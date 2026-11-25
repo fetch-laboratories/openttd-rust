@@ -41,7 +41,7 @@ WORKFLOW = quick_workflow.WORKFLOW
 JOB = quick_workflow.JOB
 COMMITS = "Check introduced commits with the pinned inherited checker"
 # Preflight's own step after Quick's (#923): CI compiles these in its native jobs.
-PROBES = "Compile comparison probes and runtime adapters without linking"
+PROBES = "Compile comparison probes, and compile and link runtime adapters"
 # Quick's `run:` steps that preflight does not run. Steps that `uses:` an action
 # (checkouts, setup-uv) are skipped too: they only prepare the runner.
 SKIPPED = {
