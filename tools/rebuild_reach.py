@@ -1,9 +1,11 @@
-"""Count the C++ objects a change makes every local build compile again (#1070).
+"""Count the C++ objects whose inputs a change touches (#1070).
 
-ccache and Ninja reuse an object only while every file it was compiled from is
-unchanged, so a build that crosses a change compiles every object whose source,
-header or generated ABI header that change touched. This module replays that
-count from Git: it reads which files each object includes from a built
+Ninja reruns an object's compile command when any file it was compiled from
+changes, and ccache serves that command only when its preprocessed text was
+compiled before. So a build that crosses a change compiles again at most every
+object whose source, header or generated ABI header the change touched; an
+object whose only change is a comment or other preprocessor-invisible text still
+hits the cache. This module replays that count from Git: it reads which files each object includes from a built
 candidate tree (`ninja -t deps`), then for each commit compares those files
 with the commit's first parent. Generated ABI headers are regenerated from each
 commit's own Rust inputs with that commit's tools/generate-abi.py.
@@ -36,7 +38,8 @@ ABI_INPUTS = (
 )
 DEFAULT_BASE = "origin/rust-migration"
 DEPS_HEADER = re.compile(r"^(\S.*?): #deps \d+")
-PULL = re.compile(r"Merge pull request #(\d+)")
+PULL = re.compile(r"^Merge pull request #(\d+)")
+DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 @dataclass
@@ -47,6 +50,26 @@ class Commit:
     total: int
     headers: list[tuple[str, int]] = field(default_factory=list)
     abi_unknown: bool = False
+
+
+@dataclass
+class Summary:
+    commits: int
+    commits_that_recompile: int
+    median: float
+    total: int
+
+
+@dataclass
+class Report:
+    commits: list[Commit]
+    summary: Summary
+
+
+@dataclass
+class Reach:
+    objects: int
+    reach: dict[str, int]
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -84,6 +107,10 @@ def build_source(build: Path) -> Path:
 
 
 def read_deps(args: argparse.Namespace, checkout: Path) -> dict[str, set[str]]:
+    """A saved graph names paths relative to the build that wrote it, so
+    --deps needs that build's --build (its CMakeCache.txt gives the source)."""
+    if args.deps and not args.build:
+        raise ValueError("--deps FILE needs --build DIR, the build that wrote it")
     build = Path(args.build or checkout / "build-rust")
     if args.deps:
         text = Path(args.deps).read_text()
@@ -158,6 +185,11 @@ def invalidated(
     return count, headers
 
 
+def since(value: str) -> str:
+    """A bare date means that day's start in UTC, not the current time of day."""
+    return f"{value} 00:00:00 +0000" if DAY.match(value) else value
+
+
 def commits(cwd: Path, args: argparse.Namespace) -> list[str]:
     if args.revs:
         return [
@@ -168,18 +200,22 @@ def commits(cwd: Path, args: argparse.Namespace) -> list[str]:
         cwd,
         "log",
         "--first-parent",
+        "--merges",
         "--reverse",
         "--format=%H %s",
-        f"--since={args.since}",
+        f"--since={since(args.since)}",
         args.base,
     )
-    return [line.split()[0] for line in log.splitlines() if PULL.search(line)]
+    return [
+        sha for sha, _, subject in (line.partition(" ") for line in log.splitlines())
+        if PULL.match(subject)
+    ]  # fmt: skip
 
 
 def measure(cwd: Path, objects: dict[str, set[str]], sha: str) -> Commit:
     changed, abi_unknown = changed_inputs(cwd, sha)
     count, headers = invalidated(objects, changed, abi_unknown)
-    pull = PULL.search(git(cwd, "log", "-1", "--format=%s", sha))
+    pull = PULL.match(git(cwd, "log", "-1", "--format=%s", sha))
     return Commit(
         sha[:10],
         int(pull[1]) if pull else None,
@@ -190,27 +226,30 @@ def measure(cwd: Path, objects: dict[str, set[str]], sha: str) -> Commit:
     )
 
 
-def summary(measured: list[Commit]) -> dict[str, float | int]:
-    """Median and total over the commits that recompile anything."""
+def summary(measured: list[Commit]) -> Summary:
+    """Median and total over the commits that touch any object's inputs."""
     counts = [c.objects for c in measured if c.objects]
-    return {
-        "commits": len(measured),
-        "commits_that_recompile": len(counts),
-        "median": statistics.median(counts) if counts else 0,
-        "total": sum(counts),
-    }
+    return Summary(
+        len(measured),
+        len(counts),
+        statistics.median(counts) if counts else 0,
+        sum(counts),
+    )
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     command = commands.add_parser(
         "rebuilds",
-        help="C++ objects each merge makes local builds compile again",
+        help="C++ objects whose inputs each merge changes",
         description=(
             "For each commit, count the candidate's C++ objects whose source, header"
-            " or generated ABI header differs from its first parent: every local"
-            " build that crosses the commit compiles those again (#1070). With no"
-            " commits, take the pull-request merges on the base's first-parent line"
-            " since --since. --reach HEADER counts the objects that include a header."
+            " or generated ABI header differs from its first parent: a local build"
+            " that crosses the commit reruns those compiles, and ccache serves only"
+            " the ones whose preprocessed text it has seen, such as comment-only"
+            " edits (#1070). The count is an estimate from one build's include graph."
+            " With no commits, take the pull-request merges on the base's"
+            " first-parent line since --since (a bare date is that day from 00:00"
+            " UTC). --reach HEADER counts the objects that include a header."
         ),
     )
     command.add_argument("revs", nargs="*", metavar="REV", help="commits to measure")
@@ -224,7 +263,9 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--build", metavar="DIR", help="built candidate tree (default build-rust)"
     )
     command.add_argument(
-        "--deps", metavar="FILE", help="saved `ninja -t deps` output of --build"
+        "--deps",
+        metavar="FILE",
+        help="saved `ninja -t deps` output of --build, which it then requires",
     )
     command.add_argument(
         "--reach",
@@ -239,7 +280,7 @@ def run(args: argparse.Namespace, cwd: Path) -> int:
     source = Path(git(cwd, "rev-parse", "--show-toplevel").strip())
     try:
         objects = read_deps(args, source)
-    except (OSError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"rebuilds: cannot read the include graph: {error}")
         print("Build the candidate once (python3 tools/migration.py build), or pass")
         print("--build DIR for another worktree's build-rust or --deps FILE.")
@@ -250,18 +291,15 @@ def run(args: argparse.Namespace, cwd: Path) -> int:
     if args.reach:
         reach = {h: sum(h in inputs for inputs in objects.values()) for h in args.reach}
         if args.json:
-            print(json.dumps({"objects": len(objects), "reach": reach}, indent=2))
+            print(json.dumps(asdict(Reach(len(objects), reach)), indent=2))
+            return 0
         for header, count in reach.items():
             print(f"{header}: {count} of {len(objects)} objects")
         return 0
     measured = [measure(cwd, objects, sha) for sha in commits(cwd, args)]
     totals = summary(measured)
     if args.json:
-        print(
-            json.dumps(
-                {"commits": [asdict(c) for c in measured], "summary": totals}, indent=2
-            )
-        )
+        print(json.dumps(asdict(Report(measured, totals)), indent=2))
         return 0
     for c in measured:
         pull = f"#{c.pull}" if c.pull else "-"
@@ -269,7 +307,7 @@ def run(args: argparse.Namespace, cwd: Path) -> int:
         flag = " (ABI headers not generated; all counted)" if c.abi_unknown else ""
         print(f"{c.sha} {pull}: {c.objects} of {c.total} objects{flag}; {top}")
     print(
-        f"Median {totals['median']} objects over the {totals['commits_that_recompile']}"
-        f" of {totals['commits']} commits that recompile any; total {totals['total']}."
+        f"Median {totals.median} objects over the {totals.commits_that_recompile}"
+        f" of {totals.commits} commits that change any; total {totals.total}."
     )
     return 0

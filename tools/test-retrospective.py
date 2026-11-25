@@ -581,7 +581,7 @@ class RebuildReachTests(unittest.TestCase):
         self.assertEqual(self.counts(wide, docs, source), [2, 0, 1])
         code, out = self.cli(wide)
         self.assertIn("2 of 3 objects; src/wide.h 2", out)
-        self.assertIn("Median 2 objects over the 1 of 1 commits", out)
+        self.assertIn("Median 2 objects over the 1 of 1 commits that change any", out)
 
     def test_generated_headers_follow_their_rust_inputs(self) -> None:
         self.write({"rust/openttd-kernels/src/record.rs": "2\n"})
@@ -593,6 +593,8 @@ class RebuildReachTests(unittest.TestCase):
         self.assertIn("ABI headers not generated; all counted", out)
 
     def test_merges_since_come_from_the_base_first_parent_line(self) -> None:
+        self.write({"src/c.cpp": "c3\n"})
+        self.commit("Mention Merge pull request #99 in a regular commit")
         self.git("checkout", "-q", "-b", "topic")
         self.write({"src/wide.h": "3\n"})
         self.commit("topic")
@@ -609,6 +611,30 @@ class RebuildReachTests(unittest.TestCase):
         code, out = self.cli("--since", "1 day ago")
         self.assertEqual(code, 0, out)
         self.assertIn("#7: 2 of 3 objects", out)
+        self.assertNotIn("#99", out)
+        self.assertIn("over the 1 of 1 commits", out)
+
+    def test_a_bare_date_starts_at_midnight_utc(self) -> None:
+        self.assertEqual(rebuild_reach.since("2026-11-23"), "2026-11-23 00:00:00 +0000")
+        self.assertEqual(rebuild_reach.since("7 days ago"), "7 days ago")
+
+    def test_each_end_uses_its_own_generator(self) -> None:
+        generator = GENERATOR.replace("write_text(text)", "write_text(text + 'v2')")
+        self.write({"tools/generate-abi.py": generator})
+        self.assertEqual(self.counts(self.commit("generator")), [1])
+
+    def test_a_saved_graph_needs_the_build_that_wrote_it(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "rebuilds", "--deps", str(self.deps), "--reach", "src/wide.h"],
+            cwd=self.repo, capture_output=True, text=True,
+        )  # fmt: skip
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--deps FILE needs --build DIR", result.stdout)
+
+    def test_reach_json_is_the_whole_output(self) -> None:
+        code, out = self.cli("--reach", "src/wide.h", "--json")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads(out), {"objects": 3, "reach": {"src/wide.h": 2}})
 
     def test_reach_counts_the_objects_including_a_header(self) -> None:
         code, out = self.cli("--reach", "src/wide.h", "generated-abi/abi-record-x.h")
