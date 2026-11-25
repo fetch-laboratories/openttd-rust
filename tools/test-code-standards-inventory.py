@@ -52,6 +52,11 @@ class CommentTests(unittest.TestCase):
             [(f.name, f.comments) for f in original], [("CmdBuildThing", 3)]
         )
 
+    def test_a_lone_closing_delimiter_has_no_content(self) -> None:
+        block = b"void F()\n{\n\t/* One line\n\t * and another.\n\t *\n\t */\n\treturn;\n}\n"
+        original = INVENTORY.functions("src/tile_cmd.cpp", block, "cpp")
+        self.assertEqual([(f.name, f.comments) for f in original], [("F", 2)])
+
     def test_normalized_name_in_its_module_pairs_once(self) -> None:
         rust = INVENTORY.functions(RUST, PORT, "rust", tests=False)
         original = INVENTORY.functions("src/tile_cmd.cpp", ORIGINAL, "cpp")

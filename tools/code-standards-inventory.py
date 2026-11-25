@@ -224,8 +224,10 @@ def comment_lines(body: Node, data: bytes) -> int:
         if node.type not in COMMENTS:
             continue
         for offset, line in enumerate(text(node, data).splitlines()):
-            content = re.sub(r"^\s*(?://[/!]?|/\*[*!]?|\*)\s?", "", line)
-            if re.sub(r"\*/\s*$", "", content).strip():
+            content = re.sub(
+                r"^\s*(?://[/!]?|/\*[*!]?|\*)\s?", "", re.sub(r"\*/\s*$", "", line)
+            )
+            if content.strip():
                 lines.add(node.start_point[0] + offset)
     return len(lines)
 
