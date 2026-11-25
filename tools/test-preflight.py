@@ -15,11 +15,11 @@ import threading
 import time
 import unittest
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -1014,6 +1014,264 @@ class CompileCheckTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(bool(check.INPUTS.match(path)), selected)
+
+    def test_definitions_select_game_and_rust_sources_but_not_fork_tests(self) -> None:
+        # #1072: #1056 removed a definition that engines-console.cpp declared itself.
+        check = tool("compile-check")
+        for path, selected in (
+            ("src/engine.cpp", True),
+            ("src/saveload/company_sl.cpp", True),
+            ("rust/openttd-kernels/src/company.rs", True),
+            ("src/tests/station.cpp", False),
+            ("src/engine_func.h", False),
+            ("tools/preflight.py", False),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(bool(check.DEFINITIONS.match(path)), selected)
+
+    def test_each_adapter_builds_against_both_games_without_compile_only(self) -> None:
+        # #1072: #1059's orders console compiled for the candidate only, and
+        # failed on CI against the reference's headers.
+        check = tool("compile-check")
+        modules = [SimpleNamespace(__name__=f"simulation.{n}") for n in ("a", "b")]
+        with patch("simulation.registry.adapter_modules", return_value=modules):
+            listed = check.jobs(False, check.ROLES)
+        self.assertEqual(
+            [name for name, _ in listed],
+            ["adapter a candidate", "adapter a reference"]
+            + ["adapter b candidate", "adapter b reference"],
+        )
+        self.assertEqual(listed[1][1][-2:], ["--role", "reference"])
+        with patch("simulation.registry.adapter_modules", return_value=modules[:1]):
+            compiled = check.jobs(False, check.ROLES, link_reference=False)
+        names = [name for name, _ in compiled]
+        self.assertEqual(
+            names, ["adapter a candidate", "adapter a reference, compile only"]
+        )
+        self.assertEqual([check.adapter_job(name) for name in names], [True, False])
+        seen: dict[str, dict[str, str]] = {}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check.migration, "REFERENCE_BUILD", Path(directory)),
+            patch.object(check, "changed", return_value=["src/engine.cpp"]),
+            patch.object(check, "generated_abi_changed", return_value=[]),
+            patch.object(check.shutil, "which", return_value=None),
+            patch.object(check, "jobs", return_value=listed),
+            patch.object(
+                check,
+                "run",
+                side_effect=lambda name, _c, env: (
+                    seen.setdefault(name, env) and (name, 0, Path(directory))
+                ),
+            ),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            self.assertEqual(check.check("base"), 0)
+        self.assertEqual(sorted(seen), sorted(name for name, _ in listed))
+        for env in seen.values():
+            self.assertNotIn("PROBE_COMPILE_ONLY", env)
+
+    def fixture_build(self, root: Path, defined: bool) -> Path:
+        """A one-object game whose ninja link line the adapter reads, and a
+        console that calls a definition the game may have removed."""
+        build = root / "build-rust"
+        (build / "src").mkdir(parents=True)
+        body = "void Removed() {}\n" if defined else ""
+        (build / "src/game.cpp").write_text(body + "int main() { return 0; }\n")
+        (build / "src/console.cpp").write_text("")
+        (build / "build.ninja").write_text(
+            "rule cxx\n  command = c++ -c $in -o $out\n"
+            "rule link\n  command = c++ $in -o $out\n"
+            "build game.o: cxx src/game.cpp\n"
+            "build openttd-rust: link game.o\n"
+        )
+        subprocess.run(["ninja", "-C", str(build)], check=True, capture_output=True)
+        entry = {
+            "file": str(build / "src/console.cpp"),
+            "directory": str(build),
+            "command": f"c++ -std=c++20 -I{root} -o console.o -c {build / 'src/console.cpp'}",
+        }
+        (build / "compile_commands.json").write_text(json.dumps([entry]))
+        (root / "abi.h").write_text("void Removed();\n")
+        source = root / "fixture-console.cpp"
+        source.write_text(
+            '#include "abi.h"\n'
+            'extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { Removed(); }\n'
+        )
+        return source
+
+    def adapter_check(self, root: Path, source: Path, compile_only: str = "") -> int:
+        """The check's child for one adapter whose build is the fixture."""
+        check = tool("compile-check")
+        import simulation.console_adapter as consoles
+
+        def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
+            return consoles.console_adapter(build, folder, env, source, "fixture")
+
+        module = SimpleNamespace(__name__="simulation.fixture", adapter=adapter)
+        environ = {k: v for k, v in os.environ.items() if k != "PROBE_COMPILE_ONLY"}
+        if compile_only:
+            environ["PROBE_COMPILE_ONLY"] = compile_only
+        with (
+            patch("simulation.registry.adapter_modules", return_value=[module]),
+            patch.object(check, "BUILD", root / "build-rust"),
+            patch.object(check, "OUT", root / "out"),
+            patch.object(check.migration, "candidate_lock", return_value=nullcontext()),
+            patch.object(check.migration, "environment", return_value=environ),
+            patch.dict(os.environ, environ, clear=True),
+            patch.object(sys, "addaudithook"),
+            patch("sys.stderr"),
+        ):
+            return check.child(None, "fixture", "candidate")
+
+    def test_an_adapter_calling_a_removed_definition_fails_at_its_link(self) -> None:
+        # #1072: engines-console.cpp declared ClearEnginesHiddenFlagOfCompany
+        # itself, so only CI's link of the adapter failed on #1056.
+        if not shutil.which("ninja"):
+            self.skipTest("no ninja on this host")
+        check = tool("compile-check")
+        for defined, code in ((True, 0), (False, check.FAILED)):
+            with self.subTest(defined=defined), tempfile.TemporaryDirectory() as d:
+                root = Path(d).resolve()
+                source = self.fixture_build(root, defined)
+                self.assertEqual(self.adapter_check(root, source), code)
+                # A linked adapter is deleted, pass or fail.
+                self.assertFalse(
+                    (
+                        root / "out/adapters/candidate/linked/fixture/openttd-fixture"
+                    ).exists()
+                )
+
+    def test_a_fresh_abi_header_fails_beside_a_link_against_the_built_one(self) -> None:
+        # Re-check of #1079: one console and one include, `abi.h`, whose
+        # build-rust/generated-abi copy declares Removed and whose fresh copy,
+        # from current Rust declarations, does not. Each job runs as its own
+        # process with the environment check() chose for it.
+        if not shutil.which("ninja"):
+            self.skipTest("no ninja on this host")
+        check = tool("compile-check")
+        child = (
+            "import importlib.util, sys\n"
+            "from contextlib import nullcontext\n"
+            "from pathlib import Path\n"
+            "from types import SimpleNamespace\n"
+            "import probe, simulation.registry as registry\n"
+            "import simulation.console_adapter as consoles\n"
+            "root, role, script, source = sys.argv[1:5]\n"
+            "build = Path(root) / 'build-rust'\n"
+            "spec = importlib.util.spec_from_file_location('check', script)\n"
+            "g = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(g)\n"
+            "g.BUILD, g.OUT, probe.BUILD = build, Path(root) / 'out', build\n"
+            "g.migration.candidate_lock = lambda *a, **k: nullcontext()\n"
+            "def adapter(b, folder, env):\n"
+            "    return consoles.console_adapter(b, folder, env, Path(source), 'fixture')\n"
+            "module = SimpleNamespace(__name__='simulation.fixture', adapter=adapter)\n"
+            "registry.adapter_modules = lambda: [module]\n"
+            "sys.exit(g.child(None, 'fixture', role))\n"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d).resolve()
+            source = self.fixture_build(root, defined=True)
+            build = root / "build-rust"
+            (root / "abi.h").unlink()
+            (build / "generated-abi").mkdir()
+            (build / "generated-abi/abi.h").write_text("void Removed();\n")
+            (root / "out/generated-abi").mkdir(parents=True)
+            (root / "out/generated-abi/abi.h").write_text("void Renamed();\n")
+            commands = json.loads((build / "compile_commands.json").read_text())
+            commands[0]["command"] += f" -I{build / 'generated-abi'}"
+            (build / "compile_commands.json").write_text(json.dumps(commands))
+            script = str(REPO / "tools/compile-check.py")
+
+            def run(
+                name: str, command: list[str], env: dict[str, str]
+            ) -> tuple[str, int, Path]:
+                role = command[command.index("--role") + 1]
+                log = root / "out/logs" / f"{name.replace(' ', '-')}.log"
+                argv = [
+                    sys.executable,
+                    "-c",
+                    child,
+                    str(root),
+                    role,
+                    script,
+                    str(source),
+                ]
+                with log.open("w") as handle:
+                    code = subprocess.run(
+                        argv,
+                        cwd=REPO / "tools",
+                        env=env,
+                        stdout=handle,
+                        stderr=subprocess.STDOUT,
+                    ).returncode
+                return name, code, log
+
+            module = SimpleNamespace(__name__="simulation.fixture")
+            environ = {k: v for k, v in os.environ.items() if k != "PROBE_COMPILE_ONLY"}
+            with (
+                patch("simulation.registry.adapter_modules", return_value=[module]),
+                patch.object(check, "BUILD", build),
+                patch.object(check, "OUT", root / "out"),
+                patch.object(check.migration, "REFERENCE_BUILD", root / "none"),
+                patch.object(check.migration, "environment", return_value=environ),
+                patch.object(check, "changed", return_value=["src/engine.cpp"]),
+                patch.object(check, "generated_abi_changed", return_value=["abi.h"]),
+                patch.object(check.shutil, "which", return_value=None),
+                patch.object(check, "run", side_effect=run),
+                patch.object(check, "comparisons", return_value=[]),
+                patch("builtins.print") as printed,
+            ):
+                (build / "CMakeCache.txt").write_text("")
+                self.assertEqual(check.check("base"), 1)
+            lines = [call.args[0] for call in printed.call_args_list]
+            failed = [line for line in lines if line.startswith("FAIL")]
+            self.assertEqual(len(failed), 1, lines)
+            self.assertIn("adapter fixture candidate, compile only", failed[0])
+            log = root / "out/logs/adapter-fixture-candidate,-compile-only.log"
+            self.assertIn("Removed", log.read_text())
+
+    def test_each_child_holds_the_scratch_lock_until_it_exits(self) -> None:
+        # Re-check of #1079: a check stopped alone left children writing.
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as d,
+            patch.object(check, "OUT", Path(d) / "out"),
+        ):
+            with check.exclusive():
+                (Path(d) / "out/logs").mkdir()
+                (held,) = check.HELD
+                probe_fd = "import os, sys; os.fstat(int(sys.argv[1]))"
+                command = [sys.executable, "-c", probe_fd, str(held)]
+                self.assertEqual(check.run("lock", command, dict(os.environ))[1], 0)
+            self.assertEqual(check.HELD, [])
+            # With no lock held, a child gets no descriptor to keep.
+            (Path(d) / "out/logs").mkdir(exist_ok=True)
+            self.assertNotEqual(check.run("lock", command, dict(os.environ))[1], 0)
+
+    def test_a_link_names_changed_sources_newer_than_the_candidate_game(self) -> None:
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "build-rust").mkdir()
+            (root / "src").mkdir()
+            game = root / "build-rust/openttd-rust"
+            game.write_text("")
+            os.utime(game, (100, 100))
+            (root / "src/engine.cpp").write_text("")
+            (root / "src/old.cpp").write_text("")
+            os.utime(root / "src/old.cpp", (50, 50))
+            with (
+                patch.object(check, "ROOT", root),
+                patch.object(check, "BUILD", root / "build-rust"),
+            ):
+                paths = ["src/engine.cpp", "src/old.cpp", "docs/x.md"]
+                self.assertEqual(check.newer_than_build(paths), ["src/engine.cpp"])
 
     def test_skips_with_a_notice_without_a_configured_build(self) -> None:
         check = tool("compile-check")
