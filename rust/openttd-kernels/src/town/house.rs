@@ -265,6 +265,15 @@ struct House<'a> {
     h: &'a HouseServices,
     map: OnceCell<Map>,
 }
+impl House<'_> {
+    /// The handle of `HouseSpec::Get(house)->grf_prop.grffile`, a file the original
+    /// dereferences when the house's callback has answered.
+    fn house_grffile(&self, house: HouseID) -> crate::newgrf::GRFFileRef<'_> {
+        // SAFETY: A spec's file is live until the loader's next reset, and a house whose
+        // callback answered has one.
+        unsafe { crate::newgrf::GRFFileRef::of(self.s, (self.h.cargo_file)(house).cast()) }
+    }
+}
 fn house<'a>(leaves: *const Leaves, services: *const Services) -> House<'a> {
     // SAFETY: Native immutable static tables outlive every synchronous entry.
     let (l, s) = unsafe { (&*leaves, &*services) };
@@ -870,10 +879,9 @@ impl<'a> House<'a> {
                 if callback == CALLBACK_FAILED || callback == CALLBACK_HOUSEPRODCARGO_END {
                     break;
                 }
-                let file = (self.h.cargo_file)(house_id);
                 let cargo = crate::cargo_registry::get_cargo_translation(
                     gb(u32::from(callback), 8, 7) as u8,
-                    file,
+                    self.house_grffile(house_id),
                     false,
                 );
                 if !is_valid_cargo_type(cargo.0) {
@@ -1334,17 +1342,17 @@ impl<'a> House<'a> {
                 let callback = u32::from(callback);
                 accepts[0] = crate::cargo_registry::get_cargo_translation(
                     gb(callback, 0, 5) as u8,
-                    (self.h.cargo_file)(house),
+                    self.house_grffile(house),
                     false,
                 );
                 accepts[1] = crate::cargo_registry::get_cargo_translation(
                     gb(callback, 5, 5) as u8,
-                    (self.h.cargo_file)(house),
+                    self.house_grffile(house),
                     false,
                 );
                 accepts[2] = crate::cargo_registry::get_cargo_translation(
                     gb(callback, 10, 5) as u8,
-                    (self.h.cargo_file)(house),
+                    self.house_grffile(house),
                     false,
                 );
             }
@@ -1419,10 +1427,9 @@ impl<'a> House<'a> {
                 if callback == CALLBACK_FAILED || callback == CALLBACK_HOUSEPRODCARGO_END {
                     break;
                 }
-                let file = (self.h.cargo_file)(house_id);
                 let cargo = crate::cargo_registry::get_cargo_translation(
                     gb(u32::from(callback), 8, 7) as u8,
-                    file,
+                    self.house_grffile(house_id),
                     false,
                 );
                 if !is_valid_cargo_type(cargo.0) {

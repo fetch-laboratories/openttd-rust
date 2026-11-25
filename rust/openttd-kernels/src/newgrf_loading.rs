@@ -1688,7 +1688,7 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                     (s.set_flag)(c, RESERVED, false);
                     (s.assert_file_match)(c, file());
                     clear_labels(file());
-                    crate::cargo_registry::build_cargo_translation_map(file());
+                    crate::cargo_registry::build_cargo_translation_map_raw(file());
                     debug!(
                         sprite,
                         2,

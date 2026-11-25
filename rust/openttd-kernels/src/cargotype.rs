@@ -125,6 +125,12 @@ impl<'a> CargoSpecRef<'a> {
         self.bitnum() != INVALID_CARGO_BITNUM
     }
 
+    /// `*insert = std::visit(visitor{}, _default_climate_cargo[l][slot])`: copy the default
+    /// cargo of climate slot `slot` into this spec, by index or by label.
+    pub(crate) fn copy_default_cargo(self, l: crate::landscape_type::LandscapeType, slot: u8) {
+        (self.s.copy_default_cargo)(self.spec_mut(), l.0, slot);
+    }
+
     /// Store `CargoSpec::grffile`: `NewGRF` where `group` belongs to.
     pub(crate) fn set_grffile(self, grffile: *const GRFFile) {
         (self.s.set_grffile)(self.spec_mut(), grffile);
@@ -216,7 +222,8 @@ impl TownProductionEffect {
     pub const TPE_MAIL: Self = Self(2);
     /// Native `NUM_TPE`.
     pub const NUM_TPE: Self = Self(3);
-    /// Native `INVALID_TPE`.
+    /// Invalid town production effect. Used as a sentinel to indicate if a `NewGRF` has
+    /// explicitly set an effect. This does not 'exist' after cargo types are finalised.
     pub const INVALID_TPE: Self = Self(4);
 }
 

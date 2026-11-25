@@ -357,5 +357,29 @@
     "reason": "The one read of a list element, unchecked as the original's is, so the pass adds no bounds check the original lacks.",
     "retiring_owner": "#1058",
     "retirement_condition": "Retires when the town production lists are Rust-owned with `CargoSpec::array` (#1058) and its port settles the empty-list read."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_registry.rs | impl<T: Copy> Global<T> > fn load | allow unsafe_code",
+    "operation": "cargo_registry::Global::load",
+    "source_contract": "The globals of cargotype.cpp that C++ reads in place (`_cargo_mask`, `_standard_cargo_mask`, `_sorted_cargo_types`, `_climate_dependent_cargo_labels`, `_climate_independent_cargo_labels`), whose addresses C++ binds and whose label spans translation hands out.",
+    "reason": "The one field-sized raw load of a published global, through a place derived from the static's pointer so that no Rust borrow invalidates the aliases C++ and the label spans hold.",
+    "retiring_owner": "#1058",
+    "retirement_condition": "Retires when C++ no longer reads the globals in place, with `CargoSpec::array`'s port (#1058) and the GUI's sorted lists."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_registry.rs | impl<T: Copy> Global<T> > fn store | allow unsafe_code",
+    "operation": "cargo_registry::Global::store",
+    "source_contract": "The globals of cargotype.cpp that C++ reads in place (`_cargo_mask`, `_standard_cargo_mask`, `_sorted_cargo_types`, `_climate_dependent_cargo_labels`, `_climate_independent_cargo_labels`), whose addresses C++ binds and whose label spans translation hands out.",
+    "reason": "The one field-sized raw store of a published global, through a place derived from the static's pointer so that no Rust borrow invalidates the aliases C++ and the label spans hold.",
+    "retiring_owner": "#1058",
+    "retirement_condition": "Retires when C++ no longer reads the globals in place, with `CargoSpec::array`'s port (#1058) and the GUI's sorted lists."
   }
 ]

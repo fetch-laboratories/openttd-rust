@@ -190,14 +190,17 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 		.shared = &GetRustSharedServices(),
 
 		.spec = RustCargoSpec,
-		.copy_default_cargo = [](uint8_t climate, uint8_t slot) noexcept {
-			std::visit([cs = RustCargoSpec(slot)](const auto &entry) {
+		.copy_default_cargo = [](CargoSpec *insert, uint8_t climate, uint8_t slot) noexcept {
+			std::visit([insert](const auto &entry) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(entry)>, int>) {
-					*cs = _default_cargo[entry];
+					/* Copy the default cargo by index. */
+					*insert = _default_cargo[entry];
 				} else {
+					/* Search for label in default cargo types and copy if found. */
 					auto found = std::ranges::find(_default_cargo, entry, &CargoSpec::label);
+					/* Index or label is invalid, this should not happen. */
 					if (found == std::end(_default_cargo)) NOT_REACHED();
-					*cs = *found;
+					*insert = *found;
 				}
 			}, _default_climate_cargo[climate][slot]);
 		},

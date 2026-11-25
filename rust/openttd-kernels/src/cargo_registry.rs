@@ -69,7 +69,7 @@ pub struct Services {
     pub(crate) spec: extern "C" fn(u8) -> *const CargoSpec,
     /// `*insert = std::visit(visitor{}, _default_climate_cargo[l][slot])` (`SetupCargoForClimate`),
     /// with the visitor's `NOT_REACHED`.
-    copy_default_cargo: extern "C" fn(u8, u8),
+    pub(crate) copy_default_cargo: extern "C" fn(*mut CargoSpec, u8, u8),
     /// `std::fill(insert, std::end(CargoSpec::array), CargoSpec{})` from slot `first`.
     fill_default: extern "C" fn(u8),
 
@@ -132,7 +132,7 @@ pub(crate) const TEST_TABLE: Services = Services {
     shared: std::ptr::null(),
 
     spec: crate::test_tables::unreachable1,
-    copy_default_cargo: crate::test_tables::unreachable2,
+    copy_default_cargo: crate::test_tables::unreachable3,
     fill_default: crate::test_tables::unreachable1,
 
     bitnum: crate::test_tables::unreachable1,
@@ -162,18 +162,15 @@ pub(crate) const TEST_TABLE: Services = Services {
     sprite_frame: crate::test_tables::unreachable1,
 };
 
-/// The globals of `cargotype.cpp`, under their names, with the table the last setup or
-/// sort installed.
-struct Registry {
-    services: *const Services,
+/// The globals of `cargotype.cpp` that C++ reads in place, under their names. They are reached
+/// only through [`Global`] places, never through a borrow, so the references and spans C++
+/// keeps, and the label spans Rust hands out, stay valid.
+struct Globals {
     /// Bitmask of cargo types available. This includes phony cargoes like regearing cargoes.
     cargo_mask: CargoTypes,
     /// Bitmask of real cargo types available. Phony cargoes like regearing cargoes are
     /// excluded.
     standard_cargo_mask: CargoTypes,
-    /// List of default cargo labels, used when setting up cargo types for default vehicles.
-    /// This is done by label so that a cargo label can be redefined in a different slot.
-    default_cargo_labels: Vec<CargoLabel>,
     /// Default cargo translation for up to version 7 `NewGRF`s.
     /// This maps the original 12 cargo slots to their original label. If a climate dependent
     /// cargo is not present it will map to `CT_INVALID`. For default cargoes this ends up as a
@@ -183,26 +180,103 @@ struct Registry {
     /// This maps the 32 "bitnum" cargo slots to their original label. If a bitnum is not
     /// present it will map to `CT_INVALID`.
     climate_independent_cargo_labels: [CargoLabel; 32],
+    /// Sort order of cargoes by cargo type.
+    sorted_cargo_types: [u8; NUM_CARGO as usize],
+}
+
+static GLOBALS: GameState<Globals> = GameState::new(Globals {
+    cargo_mask: CargoTypes(0),
+    standard_cargo_mask: CargoTypes(0),
+    climate_dependent_cargo_labels: [CargoLabel(0); 12],
+    climate_independent_cargo_labels: [CargoLabel(0); 32],
+    sorted_cargo_types: [0; NUM_CARGO as usize],
+});
+
+/// One published global, or one element of it: a field-sized place derived from the static's
+/// own pointer, read and written by raw loads and stores.
+#[derive(Clone, Copy)]
+struct Global<T>(*mut T);
+
+/// The [`Global`] of the field `$field`, of type `$ty`.
+macro_rules! global {
+    ($field:ident: $ty:ty) => {
+        Global::<$ty>(
+            GLOBALS
+                .get()
+                .wrapping_byte_add(std::mem::offset_of!(Globals, $field))
+                .cast(),
+        )
+    };
+}
+
+impl<T: Copy> Global<T> {
+    /// A field-sized load.
+    #[allow(unsafe_code, reason = "a field-sized load of a published global")]
+    fn load(self) -> T {
+        // SAFETY: The place is a field, or an element below its length, of the static, which
+        // no borrow covers; the game state is serialized.
+        unsafe { self.0.read() }
+    }
+
+    /// A field-sized store.
+    #[allow(unsafe_code, reason = "a field-sized store to a published global")]
+    fn store(self, value: T) {
+        // SAFETY: As for `load`.
+        unsafe { self.0.write(value) }
+    }
+}
+
+impl<E: Copy, const N: usize> Global<[E; N]> {
+    /// `operator[]`, unchecked as the original's `std::array` is.
+    fn at(self, index: usize) -> Global<E> {
+        Global(self.0.cast::<E>().wrapping_add(index))
+    }
+
+    /// `fill(value)`.
+    fn fill(self, value: E) {
+        for index in 0..N {
+            self.at(index).store(value);
+        }
+    }
+}
+
+impl<const N: usize> Global<[CargoLabel; N]> {
+    /// The table as a span.
+    fn labels(self) -> Labels {
+        Labels {
+            data: self.0.cast_const().cast(),
+            size: N,
+        }
+    }
+}
+
+/// `SetBit` on a published mask.
+fn set_mask_bit(mask: Global<CargoTypes>, bit: CargoType) {
+    let mut value = mask.load().0;
+    set_bit64(&mut value, bit.0);
+    mask.store(CargoTypes(value));
+}
+
+/// The registry state C++ does not read in place, with the table the last setup or sort
+/// installed. The sorted lists' buffers are published to C++ as spans after each change.
+struct Registry {
+    services: *const Services,
+    /// List of default cargo labels, used when setting up cargo types for default vehicles.
+    /// This is done by label so that a cargo label can be redefined in a different slot.
+    default_cargo_labels: Vec<CargoLabel>,
     /// `CargoSpec::label_map`.
     label_map: BTreeMap<CargoLabel, CargoType>,
     /// Cargo specifications sorted alphabetically by name.
     sorted_cargo_specs: Vec<*const CargoSpec>,
-    /// Sort order of cargoes by cargo type.
-    sorted_cargo_types: [u8; NUM_CARGO as usize],
     /// List of cargo specs for each Town Product Effect.
     town_production_cargoes: [Vec<*const CargoSpec>; TownProductionEffect::NUM_TPE.0 as usize],
 }
 
 static REGISTRY: GameState<Registry> = GameState::new(Registry {
     services: ptr::null(),
-    cargo_mask: CargoTypes(0),
-    standard_cargo_mask: CargoTypes(0),
     default_cargo_labels: Vec::new(),
-    climate_dependent_cargo_labels: [CargoLabel(0); 12],
-    climate_independent_cargo_labels: [CargoLabel(0); 32],
     label_map: BTreeMap::new(),
     sorted_cargo_specs: Vec::new(),
-    sorted_cargo_types: [0; NUM_CARGO as usize],
     town_production_cargoes: [const { Vec::new() }; TownProductionEffect::NUM_TPE.0 as usize],
 });
 
@@ -213,21 +287,10 @@ static REGISTRY: GameState<Registry> = GameState::new(Registry {
     reason = "the process-wide registry, borrowed for one closure that makes no call"
 )]
 fn with_registry<R>(f: impl FnOnce(&mut Registry) -> R) -> R {
-    // SAFETY: The state is reset only by serialized loading, and the borrow ends before any
-    // service call (the module's contract).
+    // SAFETY: The state is reset only by serialized loading, no pointer into it is published
+    // (the sorted lists publish their heap buffers), and the borrow ends before any service
+    // call.
     f(unsafe { &mut *REGISTRY.get() })
-}
-
-/// The address of one global, derived from the static's own pointer rather than from a borrow
-/// of the state, so that it stays valid across later [`with_registry`] borrows: C++ keeps the
-/// masks' and the sort order's addresses, and a label span outlives the call that made it.
-macro_rules! global_ptr {
-    ($field:ident) => {
-        REGISTRY
-            .get()
-            .wrapping_byte_add(std::mem::offset_of!(Registry, $field))
-            .cast()
-    };
 }
 
 /// The table the last setup or sort installed.
@@ -254,65 +317,64 @@ impl Services {
     }
 }
 
-/// The file the original dereferences: `_cur_gps.grffile`, or a spec's `grffile`.
+/// The handle of a file an FFI entry or `_raw` adapter receives: `_cur_gps.grffile`, or a
+/// spec's or resolver's `grffile`, which the original dereferences unchecked.
 #[allow(unsafe_code, reason = "the caller's live file")]
 fn grf_file(file: Handle) -> GRFFileRef<'static> {
-    // SAFETY: Each caller passes a live `GRFFile` the original dereferences unchecked.
+    // SAFETY: Each FFI entry and `_raw` adapter receives a live `GRFFile` (its callers'
+    // contract), as the original's dereference requires.
     unsafe { GRFFileRef::of(services().shared(), file.cast()) }
 }
 
 #[allow(unsafe_code, reason = "export; C++ binds a reference to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_mask() -> *mut u64 {
-    global_ptr!(cargo_mask)
+    global!(cargo_mask: CargoTypes).0.cast()
 }
 
 #[allow(unsafe_code, reason = "export; C++ binds a reference to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_standard_cargo_mask() -> *mut u64 {
-    global_ptr!(standard_cargo_mask)
+    global!(standard_cargo_mask: CargoTypes).0.cast()
 }
 
 #[allow(unsafe_code, reason = "export; C++ binds a span to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_reverse() -> *mut u8 {
-    global_ptr!(sorted_cargo_types)
+    global!(sorted_cargo_types: [u8; NUM_CARGO as usize])
+        .0
+        .cast()
 }
 
 /// `SetupCargoForClimate`: set up the default cargo types for the given landscape type.
 pub(crate) fn setup_cargo_for_climate(s: &'static Services, l: LandscapeType) {
     assert_with(|| l.0 < NUM_LANDSCAPE);
 
-    with_registry(|r| {
-        r.services = s;
-        r.cargo_mask = CargoTypes(0);
-        r.default_cargo_labels.clear();
-        r.climate_dependent_cargo_labels
-            .fill(CargoLabel::CT_INVALID);
-        r.climate_independent_cargo_labels
-            .fill(CargoLabel::CT_INVALID);
-    });
+    with_registry(|r| r.services = s);
+    global!(cargo_mask: CargoTypes).store(CargoTypes(0));
+    with_registry(|r| r.default_cargo_labels.clear());
+    global!(climate_dependent_cargo_labels: [CargoLabel; 12]).fill(CargoLabel::CT_INVALID);
+    global!(climate_independent_cargo_labels: [CargoLabel; 32]).fill(CargoLabel::CT_INVALID);
 
     // Copy from default cargo by label or index.
     let mut insert = 0;
     while insert < CargoType::NUM_ORIGINAL_CARGO.0 {
-        // `*insert = std::visit(visitor{}, cl)`, whose visitor the table's body holds:
-        // Copy the default cargo by index.
-        // Search for label in default cargo types and copy if found.
-        // Index or label is invalid, this should not happen.
-        (s.copy_default_cargo)(l.0, insert);
         let cs = cargo_spec_get(s, CargoType(insert));
+        // `*insert = std::visit(visitor{}, cl)`; the table's binding holds the visitor.
+        cs.copy_default_cargo(l, insert);
 
         if cs.is_valid() {
             let index = cs.index();
             let label = cs.label();
             let bitnum = cs.bitnum();
-            with_registry(|r| {
-                set_bit64(&mut r.cargo_mask.0, index.0);
-                r.default_cargo_labels.push(label);
-                r.climate_dependent_cargo_labels[usize::from(index.0)] = label;
-                r.climate_independent_cargo_labels[usize::from(bitnum)] = label;
-            });
+            set_mask_bit(global!(cargo_mask: CargoTypes), index);
+            with_registry(|r| r.default_cargo_labels.push(label));
+            global!(climate_dependent_cargo_labels: [CargoLabel; 12])
+                .at(usize::from(index.0))
+                .store(label);
+            global!(climate_independent_cargo_labels: [CargoLabel; 32])
+                .at(usize::from(bitnum))
+                .store(label);
         }
         insert += 1;
     }
@@ -333,10 +395,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u
 /// `GetClimateDependentCargoTranslationTable`: get default climate-dependent cargo
 /// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
 pub(crate) fn get_climate_dependent_cargo_translation_table() -> Labels {
-    Labels {
-        data: global_ptr!(climate_dependent_cargo_labels),
-        size: 12,
-    }
+    global!(climate_dependent_cargo_labels: [CargoLabel; 12]).labels()
 }
 
 #[allow(unsafe_code, reason = "export")]
@@ -348,10 +407,7 @@ pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
 /// `GetClimateIndependentCargoTranslationTable`: get default climate-independent cargo
 /// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
 pub(crate) fn get_climate_independent_cargo_translation_table() -> Labels {
-    Labels {
-        data: global_ptr!(climate_independent_cargo_labels),
-        size: 32,
-    }
+    global!(climate_independent_cargo_labels: [CargoLabel; 32]).labels()
 }
 
 /// `BuildCargoLabelMap`: build cargo label map.
@@ -400,9 +456,12 @@ pub extern "C" fn openttd_rust_cargo_bitnum_changed(
     let cs = CargoSpecRef::of(services(), spec);
     if cs.is_valid() {
         cs.set_grffile(grffile);
-        with_registry(|r| set_bit64(&mut r.cargo_mask.0, id));
+        set_mask_bit(global!(cargo_mask: CargoTypes), CargoType(id));
     } else {
-        with_registry(|r| clr_bit64(&mut r.cargo_mask.0, id));
+        let mask = global!(cargo_mask: CargoTypes);
+        let mut value = mask.load().0;
+        clr_bit64(&mut value, id);
+        mask.store(CargoTypes(value));
     }
     build_cargo_label_map();
 }
@@ -514,11 +573,13 @@ pub(crate) fn initialize_sorted_cargo_specs(s: &'static Services) {
     let sorted = |index: usize| CargoSpecRef::of(s, with_registry(|r| r.sorted_cargo_specs[index]));
     for it in 0..count {
         let cargo = sorted(it).index();
-        with_registry(|r| r.sorted_cargo_types[usize::from(cargo.0)] = it as u8);
+        global!(sorted_cargo_types: [u8; NUM_CARGO as usize])
+            .at(usize::from(cargo.0))
+            .store(it as u8);
     }
 
     // Count the number of standard cargos and fill the mask.
-    with_registry(|r| r.standard_cargo_mask = CargoTypes(0));
+    global!(standard_cargo_mask: CargoTypes).store(CargoTypes(0));
     let mut nb_standard_cargo: u8 = 0;
     for it in 0..count {
         let cargo = sorted(it);
@@ -535,7 +596,7 @@ pub(crate) fn initialize_sorted_cargo_specs(s: &'static Services) {
         }
         nb_standard_cargo += 1;
         let index = cargo.index();
-        with_registry(|r| set_bit64(&mut r.standard_cargo_mask.0, index.0));
+        set_mask_bit(global!(standard_cargo_mask: CargoTypes), index);
     }
 
     // _sorted_standard_cargo_specs is a subset of _sorted_cargo_specs.
@@ -580,8 +641,7 @@ pub extern "C" fn openttd_rust_cargo_finalise() {
 }
 
 /// `GetCargoTranslationTable`: get the cargo translation table to use for the given GRF file.
-pub(crate) fn get_cargo_translation_table(file: Handle) -> Labels {
-    let grffile = grf_file(file);
+pub(crate) fn get_cargo_translation_table(grffile: GRFFileRef<'_>) -> Labels {
     // Always use the translation table if it's installed.
     let cargo_list = grffile.cargo_list();
     if cargo_list.size != 0 {
@@ -601,8 +661,7 @@ pub(crate) fn get_cargo_translation_table(file: Handle) -> Labels {
 /// `usebit` defines the meaning of `cargo` for GRF version < 7: if true, then `cargo` is a
 /// bitnum; if false, then `cargo` is a cargoslot. For GRF version >= 7 `cargo` is always a
 /// translated cargo bit. Returns `CargoType` or `INVALID_CARGO` if the cargo is not available.
-pub(crate) fn get_cargo_translation(cargo: u8, file: Handle, usebit: bool) -> CargoType {
-    let grffile = grf_file(file);
+pub(crate) fn get_cargo_translation(cargo: u8, grffile: GRFFileRef<'_>, usebit: bool) -> CargoType {
     // We can't use GetCargoTranslationTable here as the usebit flag changes behaviour.
     // Pre-version 7 uses the bitnum lookup from (standard in v8) instead of climate dependent in some places..
     let cargo_list = if grffile.grf_version() < 7 && !usebit && !grffile.cargo_list_is_fallback() {
@@ -625,7 +684,7 @@ pub(crate) fn get_cargo_translation(cargo: u8, file: Handle, usebit: bool) -> Ca
 #[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: bool) -> u8 {
-    get_cargo_translation(cargo, file, usebit).0
+    get_cargo_translation(cargo, grf_file(file), usebit).0
 }
 
 /// `BuildCargoTranslationMap`: construct the cargo mapping, the reverse of a cargo
@@ -635,15 +694,15 @@ pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: 
     clippy::cast_sign_loss,
     reason = "cargo_map[cs->Index()] = idx stores the int to a uint8_t"
 )]
-pub(crate) fn build_cargo_translation_map(file: Handle) {
-    let grffile = grf_file(file);
+pub(crate) fn build_cargo_translation_map(grffile: GRFFileRef<'_>) {
     grffile.cargo_map_fill(u8::MAX);
 
-    let cargo_list = get_cargo_translation_table(file);
+    let cargo_list = get_cargo_translation_table(grffile);
 
     for cs in iterate(services()) {
         // Check the translation table for this cargo's label
-        let idx = crate::container_func::find_index(cargo_list.as_slice(), &cs.label());
+        let label = cs.label();
+        let idx = crate::container_func::find_index(cargo_list.as_slice(), &label);
         if idx >= 0 {
             grffile.set_cargo_map(cs.index(), idx as u8);
         }
@@ -654,22 +713,26 @@ pub(crate) fn build_cargo_translation_map(file: Handle) {
 #[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_build_inverse(file: Handle) {
-    build_cargo_translation_map(file);
+    build_cargo_translation_map(grf_file(file));
+}
+
+/// [`build_cargo_translation_map`] for `newgrf_loading.rs`, which no pass has finished.
+pub(crate) fn build_cargo_translation_map_raw(file: Handle) {
+    build_cargo_translation_map(grf_file(file));
 }
 
 /// `MaybeInstallFallbackCargoLabel`: install cargo label in a fallback cargo list, if a
 /// `NewGRF`-defined cargo list is not present. This allows this `NewGRF` to use its
 /// self-defined cargo types without needing an explicit translation table.
 pub(crate) fn maybe_install_fallback_cargo_label(
-    file: Handle,
+    grffile: GRFFileRef<'_>,
     id: u32,
     last: u32,
     label: CargoLabel,
 ) {
-    let grffile = grf_file(file);
     if grffile.cargo_list().size == 0 {
         // Cargo translation table isn't configured yet, assume it won't be and configure the cargo list as a fallback list.
-        let default_cargo_list = get_cargo_translation_table(file);
+        let default_cargo_list = get_cargo_translation_table(grffile);
         grffile.cargo_list_assign(default_cargo_list);
         grffile.set_cargo_list_is_fallback(true);
     }
@@ -687,7 +750,7 @@ pub(crate) fn maybe_install_fallback_cargo_label(
 #[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_fallback(file: Handle, id: u32, last: u32, label: u32) {
-    maybe_install_fallback_cargo_label(file, id, last, CargoLabel(label));
+    maybe_install_fallback_cargo_label(grf_file(file), id, last, CargoLabel(label));
 }
 
 /// `GetCustomCargoSprite`: get the custom sprite for the given cargo type, or 0 if not
@@ -824,28 +887,75 @@ pub(crate) fn find_first_cargo_with_town_acceptance_effect(
     iterate(services()).find(|cs| cs.town_acceptance_effect() == effect)
 }
 
-/// `cargo_list.size()` of the given GRF file.
-pub(crate) fn file_cargo_count(file: Handle) -> usize {
+/// [`get_cargo_translation_table`] for `newgrf_act3.rs`, which no pass has finished.
+pub(crate) fn get_cargo_translation_table_raw(file: Handle) -> Labels {
+    get_cargo_translation_table(grf_file(file))
+}
+
+/// `grffile->cargo_list.size()` for `newgrf_act3.rs`, which no pass has finished.
+pub(crate) fn file_cargo_count_raw(file: Handle) -> usize {
     grf_file(file).cargo_list().size
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCargoLabels" ["probe"] => Labels {data,size};
-    "OpenTTDCargoRegistryServices" ["probe"] => Services {common,shared,spec,copy_default_cargo,fill_default,bitnum,classes,index,label,town_acceptance_effect,town_production_effect,town_production_multiplier,set_abbrev,set_grffile,set_name,set_name_single,set_quantifier,set_town_production_effect,set_units_volume,set_sorted_cargo_specs,set_sorted_standard_cargo_specs,set_town_production_cargoes,sort,callback_frame,num_sprites,sprite,sprite_frame};
+    "OpenTTDCargoRegistryServices" ["probe"] => Services {
+        common,
+        shared,
+
+        spec,
+        copy_default_cargo,
+        fill_default,
+
+        bitnum,
+        classes,
+        index,
+        label,
+        town_acceptance_effect,
+        town_production_effect,
+        town_production_multiplier,
+
+        set_abbrev,
+        set_grffile,
+        set_name,
+        set_name_single,
+        set_quantifier,
+        set_town_production_effect,
+        set_units_volume,
+
+        set_sorted_cargo_specs,
+        set_sorted_standard_cargo_specs,
+        set_town_production_cargoes,
+        sort,
+
+        callback_frame,
+        num_sprites,
+        sprite,
+        sprite_frame,
+    };
 }
 
-/// Test-only: the current file reports `labels` as its cargo list at version 8 with no
-/// fallback, and each label maps to its cargo. Forget it with [`clear_test_labels`].
+/// Test-only: the labels [`install_test_labels`] installed, which [`stub_test_label_file`]'s
+/// `GRFFile` stubs report for any file.
 #[cfg(test)]
-pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
-    use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
-    static DATA: AtomicPtr<u32> = AtomicPtr::new(ptr::null_mut());
-    static SIZE: AtomicUsize = AtomicUsize::new(0);
+static TEST_LABELS: (
+    std::sync::atomic::AtomicPtr<u32>,
+    std::sync::atomic::AtomicUsize,
+) = (
+    std::sync::atomic::AtomicPtr::new(ptr::null_mut()),
+    std::sync::atomic::AtomicUsize::new(0),
+);
+
+/// Test-only: `shared`'s `GRFFile` readers report any file at version 8 with no fallback and
+/// the labels [`install_test_labels`] installed as its cargo list. No stub reads the file.
+#[cfg(test)]
+pub(crate) fn stub_test_label_file(shared: &mut crate::services::Services) {
+    use std::sync::atomic::Ordering;
     extern "C" fn cargo_list(_: Handle) -> Labels {
         Labels {
-            data: DATA.load(Ordering::Relaxed).cast_const().cast(),
-            size: SIZE.load(Ordering::Relaxed),
+            data: TEST_LABELS.0.load(Ordering::Relaxed).cast_const().cast(),
+            size: TEST_LABELS.1.load(Ordering::Relaxed),
         }
     }
     extern "C" fn cargo_list_is_fallback(_: Handle) -> bool {
@@ -854,12 +964,23 @@ pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
     extern "C" fn grf_file_version(_: Handle) -> u8 {
         8
     }
-    DATA.store(labels.as_ptr().cast_mut(), Ordering::Relaxed);
-    SIZE.store(labels.len(), Ordering::Relaxed);
-    let mut shared = crate::test_tables::SHARED;
     shared.grf_file_cargo_list = cargo_list;
     shared.grf_file_cargo_list_is_fallback = cargo_list_is_fallback;
     shared.grf_file_version = grf_file_version;
+}
+
+/// Test-only: a file reports `labels` as its cargo list at version 8 with no fallback, through
+/// the registry's shared table and any table [`stub_test_label_file`] stubs, and each label
+/// maps to its cargo. Forget it with [`clear_test_labels`].
+#[cfg(test)]
+pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
+    use std::sync::atomic::Ordering;
+    TEST_LABELS
+        .0
+        .store(labels.as_ptr().cast_mut(), Ordering::Relaxed);
+    TEST_LABELS.1.store(labels.len(), Ordering::Relaxed);
+    let mut shared = crate::test_tables::SHARED;
+    stub_test_label_file(&mut shared);
     let mut table = TEST_TABLE;
     table.shared = Box::leak(Box::new(shared));
     let table: &'static Services = Box::leak(Box::new(table));

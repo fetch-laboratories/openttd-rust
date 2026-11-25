@@ -321,6 +321,7 @@ fn tables() -> Tables {
     shared.tile_type = tile_type;
     shared.play_sound = play_sound;
     shared.industry_gfx = gfx;
+    crate::cargo_registry::stub_test_label_file(&mut shared);
     shared.settings = leak(settings);
     let shared = leak(shared);
     let mut industries = INDUSTRIES;

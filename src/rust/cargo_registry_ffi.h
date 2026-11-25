@@ -19,7 +19,7 @@ struct OpenTTDCargoRegistryServices {
 	const OpenTTDSharedServices *shared;
 
 	CargoSpec *(*spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	void (*copy_default_cargo)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_default_cargo);
+	void (*copy_default_cargo)(CargoSpec *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_default_cargo);
 	void (*fill_default)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(fill_default);
 
 	uint8_t (*bitnum)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(bitnum);

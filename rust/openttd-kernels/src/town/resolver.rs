@@ -751,7 +751,10 @@ unsafe fn acceptance_history(
 ) -> u32 {
     let cargo = crate::cargo_registry::get_cargo_translation(
         parameter as u8,
-        (s.shared().resolver_grf_file)(ro),
+        // SAFETY: A resolver's file is live while it resolves.
+        unsafe {
+            crate::newgrf::GRFFileRef::of(s.shared(), (s.shared().resolver_grf_file)(ro).cast())
+        },
         false,
     );
     if !is_valid_cargo_type(cargo.0) {
