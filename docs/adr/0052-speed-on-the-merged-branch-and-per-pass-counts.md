@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR 0054
 may change: agents
 ---
 # Speed is judged on the merged branch, and a pass on a hot path compares instruction counts at its base and head

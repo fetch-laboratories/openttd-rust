@@ -778,6 +778,50 @@ impl B { fn update(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {} }
             [line for line in lines if line.startswith("- ")], [f"- {same}"]
         )
 
+    def test_a_module_unsafe_allow_is_listed_in_a_file_the_branch_finishes(
+        self,
+    ) -> None:
+        """The allow is listed though the base had it: the pass keeps it (#1073)."""
+        crate = INVENTORY.RUST
+        finishing, finished = f"{crate}/finishing.rs", f"{crate}/finished.rs"
+        allowed = (
+            "//! Module.\n#![allow(\n    unsafe_code,\n    clippy::cast_sign_loss\n)]\n"
+        )
+        trees = {
+            "base": {finishing: allowed + self.BASE, finished: allowed + self.BASE},
+            "head": {
+                finishing: allowed + self.BASE + "fn more() {}\n",
+                finished: allowed + self.BASE + "fn more() {}\n",
+            },
+            "base-list": {finished: ""},
+            "head-list": {finished: "", finishing: ""},
+        }
+        lines = self.compare(trees)
+        self.assertIn(
+            "1 module-scope `unsafe_code` allows in files this branch finishes:", lines
+        )
+        self.assertIn(f"{finishing}:2: module unsafe_code allow", lines)
+        self.assertNotIn(f"{finished}:2: module unsafe_code allow", lines)
+
+    def test_only_a_file_level_allow_attribute_is_a_module_allow(self) -> None:
+        source = (
+            "/* outer /* inner */\n#![allow(unsafe_code)] */\n"
+            "// #![allow(unsafe_code)]\n"
+            "# ! [allow(unsafe_code)]\n"
+            "#![allow(clippy::cast_sign_loss)]\n"
+            "mod inline {\n    #![allow(unsafe_code)]\n}\n"
+        )
+        rows = INVENTORY.module_unsafe_allows(RUST, source)
+        self.assertEqual([row.line for row in rows], [4])
+        lints = (
+            "#![/* lead */ allow(unsafe_code)]\n"
+            "#![allow(dead_code /* unsafe_code */)]\n"
+            '#![allow(dead_code, reason = "unsafe_code is checked elsewhere")]\n'
+            "#![allow(clippy::unsafe_code)]\n"
+        )
+        rows = INVENTORY.module_unsafe_allows(RUST, lints)
+        self.assertEqual([row.line for row in rows], [1])
+
     def test_no_selected_file_prints_the_notice(self) -> None:
         trees = {"base": {RUST: self.BASE}, "head": {RUST: self.BASE}}
         trees["base-list"] = trees["head-list"] = {RUST: ""}

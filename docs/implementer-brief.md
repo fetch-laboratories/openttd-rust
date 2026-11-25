@@ -15,11 +15,18 @@ The plan holds the decisions; carry them out, in a PR that closes the plan's iss
 A pass is ready for review when a reviewer would have nothing left on the [porting review's list](review-brief.md#a-porting-review). Before the first checkpoint, look for the [design faults](porting.md#design-faults) in your files and count their repair in the pass's size. Before marking the PR ready, for each file:
 
 - Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
-- Run `python3 tools/code-standards-inventory.py --compare origin/rust-migration` and put its table in the status comment. Settle each row it lists as new or grown at the head, or name in the PR body the rule that allows it.
+- Run `python3 tools/code-standards-inventory.py --compare origin/rust-migration` and put its table in the status comment. Settle each row it lists as new or grown at the head, or name in the PR body the rule that allows it, and scope each module `unsafe_code` allow it lists ([code standards](porting.md#code-standards)).
 - Run the fixtures that call the pass's functions: the comparison probes and the ABI probe fixtures under `tools/migration/windows-abi/`. Preflight only compiles them, so only a run shows a fixture that relied on a service read the pass replaced. Your plan names them.
 - Write each test the plan's Evidence names. One you cannot build from the fixtures the pass's files have is a departure: record it in the PR body and put its gap on #156's list.
 - Add each file the pass finishes to `migration/finished-files.txt`.
-- Where the plan has a speed check, measure base and head at the commits the PR finally compares, and keep both Callgrind outputs until it merges. If a count rises, attribute the rise to functions from the two outputs before review and put the largest movers in the PR body: a count that only stays under the plan's bound is not explained. Reads repeated with no write, call or random draw between them may share one lookup ([fidelity](porting.md#fidelity)). Measure again after a review fix or base update that touches the measured path.
+
+### Speed check
+
+Where the plan has a speed check, count instructions at the base and the head ([ADR 0054](adr/0054-per-pass-counts-run-beside-review.md)):
+
+- Start the count as a background job when you mark the PR ready, and start the reviewers without waiting for it. Run only the plan's scenarios: `python3 tools/migration.py simulate SCENARIO... --instructions`. The line in [speed](speed.md) is the stocktake's, which runs all seven. A base already counted at the same commit, by you or in root's retained stocktake profile, needs no second count. The run exits 1 on the anchor identity check (#275); read each candidate's count from its report.
+- Keep both Callgrind outputs until the PR merges. If a count rises, attribute the rise to functions from the two outputs and put the largest movers in the PR body before merge: a count that only stays under the plan's bound is not explained. A rise worth removing is a finding for the fix round then running. Reads repeated with no write, call or random draw between them may share one lookup ([fidelity](porting.md#fidelity)).
+- Count again only at the final head, and only when a fix or base update since the last count touches the measured path. Start that count beside the final head's preflight, and enqueue once both pass. Do not wait on a count anywhere else.
 
 ## Messaging root
 
@@ -27,7 +34,7 @@ Message root, at the thread your spawn message names, only when the queue merges
 
 ## Starting reviewers
 
-This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says, once the PR is ready and `native` is requested: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. Start each with its fixed message and nothing more:
+This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. When the pass is [ready for review](#finishing-a-file-pass), request `native` and mark the PR ready in one step, both as background jobs (`ci.py request PR --profile native --wait`, `ci.py ready PR --wait`), and start the reviewers then. Neither run's result holds them or the ready mark: put the `native` result in the PR when it arrives, and fix a failure while they review. Start each with its fixed message and nothing more:
 
 > Review PR <URL> under `docs/review-brief.md` for behaviour. You are /root/review-<PR>-behaviour. Review <the whole PR | the commits <SHAs>>.
 

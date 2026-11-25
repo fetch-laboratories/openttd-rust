@@ -7,16 +7,19 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -193,36 +196,329 @@ class WorkflowTests(unittest.TestCase):
             preflight.selected(names, ["nothing"])
 
 
+STEPS = ["--step", "Short", "--step", "Fails", "--step", "Long"]
+
+
+def fake_popen() -> tuple[type, list[list[str]]]:
+    """A Popen stand-in whose step fails when its command ends in `false`,
+    and the list of commands it was started with."""
+    calls: list[list[str]] = []
+
+    class Popen:
+        def __init__(self, command: list[str], **_: object) -> None:
+            calls.append(command)
+            self.pid = -1  # signal_group never signals it
+            self.returncode = 1 if command[-1] == "false" else 0
+
+        def wait(self, _timeout: float | None = None) -> int:
+            return self.returncode
+
+    return Popen, calls
+
+
+def steps_of(*pairs: tuple[str, str]) -> list[preflight.Step]:
+    return [preflight.Step(name, [command]) for name, command in pairs]
+
+
 class RunTests(unittest.TestCase):
-    def test_every_step_runs_and_any_failure_fails(self) -> None:
+    def run_steps(self, argv: list[str], timings: dict[str, float]) -> tuple:
+        """main over three steps, the middle one failing, with these recorded
+        timings: its code, commands, printed lines, saved timings and logs."""
         quick = workflow(
-            {"name": "First", "run": "false"}, {"name": "Second", "run": "true"}
+            {"name": "Short", "run": "true"},
+            {"name": "Fails", "run": "false"},
+            {"name": "Long", "run": "true"},
         )
+        popen, calls = fake_popen()
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
             patch.object(preflight, "git", return_value="sha"),
             patch.object(preflight.yaml, "safe_load", return_value=quick),
             patch.object(preflight.migration, "LOCAL", Path(directory)),
-            patch.object(preflight.subprocess, "run") as run,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight.subprocess, "Popen", popen),
+            patch.object(sys, "argv", ["preflight.py", *STEPS, *argv]),
+            patch("builtins.print") as printed,
+        ):
+            (Path(directory) / preflight.TIMINGS).parent.mkdir(parents=True)
+            (Path(directory) / preflight.TIMINGS).write_text(json.dumps(timings))
+            code = preflight.main()
+            saved = json.loads((Path(directory) / preflight.TIMINGS).read_text())
+            logs = sorted(p.name for p in Path(directory).glob("preflight/2*/*.log"))
+        lines = "\n".join(str(call.args[0]) for call in printed.call_args_list)
+        commands = [command[-1] for command in calls]
+        return code, commands, lines, saved, logs
+
+    def test_steps_run_longest_first_and_report_in_step_order(self) -> None:
+        timings = {"Short": 1.0, "Fails": 5.0, "Long": 90.0, "Gone": 3.0}
+        code, commands, lines, saved, logs = self.run_steps(["--jobs", "1"], timings)
+        self.assertEqual(code, 1)
+        self.assertEqual(commands, ["true", "false", "true"])  # workflow order
+        code, commands, lines, saved, logs = self.run_steps(["--jobs", "2"], timings)
+        self.assertEqual(code, 1)
+        self.assertEqual(sorted(commands), ["false", "true", "true"])
+        self.assertEqual(logs, ["01.log", "02.log", "03.log"])
+        self.assertIn("failed: Fails;", lines)
+        self.assertEqual(set(saved), {"Short", "Fails", "Long", "Gone"})
+        self.assertLess(saved["Long"], 90)  # this run's time replaces the last
+        # A step's result is printed whole, after its start line.
+        self.assertRegex(lines, r"--> Fails\n(.*\n)*    exit 1; full output: .*02\.log")
+
+    def test_steps_overlap_up_to_jobs(self) -> None:
+        """Two steps each wait for the other: only a run of both at once ends."""
+        for jobs, overlaps in ((2, True), (1, False)):
+            meeting = threading.Barrier(2, timeout=1)
+
+            def meet(*_: object, meeting: threading.Barrier = meeting) -> tuple:
+                meeting.wait()
+                return True, 0.0
+
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+                patch.object(preflight, "timed", side_effect=meet),
+            ):
+                steps = steps_of(("a", "true"), ("b", "true"))
+                if overlaps:
+                    self.assertEqual(preflight.run_steps(steps, {}, Path(), jobs), [])
+                else:
+                    with self.assertRaises(threading.BrokenBarrierError):
+                        preflight.run_steps(steps, {}, Path(), jobs)
+
+    def test_a_verdict_belongs_to_its_step_not_its_name(self) -> None:
+        """Steps that share a name, or start out of order, keep their own result."""
+        popen, _ = fake_popen()
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight.subprocess, "Popen", popen),
+            patch("builtins.print"),
+        ):
+            preflight.save_timings({"c": 9.0, "a": 1.0})
+            for jobs in (1, 2):
+                same = steps_of(("Same", "false"), ("Same", "true"))
+                self.assertEqual(
+                    preflight.run_steps(same, {}, Path(directory), jobs), ["Same"]
+                )
+                three = steps_of(("a", "false"), ("b", "true"), ("c", "false"))
+                self.assertEqual(
+                    preflight.run_steps(three, {}, Path(directory), jobs), ["a", "c"]
+                )
+
+    def test_an_interrupt_or_stop_signal_stops_every_running_step(self) -> None:
+        """SIGINT or SIGTERM to a parallel run ends it promptly and leaves no
+        step running, even steps that ignore SIGINT and have children."""
+        for number in (signal.SIGINT, signal.SIGTERM):
+            with tempfile.TemporaryDirectory() as directory:
+                self.stop_run(Path(directory), number)
+
+    def stop_run(self, root: Path, number: int) -> None:
+        step = "trap '' INT; sleep 60 & echo $! > {}; touch {}; wait"
+        script = (
+            "import sys\nfrom pathlib import Path\n"
+            f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+            "import preflight\n"
+            f"root = Path({str(root)!r})\n"
+            "preflight.migration.LOCAL = preflight.migration.COMMON_LOCAL = root\n"
+            f"step = {step!r}\n"
+            "steps = [preflight.Step(n, ['sh', '-c', step.format("
+            "root / f'{n}.pid', root / f'{n}.started')]) for n in ('zzq1', 'zzq2')]\n"
+            "preflight.workflow_steps = lambda *_: list(steps)\n"
+            "sys.argv = ['preflight.py', '--step', 'zzq', '--jobs', '2']\n"
+            "sys.exit(preflight.main())\n"
+        )
+        child = subprocess.Popen(
+            [sys.executable, "-c", script],
+            cwd=REPO,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        deadline = time.monotonic() + 30
+        while not all((root / f"zzq{n}.started").exists() for n in "12"):
+            self.assertLess(time.monotonic(), deadline, "steps did not start")
+            self.assertIsNone(child.poll(), "preflight exited before its steps")
+            time.sleep(0.05)
+        started = time.monotonic()
+        child.send_signal(number)
+        self.assertEqual(child.wait(20), 130)
+        self.assertLess(time.monotonic() - started, preflight.STOP_SECONDS + 3)
+        for name in "12":
+            pid = int((root / f"zzq{name}.pid").read_text())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)
+
+    def test_a_stop_during_a_launch_still_stops_that_step(self) -> None:
+        """A SIGTERM that arrives after a step's process exists but before
+        preflight has registered it, serial and parallel."""
+        for jobs in ("1", "2"):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                script = (
+                    "import os, signal, sys, time\nfrom pathlib import Path\n"
+                    f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                    "import preflight\n"
+                    f"root = Path({directory!r})\n"
+                    "preflight.migration.LOCAL = root\n"
+                    "preflight.migration.COMMON_LOCAL = root\n"
+                    "real = preflight.subprocess.Popen\n"
+                    "def late(*args, **kwargs):\n"
+                    "    process = real(*args, **kwargs)\n"
+                    "    if args[0] != ['sleep', '60']:\n"
+                    "        return process\n"
+                    "    (root / 'pid').write_text(str(process.pid))\n"
+                    "    os.kill(os.getpid(), signal.SIGTERM)\n"
+                    "    time.sleep(0.5)\n"
+                    "    return process\n"
+                    "preflight.subprocess.Popen = late\n"
+                    "steps = [preflight.Step('zzq', ['sleep', '60'])]\n"
+                    "preflight.workflow_steps = lambda *_: list(steps)\n"
+                    f"sys.argv = ['preflight.py', '--step', 'zzq', '--jobs', {jobs!r}]\n"
+                    "sys.exit(preflight.main())\n"
+                )
+                child = subprocess.run(
+                    [sys.executable, "-c", script],
+                    cwd=REPO,
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertEqual(child.returncode, 130, child.stderr)
+                self.assertIn(b"--> zzq", child.stdout)  # the stop came in the launch
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(int((root / "pid").read_text()), 0)
+
+    def test_concurrent_timing_saves_keep_every_step(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+        ):
+
+            def save(prefix: str) -> None:
+                for number in range(40):
+                    preflight.save_timings({f"{prefix}{number}": 1.0})
+
+            writers = [threading.Thread(target=save, args=(p,)) for p in "xy"]
+            for writer in writers:
+                writer.start()
+            for writer in writers:
+                writer.join()
+            self.assertEqual(len(preflight.last_timings()), 80)
+
+    def test_full_runs_are_logged_and_subsets_are_not(self) -> None:
+        quick = workflow({"name": "Only", "run": "true"})
+        popen, _ = fake_popen()
+        with (
+            tempfile.TemporaryDirectory() as local,
+            tempfile.TemporaryDirectory() as common,
+            patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+            patch.object(preflight, "git", return_value="sha"),
+            patch.object(preflight, "uncommitted", return_value=""),
+            patch.object(preflight, "stamp", return_value="stamp: test"),
+            patch.object(preflight.yaml, "safe_load", return_value=quick),
+            patch.object(preflight.migration, "LOCAL", Path(local)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(common)),
+            patch.object(preflight.subprocess, "Popen", popen),
+            patch("builtins.print"),
+        ):
+            # Serial first: it saves no timings, so only record_run makes the folder.
+            for argv in (["--jobs", "1"], [], ["--step", "Only"]):
+                with patch.object(sys, "argv", ["preflight.py", *argv]):
+                    self.assertEqual(preflight.main(), 0)
+            runs, unreadable = preflight.read_runs(Path(common) / preflight.RUNS)
+        self.assertEqual([run["jobs"] for run in runs], [1, preflight.JOBS])
+        self.assertEqual(unreadable, 0)
+
+    def test_runs_are_counted_since_a_utc_time(self) -> None:
+        rows = [
+            ("2026-11-25T08:00:00Z", "a", 900, []),
+            ("2026-11-25T11:00:00Z", "a", 200, []),
+            ("2026-11-25T12:00:00Z", "a", 100, ["Gate"]),
+            ("2026-11-25T13:00:00Z", "b", 480, []),
+        ]
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch("builtins.print") as printed,
+        ):
+            log = Path(directory) / preflight.RUNS
+            log.parent.mkdir()
+            log.write_bytes(
+                "".join(
+                    json.dumps(
+                        {"at": a, "head": h, "jobs": 4, "seconds": s, "failed": f}
+                    )
+                    + "\n"
+                    for a, h, s, f in rows
+                ).encode()
+                + b'{"at": "2026-11-25T11:30:00Z", "seconds": 5}\n'
+                + b"\xff\xfe not a run\n"
+                + b'{"at": "2026-11-25T14:00'
+            )
+            # A run appended after a truncated line still counts.
+            stamped = "2026-11-25T15:00:00Z"
+            with patch.object(preflight.time, "strftime", return_value=stamped):
+                preflight.record_run("c", 4, 300.0, [])
+            self.assertEqual(preflight.report_runs("2026-11-25 10:00:00"), 0)
+            self.assertEqual(preflight.report_runs("2999-01-01"), 0)
+            self.assertEqual(preflight.report_runs("yesterday"), 2)
+        lines = [str(call.args[0]) for call in printed.call_args_list]
+        self.assertEqual(
+            lines[:4],
+            [
+                "skipped 3 unreadable lines in preflight/runs.jsonl",
+                "4 full runs since 2026-11-25 10:00:00 on 3 heads, 1 failed; "
+                "median 250s, longest 480s, 18 minutes in all",
+                "skipped 3 unreadable lines in preflight/runs.jsonl",
+                "no full runs since 2999-01-01",
+            ],
+        )
+
+    def test_the_longest_step_of_the_last_run_starts_first(self) -> None:
+        started: list[str] = []
+        steps = [preflight.Step(name, [name]) for name in ("a", "b", "c", "d")]
+
+        def record(step: preflight.Step, *_: object) -> tuple[bool, float]:
+            started.append(step.name)
+            return True, 1.0
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight, "timed", side_effect=record),
+        ):
+            preflight.save_timings({"a": 1.0, "b": 30.0, "c": 2.0})
+            failed = preflight.run_steps(steps, {}, Path(directory), 1)
+        # d has no time, so it may be the longest; then b, c and a.
+        self.assertEqual(started, ["d", "b", "c", "a"])
+        self.assertEqual(failed, [])
+
+    def test_every_step_runs_and_any_failure_fails(self) -> None:
+        quick = workflow(
+            {"name": "First", "run": "false"}, {"name": "Second", "run": "true"}
+        )
+        popen, commands = fake_popen()
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+            patch.object(preflight, "git", return_value="sha"),
+            patch.object(preflight.yaml, "safe_load", return_value=quick),
+            patch.object(preflight.migration, "LOCAL", Path(directory)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+            patch.object(preflight.subprocess, "Popen", popen),
             patch.object(sys, "argv", ["preflight.py"]),
             patch("builtins.print"),
         ):
-            run.side_effect = [
-                CompletedProcess([], 0),
-                CompletedProcess([], 1),
-                CompletedProcess([], 0),
-                CompletedProcess([], 0),
-            ]
             self.assertEqual(preflight.main(), 1)
-            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(len(commands), 4)
+            self.assertIn(["sh", "/hooks/hooks/check-commits.sh", "sha..sha"], commands)
             self.assertEqual(
-                commands[0], ["sh", "/hooks/hooks/check-commits.sh", "sha..sha"]
+                sorted(command[-1] for command in commands),
+                ["false", "sha", "sha..sha", "true"],
             )
-            self.assertEqual(
-                [command[-1] for command in commands[1:]], ["false", "true", "sha"]
+            self.assertIn(
+                ["python3", "tools/compile-check.py", "--base", "sha"], commands
             )
-            self.assertEqual(commands[-1][:2], ["python3", "tools/compile-check.py"])
 
     def test_selected_steps_skip_the_commit_checker(self) -> None:
         quick = workflow({"name": "Only", "run": "true"})
@@ -232,6 +528,7 @@ class RunTests(unittest.TestCase):
             patch.object(preflight, "git", return_value="sha"),
             patch.object(preflight.yaml, "safe_load", return_value=quick),
             patch.object(preflight.migration, "LOCAL", Path(directory)),
+            patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
             patch.object(sys, "argv", ["preflight.py", "--step", "only"]),
             patch("builtins.print"),
         ):
@@ -257,6 +554,8 @@ class RunTests(unittest.TestCase):
                 patch.object(preflight, "git", side_effect=git),
                 patch.object(preflight.yaml, "safe_load", return_value=quick),
                 patch.object(preflight.migration, "LOCAL", Path(directory)),
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
                 patch.object(sys, "argv", ["preflight.py", "--step", "only"]),
                 patch("builtins.print") as printed,
             ):
@@ -350,13 +649,38 @@ class StampTests(unittest.TestCase):
         root = REPO
         sources = [root / "CMakeLists.txt", *sorted((root / "cmake").glob("*.cmake"))]
         built = {
-            match.removeprefix("docs/").removesuffix(".md")
+            match
             for path in sources
             for match in re.findall(
-                r"\$\{CMAKE_SOURCE_DIR\}/(docs/[^\s\"@/]+\.md)", path.read_text()
+                r"\$\{CMAKE_SOURCE_DIR\}/docs/([^\s\"@)]+)", path.read_text()
             )
         }
-        self.assertEqual(set(preflight_stamp.BUILT_DOCS), built)
+        # Doxygen's docs target takes each `@image` a source names from IMAGE_PATH.
+        self.assertIn(
+            "IMAGE_PATH             = ./docs/\n", (root / "Doxyfile.in").read_text()
+        )
+        images = subprocess.run(
+            [
+                "git",
+                "grep",
+                "-h",
+                "-o",
+                "-I",
+                "-E",
+                r"[@\\]image[[:space:]]+.*",
+                "--",
+                "src",
+            ],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+        named = {line.split()[2].strip('"') for line in images.splitlines()}
+        self.assertTrue(named)
+        for name in named:
+            self.assertTrue((root / "docs" / name).is_file(), name)
+        self.assertEqual(set(preflight_stamp.BUILT_DOCS), built | named)
         plan = (root / ".github/workflows/ci-request.yml").read_text()
         listed = re.search(r"const builtDocs = \[(.*?)\];", plan, re.S)
         assert listed
@@ -364,17 +688,45 @@ class StampTests(unittest.TestCase):
             re.findall(r"'([^']+)'", listed[1]), list(preflight_stamp.BUILT_DOCS)
         )
 
-    def test_a_stamp_covers_its_tree_and_markdown_only_differences(self) -> None:
+    def test_a_stamp_covers_its_tree_and_docs_only_differences(self) -> None:
         with scratch_repo() as repo:
             code = commit(repo, "Add: Code", {"tools/x.py": "x = 1\n"})
             preflight_stamp.record("base", code)
             docs = commit(
-                repo, "Doc: Note", {"docs/note.md": "note\n", "AGENTS.md": "a\n"}
+                repo,
+                "Doc: Note",
+                {
+                    "docs/note.md": "note\n",
+                    "AGENTS.md": "a\n",
+                    "docs/skills/x/agents/openai.yaml": "interface: {}\n",
+                    ".github/PULL_REQUEST_TEMPLATE.md": "## Checks\n",
+                    ".github/ISSUE_TEMPLATE/bug.yaml": "name: Bug\n",
+                    ".codex/config.toml": 'model = "m"\n',
+                    # Git quotes this name in line output; the stamp reads it raw.
+                    "docs/skills/caf\u00e9/agents/openai.yaml": "interface: {}\n",
+                    # A name that is not UTF-8, as Git and this filesystem allow.
+                    os.fsdecode(b"docs/caf\xe9.yaml"): "interface: {}\n",
+                },
             )
             self.assertEqual((preflight_stamp.stamp_for(docs) or {}).get("head"), code)
-            built = commit(repo, "Doc: Fonts", {"docs/fonts.md": "built\n"})
-            self.assertIsNone(preflight_stamp.stamp_for(built))
-            subprocess.run(["git", "reset", "-q", "--hard", docs], cwd=repo, check=True)
+            for name, text in (
+                ("docs/fonts.md", "built\n"),
+                ("docs/obg_format.txt", "built\n"),
+                ("docs/openttd.6", "built\n"),
+                ("docs/elrail_tile.png", "built\n"),
+                ("docs/skills/x/issues.py", "x = 1\n"),
+                ("docs/skills/x/run.sh", "true\n"),
+                (".github/workflows/x.yml", "on: push\n"),
+                (".github/dependabot.yml", "version: 2\n"),
+            ):
+                with self.subTest(name):
+                    read = commit(
+                        repo, "Change: Read by a build or check", {name: text}
+                    )
+                    self.assertIsNone(preflight_stamp.stamp_for(read))
+                    subprocess.run(
+                        ["git", "reset", "-q", "--hard", docs], cwd=repo, check=True
+                    )
             tooling = commit(repo, "Change: Tool", {"tools/x.py": "x = 2\n"})
             self.assertIsNone(preflight_stamp.stamp_for(tooling))
 
@@ -439,6 +791,7 @@ class StampTests(unittest.TestCase):
             patch.object(preflight, "commit_step", return_value=passing),
             patch.object(preflight, "environment", return_value=env),
             patch.object(preflight.migration, "LOCAL", repo / ".local"),
+            patch.object(preflight.migration, "COMMON_LOCAL", repo / ".local"),
             patch.object(sys, "argv", ["preflight.py"]),
             patch("builtins.print"),
         ):
@@ -661,6 +1014,264 @@ class CompileCheckTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(bool(check.INPUTS.match(path)), selected)
+
+    def test_definitions_select_game_and_rust_sources_but_not_fork_tests(self) -> None:
+        # #1072: #1056 removed a definition that engines-console.cpp declared itself.
+        check = tool("compile-check")
+        for path, selected in (
+            ("src/engine.cpp", True),
+            ("src/saveload/company_sl.cpp", True),
+            ("rust/openttd-kernels/src/company.rs", True),
+            ("src/tests/station.cpp", False),
+            ("src/engine_func.h", False),
+            ("tools/preflight.py", False),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(bool(check.DEFINITIONS.match(path)), selected)
+
+    def test_each_adapter_builds_against_both_games_without_compile_only(self) -> None:
+        # #1072: #1059's orders console compiled for the candidate only, and
+        # failed on CI against the reference's headers.
+        check = tool("compile-check")
+        modules = [SimpleNamespace(__name__=f"simulation.{n}") for n in ("a", "b")]
+        with patch("simulation.registry.adapter_modules", return_value=modules):
+            listed = check.jobs(False, check.ROLES)
+        self.assertEqual(
+            [name for name, _ in listed],
+            ["adapter a candidate", "adapter a reference"]
+            + ["adapter b candidate", "adapter b reference"],
+        )
+        self.assertEqual(listed[1][1][-2:], ["--role", "reference"])
+        with patch("simulation.registry.adapter_modules", return_value=modules[:1]):
+            compiled = check.jobs(False, check.ROLES, link_reference=False)
+        names = [name for name, _ in compiled]
+        self.assertEqual(
+            names, ["adapter a candidate", "adapter a reference, compile only"]
+        )
+        self.assertEqual([check.adapter_job(name) for name in names], [True, False])
+        seen: dict[str, dict[str, str]] = {}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check.migration, "REFERENCE_BUILD", Path(directory)),
+            patch.object(check, "changed", return_value=["src/engine.cpp"]),
+            patch.object(check, "generated_abi_changed", return_value=[]),
+            patch.object(check.shutil, "which", return_value=None),
+            patch.object(check, "jobs", return_value=listed),
+            patch.object(
+                check,
+                "run",
+                side_effect=lambda name, _c, env: (
+                    seen.setdefault(name, env) and (name, 0, Path(directory))
+                ),
+            ),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            self.assertEqual(check.check("base"), 0)
+        self.assertEqual(sorted(seen), sorted(name for name, _ in listed))
+        for env in seen.values():
+            self.assertNotIn("PROBE_COMPILE_ONLY", env)
+
+    def fixture_build(self, root: Path, defined: bool) -> Path:
+        """A one-object game whose ninja link line the adapter reads, and a
+        console that calls a definition the game may have removed."""
+        build = root / "build-rust"
+        (build / "src").mkdir(parents=True)
+        body = "void Removed() {}\n" if defined else ""
+        (build / "src/game.cpp").write_text(body + "int main() { return 0; }\n")
+        (build / "src/console.cpp").write_text("")
+        (build / "build.ninja").write_text(
+            "rule cxx\n  command = c++ -c $in -o $out\n"
+            "rule link\n  command = c++ $in -o $out\n"
+            "build game.o: cxx src/game.cpp\n"
+            "build openttd-rust: link game.o\n"
+        )
+        subprocess.run(["ninja", "-C", str(build)], check=True, capture_output=True)
+        entry = {
+            "file": str(build / "src/console.cpp"),
+            "directory": str(build),
+            "command": f"c++ -std=c++20 -I{root} -o console.o -c {build / 'src/console.cpp'}",
+        }
+        (build / "compile_commands.json").write_text(json.dumps([entry]))
+        (root / "abi.h").write_text("void Removed();\n")
+        source = root / "fixture-console.cpp"
+        source.write_text(
+            '#include "abi.h"\n'
+            'extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { Removed(); }\n'
+        )
+        return source
+
+    def adapter_check(self, root: Path, source: Path, compile_only: str = "") -> int:
+        """The check's child for one adapter whose build is the fixture."""
+        check = tool("compile-check")
+        import simulation.console_adapter as consoles
+
+        def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
+            return consoles.console_adapter(build, folder, env, source, "fixture")
+
+        module = SimpleNamespace(__name__="simulation.fixture", adapter=adapter)
+        environ = {k: v for k, v in os.environ.items() if k != "PROBE_COMPILE_ONLY"}
+        if compile_only:
+            environ["PROBE_COMPILE_ONLY"] = compile_only
+        with (
+            patch("simulation.registry.adapter_modules", return_value=[module]),
+            patch.object(check, "BUILD", root / "build-rust"),
+            patch.object(check, "OUT", root / "out"),
+            patch.object(check.migration, "candidate_lock", return_value=nullcontext()),
+            patch.object(check.migration, "environment", return_value=environ),
+            patch.dict(os.environ, environ, clear=True),
+            patch.object(sys, "addaudithook"),
+            patch("sys.stderr"),
+        ):
+            return check.child(None, "fixture", "candidate")
+
+    def test_an_adapter_calling_a_removed_definition_fails_at_its_link(self) -> None:
+        # #1072: engines-console.cpp declared ClearEnginesHiddenFlagOfCompany
+        # itself, so only CI's link of the adapter failed on #1056.
+        if not shutil.which("ninja"):
+            self.skipTest("no ninja on this host")
+        check = tool("compile-check")
+        for defined, code in ((True, 0), (False, check.FAILED)):
+            with self.subTest(defined=defined), tempfile.TemporaryDirectory() as d:
+                root = Path(d).resolve()
+                source = self.fixture_build(root, defined)
+                self.assertEqual(self.adapter_check(root, source), code)
+                # A linked adapter is deleted, pass or fail.
+                self.assertFalse(
+                    (
+                        root / "out/adapters/candidate/linked/fixture/openttd-fixture"
+                    ).exists()
+                )
+
+    def test_a_fresh_abi_header_fails_beside_a_link_against_the_built_one(self) -> None:
+        # Re-check of #1079: one console and one include, `abi.h`, whose
+        # build-rust/generated-abi copy declares Removed and whose fresh copy,
+        # from current Rust declarations, does not. Each job runs as its own
+        # process with the environment check() chose for it.
+        if not shutil.which("ninja"):
+            self.skipTest("no ninja on this host")
+        check = tool("compile-check")
+        child = (
+            "import importlib.util, sys\n"
+            "from contextlib import nullcontext\n"
+            "from pathlib import Path\n"
+            "from types import SimpleNamespace\n"
+            "import probe, simulation.registry as registry\n"
+            "import simulation.console_adapter as consoles\n"
+            "root, role, script, source = sys.argv[1:5]\n"
+            "build = Path(root) / 'build-rust'\n"
+            "spec = importlib.util.spec_from_file_location('check', script)\n"
+            "g = importlib.util.module_from_spec(spec)\n"
+            "spec.loader.exec_module(g)\n"
+            "g.BUILD, g.OUT, probe.BUILD = build, Path(root) / 'out', build\n"
+            "g.migration.candidate_lock = lambda *a, **k: nullcontext()\n"
+            "def adapter(b, folder, env):\n"
+            "    return consoles.console_adapter(b, folder, env, Path(source), 'fixture')\n"
+            "module = SimpleNamespace(__name__='simulation.fixture', adapter=adapter)\n"
+            "registry.adapter_modules = lambda: [module]\n"
+            "sys.exit(g.child(None, 'fixture', role))\n"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d).resolve()
+            source = self.fixture_build(root, defined=True)
+            build = root / "build-rust"
+            (root / "abi.h").unlink()
+            (build / "generated-abi").mkdir()
+            (build / "generated-abi/abi.h").write_text("void Removed();\n")
+            (root / "out/generated-abi").mkdir(parents=True)
+            (root / "out/generated-abi/abi.h").write_text("void Renamed();\n")
+            commands = json.loads((build / "compile_commands.json").read_text())
+            commands[0]["command"] += f" -I{build / 'generated-abi'}"
+            (build / "compile_commands.json").write_text(json.dumps(commands))
+            script = str(REPO / "tools/compile-check.py")
+
+            def run(
+                name: str, command: list[str], env: dict[str, str]
+            ) -> tuple[str, int, Path]:
+                role = command[command.index("--role") + 1]
+                log = root / "out/logs" / f"{name.replace(' ', '-')}.log"
+                argv = [
+                    sys.executable,
+                    "-c",
+                    child,
+                    str(root),
+                    role,
+                    script,
+                    str(source),
+                ]
+                with log.open("w") as handle:
+                    code = subprocess.run(
+                        argv,
+                        cwd=REPO / "tools",
+                        env=env,
+                        stdout=handle,
+                        stderr=subprocess.STDOUT,
+                    ).returncode
+                return name, code, log
+
+            module = SimpleNamespace(__name__="simulation.fixture")
+            environ = {k: v for k, v in os.environ.items() if k != "PROBE_COMPILE_ONLY"}
+            with (
+                patch("simulation.registry.adapter_modules", return_value=[module]),
+                patch.object(check, "BUILD", build),
+                patch.object(check, "OUT", root / "out"),
+                patch.object(check.migration, "REFERENCE_BUILD", root / "none"),
+                patch.object(check.migration, "environment", return_value=environ),
+                patch.object(check, "changed", return_value=["src/engine.cpp"]),
+                patch.object(check, "generated_abi_changed", return_value=["abi.h"]),
+                patch.object(check.shutil, "which", return_value=None),
+                patch.object(check, "run", side_effect=run),
+                patch.object(check, "comparisons", return_value=[]),
+                patch("builtins.print") as printed,
+            ):
+                (build / "CMakeCache.txt").write_text("")
+                self.assertEqual(check.check("base"), 1)
+            lines = [call.args[0] for call in printed.call_args_list]
+            failed = [line for line in lines if line.startswith("FAIL")]
+            self.assertEqual(len(failed), 1, lines)
+            self.assertIn("adapter fixture candidate, compile only", failed[0])
+            log = root / "out/logs/adapter-fixture-candidate,-compile-only.log"
+            self.assertIn("Removed", log.read_text())
+
+    def test_each_child_holds_the_scratch_lock_until_it_exits(self) -> None:
+        # Re-check of #1079: a check stopped alone left children writing.
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as d,
+            patch.object(check, "OUT", Path(d) / "out"),
+        ):
+            with check.exclusive():
+                (Path(d) / "out/logs").mkdir()
+                (held,) = check.HELD
+                probe_fd = "import os, sys; os.fstat(int(sys.argv[1]))"
+                command = [sys.executable, "-c", probe_fd, str(held)]
+                self.assertEqual(check.run("lock", command, dict(os.environ))[1], 0)
+            self.assertEqual(check.HELD, [])
+            # With no lock held, a child gets no descriptor to keep.
+            (Path(d) / "out/logs").mkdir(exist_ok=True)
+            self.assertNotEqual(check.run("lock", command, dict(os.environ))[1], 0)
+
+    def test_a_link_names_changed_sources_newer_than_the_candidate_game(self) -> None:
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "build-rust").mkdir()
+            (root / "src").mkdir()
+            game = root / "build-rust/openttd-rust"
+            game.write_text("")
+            os.utime(game, (100, 100))
+            (root / "src/engine.cpp").write_text("")
+            (root / "src/old.cpp").write_text("")
+            os.utime(root / "src/old.cpp", (50, 50))
+            with (
+                patch.object(check, "ROOT", root),
+                patch.object(check, "BUILD", root / "build-rust"),
+            ):
+                paths = ["src/engine.cpp", "src/old.cpp", "docs/x.md"]
+                self.assertEqual(check.newer_than_build(paths), ["src/engine.cpp"])
 
     def test_skips_with_a_notice_without_a_configured_build(self) -> None:
         check = tool("compile-check")

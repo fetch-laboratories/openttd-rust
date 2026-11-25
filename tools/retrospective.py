@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only PR readiness, milestone latency, stocktakes and base-update checks."""
+"""Read-only PR readiness, milestone latency, stocktakes, base-update checks, rebuild counts and ready waits."""
 
 from __future__ import annotations
 
@@ -10,11 +10,12 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from urllib.parse import urlencode
 
 import base_update
 import ci
+import rebuild_reach
 from review_report import Comment, Review, ReviewReport, review_reports
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -287,6 +288,135 @@ def stocktake(start: str, end: str) -> dict[str, Any]:
     }
 
 
+class RunRow(TypedDict):
+    """The fields `ready-wait` reads from `gh run list`."""
+
+    databaseId: int
+    displayTitle: str
+    createdAt: str
+    attempt: int
+
+
+class AttemptRow(TypedDict):
+    """The fields `ready-wait` reads from one run attempt."""
+
+    run_started_at: str
+    updated_at: str
+    status: str
+
+
+class TimelineEvent(TypedDict, total=False):
+    event: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class Attempt:
+    started_at: str
+    updated_at: str
+    status: str
+
+    @classmethod
+    def read(cls, row: AttemptRow) -> Attempt:
+        return cls(row["run_started_at"], row["updated_at"], row["status"])
+
+
+@dataclass(frozen=True)
+class NativeRun:
+    """One requested `native` run and each of its attempts, oldest first."""
+
+    created_at: str
+    attempts: tuple[Attempt, ...]
+
+
+def ready_wait(ready: list[str], native: list[NativeRun]) -> float | None:
+    """Minutes the first ready mark came after the last `native` run requested
+    before it finished; None when it came while that run ran, or before any
+    request (#1072). The brief starts reviewers at the ready mark.
+
+    The run's state at the mark is its latest attempt started by then: a
+    rerun started after the mark does not move the earlier attempt's finish."""
+    if not ready:
+        raise ValueError("never marked ready")
+    mark = min(timestamp(at) for at in ready)
+    before = [run for run in native if timestamp(run.created_at) <= mark]
+    if not before:
+        return None
+    last = max(before, key=lambda run: run.created_at)
+    started = [a for a in last.attempts if timestamp(a.started_at) <= mark]
+    if not started:
+        return None
+    attempt = started[-1]
+    finished = timestamp(attempt.updated_at)
+    if attempt.status != "completed" or finished > mark:
+        return None
+    return (mark - finished).total_seconds() / 60
+
+
+def native_run(repository: str, row: RunRow) -> NativeRun:
+    attempts = [
+        Attempt.read(
+            cast(
+                AttemptRow,
+                ci.api(repository, f"actions/runs/{row['databaseId']}/attempts/{n}"),
+            )
+        )
+        for n in range(1, row["attempt"] + 1)
+    ]
+    return NativeRun(row["createdAt"], tuple(attempts))
+
+
+def ready_waits(repository: str, since: str) -> int:
+    """Print, per PR with a `native` request since SINCE, whether its ready mark
+    waited for that run to finish, then the count."""
+    rows = cast(
+        list[RunRow],
+        json.loads(
+            ci.gh(
+                "run",
+                "list",
+                "--repo",
+                repository,
+                "--workflow",
+                "Requested validation",
+                "--limit",
+                "1000",
+                "--created",
+                f">={since}",
+                "--json",
+                "databaseId,displayTitle,createdAt,attempt",
+            )
+        ),
+    )
+    by_pull: dict[int, list[RunRow]] = {}
+    for row in rows:
+        words = row["displayTitle"].split()
+        if words[:3] == ["CI", "native", "PR"] and words[3].isdigit():
+            by_pull.setdefault(int(words[3]), []).append(row)
+    waited = counted = 0
+    for number in sorted(by_pull):
+        path = f"issues/{number}/timeline?per_page=100"
+        events = cast(list[TimelineEvent], pages(repository, path))
+        ready = [
+            e["created_at"]
+            for e in events
+            if e.get("event") == "ready_for_review" and "created_at" in e
+        ]
+        if not ready:
+            print(f"#{number}: not marked ready")
+            continue
+        runs = [native_run(repository, row) for row in by_pull[number]]
+        minutes = ready_wait(ready, runs)
+        counted += 1
+        if minutes is None:
+            print(f"#{number}: ready with or before native")
+        else:
+            waited += 1
+            print(f"#{number}: WAITED, ready {minutes:.1f} min after native finished")
+    print(f"ready after native finished: {waited} of {counted}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -300,9 +430,32 @@ def main() -> None:
     command.add_argument("end")
     command.add_argument("--json", action="store_true")
     base_update.add_parser(commands)
+    rebuild_reach.add_parser(commands)
+    command = commands.add_parser(
+        "ready-wait",
+        help="PRs marked ready only after their native run finished",
+        description=(
+            "For each PR with a requested native run since SINCE, whether its first"
+            " ready mark came after the last native run requested before it had"
+            " finished: reviewers start at the ready mark, so that wait holds them"
+            " (#1072)."
+        ),
+    )
+    command.add_argument("--since", required=True, help="first day, YYYY-MM-DD")
+    command.add_argument("--repo")
     args = parser.parse_args()
+    if args.command == "ready-wait":
+        repository = (
+            args.repo
+            or json.loads(ci.gh("repo", "view", "--json", "nameWithOwner"))[
+                "nameWithOwner"
+            ]
+        )
+        sys.exit(ready_waits(repository, args.since))
     if args.command == "base-update":
         sys.exit(base_update.run(args, Path.cwd()))
+    if args.command == "rebuilds":
+        sys.exit(rebuild_reach.run(args, Path.cwd()))
     result: dict[str, Any]
     if args.command == "stocktake":
         result = stocktake(args.start, args.end)

@@ -11,7 +11,7 @@ Inspect root's session and the project in /home/fetch/projects/openttd-rust, the
 User input: $ARGUMENTS. It may give a trigger or an action scope; explicit scope changes the action allowance, not the merge checks or automatic rollback. If a PR number or name does not match, name the likely match in your note. Read `AGENTS.md` and `docs/roadmap.md` first.
 
 Attribution line for the message:
-`Agent: /root (<host> wind-down) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
+`Agent: /root/wind-down | Model: <your exact model ID> | Reasoning effort: <as the host reports it, else not-reported-by-host> | Host: <host>`. The path, model and effort are one word each, as the tools read them.
 
 ## 1. Read root's live session
 

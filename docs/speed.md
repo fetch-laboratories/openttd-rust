@@ -2,7 +2,7 @@
 
 ## Policy
 
-- Speed against the ceilings is measured on the merged branch at each stocktake. A pass on a per-tick or per-tile path also compares instruction counts at its base and head and explains a rise before review, with no bound a PR must stay under ([ADR 0052](adr/0052-speed-on-the-merged-branch-and-per-pass-counts.md), [implementer brief](implementer-brief.md#finishing-a-file-pass)). PRs do not edit `SPEED_ANCHORS` or `SPEED_INTEGRATED`.
+- Speed against the ceilings is measured on the merged branch at each stocktake. A pass on a per-tick or per-tile path also compares instruction counts at its base and head, beside its review, and explains a rise before merge, with no bound a PR must stay under ([ADR 0054](adr/0054-per-pass-counts-run-beside-review.md), [implementer brief](implementer-brief.md#speed-check)). PRs do not edit `SPEED_ANCHORS` or `SPEED_INTEGRATED`.
 - Ceiling and band decisions use the mean of a scenario's last three speed-pass ratios on this host's current [hardware](rust-migration.md#hardware), carried forward by the projection. Until a scenario has three passes on it, use the mean of those it has.
 
 | Scenario | Ceiling ([ADR 0014](adr/0014-speed-ceilings.md)) | Band starts |

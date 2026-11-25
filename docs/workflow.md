@@ -2,9 +2,15 @@
 
 ## Change types
 
-- **Docs-only** means what CI and the pre-push hook treat as inert: `AGENTS.md` and Markdown (`.md`) under `docs/`, except the docs CMake packages for the in-game viewer (the `builtDocs` list in `.github/workflows/ci-policy.yml`). Check the whole diff, both paths of a rename included. Everything else goes through a PR that passes CI.
+- **Docs-only** means what CI and the pre-push hook treat as inert, because no build, test or check reads it:
+  - `AGENTS.md`;
+  - every file under `docs/`, whatever its type, except scripts (`.py`, `.sh`) and the files a build reads there: what CMake packages and the images Doxygen takes (the `builtDocs` list in `.github/workflows/ci-policy.yml`);
+  - `.github/PULL_REQUEST_TEMPLATE.md` and `.github/ISSUE_TEMPLATE/`, which only GitHub's forms and agents read;
+  - `.codex/`, the Codex host's settings.
+
+  Check the whole diff, both paths of a rename included. Everything else goes through a PR that passes CI. A file joins the list once nothing in a build, test or check reads it. The list is `inert` in `tools/preflight_stamp.py` and in the three workflows that share its rule, and the push filter of `ci-build.yml` and `rust-migration.yml`; `tools/test-ci.py` holds them to one rule.
 - Commit a docs-only change directly to `rust-migration`, one commit per change, and push it when done. These pushes use administrative bypass of branch protection, which covers docs-only pushes and nothing else.
-- Push to `rust-migration` only while the merge queue is empty; hold the commit locally until then. Any push to the base rebuilds every queued PR's merge group and starts its Full run again, and after a queue removal the requeue check refuses a head that is behind by any commit that changes more than inert Markdown. `gh pr list --search "is:queued"` lists the queue.
+- Push to `rust-migration` only while the merge queue is empty; hold the commit locally until then. Any push to the base rebuilds every queued PR's merge group and starts its Full run again, and after a queue removal the requeue check refuses a head that is behind by any commit that changes more than docs-only files. `gh pr list --search "is:queued"` lists the queue.
 
 ## Records
 
@@ -32,7 +38,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 
 ### Checks
 
-- Scenario comparisons run on CI, not on this host ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)); run one locally, by name, only to diagnose a failure. Once the local build and Cargo checks pass, start `python3 tools/ci.py request PR --profile native --wait` with your host's [background-job](team.md#background-jobs) mechanics (exit 2 means still running, not failed: resume with `python3 tools/ci.py wait PR`), and record the passing run at the reviewed head in the status comment.
+- Scenario comparisons run on CI, not on this host ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)); run one locally, by name, only to diagnose a failure. Once the local build and Cargo checks pass, start `python3 tools/ci.py request PR --profile native --wait` with your host's [background-job](team.md#background-jobs) mechanics (exit 2 means still running, not failed: resume with `python3 tools/ci.py wait PR`), and record the passing run and its head in the status comment.
 - That passing run is the PR's one `native` run (provisional). A review fix or a base update after it queues on `Quick validation` at its head: the queue's Full runs every job `native` runs ([jobs and profiles](ci.md#jobs-and-profiles)), and `enqueue` reads the PR's newest requested run on any of its commits. Request `native` again only to diagnose a failed Full.
 - Mark a draft PR ready with `python3 tools/ci.py ready PR --wait` as a background job: it waits for `Quick validation` at the head, which `enqueue` needs. Resume it with `python3 tools/ci.py wait PR --quick`. To wait out a run before `gh run rerun --failed`, use `wait --complete`; `wait --run RUN` waits on a run that has no request record.
 - Request `--profile platform` only for a suspected macOS build failure, or once before queueing a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/`: Full does not build macOS, and the [platform cadence](root-workflow.md#cadences) would find the break after it merges.
