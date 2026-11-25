@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
 from subprocess import CompletedProcess
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -1014,6 +1014,77 @@ class CompileCheckTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(bool(check.INPUTS.match(path)), selected)
+
+    def test_definitions_select_game_and_rust_sources_but_not_fork_tests(self) -> None:
+        # #1072: #1056 removed a definition that engines-console.cpp declared itself.
+        check = tool("compile-check")
+        for path, selected in (
+            ("src/engine.cpp", True),
+            ("src/saveload/company_sl.cpp", True),
+            ("rust/openttd-kernels/src/company.rs", True),
+            ("src/tests/station.cpp", False),
+            ("src/engine_func.h", False),
+            ("tools/preflight.py", False),
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(bool(check.DEFINITIONS.match(path)), selected)
+
+    def test_each_adapter_builds_against_both_games_without_compile_only(self) -> None:
+        # #1072: #1059's orders console compiled for the candidate only, and
+        # failed on CI against the reference's headers.
+        check = tool("compile-check")
+        modules = [SimpleNamespace(__name__=f"simulation.{n}") for n in ("a", "b")]
+        with patch("simulation.registry.adapter_modules", return_value=modules):
+            listed = check.jobs(False, check.ROLES)
+        self.assertEqual(
+            [name for name, _ in listed],
+            ["adapter a candidate", "adapter a reference"]
+            + ["adapter b candidate", "adapter b reference"],
+        )
+        self.assertEqual(listed[1][1][-2:], ["--role", "reference"])
+        seen: dict[str, dict[str, str]] = {}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check.migration, "REFERENCE_BUILD", Path(directory)),
+            patch.object(check, "changed", return_value=["src/engine.cpp"]),
+            patch.object(check, "generated_abi_changed", return_value=[]),
+            patch.object(check.shutil, "which", return_value=None),
+            patch.object(check, "jobs", return_value=listed),
+            patch.object(
+                check,
+                "run",
+                side_effect=lambda name, _c, env: seen.setdefault(name, env)
+                and (name, 0, Path(directory)),
+            ),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            self.assertEqual(check.check("base"), 0)
+        self.assertEqual(sorted(seen), sorted(name for name, _ in listed))
+        for env in seen.values():
+            self.assertNotIn("PROBE_COMPILE_ONLY", env)
+
+    def test_a_link_names_changed_sources_newer_than_the_candidate_game(self) -> None:
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "build-rust").mkdir()
+            (root / "src").mkdir()
+            game = root / "build-rust/openttd-rust"
+            game.write_text("")
+            os.utime(game, (100, 100))
+            (root / "src/engine.cpp").write_text("")
+            (root / "src/old.cpp").write_text("")
+            os.utime(root / "src/old.cpp", (50, 50))
+            with (
+                patch.object(check, "ROOT", root),
+                patch.object(check, "BUILD", root / "build-rust"),
+            ):
+                paths = ["src/engine.cpp", "src/old.cpp", "docs/x.md"]
+                self.assertEqual(check.newer_than_build(paths), ["src/engine.cpp"])
 
     def test_skips_with_a_notice_without_a_configured_build(self) -> None:
         check = tool("compile-check")

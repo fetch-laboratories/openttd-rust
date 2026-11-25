@@ -49,6 +49,11 @@ def console_adapter(
             raise RuntimeError(f"not a compile command: {compile_args[0]}")
         subprocess.run(command, cwd=entry["directory"], env=env, check=True)
         return folder / f"openttd-{kind}"
+    # Preflight's adapter build (#1072) needs CI's diagnostics and symbol
+    # resolution, not debug info: dropping it leaves both unchanged.
+    checking = bool(os.environ.get("ADAPTER_BUILD_CHECK"))
+    if checking:
+        compile_args.append("-g0")
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
     command = subprocess.check_output(
@@ -82,6 +87,7 @@ def console_adapter(
         str(folder / f"{kind}.o"),
         "-Wl,--wrap=_Z22IConsoleStdLibRegisterv",
         *["-Wl,--wrap=" + symbol for symbol in wraps],
+        *(["-Wl,--strip-debug"] if checking else []),
     ]
     subprocess.run(link_args, cwd=build, env=env, check=True)
     return binary
