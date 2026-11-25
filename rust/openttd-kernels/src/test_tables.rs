@@ -217,8 +217,8 @@ pub(crate) const TRAIN_LEAVES: crate::train::Leaves = crate::train::Leaves {
 
 /// `crate::ship_control::Leaves` with every entry unreachable.
 pub(crate) const SHIP_LEAVES: crate::ship_control::Leaves = crate::ship_control::Leaves {
-    update_viewport: unreachable3,
     next_depot: unreachable2,
+    update_viewport: unreachable3,
     vehicle: &VEHICLE,
 };
 

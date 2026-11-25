@@ -53,8 +53,8 @@ static void ShipBoundary()
 	ship_vehicle.maintenance = &ship_maintenance;
 	auto *shell = &ship_probe.record;
 	OpenTTDShipLeaves leaves{
-		.update_viewport = ShipProbeUnused<void, OpenTTDVehicle *, bool, bool>,
 		.next_depot = ShipProbeUnused<bool, uint32_t, OpenTTDShipDepot *>,
+		.update_viewport = ShipProbeUnused<void, OpenTTDVehicle *, bool, bool>,
 		.vehicle = &ship_vehicle
 	};
 	ship_probe = {};

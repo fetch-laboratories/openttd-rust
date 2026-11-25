@@ -253,12 +253,12 @@ pub struct Depot {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    /// `SpecializedVehicle<Ship>::UpdateViewport(force_update, update_delta)`, which calls the
-    /// ship's drawing members.
-    pub update_viewport: extern "C" fn(VehicleRef, bool, bool),
     /// One step of `Depot::Iterate(first)`: writes the first depot at or after index `first`
     /// to `out`, or returns false when there is none.
     pub next_depot: extern "C" fn(u32, *mut Depot) -> bool,
+    /// `SpecializedVehicle<Ship>::UpdateViewport(force_update, update_delta)`, which calls the
+    /// ship's drawing members.
+    pub update_viewport: extern "C" fn(VehicleRef, bool, bool),
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
@@ -1548,8 +1548,8 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDShipLeaves" ["probe"] => Leaves {
-        update_viewport,
         next_depot,
+        update_viewport,
         vehicle,
     };
     "OpenTTDShipDepot" ["probe"] => Depot {

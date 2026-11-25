@@ -27,7 +27,7 @@
 
 ## Ship controller and private state (#146)
 
-- Rust owns: every body of `ship_cmd.cpp` (tick/movement, locks, acceleration, rotation/reversal, track/depot/destination policy, economy-day/service/cache, `CmdBuildShip`, nearest-depot region BFS, `GetVehicleTrackdir`, `IsShipDestinationTile`, `GetEffectiveWaterClass`), the ship owner (`state`, `rotation`, rotation coordinates and cached path) reached through the vehicle record's `ship` link, and the record's sprite-cache direction; ship YAPF (#119) owns search.
+- Rust owns: every simulation body of `ship_cmd.cpp`, all but the drawing and sound members (tick/movement, locks, acceleration, rotation/reversal, track/depot/destination policy, economy-day/service/cache, `CmdBuildShip`, nearest-depot region BFS, `GetVehicleTrackdir`, `IsShipDestinationTile`, `GetEffectiveWaterClass`), the ship owner (`state`, `rotation`, rotation coordinates and cached path) reached through the vehicle record's `ship` link, and the record's sprite-cache direction; ship YAPF (#119) owns search.
 - C++ keeps: the `Ship` shell and its virtual members as one-call shims, the specialised `UpdateViewport` with the drawing members (#656), the depot pool walk (#638), sprites, sound, `UpdateDeltaXY`, the `PerformanceAccumulator` of `Ship::Tick` (#1011) and modern/legacy save staging.
 - Checks: `python3 tools/migration.py simulate water --jobs 2`; the ABI probe's ship case runs the real reverse and depot searches.
 - Limits: Gaps remain in legacy saves, viewport pixels or arbitrary custom NewGRF combinations.

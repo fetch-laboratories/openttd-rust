@@ -8,8 +8,6 @@
 /** @file ship_control_services.h The ship controller's services that C++ still owns. */
 #include "vehicle_services.h"
 
-static void Ship_update_viewport(OpenTTDVehicle *handle, bool force_update, bool update_delta) noexcept { Ship::From(VehicleOf(handle))->UpdateViewport(force_update, update_delta); }
-
 static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 {
 	for (const Depot *d : Depot::Iterate(first)) {
@@ -19,11 +17,13 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 	return false;
 }
 
+static void Ship_update_viewport(OpenTTDVehicle *handle, bool force_update, bool update_delta) noexcept { Ship::From(VehicleOf(handle))->UpdateViewport(force_update, update_delta); }
+
 const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
 	static const OpenTTDShipLeaves leaves{
-		.update_viewport = Ship_update_viewport,
 		.next_depot = Ship_next_depot,
+		.update_viewport = Ship_update_viewport,
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return leaves;

@@ -19,8 +19,8 @@ struct OpenTTDShipState;
 /** One step of Depot::Iterate. */
 struct OpenTTDShipDepot { uint16_t index; uint32_t xy; };
 struct OpenTTDShipLeaves {
-	void (*update_viewport)(OpenTTDVehicle *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport);
 	bool (*next_depot)(uint32_t, OpenTTDShipDepot *) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
+	void (*update_viewport)(OpenTTDVehicle *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport);
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 };
 const OpenTTDShipLeaves &GetRustShipServices() noexcept;
