@@ -44,7 +44,7 @@ struct OpenTTDCargoRegistryServices {
 	void (*sort)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(sort);
 
 	uint16_t (*callback_frame)(const CargoSpec *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_frame);
-	uint16_t (*num_sprites)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(num_sprites);
+	uint8_t (*num_sprites)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(num_sprites);
 	uint32_t (*sprite)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
 	uint32_t (*sprite_frame)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(sprite_frame);
 };

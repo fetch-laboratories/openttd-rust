@@ -117,7 +117,7 @@ pub struct Services {
     pub(crate) callback_frame:
         extern "C" fn(*const CargoSpec, u16, u32, u32, *mut i32, usize) -> u16,
     /// `ResultSpriteGroup::num_sprites`.
-    num_sprites: extern "C" fn(Handle) -> u16,
+    num_sprites: extern "C" fn(Handle) -> u8,
     /// `ResultSpriteGroup::sprite`.
     sprite: extern "C" fn(Handle) -> u32,
     /// Builds `CargoResolverObject object(cs)` and calls `openttd_rust_cargo_evaluate_sprite`
@@ -455,6 +455,10 @@ impl TownProductionCargoes {
 }
 
 /// `InitializeSortedCargoSpecs`: initialize the list of sorted cargo specifications.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "static_cast<uint8_t>(it - std::begin(_sorted_cargo_specs))"
+)]
 pub(crate) fn initialize_sorted_cargo_specs(s: &'static Services) {
     // Language loading sorts the initially empty specification array before climate setup.
     with_registry(|r| r.services = s);
@@ -490,10 +494,6 @@ pub(crate) fn initialize_sorted_cargo_specs(s: &'static Services) {
     let sorted = |index: usize| CargoSpecRef::of(s, with_registry(|r| r.sorted_cargo_specs[index]));
     for it in 0..count {
         let cargo = sorted(it).index();
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "static_cast<uint8_t>(it - std::begin(_sorted_cargo_specs))"
-        )]
         with_registry(|r| r.sorted_cargo_types[usize::from(cargo.0)] = it as u8);
     }
 
@@ -610,6 +610,11 @@ pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: 
 
 /// `BuildCargoTranslationMap`: construct the cargo mapping, the reverse of a cargo
 /// translation table, for the file being loaded.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "cargo_map[cs->Index()] = idx stores the int to a uint8_t"
+)]
 pub(crate) fn build_cargo_translation_map(file: Handle) {
     let grffile = grf_file(file);
     grffile.cargo_map_fill(u8::MAX);
@@ -620,11 +625,6 @@ pub(crate) fn build_cargo_translation_map(file: Handle) {
         // Check the translation table for this cargo's label
         let idx = crate::container_func::find_index(cargo_list.as_slice(), &cs.label());
         if idx >= 0 {
-            #[allow(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "cargo_map[cs->Index()] = idx stores the int to a uint8_t"
-            )]
             grffile.set_cargo_map(cs.index(), idx as u8);
         }
     }
