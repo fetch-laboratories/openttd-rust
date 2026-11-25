@@ -1,13 +1,13 @@
 """Count the C++ objects whose inputs a change touches (#1070).
 
-Ninja reruns an object's compile command when any file it was compiled from
-changes, and ccache serves that command only when its preprocessed text was
-compiled before. So a build that crosses a change compiles again at most every
-object whose source, header or generated ABI header the change touched; an
-object whose only change is a comment or other preprocessor-invisible text still
-hits the cache. This module replays that count from Git: it reads which files each object includes from a built
-candidate tree (`ninja -t deps`), then for each commit compares those files
-with the commit's first parent. Generated ABI headers are regenerated from each
+In one build's include graph, count the objects whose source, header or
+generated ABI header a change touches. Ninja reruns each of those compiles when
+a build crosses the change; ccache may serve some of them from text it has
+already compiled. Objects the graph does not list are not counted.
+
+The count is replayed from Git: each object's inputs come from a built
+candidate tree (`ninja -t deps`), and each commit's files are compared with
+its first parent's. Generated ABI headers are regenerated from each
 commit's own Rust inputs with that commit's tools/generate-abi.py.
 
 The include graph is the build tree's, applied to older commits, so a count is
@@ -97,13 +97,16 @@ def parse_deps(text: str, build: Path, source: Path) -> dict[str, set[str]]:
 
 
 def build_source(build: Path) -> Path:
-    """The source tree a build was configured from; its includes name that tree."""
+    """The source tree a build was configured from; its includes name that tree.
+    Without it a graph's source paths cannot be matched, so refuse to guess."""
     cache = build / "CMakeCache.txt"
     if cache.exists():
         for line in cache.read_text().splitlines():
             if line.startswith("CMAKE_HOME_DIRECTORY:"):
                 return Path(line.split("=", 1)[1])
-    return build.parent
+    raise ValueError(
+        f"{cache} names no CMAKE_HOME_DIRECTORY; pass the build that wrote the graph"
+    )
 
 
 def read_deps(args: argparse.Namespace, checkout: Path) -> dict[str, set[str]]:
@@ -243,10 +246,10 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="C++ objects whose inputs each merge changes",
         description=(
             "For each commit, count the candidate's C++ objects whose source, header"
-            " or generated ABI header differs from its first parent: a local build"
-            " that crosses the commit reruns those compiles, and ccache serves only"
-            " the ones whose preprocessed text it has seen, such as comment-only"
-            " edits (#1070). The count is an estimate from one build's include graph."
+            " or generated ABI header differs from its first parent, in the include"
+            " graph of one build: a local build that crosses the commit reruns those"
+            " compiles, and ccache may serve some of them (#1070). Objects the graph"
+            " does not list are not counted."
             " With no commits, take the pull-request merges on the base's"
             " first-parent line since --since (a bare date is that day from 00:00"
             " UTC). --reach HEADER counts the objects that include a header."

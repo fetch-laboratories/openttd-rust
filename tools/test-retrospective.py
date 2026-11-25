@@ -631,6 +631,12 @@ class RebuildReachTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("--deps FILE needs --build DIR", result.stdout)
 
+    def test_a_build_without_its_cmake_cache_is_refused(self) -> None:
+        (self.build / "CMakeCache.txt").unlink()
+        code, out = self.cli("--reach", "src/wide.h")
+        self.assertEqual(code, 2, out)
+        self.assertIn("names no CMAKE_HOME_DIRECTORY", out)
+
     def test_reach_json_is_the_whole_output(self) -> None:
         code, out = self.cli("--reach", "src/wide.h", "--json")
         self.assertEqual(code, 0, out)
