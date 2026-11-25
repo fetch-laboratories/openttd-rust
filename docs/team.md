@@ -10,12 +10,13 @@ Each role has a fixed model and effort, in the table below ([ADR 0011](adr/0011-
 | Planning | `claude-fable-5-2`, medium | `gpt-6-astra`, high |
 | Independent review | `gpt-6.2-sol`, high | `gpt-6.2-sol`, high |
 | Routine runs, measurements and tracker edits | `claude-sonnet-5-5`, medium | `gpt-6.1-terra`, high |
+| [Fathom](skills/fathom/SKILL.md) | `claude-opus-5-5`, high | `claude-opus-5-5`, high |
 
 Under a Claude Code root, Opus handles all code-touching work; Sonnet handles only non-code work. Under a Codex root, Sol handles substantive implementation and analysis; Terra handles bounded mechanical work.
 
 ## Slots
 
-At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). An implementer holds its slot from dispatch until its PR merges or root stops it, including while it waits on CI, review or the merge queue, and root gives it no new work meanwhile. A running profile counts as one. Reviews, planning and research do not count.
+At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). An implementer holds its slot from dispatch until its PR merges or root stops it, including while it waits on CI, review or the merge queue, and root gives it no new work meanwhile. A running profile counts as one. Reviews, planning and research do not count, and neither does a fathom agent or the PR it opens ([ADR 0053](adr/0053-a-fathom-takes-no-slot.md)).
 
 ## Spawning
 
@@ -23,6 +24,7 @@ At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-wai
   > Plan the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/planner-brief.md`. You are <name>. Root's thread is <thread ID>.
 - Root starts each implementer with this fixed message, and adds only facts the plan and the docs do not hold, such as a base change since the plan was written:
   > Implement the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/implementer-brief.md`. You are <name>. Complete the whole task. Root's thread is <thread ID>.
+- Root, a steering review or a navigation review starts a [fathom](skills/fathom/SKILL.md) agent for a case as a thread of its own and does not wait on it: `t3_thread_launch` with the role table's model and effort as `modelSelection`, `workspaceStrategy: {type: "root"}`, a title that names the case, a stable `clientRequestId` and the prompt `/fathom <case issue URL>`.
 - Spawn a fresh agent named for each task; its name is its attribution.
 - The host does not report a child's model or effort to it. Root's spawn message names both, and the child signs with them; a planner or implementer names them to the reviewers it starts.
 - Root writes no summary of a child's waiting notice.
@@ -51,9 +53,9 @@ The review loop is in [review](workflow.md#review). Root reads dispositions, not
 
 ### Ready queue and pipelining
 
-- Root selects work and writes the roadmap's [ready queue](roadmap.md#ready-queue): two or three undispatched work orders. Each work order has its own issue, whose body root opens with one line saying what is finished when the work is done. An entry is that issue and the PR or issue it waits on. Size, files and method are the planner's to settle.
+- Root selects work and writes the roadmap's [ready queue](roadmap.md#ready-queue): the undispatched work orders, the next entry of each slot's chain. Each work order has its own issue, whose body root opens with one line saying what is finished when the work is done. An entry is that issue and the PR or issue it waits on. Size, files and method are the planner's to settle.
   - Work under a tracker that spans many PRs, such as #734, gets a sub-issue of it: `gh api repos/{owner}/{repo}/issues/<tracker>/sub_issues -F sub_issue_id=$(gh api repos/{owner}/{repo}/issues/<new issue> -q .id)`.
-- Root refills the queue when it holds no entry for the next slot to free, up to three entries at once (provisional), in a docs-only commit that edits only that section. While the [merge queue is not empty](workflow.md#change-types) the refill waits as a local commit, and root's status comment on #3 carries the queue's state.
+- Root refills the queue when no entry could go to the slot that frees next: an entry counts for a slot only if it waits on nothing but that slot's own PR (provisional). The refill is a docs-only commit that edits only that section. While the [merge queue is not empty](workflow.md#change-types) the refill waits as a local commit, and root's status comment on #3 carries the queue's state.
 - **Plans.** Each work order gets an implementation plan before it gets an implementer. Once an entry waits on nothing, root starts a [planner](planner-brief.md) for it, whether or not a slot is free. The planner writes the plan into the issue's body, below root's line, and has it [reviewed](planner-brief.md#plan-review) by a reviewer of its own; that reviewer does not review the PR later. Root settles the plan's open questions, then dispatches the entry to the next free slot.
 - **File sets.** Before starting, the implementer checks the plan's file set against open PRs' actual edits with `python3 tools/retrospective.py readiness <PR> <open PRs>` and records the result in its status comment; root brokers no file reservation.
   - A #734/#735 pass owns the files it finishes whole. Another stream's PR may add separate test modules or one-line hooks to those files; it names the hook, and a conflict is resolved by base update.

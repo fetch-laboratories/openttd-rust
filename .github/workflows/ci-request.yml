@@ -138,13 +138,17 @@ jobs:
           const checkerPaths = new RegExp('^(tools/(lint-ratchet|lint-policy|growth-ratchet|refactor-proof|' +
             'baseline_ratchet|cleanup_contract|test-cleanup-checks)\\.py|' +
             'migration/(clippy-debt|ruff-debt)\\.json|migration/lints/clippy\\.toml)$');
-          // Markdown that no build reads: AGENTS.md and docs/, except the docs CMake packages for
-          // the in-game viewer (tools/test-ci.py checks this list against CMake).
-          const builtDocs = ['admin_network', 'debugging_desyncs', 'desync', 'directory_structure', 'eints', 'fonts',
-            'game_coordinator', 'linkgraph', 'logging_and_performance_metrics', 'multiplayer', 'savegame_format',
-            'symbol_server'];
-          const inert = path => typeof path === 'string' && (path === 'AGENTS.md' || path.startsWith('docs/') &&
-            path.endsWith('.md') && !builtDocs.some(name => path === `docs/${name}.md`));
+          // Docs-only files, which no build, test or check reads: AGENTS.md, GitHub's PR and issue
+          // forms, the Codex host's settings, and docs/ except scripts and what a build reads there:
+          // CMake's packages and Doxygen's images (tools/test-preflight.py checks this list).
+          const builtDocs = ['admin_network.md', 'debugging_desyncs.md', 'desync.md', 'directory_structure.md', 'eints.md',
+            'fonts.md', 'game_coordinator.md', 'linkgraph.md', 'logging_and_performance_metrics.md', 'multiplayer.md',
+            'savegame_format.md', 'symbol_server.md', 'obg_format.txt', 'obm_format.txt', 'obs_format.txt', 'openttd.6',
+            'elrail_tile.png', 'elrail_track.png'];
+          const inert = path => typeof path === 'string' && (path === 'AGENTS.md' ||
+            path === '.github/PULL_REQUEST_TEMPLATE.md' || path.startsWith('.github/ISSUE_TEMPLATE/') ||
+            path.startsWith('.codex/') || path.startsWith('docs/') && !path.endsWith('.py') &&
+            !path.endsWith('.sh') && !builtDocs.some(name => path === `docs/${name}`));
           const entries = async sha => {
             const {data} = await github.rest.git.getTree({...context.repo, tree_sha: sha, recursive: 'true'});
             const modes = {'040000': 'tree', '100644': 'blob', '100755': 'blob', '120000': 'blob', '160000': 'commit'};

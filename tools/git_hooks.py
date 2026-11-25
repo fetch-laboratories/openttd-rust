@@ -9,9 +9,9 @@ the worktree that runs the hook, and does nothing in a worktree whose branch
 predates that hook.
 
 pre-push: a push of a branch whose change against origin/rust-migration is not
-inert Markdown needs a preflight stamp for its tree. Every push first runs a
+docs-only needs a preflight stamp for its tree. Every push first runs a
 fast tier of a few seconds: the pinned commit checker on the branch's commits,
-then, unless the change is inert Markdown, `cargo fmt --check` and Quick's Ruff
+then, unless the change is docs-only, `cargo fmt --check` and Quick's Ruff
 lines. A checkpoint push to a draft PR, or before its PR exists, may skip the
 stamp with
 
@@ -93,7 +93,7 @@ def check_push(ref: str, sha: str, base: str, env: dict[str, str], logs: Path) -
     if failed:
         return f"{branch}: fast tier failed: {', '.join(failed)}"
     if inert:
-        print(f"{branch}: inert Markdown only; no preflight stamp needed")
+        print(f"{branch}: docs-only change; no preflight stamp needed")
         return ""
     if entry := preflight_stamp.stamp_for(sha):
         print(f"{branch}: preflight passed at {entry['passed_at']} on this tree")

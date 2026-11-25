@@ -586,14 +586,6 @@ void Order::MakeLoading(bool ordered)
 }
 
 /**
- * Makes this order a Leave Station order.
- */
-void Order::MakeLeaveStation()
-{
-	openttd_rust_order_leave(this);
-}
-
-/**
  * Makes this order a Dummy order.
  */
 void Order::MakeDummy()
@@ -916,16 +908,6 @@ CommandCost CmdOrderRefit(DoCommandFlags flags, VehicleID veh, VehicleOrderID or
 	CommandCost result; openttd_rust_command_refit(Vehicle::GetIfValid(veh), order_number, cargo, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
 }
 
-
-/**
- *
- * Check the orders of a vehicle, to see if there are invalid orders and stuff
- *
- */
-void CheckOrders(const Vehicle *v)
-{
-	openttd_rust_check_orders(const_cast<Vehicle *>(v), &GetRustOrdersLeaves());
-}
 
 /**
  * Removes an order from all vehicles. Triggers when, say, a station is removed.

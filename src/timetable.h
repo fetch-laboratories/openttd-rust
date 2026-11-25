@@ -27,7 +27,6 @@ TimerGameTick::TickCounter GetStartTickFromDate(TimerGameEconomy::Date start_dat
 TimerGameEconomy::Date GetDateFromStartTick(TimerGameTick::TickCounter start_tick);
 
 void ShowTimetableWindow(const Vehicle *v);
-void UpdateVehicleTimetable(Vehicle *v, bool travelling);
 
 std::pair<StringParameter, StringParameter> GetTimetableParameters(TimerGameTick::Ticks ticks);
 

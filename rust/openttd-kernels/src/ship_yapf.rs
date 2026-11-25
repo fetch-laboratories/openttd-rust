@@ -32,7 +32,7 @@ use crate::pathfinder_func::calc_closest_station_tile;
 use crate::pathfinder_type::{YAPF_TILE_CORNER_LENGTH, YAPF_TILE_LENGTH};
 use crate::rail_type::RailTypes;
 use crate::services::Services;
-use crate::ship_control::{Leaves, get_effective_water_class, is_ship_destination_tile};
+use crate::ship_control::{Ship, get_effective_water_class, is_ship_destination_tile};
 use crate::station_type::{StationID, StationType};
 use crate::tile_type::{TILE_HEIGHT, TileIndex};
 use crate::track_func::{
@@ -44,7 +44,6 @@ use crate::track_func::{
 use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::VehicleRef;
-use crate::vehicle_type::OpenTTDVehicle;
 use crate::vehicle_type::VehicleType;
 use crate::water_map::WaterClass;
 use crate::water_regions::{
@@ -70,12 +69,24 @@ const MAX_NUMBER_OF_NODES: i32 = 65536;
 
 /// `ShipPathCache`: the trackdirs a ship follows before it searches again, last
 /// first. The original's `ShipPathElement` holds only its trackdir.
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct ShipPathCache(Vec<Trackdir>);
 impl ShipPathCache {
-    /// `back`.
-    fn back(&self) -> Trackdir {
+    /// `empty`.
+    pub(crate) fn empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    /// `back`, under the original's nonempty precondition.
+    pub(crate) fn back(&self) -> Trackdir {
         self.0[self.0.len() - 1]
+    }
+    /// `pop_back`.
+    pub(crate) fn pop_back(&mut self) {
+        self.0.pop();
+    }
+    /// `clear`.
+    pub(crate) fn clear(&mut self) {
+        self.0.clear();
     }
 }
 
@@ -98,28 +109,16 @@ pub struct Input {
     pub unit_number: u16,
 }
 
-/// The ship a search runs for, as the ship controller supplies it.
-/// `ship_control.rs`'s pass replaces it with that file's own handle.
-pub(crate) struct Ship<'a> {
-    pub(crate) v: VehicleRef,
-    /// `v->state`.
-    pub(crate) state: TrackBits,
-    /// `v->GetVehicleTrackdir()`, whose ship body is in an export of `ship_control.rs`.
-    pub(crate) trackdir: Trackdir,
-    /// The controller's leaves, for `IsShipDestinationTile`.
-    pub(crate) leaves: &'a Leaves,
-}
-
 /// What `ShipInput` reads, in the order the original first reads it: the ship's
 /// tile and destination, its current order, its direction, its engine's speed
 /// and speed fractions, the two curve penalties and its unit number.
-fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
-    let tile = v.v.tile().0;
-    let dest_tile = v.v.dest_tile().0;
-    let order = v.v.current_order();
+fn ship_input(s: &Services, v: VehicleRef) -> Input {
+    let tile = v.tile().0;
+    let dest_tile = v.dest_tile().0;
+    let order = v.current_order();
     let (order_type, order_destination) = (order.kind().0, order.destination().0);
-    let direction = v.v.direction().0;
-    let svi = (crate::movement::table(s).vehicle().engine)(v.v);
+    let direction = v.direction().0;
+    let svi = (crate::movement::table(s).vehicle().engine)(v);
     let settings = s.settings();
     // SAFETY: The settings catalog holds canonical process-lifetime addresses.
     let (ship_curve45_penalty, ship_curve90_penalty) = unsafe {
@@ -139,7 +138,7 @@ fn ship_input(s: &Services, v: &Ship<'_>) -> Input {
         canal_speed_frac: svi.ship_speed_fraction(false),
         ship_curve45_penalty,
         ship_curve90_penalty,
-        unit_number: v.v.unitnumber(s),
+        unit_number: v.unitnumber(s),
     }
 }
 
@@ -152,16 +151,9 @@ pub(crate) struct Vehicle<'a> {
     input: Input,
     state: TrackBits,
     trackdir: Trackdir,
-    leaves: &'a Leaves,
 }
 impl<'a> Vehicle<'a> {
-    pub(crate) fn new(
-        s: &'a Services,
-        input: Input,
-        state: TrackBits,
-        trackdir: Trackdir,
-        leaves: &'a Leaves,
-    ) -> Self {
+    pub(crate) fn new(s: &'a Services, input: Input, state: TrackBits, trackdir: Trackdir) -> Self {
         // SAFETY: The shared table returns the static water table, whose service
         // returns the current map's region owner.
         let regions = unsafe { ((*(s.water_services)()).water_regions)() };
@@ -172,7 +164,6 @@ impl<'a> Vehicle<'a> {
             input,
             state,
             trackdir,
-            leaves,
         }
     }
     #[inline]
@@ -623,7 +614,7 @@ impl<'v> CYapfShip<'v> {
 
         if self.dest_station != StationID::INVALID {
             return v.world.is_docking_tile(tile)
-                && is_ship_destination_tile(&v.world, v.leaves, tile, self.dest_station);
+                && is_ship_destination_tile(&v.world, tile, self.dest_station);
         }
 
         tile == self.dest_tile
@@ -1119,13 +1110,13 @@ pub(crate) fn check_ship_reverse(v: &Vehicle<'_>, trackdir: Option<&mut Trackdir
 /// `YapfShipChooseTrack`: ship controller helper - path finder invoker.
 pub(crate) fn yapf_ship_choose_track(
     s: &Services,
-    v: &Ship<'_>,
+    v: Ship,
     tile: TileIndex,
     path_found: &mut bool,
     path_cache: &mut ShipPathCache,
 ) -> Track {
     crate::witness::hit(crate::witness::SHIP_YAPF_CHOOSE_CALLS);
-    let v = Vehicle::new(s, ship_input(s, v), v.state, v.trackdir, v.leaves);
+    let v = search_vehicle(s, v);
     let mut best_origin_dir = Trackdir::INVALID_TRACKDIR;
     let origin_dirs = trackdir_to_trackdir_bits(v.trackdir, |ok| v.check(ok));
     let td_ret = choose_ship_track(
@@ -1148,11 +1139,18 @@ pub(crate) fn yapf_ship_choose_track(
 /// `YapfShipCheckReverse`.
 pub(crate) fn yapf_ship_check_reverse(
     s: &Services,
-    v: &Ship<'_>,
+    v: Ship,
     trackdir: Option<&mut Trackdir>,
 ) -> bool {
-    let v = Vehicle::new(s, ship_input(s, v), v.state, v.trackdir, v.leaves);
+    let v = search_vehicle(s, v);
     check_ship_reverse(&v, trackdir)
+}
+
+/// The search's view of the ship `v`: what [`ship_input`] reads, `v->state` and
+/// `v->GetVehicleTrackdir()`.
+fn search_vehicle(s: &Services, v: Ship) -> Vehicle<'_> {
+    let trackdir = crate::ship_control::get_vehicle_trackdir(&World::new(s), v);
+    Vehicle::new(s, ship_input(s, v.v), v.state(), trackdir)
 }
 
 /// `WaterRegionPatchKey`: yapf node key that represents a single patch of
@@ -1390,8 +1388,7 @@ pub(crate) fn find_water_region_path(
         // SAFETY: The shared table returns the static station command table.
         let commands = unsafe { &*(v.s.station_commands)() };
         for tile in (commands.tile_area)(station, StationType::Dock.0).tiles(v.world.dimensions) {
-            if v.world.is_docking_tile(tile)
-                && is_ship_destination_tile(&v.world, v.leaves, tile, station_id)
+            if v.world.is_docking_tile(tile) && is_ship_destination_tile(&v.world, tile, station_id)
             {
                 pf.add_origin(v.get_water_region_patch_info(tile));
             }
@@ -1428,25 +1425,9 @@ pub(crate) fn find_water_region_path(
     path
 }
 
-// SAFETY for the path cache exports: each owner pointer came from
-// `openttd_rust_ship_path_new` or `_clone`, is live and exclusive for the call,
-// and is destroyed once; an index is below the cache's size.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_ship_path_new() -> *mut ShipPathCache {
-    Box::into_raw(Box::default())
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_path_clone(
-    p: *const ShipPathCache,
-) -> *mut ShipPathCache {
-    Box::into_raw(Box::new(unsafe { &*p }.clone()))
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_path_destroy(p: *mut ShipPathCache) {
-    if !p.is_null() {
-        drop(unsafe { Box::from_raw(p) });
-    }
-}
+// SAFETY for the path cache exports: each cache pointer comes from
+// `openttd_rust_ship_state_path` of a live ship owner and is exclusive for the call; an
+// index is below the cache's size.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_path_size(p: *const ShipPathCache) -> usize {
     unsafe { &*p }.0.len()
@@ -1464,75 +1445,8 @@ pub unsafe extern "C" fn openttd_rust_ship_path_push(p: *mut ShipPathCache, td: 
     unsafe { &mut *p }.0.push(Trackdir(td));
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_path_pop(p: *mut ShipPathCache) {
-    unsafe { &mut *p }.0.pop();
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_path_clear(p: *mut ShipPathCache) {
-    unsafe { &mut *p }.0.clear();
-}
-
-/// `YapfShipChooseTrack` for the C++ ship controller, which passes the ship's
-/// `GetState()` and `GetVehicleTrackdir()`, its path cache and `path_found`.
-///
-/// # Safety
-/// The caller holds the game-state mutex and passes the live shared table, the
-/// controller's leaves, the ship's live record and its sole path cache, and a
-/// writable `path_found`. No service reenters the cache. No pointer escapes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_yapf_ship_choose_track(
-    shared: *const Services,
-    ship_leaves: *const Leaves,
-    v: *const OpenTTDVehicle,
-    state: u8,
-    trackdir: u8,
-    tile: u32,
-    path_cache: *mut ShipPathCache,
-    path_found: *mut bool,
-) -> u8 {
-    // SAFETY: As this function's contract.
-    let (s, leaves, path_cache, path_found) =
-        unsafe { (&*shared, &*ship_leaves, &mut *path_cache, &mut *path_found) };
-    let ship = Ship {
-        // SAFETY: The caller passes a live non-null vehicle record.
-        v: VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) }),
-        state: TrackBits(state),
-        trackdir: Trackdir(trackdir),
-        leaves,
-    };
-    yapf_ship_choose_track(s, &ship, TileIndex(tile), path_found, path_cache).0
-}
-
-/// `YapfShipCheckReverse` for the C++ ship controller. `trackdir_out` is the
-/// original's `trackdir`, which may be null.
-///
-/// # Safety
-/// As [`openttd_rust_yapf_ship_choose_track`]; `trackdir_out` is null or writable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_yapf_ship_check_reverse(
-    shared: *const Services,
-    ship_leaves: *const Leaves,
-    v: *const OpenTTDVehicle,
-    state: u8,
-    trackdir: u8,
-    trackdir_out: *mut u8,
-) -> u8 {
-    // SAFETY: As this function's contract.
-    let (s, leaves) = unsafe { (&*shared, &*ship_leaves) };
-    let ship = Ship {
-        // SAFETY: The caller passes a live non-null vehicle record.
-        v: VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) }),
-        state: TrackBits(state),
-        trackdir: Trackdir(trackdir),
-        leaves,
-    };
-    let mut out = Trackdir::INVALID_TRACKDIR;
-    let reverse = yapf_ship_check_reverse(s, &ship, (!trackdir_out.is_null()).then_some(&mut out));
-    if !trackdir_out.is_null() {
-        // SAFETY: As this function's contract.
-        unsafe { trackdir_out.write(out.0) };
-    }
-    u8::from(reverse)
+    unsafe { &mut *p }.clear();
 }
 
 crate::abi::layouts! {
@@ -1554,9 +1468,7 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        CYapfBaseT, CYapfShip, CYapfShipNode, Input, NodeList, Ship, Vehicle, Yapf, ship_input,
-    };
+    use super::{CYapfBaseT, CYapfShip, CYapfShipNode, Input, NodeList, Vehicle, Yapf, ship_input};
     use crate::map_func::TileTypeAllocation;
     use crate::order_type::OrderType;
     use crate::services::Services;
@@ -1654,7 +1566,6 @@ mod tests {
             input(),
             TrackBits::TRACK_BIT_NONE,
             Trackdir::TRACKDIR_X_NE,
-            &crate::test_tables::SHIP_LEAVES,
         )
     }
 
@@ -1734,13 +1645,7 @@ mod tests {
             (*record).direction = crate::direction_type::Direction(5);
             (*record).orders = &raw mut orders;
         }
-        let ship = Ship {
-            v: VehicleRef(NonNull::new(record).unwrap()),
-            state: TrackBits::TRACK_BIT_Y,
-            trackdir: Trackdir::TRACKDIR_Y_SE,
-            leaves: &crate::test_tables::SHIP_LEAVES,
-        };
-        let input = ship_input(&s, &ship);
+        let input = ship_input(&s, VehicleRef(NonNull::new(record).unwrap()));
         assert_eq!(
             (input.tile, input.dest_tile),
             (1111, 2222),

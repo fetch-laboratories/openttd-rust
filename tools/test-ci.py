@@ -26,6 +26,7 @@ from urllib.parse import unquote
 
 import ci
 import ci_log
+import preflight_stamp
 import quick_workflow
 import review_report
 import source_fixture
@@ -52,6 +53,62 @@ PULL = {
     "merge_commit_sha": MERGE,
     "body": "Agent: /implementation | Model: m | Reasoning effort: high",
 }
+
+
+# Paths the docs-only rule must judge so, beside every tracked path near them.
+DOCS_ONLY_CASES = {
+    "AGENTS.md": True,
+    "docs/roadmap.md": True,
+    "docs/skills/x/SKILL.md": True,
+    "docs/skills/x/agents/openai.yaml": True,
+    "docs/elrail.svg": True,
+    "docs/landscape.html": True,
+    "docs/x/data.json": True,
+    "docs/fonts.md.txt": True,
+    ".github/PULL_REQUEST_TEMPLATE.md": True,
+    ".github/ISSUE_TEMPLATE/bug.yaml": True,
+    ".codex/config.toml": True,
+    "docs/fonts.md": False,
+    "docs/obg_format.txt": False,
+    "docs/openttd.6": False,
+    "docs/skills/steer/issues.py": False,
+    "docs/skills/x/run.sh": False,
+    "docs.md": False,
+    "docsx/a.md": False,
+    "README.md": False,
+    "tools/ci.py": False,
+    "migration/baseline.json": False,
+    ".github/workflows/ci-quick.yml": False,
+    ".github/dependabot.yml": False,
+    ".github/PULL_REQUEST_TEMPLATE.md.py": False,
+    ".codexx/config.toml": False,
+    "docs/elrail_tile.png": False,
+    "docs/x/caf\u00e9.yaml": True,
+}
+
+
+def near_docs_only_paths() -> set[str]:
+    """Tracked root-level files and every tracked file under the docs-only trees."""
+    tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT, text=True)
+    return {
+        path
+        for path in tracked.split("\0")
+        if path
+        and ("/" not in path or path.startswith(("docs/", ".github/", ".codex/")))
+    }
+
+
+def starts_workflow(patterns: list[str], path: str) -> bool:
+    """GitHub's `paths` filter for one path: the last pattern that matches decides."""
+    started = False
+    for pattern in patterns:
+        glob = "".join(
+            ".*" if part == "**" else "[^/]*" if part == "*" else re.escape(part)
+            for part in re.split(r"(\*\*|\*)", pattern.removeprefix("!"))
+        )
+        if re.fullmatch(glob, path):
+            started = not pattern.startswith("!")
+    return started
 
 
 def workflow(filename: str) -> dict[str, Any]:
@@ -556,19 +613,23 @@ class GateTests(unittest.TestCase):
                 needs = {"plan": {"result": "success", "outputs": outputs}}
                 self.assertEqual(evaluate(condition, needs=needs), expected)
 
-    def test_inert_markdown_excludes_every_markdown_build_input(self) -> None:
+    def test_inert_files_exclude_every_build_input(self) -> None:
         sources = [ROOT / "CMakeLists.txt", *sorted((ROOT / "cmake").glob("*.cmake"))]
+        tracked = set(
+            subprocess.check_output(
+                ["git", "ls-files", "-z"], cwd=ROOT, text=True
+            ).split("\0")
+        ) - {""}
         built = {
             match
             for path in sources
             for match in re.findall(
-                r"\$\{CMAKE_SOURCE_DIR\}/([^\s\"@]+\.md)", path.read_text()
+                r"\$\{CMAKE_SOURCE_DIR\}/([^\s\"@)]+)", path.read_text()
             )
-        }
-        self.assertIn("docs/fonts.md", built)
-        tracked = subprocess.check_output(
-            ["git", "ls-files", "*.md"], cwd=ROOT, text=True
-        ).split()
+        } & tracked
+        for name in ("README.md", "docs/fonts.md", "docs/obg_format.txt"):
+            self.assertIn(name, built)
+        self.assertIn("docs/openttd.6", built)
         blocks = []
         for filename, name in (
             ("ci-request.yml", "plan"),
@@ -576,15 +637,14 @@ class GateTests(unittest.TestCase):
             ("ci-policy.yml", "policy"),
         ):
             script = script_for(filename, name)
-            start = script.index("// Markdown that no build reads")
+            start = script.index("// Docs-only files, which no build")
             blocks.append(
                 script[start : script.index(");", script.index("const inert")) + 2]
             )
         # Indentation follows each script's nesting; the code itself must match.
         self.assertEqual(len({" ".join(block.split()) for block in blocks}), 1)
-        paths = sorted(
-            built | set(tracked) | {"docs/skills/x/SKILL.md", "docs/fonts.md.txt"}
-        )
+        expected = DOCS_ONLY_CASES
+        paths = sorted(built | near_docs_only_paths() | set(expected))
         verdicts = cast(
             dict[str, bool],
             node(
@@ -594,14 +654,39 @@ class GateTests(unittest.TestCase):
         )
         for path in built:
             self.assertFalse(verdicts[path], path)
+        for path, verdict in expected.items():
+            self.assertEqual(verdicts[path], verdict, path)
+        # The hook's rule and the workflows' rule are one rule.
         for path, verdict in verdicts.items():
-            expected = (
-                path == "AGENTS.md"
-                or path.startswith("docs/")
-                and path.endswith(".md")
-                and path not in built
+            self.assertEqual(verdict, preflight_stamp.inert(path), path)
+
+    def test_a_docs_only_push_starts_no_heavy_workflow(self) -> None:
+        # A push that starts these would take the pending slot of their
+        # branch-wide concurrency group from a code push, then skip its builds.
+        filters = []
+        for filename in ("ci-build.yml", "rust-migration.yml"):
+            # YAML reads the key `on` as the boolean true.
+            push = cast(dict[Any, Any], workflow(filename))[True]["push"]
+            self.assertNotIn("paths-ignore", push)
+            filters.append(push["paths"])
+        self.assertEqual(filters[0], filters[1])
+        # The filter is the rule: a path starts them unless it is docs-only.
+        for path in sorted(near_docs_only_paths() | set(DOCS_ONLY_CASES)):
+            self.assertEqual(
+                starts_workflow(filters[0], path), not preflight_stamp.inert(path), path
             )
-            self.assertEqual(verdict, expected, path)
+        # A push starts them when any one of its files does: Markdown that a
+        # build packages beside a docs-only file still validates.
+        mixed = ("docs/fonts.md", "docs/skills/x/agents/openai.yaml")
+        self.assertEqual(
+            [starts_workflow(filters[0], path) for path in mixed], [True, False]
+        )
+        built = [
+            pattern.removeprefix("docs/")
+            for pattern in filters[0]
+            if pattern.startswith("docs/") and "*" not in pattern
+        ]
+        self.assertEqual(built, list(preflight_stamp.BUILT_DOCS))
 
     def test_checker_only_publisher_needs_quick_and_marks_no_tree(self) -> None:
         def needs(quick: str) -> dict[str, dict[str, Any]]:

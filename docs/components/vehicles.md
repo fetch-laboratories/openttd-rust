@@ -27,11 +27,11 @@
 
 ## Ship controller and private state (#146)
 
-- Rust owns: ship tick/movement, locks, acceleration, rotation/reversal, track/depot/destination policy, economy-day/service/cache/build initialization, nearest-depot region BFS and four ship scalars; ship YAPF (#119) owns path/search.
-- C++ keeps: vehicle/map/pool storage, renderer bounds/sprites, allocation, Money accounting and modern/legacy save staging.
-- Checks: `python3 tools/migration.py simulate water --jobs 2`.
+- Rust owns: every simulation body of `ship_cmd.cpp`, all but the drawing and sound members (tick/movement, locks, acceleration, rotation/reversal, track/depot/destination policy, economy-day/service/cache, `CmdBuildShip`, nearest-depot region BFS, `GetVehicleTrackdir`, `IsShipDestinationTile`, `GetEffectiveWaterClass`), the ship owner (`state`, `rotation`, rotation coordinates and cached path) reached through the vehicle record's `ship` link, and the record's sprite-cache direction; ship YAPF (#119) owns search.
+- C++ keeps: the `Ship` shell and its virtual members as one-call shims, the specialised `UpdateViewport` with the drawing members (#656), the depot pool walk (#638), sprites, sound, `UpdateDeltaXY`, the `PerformanceAccumulator` of `Ship::Tick` (#1011) and modern/legacy save staging.
+- Checks: `python3 tools/migration.py simulate water --jobs 2`; the ABI probe's ship case runs the real reverse and depot searches.
 - Limits: Gaps remain in legacy saves, viewport pixels or arbitrary custom NewGRF combinations.
-- PRs: #152.
+- PRs: #152; file pass #1059.
 
 ## Rail vehicles and controller state (#130)
 
@@ -122,7 +122,7 @@
 ## Ship YAPF searches and canonical path cache
 
 - Rust owns: region/track searches, search arenas, heap, estimates, corridor, attempts, lost paths, cache extraction and per-ship path; the ship, engine and settings reads, map reads, dock origins and water region calls.
-- C++ keeps: ship/station pools, the controller's `GetState`, `GetVehicleTrackdir` and `IsShipDestinationTile` map reads (until `ship_control.rs`'s pass), and save staging.
+- C++ keeps: ship/station pools and save staging; the controller calls the searches in Rust with the ship's own path.
 - Checks: `python3 tools/migration.py simulate water --jobs 2`.
 - Limits: Gaps remain in arbitrary maps, NewGRFs or complete legacy saves.
 - PRs: #126, #308; scratch capacity #306; file pass #977.

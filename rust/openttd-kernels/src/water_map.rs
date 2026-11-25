@@ -27,6 +27,21 @@ impl WaterTileType {
     /// Water Depot.
     pub const Depot: Self = Self(3);
 }
+/// Native `DepotPart`: sections of the water depot, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DepotPart(pub u8);
+#[allow(non_upper_case_globals, reason = "DepotPart enumerator spelling")]
+impl DepotPart {
+    /// Northern part of a depot.
+    pub const North: Self = Self(0);
+    /// Southern part of a depot.
+    pub const South: Self = Self(1);
+}
+/// Depot part flag.
+const WBL_DEPOT_PART: u8 = 0;
+/// Depot axis flag.
+const WBL_DEPOT_AXIS: u8 = 1;
 /// Raw adapter: `WaterTileType::Lock`, until `water_map.rs`'s pass.
 pub(crate) const WATER_TILE_LOCK: u8 = WaterTileType::Lock.0;
 /// Raw adapter: `WaterTileType::Depot`, until `water_map.rs`'s pass.
@@ -170,13 +185,44 @@ impl crate::map_func::World<'_> {
     pub(crate) fn is_ship_depot_tile(&self, t: TileIndex) -> bool {
         self.is_tile_type(t, TileType::MP_WATER) && self.is_ship_depot(t)
     }
-    /// `GetShipDepotAxis`, with its `IsShipDepotTile` assertion.
-    pub(crate) fn ship_depot_axis(&self, t: u32) -> u8 {
-        self.check(
-            self.kind(TileIndex(t)) == TileType::MP_WATER
-                && self.water_tile_type(t) == WATER_TILE_DEPOT,
-        );
-        (Self::byte(self.types.m5(TileIndex(t))) >> 1) & 1
+    /// `GetShipDepotAxis`: get the axis of the ship depot `t`, with its `IsShipDepotTile`
+    /// assertion.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "GetShipDepotAxis's (Axis) cast of GB"
+    )]
+    pub(crate) fn get_ship_depot_axis(&self, t: TileIndex) -> crate::direction_type::Axis {
+        self.assert_with(|| self.is_ship_depot_tile(t));
+        crate::direction_type::Axis(crate::bitmath_func::gb(
+            u32::from(Self::byte(self.types.m5(t))),
+            WBL_DEPOT_AXIS,
+            1,
+        ) as u8)
+    }
+    /// `GetShipDepotPart`: get the part of the ship depot `t`, with its `IsShipDepotTile`
+    /// assertion.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "GetShipDepotPart's static_cast<DepotPart> of GB"
+    )]
+    pub(crate) fn get_ship_depot_part(&self, t: TileIndex) -> DepotPart {
+        self.assert_with(|| self.is_ship_depot_tile(t));
+        DepotPart(crate::bitmath_func::gb(
+            u32::from(Self::byte(self.types.m5(t))),
+            WBL_DEPOT_PART,
+            1,
+        ) as u8)
+    }
+    /// `GetShipDepotDirection`: get the direction of the ship depot `t`.
+    pub(crate) fn get_ship_depot_direction(
+        &self,
+        t: TileIndex,
+    ) -> crate::direction_type::DiagDirection {
+        crate::direction_func::xyns_to_diag_dir(
+            self.get_ship_depot_axis(t),
+            u32::from(self.get_ship_depot_part(t).0),
+            |ok| self.check(ok),
+        )
     }
 }
 

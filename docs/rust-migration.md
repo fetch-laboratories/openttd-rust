@@ -58,7 +58,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 
 ### Quick cleanup checks
 
-[Quick](ci.md#jobs-and-profiles) runs the Cargo checks and these gates; `python3 tools/preflight.py` runs them all locally, against the merge base of `--base` (default `origin/rust-migration`) and the head. Run one gate with `--step NAME`, which runs the Quick steps whose name contains NAME (`--list` names them) with Quick's pinned versions and base. `python3 tools/preflight.py --fast` is the seconds-long check before a commit: the pre-push hook's fast tier and Quick's Ruff and ty lines, with no stamp. Preserve the original's casts and control flow: a faithful truncation must not become a checked conversion to reduce debt.
+[Quick](ci.md#jobs-and-profiles) runs the Cargo checks and these gates; `python3 tools/preflight.py` runs them all locally, against the merge base of `--base` (default `origin/rust-migration`) and the head. It runs `--jobs` steps at once (default half the host's threads, at most four), the longest of the last run first; `--jobs 1` runs them in workflow order. `--runs SINCE` counts this host's full runs since a UTC date, with their median and total time. Run one gate with `--step NAME`, which runs the Quick steps whose name contains NAME (`--list` names them) with Quick's pinned versions and base. `python3 tools/preflight.py --fast` is the seconds-long check before a commit: the pre-push hook's fast tier and Quick's Ruff and ty lines, with no stamp. Preserve the original's casts and control flow: a faithful truncation must not become a checked conversion to reduce debt.
 
 | Command | Fails on |
 | --- | --- |
@@ -96,6 +96,8 @@ A change's carries and exception proposals go in `migration/cleanup-records/<bra
 ## Compiler cache
 
 Cache build outputs only when the key covers everything that determines them; do not cache test results. Worktrees share the main checkout's reference, reference build and `.local/compiler-cache/`. After a configure-time environment change, such as a dependency prefix, use a fresh build directory: the driver skips CMake configure when the cached `-D` values match.
+
+A build reruns the compile of every object whose source, header or generated ABI header changed, and the cache may serve some of those reruns from text any worktree has compiled before. So a new worktree costs about a minute more than a warm one, while a change to a header that core headers include recompiles most of the 575 objects in either: port merges in late November changed the inputs of a median of 377, and on the builds measured nearly all of those missed the cache, about seven minutes at five jobs on an idle host ([#1070](https://github.com/fetch-laboratories/openttd-rust/issues/1070)). `python3 tools/retrospective.py rebuilds [REV ... | --since DATE]` counts, in a built tree's `ninja -t deps`, the objects whose inputs each merge changes, and `--reach HEADER` the objects that include a header.
 
 ## Output disk
 
@@ -144,7 +146,7 @@ Quick runs all but `port-metrics.py`, against `--base-ref origin/rust-migration`
 | `python3 tools/rebound-callees.py` | Duplicate bindings and forwarded service fields; macros, lambdas, wrappers, some templates and namespace resolution need review. |
 | `python3 tools/rust-only.py` | `WITH_RUST` conditionals in `src/`. |
 | `python3 tools/ffi-bool-returns.py` | Rust-defined C `bool` returns. |
-| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt`, and one used only by uncalled free functions a row in `tools/uncalled-function-baseline.txt`, each naming the owner issue that retires it. `--report-uncalled` also lists uncalled free functions and those only tests or tools call. |
+| `python3 tools/orphan-exports.py` | Rust exports and C++ declarations without production use; tests and harnesses do not count. An export used only by uncalled C++ members needs a row in `tools/uncalled-export-baseline.txt`, and one used only by uncalled free functions a row in `tools/uncalled-function-baseline.txt`, each naming the owner issue that retires it. A C++ free function that nothing calls needs a row in `tools/uncalled-free-function-baseline.txt`, so a change that deletes a function's last caller deletes the function; the `CheckAbi_*` table checks and the platform's entries are exempt. `--report-uncalled` also lists uncalled free functions and those only tests or tools call. |
 | `python3 tools/port-metrics.py` | Code-line counts and original retirement; `--whole-fork` adds source areas, C++ evidence and exports; `--functions [AREA ...]` adds remaining original lines per file and function. |
 
 - No checker detects Rust copies of original header helpers and constants ([porting](porting.md#callees-and-shared-accessors)).

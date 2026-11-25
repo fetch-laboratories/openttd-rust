@@ -5,13 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file ship_yapf_protocol.hpp Heap comparison, path ownership and production ship searches over fixture maps. */
+/** @file ship_yapf_protocol.hpp Heap comparison, the owner's path and production ship searches over fixture maps. */
 #ifndef SHIP_YAPF_PROTOCOL_HPP
 #define SHIP_YAPF_PROTOCOL_HPP
 #include "../rust/ship_yapf_ffi.h"
 #include "../rust/ship_control_ffi.h"
 #include "../rust/ground_ffi.h"
-#include "../rust/engine_capabilities_ffi.h"
 #include "follower_fixture.hpp"
 #include <array>
 #include <string_view>
@@ -111,20 +110,18 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	std::vector<uint32_t> actual(commands.size());
 	openttd_test_ship_heap_probe(costs.data(), costs.size(), commands.data(), values.data(), commands.size(), actual.data());
 	check(actual == expected);
-	using PathOwner = std::unique_ptr<OpenTTDShipPath, decltype(&openttd_rust_ship_path_destroy)>;
-	PathOwner path{openttd_rust_ship_path_new(), openttd_rust_ship_path_destroy};
-	openttd_rust_ship_path_push(path.get(), 255); openttd_rust_ship_path_push(path.get(), 13);
-	PathOwner copy{openttd_rust_ship_path_clone(path.get()), openttd_rust_ship_path_destroy};
-	openttd_rust_ship_path_set(copy.get(), 0, 2); openttd_rust_ship_path_pop(copy.get());
-	check(openttd_rust_ship_path_size(copy.get()) == 1 && openttd_rust_ship_path_get(copy.get(), 0) == 2);
-	check(openttd_rust_ship_path_size(path.get()) == 2 && openttd_rust_ship_path_get(path.get(), 0) == 255 && openttd_rust_ship_path_get(path.get(), 1) == 13);
-	openttd_rust_ship_path_clear(path.get());
+	/* The path a ship owner holds. */
+	using StateOwner = std::unique_ptr<OpenTTDShipState, decltype(&openttd_rust_ship_state_destroy)>;
+	StateOwner state{openttd_rust_ship_state_new(), openttd_rust_ship_state_destroy};
+	OpenTTDShipPath *path = openttd_rust_ship_state_path(state.get());
+	openttd_rust_ship_path_push(path, 255); openttd_rust_ship_path_push(path, 13);
+	check(openttd_rust_ship_path_size(path) == 2 && openttd_rust_ship_path_get(path, 0) == 255 && openttd_rust_ship_path_get(path, 1) == 13);
+	/* Save/load's staging writes one element by index, and only that element changes. */
+	openttd_rust_ship_path_set(path, 0, 2);
+	check(openttd_rust_ship_path_size(path) == 2 && openttd_rust_ship_path_get(path, 0) == 2 && openttd_rust_ship_path_get(path, 1) == 13);
+	openttd_rust_ship_path_clear(path);
 
-	/* The searches read the map, a real water region owner and the probe's input. The controller's
-	 * leaves serve only station orders, which no case gives. */
-	static const OpenTTDEngineCapabilitiesServices capabilities{};
-	OpenTTDShipLeaves leaves{};
-	leaves.capabilities = &capabilities;
+	/* The searches read the map, a real water region owner and the probe's input. */
 	using RegionOwner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 	RegionOwner owner{nullptr, openttd_rust_water_destroy};
 	const auto install = [&](FollowerFixture &map, uint32_t width, uint32_t height) {
@@ -146,11 +143,11 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 		probe.input = Input(10 + 32 * 20, 10 + 32 * 24, DIR_SE);
 		probe.state = TRACK_BIT_Y;
 		probe.trackdir = TRACKDIR_Y_SE;
-		auto direction = openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_Y_SE, 0, path.get());
-		check(probe.path_found == 1 && direction == TRACKDIR_Y_SE && probe.best_origin_dir == TRACKDIR_Y_SE && openttd_rust_ship_path_size(path.get()) == 0 && draws == 0);
+		auto direction = openttd_test_ship_choose_ship_track(&map.shared, &probe, probe.input.tile, 1 << TRACKDIR_Y_SE, 0, path);
+		check(probe.path_found == 1 && direction == TRACKDIR_Y_SE && probe.best_origin_dir == TRACKDIR_Y_SE && openttd_rust_ship_path_size(path) == 0 && draws == 0);
 		/* The destination four tiles behind: the reverse origin is the better one. */
 		probe.input.dest_tile = probe.input.tile - 4 * 32;
-		check(openttd_test_ship_check_ship_reverse(&map.shared, &leaves, &probe, nullptr) == 1 && draws == 0);
+		check(openttd_test_ship_check_ship_reverse(&map.shared, &probe, nullptr) == 1 && draws == 0);
 		/* A blocked ship may reverse into Y_NW, LOWER_W or RIGHT_N. The water beside it is land,
 		 * so that only Y_NW leads anywhere, as the reverse trackdir the case observes. */
 		for (uint32_t t : {probe.input.tile - 1, probe.input.tile + 1}) {
@@ -158,9 +155,9 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 			openttd_rust_water_invalidate(owner.get(), &map.shared, t);
 		}
 		uint8_t trackdir = INVALID_TRACKDIR;
-		check(openttd_test_ship_check_ship_reverse(&map.shared, &leaves, &probe, &trackdir) == 1 && trackdir == TRACKDIR_Y_NW && draws == 0);
+		check(openttd_test_ship_check_ship_reverse(&map.shared, &probe, &trackdir) == 1 && trackdir == TRACKDIR_Y_NW && draws == 0);
 		std::array<OpenTTDWaterPatch, 5> patches{};
-		check(openttd_test_ship_find_water_region_path(&map.shared, &leaves, &probe, probe.input.tile, 5, patches.data(), patches.size()) == 1 && patches[0].label == 1);
+		check(openttd_test_ship_find_water_region_path(&map.shared, &probe, probe.input.tile, 5, patches.data(), patches.size()) == 1 && patches[0].label == 1);
 	}
 
 	/* A one-tile-wide winding river exceeds the low-level node limit, then a failed retry. The
@@ -182,9 +179,9 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 		probe.input = Input(1 + 256, 1 + 256 * 101, DIR_SW);
 		probe.state = TRACK_BIT_X;
 		probe.trackdir = TRACKDIR_X_SW;
-		openttd_rust_ship_path_clear(path.get());
+		openttd_rust_ship_path_clear(path);
 		const Stats stats;
-		openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_X_SW, 0, path.get());
+		openttd_test_ship_choose_ship_track(&map.shared, &probe, probe.input.tile, 1 << TRACKDIR_X_SW, 0, path);
 		check(probe.path_found == 0 && stats["track_limits"] == 1 && stats["retries"] == 1 && stats["lost"] == 1);
 		/* The long winding route reaches the same fixed limit as the unchanged
 		 * generic search. The restricted retry additionally searches its start patch. */
@@ -204,9 +201,9 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 		probe.input = Input(118 + 128 * 125, 1 + 128, DIR_SW);
 		probe.state = TRACK_BIT_X;
 		probe.trackdir = TRACKDIR_X_SW;
-		openttd_rust_ship_path_clear(path.get());
+		openttd_rust_ship_path_clear(path);
 		const Stats stats;
-		openttd_test_ship_choose_ship_track(&map.shared, &leaves, &probe, probe.input.tile, 1 << TRACKDIR_X_SW, 0, path.get());
+		openttd_test_ship_choose_ship_track(&map.shared, &probe, probe.input.tile, 1 << TRACKDIR_X_SW, 0, path);
 		check(probe.path_found == 0 && stats["region_nodes"] == 257 && stats["region_limits"] == 1 && stats["track_nodes"] == 0);
 		check(stats["lost"] == 1 && stats["random_draws"] == 8 && draws == 8);
 	}

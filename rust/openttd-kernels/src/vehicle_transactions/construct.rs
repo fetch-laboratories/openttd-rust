@@ -99,9 +99,10 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
         engine.reliability(),
         engine.reliability_decay(),
     );
-    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
-        crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
-    });
+    (r.common.vehicles.set_max_age)(
+        unsafe { vehicle_ref(v, r.common.vehicles) },
+        crate::engine_capabilities::get_life_length_in_days(r.capabilities, e),
+    );
     (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD) as u16);
     (k.build_stamp)(v);
     (a.random_bits)(v, b.shared.random() as u16);
@@ -237,9 +238,10 @@ pub(crate) unsafe fn cmd_build_aircraft(
         engine.reliability(),
         engine.reliability_decay(),
     );
-    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
-        crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
-    });
+    (r.common.vehicles.set_max_age)(
+        unsafe { vehicle_ref(v, r.common.vehicles) },
+        crate::engine_capabilities::get_life_length_in_days(r.capabilities, e),
+    );
     let subtype = if engine.aircraft_subtype() & AIR_CTOL != 0 {
         AIR_AIRCRAFT
     } else {

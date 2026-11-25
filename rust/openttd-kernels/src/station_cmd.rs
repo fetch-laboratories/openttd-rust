@@ -309,7 +309,6 @@ pub struct CommandServicesTable {
     pub hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
     pub clear_airport: extern "C" fn(*mut BaseStation),
-    pub ship: *const crate::ship_control::Leaves,
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
     pub set_docking: extern "C" fn(u32, bool),
@@ -5179,16 +5178,14 @@ impl Ctx<'_> {
              * docking tile. Force them to leave the station (as they were loading
              * on the removed dock). */
             if s.current_order().kind() == OrderType::OT_LOADING {
-                let tile = s.tile().0;
-                if !((self.shared.docking_tile)(tile)
-                    && unsafe {
-                        crate::ship_control::openttd_rust_ship_is_destination_abi(
-                            tile,
-                            u32::from(index),
-                            self.s.ship,
-                            self.s.shared,
-                        ) != 0
-                    })
+                let tile = s.tile();
+                let world = crate::map_func::World::new(self.shared);
+                if !(world.is_docking_tile(tile)
+                    && crate::ship_control::is_ship_destination_tile(
+                        &world,
+                        tile,
+                        StationID(index),
+                    ))
                 {
                     crate::vehicle::visits::leave_station(s, self.vehicle().visits());
                 }
@@ -5199,23 +5196,15 @@ impl Ctx<'_> {
             if s.current_order().kind() == OrderType::OT_GOTO_STATION
                 && !StationFacilities((self.world().facilities)(st)).test(StationFacility::Dock)
             {
-                let dest = unsafe {
-                    crate::ship_control::openttd_rust_ship_station_destination(
-                        identity.id,
-                        u32::from(index),
-                        s.0.as_ptr(),
-                        self.s.ship,
-                        self.s.shared,
-                    )
-                };
-                unsafe {
-                    crate::ship_control::openttd_rust_ship_destination(
-                        identity.id,
-                        dest,
-                        self.s.ship,
-                        self.s.shared,
-                    );
-                }
+                let ship = crate::ship_control::Ship::of(s);
+                crate::ship_control::set_dest_tile(
+                    ship,
+                    crate::ship_control::get_order_station_location(
+                        self.vehicle(),
+                        ship,
+                        StationID(index),
+                    ),
+                );
             }
         }
     }
@@ -6157,7 +6146,6 @@ crate::abi::layouts! {
         hangar_tile,
         delete_airport_storage,
         clear_airport,
-        ship,
         clear,
         restoration,
         set_docking,

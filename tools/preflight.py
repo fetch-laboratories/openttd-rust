@@ -3,7 +3,8 @@
 
 The steps come from .github/workflows/ci-quick.yml itself, so the two cannot
 drift. Unlike CI, every step runs even after a failure, and the result lists
-each failed step.
+each failed step. The steps read the tree and write nothing a later step reads,
+so --jobs of them run at once, the longest of the last run first (#1069).
 
 --fast runs, in seconds, the pre-push hook's fast tier (the pinned commit
 checker, cargo fmt --check and Quick's Ruff lines) and Quick's ty line, and
@@ -11,15 +12,21 @@ records no stamp.
 """
 
 import argparse
+import datetime
+import json
 import os
 import re
 import shutil
+import signal
+import statistics
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, TypedDict
 
 import preflight_stamp
 import quick_workflow
@@ -33,7 +40,7 @@ HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
 WORKFLOW = quick_workflow.WORKFLOW
 COMMITS = "Check introduced commits with the pinned inherited checker"
 # Preflight's own step after Quick's (#923): CI compiles these in its native jobs.
-PROBES = "Compile comparison probes and runtime adapters without linking"
+PROBES = "Compile comparison probes, and compile and link runtime adapters"
 # Quick's `run:` steps that preflight does not run. Steps that `uses:` an action
 # (checkouts, setup-uv) are skipped too: they only prepare the runner.
 SKIPPED = {
@@ -57,6 +64,24 @@ BASE_EXPRESSION = re.compile(r"\s*\$\{\{(.*?)\}\}\s*", re.DOTALL)
 TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
+# Steps at once by default: half the host's threads, at most four. The probe
+# compile, the longest step, sizes its own compiler pool to the free threads.
+JOBS = min(4, max(1, (os.cpu_count() or 2) // 2))
+# Each step's seconds in the last run on this host, shared by every worktree,
+# so the longest steps start first.
+TIMINGS = "preflight/timings.json"
+# One line per full run on this host, read by --runs: what steering counts (#1069).
+RUNS = "preflight/runs.jsonl"
+# Guards printing and the set of running step processes.
+PRINTING = threading.Lock()
+ACTIVE: set[subprocess.Popen[bytes]] = set()
+# Seconds a terminated step has to exit before it is killed.
+STOP_SECONDS = 5
+INF = float("inf")
+STOPS = (signal.SIGTERM, signal.SIGHUP)
+STOPS_AND_INT = {signal.SIGINT, *STOPS}
+# Set when a parallel run is being stopped: a step launched after it stops at once.
+STOPPING = threading.Event()
 SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
 RUST_FORMAT = "Rust formatting (cargo fmt --check)"
 FORMAT = "python3 tools/migration.py fmt"
@@ -174,7 +199,7 @@ def commit_step(base: str, head: str, hooks: Path) -> Step:
 
 
 def fast_tier(base: str, head: str, inert: bool, hooks: Path) -> list[Step]:
-    """The pre-push hook's seconds-long checks; inert Markdown needs only the first."""
+    """The pre-push hook's seconds-long checks; a docs-only change needs only the first."""
     steps = [commit_step(base, head, hooks)]
     if not inert:
         steps.append(Step(RUST_FORMAT, ["cargo", "fmt", "--all", "--", "--check"]))
@@ -192,25 +217,271 @@ def environment() -> dict[str, str]:
 
 
 def run(step: Step, env: dict[str, str], log: Path) -> bool:
-    print(f"--> {step.name}", flush=True)
+    return timed(step, env, log)[0]
+
+
+def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
+    """Run one step into its log; print its start, and its result in one block."""
+    with PRINTING:
+        print(f"--> {step.name}", flush=True)
     started = time.monotonic()
     with log.open("w") as output:
-        code = subprocess.run(
+        process = launch(step, env, output)
+        try:
+            # A stop signal held back during the launch arrives here.
+            unblock()
+            code = process.wait()
+        except BaseException:
+            stop([process])
+            raise
+        finally:
+            with PRINTING:
+                ACTIVE.discard(process)
+    elapsed = time.monotonic() - started
+    lines = []
+    if code:
+        tail = log.read_text(errors="replace").splitlines()[-TAIL_LINES:]
+        lines += [f"    {line}" for line in tail]
+    lines.append(f"{'FAIL' if code else 'pass'} {elapsed:.0f}s {step.name}")
+    if code:
+        lines.append(f"    exit {code}; full output: {log}")
+    with PRINTING:
+        print("\n".join(lines), flush=True)
+    return code == 0, elapsed
+
+
+def launch(step: Step, env: dict[str, str], output: IO[str]) -> subprocess.Popen[bytes]:
+    """Start a step in its own process group, so stop() reaches its children,
+    and register it before any stop can miss it.
+
+    On the main thread the stop signals wait until the caller unblocks them; on
+    a worker, a stop that began during the launch stops the step at once.
+    """
+    if on_main_thread():
+        signal.pthread_sigmask(signal.SIG_BLOCK, STOPS_AND_INT)
+    try:
+        process = subprocess.Popen(
             step.command,
             cwd=migration.ROOT,
             env=env | step.env,
             stdout=output,
             stderr=subprocess.STDOUT,
-            check=False,
-        ).returncode
-    elapsed = time.monotonic() - started
-    if code:
-        tail = log.read_text(errors="replace").splitlines()[-TAIL_LINES:]
-        print("\n".join(f"    {line}" for line in tail))
-    print(f"{'FAIL' if code else 'pass'} {elapsed:.0f}s {step.name}", flush=True)
-    if code:
-        print(f"    exit {code}; full output: {log}", flush=True)
-    return code == 0
+            start_new_session=True,
+        )
+    except BaseException:
+        unblock()
+        raise
+    with PRINTING:
+        ACTIVE.add(process)
+        stopping = STOPPING.is_set() and not on_main_thread()
+    if stopping:
+        stop([process])
+    return process
+
+
+def on_main_thread() -> bool:
+    return threading.current_thread() is threading.main_thread()
+
+
+def unblock() -> None:
+    if on_main_thread():
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, STOPS_AND_INT)
+
+
+def signal_group(process: subprocess.Popen[bytes], number: int) -> None:
+    # Process group 0 or below would be preflight's own, or every process.
+    if process.pid <= 0:
+        return
+    try:
+        os.killpg(process.pid, number)
+    except ProcessLookupError:
+        pass
+
+
+def stop(processes: list[subprocess.Popen[bytes]]) -> None:
+    """Terminate the given steps' process groups and reap them, killing stragglers."""
+    for process in processes:
+        signal_group(process, signal.SIGTERM)
+    deadline = time.monotonic() + STOP_SECONDS
+    for process in processes:
+        try:
+            process.wait(max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            pass
+        signal_group(process, signal.SIGKILL)
+        process.wait()
+
+
+def timings_path() -> Path:
+    return migration.COMMON_LOCAL / TIMINGS
+
+
+def last_timings() -> dict[str, float]:
+    """The last recorded seconds per step name; none when the file is unreadable."""
+    try:
+        recorded = json.loads(timings_path().read_text())
+    except (OSError, ValueError):
+        return {}
+    return recorded if isinstance(recorded, dict) else {}
+
+
+def save_timings(seconds: dict[str, float]) -> None:
+    """Merge this run's seconds into the shared timings, under its lock."""
+    path = timings_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with file_lock(path.with_name(f"{path.name}.lock"), label="preflight timings"):
+            temporary = path.with_name(f"{path.name}.{os.getpid()}")
+            merged = last_timings() | seconds
+            temporary.write_text(json.dumps(merged, indent=1) + "\n")
+            os.replace(temporary, path)
+    except OSError as error:
+        print(f"timings not saved: {error}", flush=True)
+
+
+class Run(TypedDict):
+    """One full run's line in the shared run log."""
+
+    at: str
+    head: str
+    jobs: int
+    seconds: int
+    failed: list[str]
+
+
+def record_run(head: str, jobs: int, seconds: float, failed: list[str]) -> None:
+    entry = Run(
+        at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        head=head,
+        jobs=jobs,
+        seconds=round(seconds),
+        failed=failed,
+    )
+    path = migration.COMMON_LOCAL / RUNS
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with file_lock(path.with_name(f"{path.name}.lock"), label="preflight runs"):
+            with path.open("ab") as log:
+                # A line an interrupted writer left unfinished ends here.
+                if log.tell() and not path.read_bytes().endswith(b"\n"):
+                    log.write(b"\n")
+                log.write(json.dumps(entry).encode() + b"\n")
+    except OSError as error:
+        print(f"run not logged: {error}", flush=True)
+
+
+def utc(text: str) -> datetime.datetime:
+    """An ISO date or time, read as UTC when it names no zone."""
+    when = datetime.datetime.fromisoformat(text)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=datetime.UTC)
+    return when
+
+
+def intact(entry: object) -> bool:
+    """Whether a decoded line has every field of a Run, each of its type."""
+    if not isinstance(entry, dict) or set(entry) != set(Run.__annotations__):
+        return False
+    try:
+        utc(entry["at"])
+    except (TypeError, ValueError):
+        return False
+    return (
+        isinstance(entry["head"], str)
+        and all(isinstance(entry[key], int) for key in ("jobs", "seconds"))
+        and isinstance(entry["failed"], list)
+        and all(isinstance(name, str) for name in entry["failed"])
+    )
+
+
+def read_runs(path: Path) -> tuple[list[Run], int]:
+    """The run log's intact entries, and how many lines could not be read."""
+    try:
+        lines = path.read_bytes().splitlines()
+    except FileNotFoundError:
+        return [], 0
+    runs, unreadable = [], 0
+    for line in lines:
+        try:
+            entry = json.loads(line.decode())
+        except ValueError:  # UnicodeDecodeError and JSONDecodeError
+            entry = None
+        if intact(entry):
+            runs.append(entry)
+        else:
+            unreadable += 1
+    return runs, unreadable
+
+
+def report_runs(since: str) -> int:
+    """Full runs on this host since a UTC date or time: count and minutes."""
+    try:
+        cutoff = utc(since)
+    except ValueError:
+        print(f"--runs: {since!r} is not an ISO date or time", file=sys.stderr)
+        return 2
+    try:
+        entries, unreadable = read_runs(migration.COMMON_LOCAL / RUNS)
+    except OSError as error:
+        print(f"--runs: {error}", file=sys.stderr)
+        return 1
+    if unreadable:
+        print(f"skipped {unreadable} unreadable lines in {RUNS}")
+    runs = [entry for entry in entries if utc(entry["at"]) >= cutoff]
+    if not runs:
+        print(f"no full runs since {since}")
+        return 0
+    seconds = sorted(entry["seconds"] for entry in runs)
+    failed = sum(bool(entry["failed"]) for entry in runs)
+    heads = len({entry["head"] for entry in runs})
+    print(
+        f"{len(runs)} full runs since {since} on {heads} heads, {failed} failed; "
+        f"median {statistics.median(seconds):.0f}s, longest {seconds[-1]}s, "
+        f"{sum(seconds) / 60:.0f} minutes in all"
+    )
+    return 0
+
+
+def run_steps(
+    steps: list[Step], env: dict[str, str], logs: Path, jobs: int
+) -> list[str]:
+    """Run every step, jobs at a time, longest first; the failed names in step order.
+
+    A verdict belongs to the step's position, not its name, which need not be
+    unique. Each step keeps its workflow number for its log. A step with no
+    recorded time starts first, since it may be the longest. On an interrupt,
+    queued steps are cancelled and running ones terminated.
+    """
+    last = last_timings()
+    order = sorted(range(len(steps)), key=lambda i: -last.get(steps[i].name, INF))
+    STOPPING.clear()
+    pool = ThreadPoolExecutor(max(1, jobs))
+    try:
+        futures = {
+            index: pool.submit(timed, steps[index], env, logs / f"{index + 1:02}.log")
+            for index in order
+        }
+        results = [futures[index].result() for index in range(len(steps))]
+    except BaseException:
+        with PRINTING:
+            STOPPING.set()
+            running = list(ACTIVE)
+        pool.shutdown(wait=False, cancel_futures=True)
+        stop(running)
+        # A step still launching stops itself on STOPPING; wait for it.
+        pool.shutdown()
+        raise
+    finally:
+        STOPPING.clear()
+    pool.shutdown()
+    save_timings(
+        {step.name: seconds for step, (_, seconds) in zip(steps, results, strict=True)}
+    )
+    return [
+        step.name
+        for step, (passed, _) in zip(steps, results, strict=True)
+        if not passed
+    ]
 
 
 def selected(names: list[str], patterns: list[str] | None) -> list[str]:
@@ -243,7 +514,18 @@ def arguments() -> argparse.Namespace:
             "a check before a commit; records no stamp"
         ),
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=JOBS,
+        help=f"steps run at once (default {JOBS}); 1 runs them in workflow order",
+    )
     parser.add_argument("--list", action="store_true", help="list the steps and exit")
+    parser.add_argument(
+        "--runs",
+        metavar="SINCE",
+        help="count this host's full runs since a UTC date or time, and exit",
+    )
     return parser.parse_args()
 
 
@@ -338,8 +620,50 @@ def fast(options: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def execute(
+    options: argparse.Namespace,
+    chosen: list[Step],
+    env: dict[str, str],
+    logs: Path,
+    head: str,
+) -> list[str]:
+    """Run the chosen steps, in workflow order with --jobs 1; log a full run."""
+    started = time.monotonic()
+    if options.jobs == 1:
+        failed = [
+            step.name
+            for number, step in enumerate(chosen, 1)
+            if not run(step, env, logs / f"{number:02}.log")
+        ]
+    else:
+        failed = run_steps(chosen, env, logs, options.jobs)
+    if not options.step:
+        record_run(head, options.jobs, time.monotonic() - started, failed)
+    return failed
+
+
+def interrupt(number: int, _frame: object) -> None:
+    raise KeyboardInterrupt(signal.Signals(number).name)
+
+
 def main() -> int:
     options = arguments()
+    if options.runs:
+        return report_runs(options.runs)
+    # Steps run in their own process groups, so a stop signal to preflight
+    # must reach them through the same cleanup as Ctrl-C.
+    previous = {number: signal.signal(number, interrupt) for number in STOPS}
+    try:
+        return check(options)
+    except KeyboardInterrupt as stopped:
+        print(f"preflight stopped ({stopped or 'SIGINT'}); no stamp", file=sys.stderr)
+        return 130
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
+def check(options: argparse.Namespace) -> int:
     try:
         if options.fast:
             return fast(options)
@@ -363,11 +687,7 @@ def main() -> int:
         env = environment()
         started = time.monotonic()
         chosen = [step for step in steps if step.name in names]
-        failed = [
-            step.name
-            for number, step in enumerate(chosen, 1)
-            if not run(step, env, logs / f"{number:02}.log")
-        ]
+        failed = execute(options, chosen, env, logs, head)
         # A step can change tracked files; the summary describes the end state too.
         warning = warning or uncommitted()
         if not failed:

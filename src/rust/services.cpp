@@ -609,7 +609,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.kdtree_partition = RustKdtreePartition,
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },
 	.station_catchment = []() noexcept { return &GetRustStationCatchmentServices(); },
-	.docking_tile = OpenTTDIsDockingTile,
 	.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
 	.station_serve_neutral = RustServeNeutralIndustries,
 	.station_type = [](uint32_t tile) noexcept { return GetStationType(TileIndex{tile}); },

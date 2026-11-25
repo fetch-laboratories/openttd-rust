@@ -17,6 +17,9 @@
 #include "order_backup.h"
 #include "order_cmd.h"
 #include "order_func.h"
+#ifdef WITH_RUST
+#include "rust/orders_ffi.h"
+#endif
 #include "saveload/saveload.h"
 #include "timetable_cmd.h"
 #include "cargo_type.h"
@@ -262,7 +265,12 @@ static bool OrdersScenario(std::span<std::string_view> args)
 		FIXTURE_SET(peer, VehStatus, vehstatus, FIXTURE_GET(peer, VehStatus, vehstatus).Reset(VehState::Stopped));
 		VehicleEnterDepot(v);
 		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Reset(VehState::Stopped));
+#ifdef WITH_RUST
+		/* Vehicle::LeaveUnbunchingDepot, whose body is Rust's. */
+		openttd_rust_leave_unbunching(v, &GetRustOrdersLeaves());
+#else
 		v->LeaveUnbunchingDepot();
+#endif
 		fmt::print(stderr, "ORDERS waiting {} {}\n", v->IsWaitingForUnbunching(), peer->IsWaitingForUnbunching());
 		State("departure", v);
 		State("peer", peer);

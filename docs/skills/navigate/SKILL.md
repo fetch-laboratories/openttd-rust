@@ -13,7 +13,7 @@ OpenTTD as a Rust program: every original C++ line retired, the game behaving as
 Everything else, including AGENTS.md's goal, is subject to review. Work at the scale of areas, phases, thousands of lines and rates over weeks; leave transcripts, PRs, CI and individual ports to `/steer`. Judge the whole picture yourself; a subagent may count lines. Correct without waiting for the user, except an ADR marked `may change: user` ([ADRs](../../adr/README.md#who-may-change-one)).
 
 Attribution on every issue, comment and commit body you write:
-`Agent: /root (<host> navigation) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
+`Agent: /root/navigation | Model: <your exact model ID> | Reasoning effort: <as the host reports it, else not-reported-by-host> | Host: <host>`. The path, model and effort are one word each, because the tools read each up to its first space: `ci.py ready` and the merge group's growth gate refuse a PR whose path is more, and `ci.py comment` refuses an `--effort` that is more.
 
 ## 1. Fix the position
 
@@ -38,12 +38,14 @@ Ask whether each part, followed literally, reaches the destination:
 - **Metrics**: whether every figure root and steer use measures distance.
 - **Rate**: its changes and the parts of the course responsible, measured from each period's merges and PRs, not listed as candidates. In a stage that retires no C++ by design, such as the cleanup, judge that stage's own pace: its intended cost is not a finding.
 - **Autonomy**: waits, parked work and decisions the destination already answers.
+- **Steering and fathoms**: for each steering review and each closed [fathom](../fathom/SKILL.md) case of the period, whether the number it aimed at moved and stayed; which problems came back after a correction; and the cases still open on the tracker, #1067, by cost.
 
 Done when every part has a verdict, and each failure names its text by file and line.
 
 ## 4. Reset the course
 
 - Correct each failure at its source: the goal line in `AGENTS.md`, [goal and phases](../../planning.md#goal-and-phases), the roadmap's "Phases", owning guidance and skills. Rewrite or remove a failing rule rather than adding a counter-rule. Record a correction that is a real decision as an ADR ([ADRs](../../adr/README.md)).
+- Hand down a failure whose cause your counts do not establish: a question for the next steering, or a fathom case ([spawning](../../team.md#spawning)), with the rule's history and the test that would settle it.
 - Put a tool change, such as a metric, in an issue at the top of the work order.
 - Replace the roadmap's "Phases" chart with the position table, each phase's size, exit criterion and status, and root's first actions.
 - Commit all edits as one docs-only commit on `rust-migration`: `Doc: Navigate toward <correction> [skip ci]`, or `Doc: Navigate, course holds [skip ci]` if only the position changed. Push once settled.

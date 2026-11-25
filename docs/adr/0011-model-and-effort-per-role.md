@@ -14,4 +14,4 @@ A change spends the user's money and usage allowance. No figure is recorded beyo
 
 ## History
 
-On 2026-11-10 the user wrote that Codex "should only do reviews which are then fixed by opus implementers". Later that day they approved a table that lets either provider run root and fill every role. Planning ran at high effort until 2026-11-11. Review ran on `gpt-6.1-sol` until 2026-11-18, when the user wrote: "gpt 6.2 sol is now available to be used as review agent"; the effort stayed high.
+On 2026-11-10 the user wrote that Codex "should only do reviews which are then fixed by opus implementers". Later that day they approved a table that lets either provider run root and fill every role. Planning ran at high effort until 2026-11-11. Review ran on `gpt-6.1-sol` until 2026-11-18, when the user wrote: "gpt 6.2 sol is now available to be used as review agent"; the effort stayed high. The fathom role joined the table on 2026-11-25, when the user wrote: "go with opus 5.5 high for fathom".
