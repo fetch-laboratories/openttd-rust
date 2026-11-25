@@ -19,15 +19,9 @@
 //! deletion, nested commands, `AI::Stop`). `AI::StartNew` and the `CCA_NEW_AI` `Post` can raise
 //! `Script_FatalError` in ordinary play, so `do_startup_new_company`, `cmd_company_ctrl` and
 //! `on_tick_companies` return to a caller-owned C++ frame before them.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::too_many_lines,
-    clippy::struct_field_names,
-    clippy::struct_excessive_bools
-)]
+// The contract above covers the raw-field loads and stores and the native exports that most
+// of the file's functions hold.
+#![allow(unsafe_code)]
 use crate::cargo_type::{CargoType, NUM_CARGO};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_base::COMPANY_MAX_LOAN_DEFAULT;
@@ -407,6 +401,10 @@ pub(crate) fn price(index: Price) -> i64 {
 }
 
 /// Raw adapter of [`price`] for the files no pass has finished.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`_price[index]`: the unfinished callers index by a `Price`, a `uint8_t` enum, widened to `size_t`"
+)]
 pub(crate) fn price_raw(index: usize) -> i64 {
     price(Price(index as u8))
 }
@@ -720,6 +718,11 @@ fn subtract_money_from_company(s: &Services, cost: i64, expenses_type: ExpensesT
 /// `SubtractMoneyFromCompanyFract`: subtract money from a company, including the money
 /// fraction. `company` is the company paying the bill, `cost` and `expenses_type` the cost of
 /// a command.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`c->money_fraction = m - (uint8_t)cost` (company_cmd.cpp:330)"
+)]
 pub(crate) fn subtract_money_from_company_fract(
     f: &FinanceServices,
     company: CompanyID,
@@ -753,6 +756,10 @@ pub extern "C" fn openttd_rust_company_subtract_fraction(
 }
 
 /// `UpdateLandscapingLimit`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`limit = static_cast<uint32_t>(std::min<uint64_t>(limit + per_64k_frames, burst << 16))` (company_cmd.cpp:338)"
+)]
 fn update_landscaping_limit(limit: u32, per_64k_frames: u64, burst: u64) -> u32 {
     (u64::from(limit) + per_64k_frames).min(burst << 16) as u32
 }
@@ -891,6 +898,10 @@ impl Startup {
 /// `DoStartupNewCompany`: create a new company and sets all company variables default values.
 /// `true` asks the caller to run `AI::StartNew(frame.index)` and call again with the same
 /// frame; afterwards the frame names the company created, if any.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The startup frame carries the new company's `CompanyID` widened to `uint32_t`"
+)]
 pub(crate) fn do_startup_new_company(s: &Services, frame: &mut Startup) -> bool {
     if frame.stage == STARTUP_AI_STARTED {
         frame.stage = STARTUP_DONE;
@@ -926,12 +937,14 @@ pub(crate) fn do_startup_new_company(s: &Services, frame: &mut Startup) -> bool 
 
     // Scale the initial loan based on the inflation rounded down to the loan interval. The
     // maximum loan has already been inflation adjusted.
-    let loan =
-        (((INITIAL_LOAN as u64).wrapping_mul(read_field!(economy(), inflation_prices)) >> 16)
-            as i64
-            / i64::from(LOAN_INTERVAL)
-            * i64::from(LOAN_INTERVAL))
-        .min(read_field!(economy(), max_loan));
+    let loan = ((INITIAL_LOAN
+        .cast_unsigned()
+        .wrapping_mul(read_field!(economy(), inflation_prices))
+        >> 16)
+        .cast_signed()
+        / i64::from(LOAN_INTERVAL)
+        * i64::from(LOAN_INTERVAL))
+    .min(read_field!(economy(), max_loan));
     write_field!(c.finances, current_loan, loan);
     write_field!(c.finances, money, loan);
 
@@ -1076,6 +1089,10 @@ pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
 /// bankrupt will ask the other companies in order of their performance rating, so better
 /// performing companies get the 'do you want to merge with Y' question earlier. The question
 /// will then stay till either the company has gone bankrupt or got merged with a company.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`c->bankrupt_timeout = TAKE_OVER_TIMEOUT` (company_cmd.cpp:761) stores the `int` constant in the `int16_t` member"
+)]
 fn handle_bankruptcy_takeover(s: &Services, c: CompanyRef) {
     // Amount of time out for each company to take over a company;
     // Timeout is a quarter (3 months of 30 days) divided over the
@@ -1174,6 +1191,10 @@ pub(crate) struct Tick {
 
 /// `OnTick_Companies`: called every tick for updating some company info. `true` asks the
 /// caller to `Post` `CCA_NEW_AI` and call again with the same locals.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`Company::GetIfValid(_cur_company_tick_index)` (company_cmd.cpp:774) converts the `uint` index, below `MAX_COMPANIES`, to `CompanyID`"
+)]
 pub(crate) fn on_tick_companies(s: &Services, t: &mut Tick) -> bool {
     let settings = s.shared.settings();
     if t.stage == TICK_BEGIN {
@@ -1252,10 +1273,10 @@ pub(crate) fn on_tick_companies(s: &Services, t: &mut Tick) -> bool {
         // of indicated value.
         let timeout = t.timeout;
         t.timeout = timeout
-            .wrapping_add((s.script_random_next)((timeout / 4) as u32) as i32)
+            .wrapping_add((s.script_random_next)((timeout / 4).cast_unsigned()).cast_signed())
             .wrapping_sub(timeout / 8);
 
-        (s.new_competitor_timeout_reset)(t.timeout.max(1) as u32);
+        (s.new_competitor_timeout_reset)(t.timeout.max(1).cast_unsigned());
     }
 
     t.stage = TICK_END;
@@ -1387,6 +1408,11 @@ impl Control {
 /// `CmdCompanyCtrl`: control the companies: add, delete, etc. `true` asks the caller to run
 /// `AI::StartNew(frame.startup.index)` and call again with the same frame; the command's
 /// result is in `out` once it returns `false`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The startup frame carries the new company's `CompanyID` widened to `uint32_t`"
+)]
+#[allow(clippy::too_many_lines)] // `CmdCompanyCtrl`'s four actions in one body, as the original.
 pub(crate) fn cmd_company_ctrl(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -1783,7 +1809,7 @@ pub(crate) fn cmd_give_money(
                 false,
                 &from_company_name,
                 &dest_company_name,
-                Integer(amount as u64),
+                Integer(amount.cast_unsigned()),
             );
         }
     }
@@ -1985,6 +2011,11 @@ pub extern "C" fn openttd_rust_company_hostile_takeover_value(
 /// `UpdateCompanyRatingAndValue`: if `update` is set to true, the economy is updated with
 /// this score (also the house is updated, should only be true in the on-tick event). Returns
 /// the actual score of this company.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`s = Clamp<int64_t>(...) * _score_info[i].score / _score_info[i].needed` (economy.cpp:296) stores the `int64_t` product in the `int` score"
+)]
+#[allow(clippy::too_many_lines)] // `UpdateCompanyRatingAndValue`'s score parts in the original's order.
 pub(crate) fn update_company_rating_and_value(s: &Services, c: CompanyRef, update: bool) -> i32 {
     let owner = c.index;
     let f = c.finances;
@@ -2148,7 +2179,7 @@ pub(crate) fn update_company_rating_and_value(s: &Services, c: CompanyRef, updat
         crate::objects::update_company_hq(
             (s.identity.objects)(),
             (s.location_of_hq)(c.company),
-            score as u32,
+            score.cast_unsigned(),
         );
         let value = calculate_company_value(s, c, true);
         write_field!(f, old_economy[0].company_value, value);
@@ -2171,6 +2202,12 @@ pub extern "C" fn openttd_rust_company_update_rating(
 /// `ChangeOwnershipOfCompanyItems`: change the ownership of all the items of a company.
 /// `old_owner` is the company that gets removed, `new_owner` the company to merge to, or
 /// `INVALID_OWNER` to remove the company.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`t->ratings[old_owner] = RATING_INITIAL` (economy.cpp:381) stores in `int16_t`; `CompanyServiceInterval`'s `int` passes as `CmdChangeServiceInt`'s `uint16_t` interval (economy.cpp:453); the page cursor's index is a `StoryPageID`"
+)]
+#[allow(clippy::too_many_lines)] // `ChangeOwnershipOfCompanyItems`'s item walks in the original's order.
 pub(crate) fn change_ownership_of_company_items(
     s: &Services,
     ownership: &crate::tile_owner::Context,
@@ -2217,7 +2254,7 @@ pub(crate) fn change_ownership_of_company_items(
         write_field!(
             CompanyRef::get(s.identity, old_owner).finances,
             money,
-            (u64::MAX >> 2) as i64
+            (u64::MAX >> 2).cast_signed()
         ); // jackpot ;p
     }
 
@@ -2613,7 +2650,7 @@ fn company_check_bankrupt(s: &Services, c: CompanyRef) {
     // If the company has money again, it does not go bankrupt
     if read_field!(f, money).saturating_sub(read_field!(f, current_loan)) >= neg(get_max_loan(f)) {
         let previous_months_of_bankruptcy =
-            crate::math::ceil_div(u32::from(read_field!(f, months_of_bankruptcy)), 3) as i32;
+            crate::math::ceil_div(u32::from(read_field!(f, months_of_bankruptcy)), 3).cast_signed();
         write_field!(f, months_of_bankruptcy, 0);
         write_field!(f, bankrupt_asked, CompanyMask::default());
         if previous_months_of_bankruptcy != 0 {
@@ -2693,7 +2730,7 @@ fn company_check_bankrupt(s: &Services, c: CompanyRef) {
     // subtraction and converts the difference to `uint`.
     let months = read_field!(f, months_of_bankruptcy);
     if crate::math::ceil_div(u32::from(months), 3)
-        != crate::math::ceil_div((i32::from(months) - 1) as u32, 3)
+        != crate::math::ceil_div((i32::from(months) - 1).cast_unsigned(), 3)
     {
         (s.identity.admin_update)(c.company);
     }
@@ -2900,8 +2937,9 @@ pub(crate) fn recompute_prices(s: &Services) {
         ((u64::from(unsafe { settings.max_loan.read() })
             .wrapping_mul(read_field!(e, inflation_prices))
             >> 16)
-            / LOAN_INTERVAL as u64
-            * LOAN_INTERVAL as u64) as i64
+            / u64::from(LOAN_INTERVAL.cast_unsigned())
+            * u64::from(LOAN_INTERVAL.cast_unsigned()))
+        .cast_signed()
     );
 
     // Setup price bases
@@ -2930,7 +2968,10 @@ pub(crate) fn recompute_prices(s: &Services) {
         }
 
         // Apply inflation
-        price = (price as u64).wrapping_mul(read_field!(e, inflation_prices)) as i64;
+        price = price
+            .cast_unsigned()
+            .wrapping_mul(read_field!(e, inflation_prices))
+            .cast_signed();
 
         // Apply newgrf modifiers, remove fractional part of inflation, and normalise on medium
         // difficulty.
@@ -2943,7 +2984,7 @@ pub(crate) fn recompute_prices(s: &Services) {
         };
         let shift = i32::from(multiplier) - 16 - 3;
         if shift >= 0 {
-            price = price.wrapping_shl(shift as u32);
+            price = price.wrapping_shl(shift.cast_unsigned());
         } else {
             price >>= -shift;
         }
@@ -2964,7 +3005,7 @@ pub(crate) fn recompute_prices(s: &Services) {
     // Setup cargo payment
     for cs in crate::cargo_registry::cargo_specs() {
         let payment = (s.cargo_initial_payment)(cs)
-            .saturating_mul(read_field!(e, inflation_payment) as i64)
+            .saturating_mul(read_field!(e, inflation_payment).cast_signed())
             >> 16;
         (s.cargo_set_current_payment)(cs, payment);
     }
@@ -3030,6 +3071,10 @@ fn companies_pay_interest(s: &Services) {
 }
 
 /// `HandleEconomyFluctuations`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`_economy.fluct = -(int)GB(Random(), 0, 2)` and `GB(Random(), 0, 8) + 312` (economy.cpp:858-861) store in the `int16_t` member"
+)]
 fn handle_economy_fluctuations(s: &Services) {
     let e = economy();
     // SAFETY: The catalog's address of a live setting.
@@ -3088,6 +3133,10 @@ pub extern "C" fn openttd_rust_economy_reset_price_multipliers() {
 /// `SetPriceBaseMultiplier`: change a price base by the given factor. The price base is
 /// altered by factors of two. `NewBaseCost = OldBaseCost * 2^n`. `price` is the index of the
 /// price base to change, `factor` the amount to change by.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`_price_base_multiplier[price] = Clamp(factor, MIN_PRICE_MODIFIER, MAX_PRICE_MODIFIER)` (economy.cpp:885) stores in `int8_t`"
+)]
 pub(crate) fn set_price_base_multiplier(price: Price, factor: i32) {
     assert_with(|| price < Price::PR_END);
     // SAFETY: Process-lifetime storage the game-state mutex serializes.
@@ -3107,6 +3156,11 @@ pub extern "C" fn openttd_rust_economy_set_price_multiplier(price: u8, factor: i
 
 /// `StartupEconomy`; `industry_builder` is the industry builder state, which
 /// `StartupIndustryDailyChanges` updates.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`_economy.infl_amount_pr = std::max(0, initial_interest - 1)` stores in `uint8_t` and `_economy.fluct = GB(Random(), 0, 8) + 168` in `int16_t` (economy.cpp:913-914)"
+)]
 pub(crate) fn startup_economy(s: &Services, industry_builder: *mut crate::industry::Builder) {
     let settings = s.shared.settings();
     let e = economy();
@@ -3215,7 +3269,7 @@ fn do_acquire_company(
             &[
                 StringParameterData::String(&company_name),
                 StringParameterData::String(&other_company_name),
-                Integer(read_field!(c.finances, bankrupt_value) as u64),
+                Integer(read_field!(c.finances, bankrupt_value).cast_unsigned()),
             ],
         )
     };
@@ -3364,7 +3418,11 @@ pub(crate) fn cmd_increase_loan(s: &Services, out: Cost<'_>, flags: DoCommandFla
     let c = CompanyRef::get(s.identity, current).finances;
     let max_loan = get_max_loan(c);
     if read_field!(c, current_loan) >= max_loan {
-        (s.cost.error_param)(out.0, STR_ERROR_MAXIMUM_PERMITTED_LOAN.0, max_loan as u64);
+        (s.cost.error_param)(
+            out.0,
+            STR_ERROR_MAXIMUM_PERMITTED_LOAN.0,
+            max_loan.cast_unsigned(),
+        );
         return;
     }
 
@@ -3454,7 +3512,7 @@ pub(crate) fn cmd_decrease_loan(s: &Services, out: Cost<'_>, flags: DoCommandFla
     };
 
     if get_available_money(s.shared, s.finance, current) < loan {
-        (s.cost.error_param)(out.0, STR_ERROR_CURRENCY_REQUIRED.0, loan as u64);
+        (s.cost.error_param)(out.0, STR_ERROR_CURRENCY_REQUIRED.0, loan.cast_unsigned());
         return;
     }
 
@@ -3631,9 +3689,9 @@ pub(crate) fn cmd_change_bank_balance(
             let map = world.dimensions;
             // `GetTilePixelZ(tile)` is `GetTileZ(tile) * TILE_HEIGHT`.
             (s.shared.cost_animation)(
-                (map.tile_x(tile) * TILE_SIZE) as i32,
-                (map.tile_y(tile) * TILE_SIZE) as i32,
-                world.tile_z(tile) * TILE_HEIGHT as i32,
+                (map.tile_x(tile) * TILE_SIZE).cast_signed(),
+                (map.tile_y(tile) * TILE_SIZE).cast_signed(),
+                world.tile_z(tile) * TILE_HEIGHT.cast_signed(),
                 neg(delta),
             );
         }
