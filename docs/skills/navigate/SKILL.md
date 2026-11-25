@@ -13,7 +13,7 @@ OpenTTD as a Rust program: every original C++ line retired, the game behaving as
 Everything else, including AGENTS.md's goal, is subject to review. Work at the scale of areas, phases, thousands of lines and rates over weeks; leave transcripts, PRs, CI and individual ports to `/steer`. Judge the whole picture yourself; a subagent may count lines. Correct without waiting for the user, except an ADR marked `may change: user` ([ADRs](../../adr/README.md#who-may-change-one)).
 
 Attribution on every issue, comment and commit body you write:
-`Agent: /root (<host> navigation) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
+`Agent: /root/navigation | Model: <your exact model ID> | Reasoning effort: <as the host reports it, else not-reported-by-host> | Host: <host>`. The path, model and effort are one word each, because the tools read each up to its first space: `ci.py ready` and the merge group's growth gate refuse a PR whose path is more, and `ci.py comment` refuses an `--effort` that is more.
 
 ## 1. Fix the position
 

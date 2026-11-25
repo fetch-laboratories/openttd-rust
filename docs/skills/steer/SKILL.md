@@ -11,7 +11,7 @@ Review root's autonomous work since the last steering commit. Find what root can
 User focus: $ARGUMENTS (in Codex, any text sent with `$steer`). Answer a focused question first, to its root cause, and tell the user which of steps 2 and 3 still run.
 
 Attribution on every issue, comment and commit body you write:
-`Agent: /root (<host> steering review) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
+`Agent: /root/steering | Model: <your exact model ID> | Reasoning effort: <as the host reports it, else not-reported-by-host> | Host: <host>`. The path, model and effort are one word each, because the tools read each up to its first space: `ci.py ready` and the merge group's growth gate refuse a PR whose path is more, and `ci.py comment` refuses an `--effort` that is more.
 
 ## While root runs
 
