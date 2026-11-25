@@ -262,7 +262,8 @@ static bool OrdersScenario(std::span<std::string_view> args)
 		FIXTURE_SET(peer, VehStatus, vehstatus, FIXTURE_GET(peer, VehStatus, vehstatus).Reset(VehState::Stopped));
 		VehicleEnterDepot(v);
 		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Reset(VehState::Stopped));
-		v->LeaveUnbunchingDepot();
+		/* Vehicle::LeaveUnbunchingDepot. */
+		openttd_rust_leave_unbunching(v, &GetRustOrdersLeaves());
 		fmt::print(stderr, "ORDERS waiting {} {}\n", v->IsWaitingForUnbunching(), peer->IsWaitingForUnbunching());
 		State("departure", v);
 		State("peer", peer);

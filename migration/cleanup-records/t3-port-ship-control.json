@@ -10,5 +10,16 @@
     "operation": "ship_control::ship_controller",
     "source_contract": "`ShipController` (src/ship_cmd.cpp), one body of about 150 lines in the original.",
     "reason": "Decision 1 of plan #1027 part 3 ports each original body as one function with its comments at each branch; splitting ShipController would invent function boundaries the original lacks. The base's module-wide `too_many_lines` allowance goes, leaving this one item."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-vehicle.h": 2
+    },
+    "reason": "#1027 part 3 decisions 1 and 8: the owner link `ship` joins VehicleRecord beside `road` and `aircraft`, so that an entry resolves the ship owner once from the record instead of calling Ship::Get per leaf; and the original's member `sprite_cache.last_direction` (vehicle_base.h:158) moves to the record, where ShipController writes it in place and SpecializedVehicle::UpdateViewport reads it through an inline accessor.",
+    "existing_alternatives": "The base resolved the owner through the ship leaves' state_owner service on every entry and wrote the sprite cache direction through the sprite_direction leaf, a carrier for one call site (porting.md, design faults).",
+    "retiring_owner": "#734",
+    "retirement_condition": "The fields are the link's and the member's one definition; they stay with the vehicle record."
   }
 ]

@@ -121,6 +121,7 @@ fn free(v: Ship) {
 
 #[test]
 fn get_effective_water_class_takes_each_arm_and_records_each_assertion() {
+    #[cfg(test)]
     thread_local! {
         static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
     }
@@ -214,6 +215,7 @@ fn reverse_ship_into_trackdir_turns_onto_the_trackdir_and_stops() {
     if crate::services_assert::isolate_test_check(NAME, record_failure) {
         return;
     }
+    #[cfg(test)]
     thread_local! {
         static VIEWPORTS: Cell<u32> = const { Cell::new(0) };
         static SHIP: Cell<Option<Ship>> = const { Cell::new(None) };
