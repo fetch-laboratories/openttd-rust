@@ -108,20 +108,17 @@ fn install_map(kind: TileType, m1: u8) -> (Vec<BaseTileLayout>, Vec<ExtendedTile
     (base, extended)
 }
 
-/// The submarine test's tables: the shared table over this thread's map, and the vehicle
-/// table with its resolver and maintenance links, all leaked.
-#[allow(unsafe_code)]
-fn submarine_tables() -> Tables<'static> {
+/// The submarine test's service table: the shared table over this thread's map, and the
+/// vehicle table with its resolver and maintenance links, all leaked; its other links are
+/// null.
+fn submarine_services() -> &'static Services {
     let mut shared = crate::services::fixture(ptr::null_mut(), random);
     shared.map = fixture::statics();
-    let services = leak(Services {
+    leak(Services {
         shared: leak(shared),
         vehicles: vehicles(),
         ..crate::test_tables::DISASTER
-    });
-    // SAFETY: The submarine's tick reaches only the shared and vehicle tables and the vehicle
-    // table's resolver and maintenance links, which are leaked above.
-    unsafe { Tables::new(services) }
+    })
 }
 
 /// A disaster vehicle record with its owner, which the test leaks.
@@ -142,6 +139,7 @@ fn disaster_vehicle() -> DisasterVehicle {
 /// A step that wrapped to row 63, or that `TileAdd` let through, would reach sea, and the
 /// random source fails `Chance16(1, 90)`, so a submarine that took it would move.
 #[test]
+#[allow(unsafe_code)]
 fn submarine_leaves_row_zero_without_assertion_under_native_debug() {
     if crate::services_assert::isolate_test_check(
         "disaster::tests::submarine_leaves_row_zero_without_assertion_under_native_debug",
@@ -150,7 +148,9 @@ fn submarine_leaves_row_zero_without_assertion_under_native_debug() {
         return;
     }
     let _map = install_map(TileType::MP_WATER, Owner::WATER.0);
-    let t = submarine_tables();
+    // SAFETY: The small submarine's tick reaches only the shared and vehicle tables and the
+    // vehicle table's resolver and maintenance links, which the fixture leaks.
+    let t = unsafe { Tables::new(submarine_services()) };
     let v = disaster_vehicle();
     v.v.set_subtype(crate::disaster_vehicle::DisasterSubType::ST_SMALL_SUBMARINE.0);
     v.v.set_tile(TileIndex(10)); // (10, 0)
@@ -317,11 +317,10 @@ extern "C" fn success(cost: *const CommandCost) -> bool {
     cost_flag(cost)
 }
 
-/// The tables `disaster_clear_square_clears_house_and_human_rail_as_its_owner` runs under:
-/// the real landscape command over the recording clear procedure, the fixture's costs and
-/// companies, and the signal buffer.
-#[allow(unsafe_code)]
-fn clear_fixture() -> (Tables<'static>, &'static Shared) {
+/// The service table `disaster_clear_square_clears_house_and_human_rail_as_its_owner` runs
+/// under: the real landscape command over the recording clear procedure, the fixture's costs
+/// and companies, and the signal buffer.
+fn clear_fixture() -> (&'static Services, &'static Shared) {
     let costs = leak(crate::services::CommandCostServices {
         construct,
         destroy,
@@ -399,9 +398,7 @@ fn clear_fixture() -> (Tables<'static>, &'static Shared) {
         vehicles,
         ..crate::test_tables::DISASTER
     });
-    // SAFETY: The clear's paths reach the identity, shared and vehicle tables and the shared
-    // table's command, landscape, station and movement links, which are leaked above.
-    (unsafe { Tables::new(services) }, shared)
+    (services, shared)
 }
 
 /// `DisasterClearSquare` through the real `Command<CMD_LANDSCAPE_CLEAR>::Do`, its nesting and
@@ -410,6 +407,7 @@ fn clear_fixture() -> (Tables<'static>, &'static Shared) {
 /// depot or an AI's rail is left alone. A top-level command runs its procedure in a test
 /// phase and then an execute phase, so each expectation names its phase.
 #[test]
+#[allow(unsafe_code)]
 fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
     if crate::services_assert::isolate_test_check(
         "disaster::tests::disaster_clear_square_clears_house_and_human_rail_as_its_owner",
@@ -430,7 +428,11 @@ fn disaster_clear_square_clears_house_and_human_rail_as_its_owner() {
         base[tile].m1 = owner;
         base[tile].m5 = m5;
     }
-    let (t, shared) = clear_fixture();
+    let (services, shared) = clear_fixture();
+    // SAFETY: `DisasterClearSquare` and the nested release reach the identity, shared and
+    // vehicle tables and the shared table's command, landscape, station and movement links,
+    // which the fixture leaks.
+    let t = unsafe { Tables::new(services) };
 
     // An airplane in state 1 whose target, in `dest_tile`, is industry 7.
     let airplane = disaster_vehicle();
