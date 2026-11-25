@@ -588,7 +588,7 @@ impl<'v> CYapfShip<'v> {
         } else {
             self.dest_station = StationID::INVALID;
             self.dest_tile = TileIndex(v.input.dest_tile);
-            self.dest_trackdirs = TrackdirBits(track_status_to_trackdir_bits(
+            self.dest_trackdirs = track_status_to_trackdir_bits(
                 crate::movement::table(v.s).get_tile_track_status_in_world(
                     &v.world,
                     TileIndex(v.input.dest_tile),
@@ -596,7 +596,7 @@ impl<'v> CYapfShip<'v> {
                     0,
                     DiagDirection::INVALID_DIAGDIR,
                 ),
-            ));
+            );
         }
     }
     /// `SetIntermediateDestination`.
@@ -627,7 +627,7 @@ impl<'v> CYapfShip<'v> {
         }
 
         tile == self.dest_tile
-            && (self.dest_trackdirs & TrackdirBits(trackdir_to_trackdir_bits(trackdir.0)))
+            && (self.dest_trackdirs & trackdir_to_trackdir_bits(trackdir, |ok| self.v().check(ok)))
                 != TrackdirBits::TRACKDIR_BIT_NONE
     }
 
@@ -646,13 +646,14 @@ impl<'v> CYapfShip<'v> {
     #[inline]
     fn curve_cost(&self, td1: Trackdir, td2: Trackdir) -> i32 {
         let v = self.v();
-        v.check(is_valid_trackdir(td1.0));
-        v.check(is_valid_trackdir(td2.0));
+        v.check(is_valid_trackdir(td1));
+        v.check(is_valid_trackdir(td2));
 
-        if has_trackdir(trackdir_crosses_trackdirs(td1.0), td2.0, |ok| v.check(ok)) {
+        let check = |ok| v.check(ok);
+        if has_trackdir(trackdir_crosses_trackdirs(td1, check), td2, check) {
             /* 90-deg curve penalty. */
             return v.input.ship_curve90_penalty.cast_signed();
-        } else if td2.0 != next_trackdir(td1.0, |ok| v.check(ok)) {
+        } else if td2 != next_trackdir(td1, check) {
             /* 45-deg curve penalty. */
             return v.input.ship_curve45_penalty.cast_signed();
         }
@@ -748,7 +749,7 @@ impl<'v> Yapf<'v> for CYapfShip<'v> {
         let td = n.key.td;
 
         /* Base tile cost depending on distance. */
-        let mut c = if is_diagonal_trackdir(td.0) {
+        let mut c = if is_diagonal_trackdir(td, |ok| v.check(ok)) {
             YAPF_TILE_LENGTH
         } else {
             YAPF_TILE_CORNER_LENGTH
@@ -871,7 +872,7 @@ fn get_random_trackdir(v: &Vehicle<'_>, mut trackdirs: TrackdirBits) -> Trackdir
     for _ in 0..strip_amount {
         remove_first_trackdir(&mut trackdirs, |ok| v.check(ok));
     }
-    Trackdir(find_first_trackdir(trackdirs.0))
+    find_first_trackdir(trackdirs, |ok| v.check(ok))
 }
 
 /// `GetRandomFollowUpTileTrackdir`: returns a random tile/trackdir that can be
@@ -892,7 +893,7 @@ fn get_random_follow_up_tile_trackdir(
     );
     if follower.follow(v.s, tile, dir) {
         let mut dirs = follower.new_td_bits;
-        let dirs_without_90_degree = dirs & !TrackdirBits(trackdir_crosses_trackdirs(dir.0));
+        let dirs_without_90_degree = dirs & !trackdir_crosses_trackdirs(dir, |ok| v.check(ok));
         if dirs_without_90_degree != TrackdirBits::TRACKDIR_BIT_NONE {
             dirs = dirs_without_90_degree;
         }
@@ -1024,7 +1025,7 @@ pub(crate) fn choose_ship_track(
 
         /* Return INVALID_TRACKDIR to trigger a ship reversal if that is the best option. */
         *best_origin_dir = items[node].key.td;
-        if (TrackdirBits(trackdir_to_trackdir_bits(best_origin_dir.0)) & forward_dirs)
+        if (trackdir_to_trackdir_bits(*best_origin_dir, |ok| v.check(ok)) & forward_dirs)
             == TrackdirBits::TRACKDIR_BIT_NONE
         {
             crate::witness::hit(crate::witness::SHIP_YAPF_REVERSE_ORIGINS);
@@ -1065,9 +1066,10 @@ pub(crate) fn check_ship_reverse(v: &Vehicle<'_>, trackdir: Option<&mut Trackdir
     let Some(trackdir) = trackdir else {
         crate::witness::hit(crate::witness::SHIP_YAPF_REVERSE_CALLS);
         /* The normal case, typically called when ships leave a dock. */
-        let reverse_dir = Trackdir(reverse_trackdir(v.trackdir.0));
-        let forward_dirs = TrackdirBits(trackdir_to_trackdir_bits(v.trackdir.0));
-        let reverse_dirs = TrackdirBits(trackdir_to_trackdir_bits(reverse_dir.0));
+        let check = |ok| v.check(ok);
+        let reverse_dir = reverse_trackdir(v.trackdir, check);
+        let forward_dirs = trackdir_to_trackdir_bits(v.trackdir, check);
+        let reverse_dirs = trackdir_to_trackdir_bits(reverse_dir, check);
         choose_ship_track(
             v,
             TileIndex(v.input.tile),
@@ -1091,18 +1093,16 @@ pub(crate) fn check_ship_reverse(v: &Vehicle<'_>, trackdir: Option<&mut Trackdir
         vehicle_exit_dir(Direction(v.input.direction), v.state, check),
         check,
     );
-    let reverse_dirs = TrackdirBits(
-        diagdir_reaches_trackdirs(entry.0)
-            & track_status_to_trackdir_bits(
-                crate::movement::table(v.s).get_tile_track_status_in_world(
-                    &v.world,
-                    TileIndex(v.input.tile),
-                    TransportType::TRANSPORT_WATER,
-                    0,
-                    entry,
-                ),
+    let reverse_dirs = diagdir_reaches_trackdirs(entry, check)
+        & track_status_to_trackdir_bits(
+            crate::movement::table(v.s).get_tile_track_status_in_world(
+                &v.world,
+                TileIndex(v.input.tile),
+                TransportType::TRANSPORT_WATER,
+                0,
+                entry,
             ),
-    );
+        );
     choose_ship_track(
         v,
         TileIndex(v.input.tile),
@@ -1132,7 +1132,7 @@ pub(crate) fn yapf_ship_choose_track(
     crate::witness::hit(crate::witness::SHIP_YAPF_CHOOSE_CALLS);
     let v = Vehicle::new(s, ship_input(s, v), v.state, v.trackdir, v.leaves);
     let mut best_origin_dir = Trackdir::INVALID_TRACKDIR;
-    let origin_dirs = TrackdirBits(trackdir_to_trackdir_bits(v.trackdir.0));
+    let origin_dirs = trackdir_to_trackdir_bits(v.trackdir, |ok| v.check(ok));
     let td_ret = choose_ship_track(
         &v,
         tile,
@@ -1146,7 +1146,7 @@ pub(crate) fn yapf_ship_choose_track(
     if td_ret == Trackdir::INVALID_TRACKDIR {
         Track::INVALID_TRACK
     } else {
-        Track(trackdir_to_track(td_ret.0))
+        trackdir_to_track(td_ret, |ok| v.check(ok))
     }
 }
 

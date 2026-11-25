@@ -5,7 +5,6 @@
 #include "engine_ffi.h"
 #include "../rail_type.h"
 #include "../road_type.h"
-struct OpenTTDTypeIntroduction { uint32_t label; int32_t date; uint64_t required, introduces; };
 class RoadTypeInfo;
 /* Native TypeInfo storage supplies immutable metadata. These leaves neither reset
  * pools nor yield. Engine lifecycle scalar reads end before every callback.
@@ -16,8 +15,6 @@ struct OpenTTDTypeAvailabilityServices {
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
-	uint64_t (*rail_introduces)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduces);
-	OpenTTDTypeIntroduction (*rail_introduction)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduction);
 	uint8_t (*road_flags)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	const RoadTypeInfo *(*road_info)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_info);
 	uint64_t (*road_introduces)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces);

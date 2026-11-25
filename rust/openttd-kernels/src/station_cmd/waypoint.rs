@@ -22,7 +22,7 @@ use crate::economy_type::{
 };
 use crate::newgrf_roadstop::RoadStopClassID;
 use crate::newgrf_station::StationClassID;
-use crate::rail_map::RAIL_TILE_NORMAL;
+use crate::rail_map::RailTileType;
 use crate::road_type::{RoadBits, RoadTramType, RoadType};
 use crate::slope_type::Slope;
 use crate::station_map::StationGfx;
@@ -124,20 +124,17 @@ impl Ctx<'_> {
     fn get_axis_for_new_rail_waypoint(&self, tile: TileIndex) -> Axis {
         w::hit(w::WAYPOINT_AXIS_RAIL);
         /* The axis for rail waypoints is easy. */
-        if crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
-            return crate::map_func::World::new(self.shared).get_rail_station_axis(tile);
+        let world = crate::map_func::World::new(self.shared);
+        if world.is_rail_waypoint_tile(tile) {
+            return world.get_rail_station_axis(tile);
         }
         /* Non-plain rail type, no valid axis for waypoints. */
-        if TileType((self.shared.tile_type)(tile.0)) != TileType::MP_RAILWAY
-            || crate::services::RailTileType(
-                crate::map_func::World::new(self.shared).rail_tile_type(tile.0),
-            )
-            .0 != RAIL_TILE_NORMAL
+        if !world.is_tile_type(tile, TileType::MP_RAILWAY)
+            || world.get_rail_tile_type(tile) != RailTileType::Normal
         {
             return Axis::INVALID_AXIS;
         }
-        let ground = unsafe { &*self.rail_map().ground };
-        match TrackBits((ground.tracks)(tile.0).0) {
+        match world.get_track_bits(tile) {
             TrackBits::TRACK_BIT_X => Axis::AXIS_X,
             TrackBits::TRACK_BIT_Y => Axis::AXIS_Y,
             _ => Axis::INVALID_AXIS,
@@ -656,7 +653,7 @@ impl Ctx<'_> {
                 id,
                 axis.0,
                 gfx,
-                crate::services::RailType(world().rail_type(tile.0)),
+                world().get_rail_type(tile),
             );
             (self.s.set_custom_rail_index)(tile.0, specindex.value);
             self.set_rail_station_tile_flags(tile, spec);

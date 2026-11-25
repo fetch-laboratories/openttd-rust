@@ -50,8 +50,6 @@ inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOth
 
 /* Rail command, depot and crossing leaves (rail_cmd.rs). */
 inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
-inline VehicleAccelerationModel RustRailAccelerationType(RailType type) noexcept { return GetRailTypeInfo(type)->acceleration_type; }
-inline uint16_t RustRailMaxSpeed(RailType type) noexcept { return GetRailTypeInfo(type)->max_speed; }
 inline void RustSetRailCostMultiplier(RailTypeInfo *info, uint16_t value) noexcept { info->cost_multiplier = value; }
 inline uint16_t RustRailCostMultiplier(RailType type) noexcept { return GetRailTypeInfo(type)->cost_multiplier; }
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }
@@ -66,7 +64,6 @@ inline void RustSetSignalType(uint32_t tile, uint8_t track, uint8_t type) noexce
 inline SignalVariant RustSignalVariant(uint32_t tile, uint8_t track) noexcept { return GetSignalVariant(TileIndex(tile), static_cast<Track>(track)); }
 inline void RustSetSignalVariant(uint32_t tile, uint8_t track, uint8_t variant) noexcept { SetSignalVariant(TileIndex(tile), static_cast<Track>(track), static_cast<SignalVariant>(variant)); }
 inline void RustCycleSignalSide(uint32_t tile, uint8_t track) noexcept { CycleSignalSide(TileIndex(tile), static_cast<Track>(track)); }
-inline uint64_t RustAllCompatibleRailTypes(uint64_t types) noexcept { return GetAllCompatibleRailTypes(RailTypes{types}).base(); }
 inline bool RustRail90Disallowed(uint8_t a, uint8_t b, bool def) noexcept { return Rail90DegTurnDisallowed(static_cast<RailType>(a), static_cast<RailType>(b), def); }
 inline bool RustOnewaySignalBlocking(uint32_t tile, uint8_t td) noexcept { return HasOnewaySignalBlockingTrackdir(TileIndex{tile}, static_cast<Trackdir>(td)); }
 inline bool RustHasPbsSignal(uint32_t tile, uint8_t td) noexcept { return HasPbsSignalOnTrackdir(TileIndex{tile}, static_cast<Trackdir>(td)); }

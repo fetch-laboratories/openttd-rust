@@ -29,7 +29,7 @@ struct OpenTTDScriptRailSignal {
 };
 extern "C" {
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_train_has_power(const OpenTTDScriptHostServices *, const OpenTTDRailCommandServices *, uint32_t, uint32_t);
-int64_t OPENTTD_RUST_CALL openttd_rust_script_rail_max_speed(const OpenTTDScriptHostServices *, const OpenTTDGroundPhysicsServices *, uint32_t);
+int64_t OPENTTD_RUST_CALL openttd_rust_script_rail_max_speed(const OpenTTDScriptHostServices *, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_rail_build_cost(const OpenTTDScriptHostServices *, const OpenTTDRailCommandServices *, uint32_t, uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_rail_tracks(const OpenTTDScriptHostServices *, uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_rail_current_type();

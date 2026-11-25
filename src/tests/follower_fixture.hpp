@@ -61,13 +61,14 @@ struct FollowerFixture {
 		movement.orders = &orders;
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m5 & 63); };
 		rail.rail_reservation = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m2 & 63); };
-		physics.rail_speed = [](RailType) noexcept -> uint16_t { return 0; };
+		shared.rail_type_max_speed = [](const RailTypeInfo *) noexcept -> uint16_t { return 0; };
 		train.physics = &physics; train.vehicle = &vehicle;
 		pbs.shared = &shared; pbs.rail = &rail; pbs.train = &train;
 		pbs.handle = [](const ::Train *) noexcept -> OpenTTDTrainHandle { return {&active->record, active->state.get()}; };
 		pbs.rail90 = [](uint8_t, uint8_t, bool def) noexcept { return def; };
-		shared.all_compatible_railtypes = [](uint64_t types) noexcept { return types; };
-		pbs.compatible = [](uint8_t type) noexcept -> uint64_t { return uint64_t{1} << type; };
+		/* The rail type is the stand-in record's address; each is compatible with itself. */
+		shared.rail_type_info = [](RailType type) noexcept { return reinterpret_cast<const RailTypeInfo *>(static_cast<uintptr_t>(type)); };
+		shared.rail_type_compatible_railtypes = [](const RailTypeInfo *info) noexcept -> uint64_t { return uint64_t{1} << reinterpret_cast<uintptr_t>(info); };
 		pbs.show_reservation = []() noexcept { return false; };
 		(state.get())->compatible_railtypes = 1;
 		(state.get())->railtypes = 1;

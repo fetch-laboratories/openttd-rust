@@ -472,7 +472,7 @@ fn resolve_company_id(s: &Services, company: i32) -> i32 {
 /// `ScriptTile::HasTransportType`; `(::TransportType)` truncates to the `uint8_t` enum.
 #[allow(clippy::cast_possible_truncation)]
 pub(crate) fn has_transport_type(s: &Services, tile: u32, transport_type: u32) -> bool {
-    use crate::track_func::track_status_to_trackdir_bits;
+    use crate::track_func::track_status_to_trackdir_bits_raw;
     if !valid(&world(s), tile) {
         return false;
     }
@@ -480,10 +480,10 @@ pub(crate) fn has_transport_type(s: &Services, tile: u32, transport_type: u32) -
     let side = crate::direction_type::INVALID_DIAGDIR;
     let status = |sub| crate::movement::track_status(s.command.shared, tile, mode, sub, side);
     if transport_type == TRANSPORT_ROAD {
-        track_status_to_trackdir_bits(status(0)) != 0
-            || track_status_to_trackdir_bits(status(1)) != 0
+        track_status_to_trackdir_bits_raw(status(0)) != 0
+            || track_status_to_trackdir_bits_raw(status(1)) != 0
     } else {
-        track_status_to_trackdir_bits(status(0)) != 0
+        track_status_to_trackdir_bits_raw(status(0)) != 0
     }
 }
 

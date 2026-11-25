@@ -61,7 +61,7 @@ impl CYapfNodeKeyExitDir {
             exitdir: if td == Trackdir::INVALID_TRACKDIR {
                 DiagDirection::INVALID_DIAGDIR
             } else {
-                DiagDirection(trackdir_to_exitdir(td.0))
+                trackdir_to_exitdir(td, crate::services_assert::native_check)
             },
         }
     }

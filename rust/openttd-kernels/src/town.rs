@@ -1909,7 +1909,7 @@ impl Engine<'_> {
                 if !(self.is_valid_tile(bridge_tile)
                     && (((self.services.is_water_tile)(bridge_tile.0)
                         && !world().is_sea(bridge_tile.0))
-                        || (self.services.is_plain_rail)(bridge_tile.0)
+                        || world().is_plain_rail_tile(bridge_tile)
                         || one_way_road(bridge_tile)))
                 {
                     break;
@@ -1926,7 +1926,7 @@ impl Engine<'_> {
                 bridge_tile += delta;
                 if !(self.is_valid_tile(bridge_tile)
                     && ((self.services.is_water_tile)(bridge_tile.0)
-                        || (self.services.is_plain_rail)(bridge_tile.0)
+                        || world().is_plain_rail_tile(bridge_tile)
                         || one_way_road(bridge_tile)))
                 {
                     break;

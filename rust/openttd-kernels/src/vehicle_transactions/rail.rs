@@ -317,8 +317,7 @@ unsafe fn cmd_build_rail_wagon(
     let CmdBuildRailWagon { tile, e } = cmd;
     /* Check that the wagon can drive on the track in question */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
-    let tiletype =
-        crate::rail_type::RailType(crate::map_func::World::new(x.t.shared).rail_type(tile.0));
+    let tiletype = crate::map_func::World::new(x.t.shared).get_rail_type(tile);
     if !crate::rail::is_compatible_rail_types(
         x.t.shared,
         crate::rail_type::RailTypes(railtypes),
@@ -454,10 +453,12 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
     /* Check if depot and new engine uses the same kind of tracks *
      * We need to see if the engine got power on the tile to avoid electric engines in non-electric depots */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
-    let tiletype =
-        crate::rail_type::RailType(crate::map_func::World::new(x.t.shared).rail_type(tile.0));
-    if !crate::rail::has_power_on_rail(x.t.shared, crate::rail_type::RailTypes(railtypes), tiletype)
-    {
+    let tiletype = crate::map_func::World::new(x.t.shared).get_rail_type(tile);
+    if !crate::rail::has_power_on_rail_types(
+        x.t.shared,
+        crate::rail_type::RailTypes(railtypes),
+        tiletype,
+    ) {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
