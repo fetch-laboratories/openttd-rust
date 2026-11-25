@@ -132,6 +132,7 @@ static void ShipBoundary()
 	static OpenTTDVehicleResolverServices ship_resolver{};
 	ship_resolver.breakdown_delay = [](OpenTTDVehicle *) noexcept -> uint8_t {
 		CHECK(ship_probe.stage == 0 && ship_probe.record.hash_tile_current == nullptr);
+		CHECK(openttd_rust_ship_path_size(openttd_rust_ship_state_path(ship_probe.owner)) == 1 && openttd_rust_ship_path_get(openttd_rust_ship_state_path(ship_probe.owner), 0) == TRACKDIR_X_NE);
 		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
 		return 5;
 	};
@@ -144,7 +145,7 @@ static void ShipBoundary()
 	/* A cached path element, which the broken-down tick keeps and the reverse tick clears. */
 	openttd_rust_ship_path_push(openttd_rust_ship_state_path(state.get()), TRACKDIR_X_NE);
 	CHECK(openttd_rust_ship_tick(shell, &leaves, &ship_probe.services));
-	CHECK(openttd_rust_ship_path_size(openttd_rust_ship_state_path(state.get())) == 1);
+	CHECK(openttd_rust_ship_path_size(openttd_rust_ship_state_path(state.get())) == 1 && openttd_rust_ship_path_get(openttd_rust_ship_state_path(state.get()), 0) == TRACKDIR_X_NE);
 	/* The broken-down ship's tick ends before any position update. */
 	CHECK(ship_delay == 4 && ship_probe.stage == 0 && ship_probe.record.hash_tile_current == nullptr);
 	/* The same tick state again, running normally: the reverse path, with the cached path. */
