@@ -6,96 +6,94 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 ## Where the fork stands
 
-Base is at merge 89 (`17a38406ed`). The tables below are the merge-83 stocktake's (2026-11-24) beside merge 71 (`603724a3fd`), the stocktake before it, and the line under each gives what the 38th steering review measured at merge 89. Root's session of 2026-11-24 merged 76 to 89 and stopped at the user's request ([resume checkpoint](#resume-checkpoint)). The next stocktake follows merge 95 and the next platform cadence merge 92.
+Base is at merge 95 (`1007aa96f8`). The tables below are the merge-95 stocktake's (2026-11-25) beside merge 83 (`298e90e820`), the stocktake before it. Root's session that began on 2026-11-24 at about 21:00Z merged 90 to 95 and is running. The next stocktake follows merge 107 and the next platform cadence merge 97.
 
-- **#734's lines left fell by 8,523 in merges 84 to 89**, from 98,564 to 90,041 in 8 running hours ([who decides](../AGENTS.md#who-decides)): 1,065 an hour, against 181 in merges 60 to 75 and 1,189 in merges 48 to 59. All six merges were file passes (`vehicle/maintenance.rs`, `effect.rs`, `train.rs`, `vehicle/visits.rs`, `train_reservation.rs` and `vehicle/scheduler.rs`), on three slots at the user's allowance. In merges 76 to 83 the lines left had risen by 540 over 9 running hours, with one file pass in eight merges. 149 of 319 files are finished. At 1,065 an hour the 90,041 lines are about 85 running hours of passes, and at the whole session's 499 about 180; six merges set the first rate, and the merge-95 stocktake measures it again.
-- Fork C++ fell by 1,698 lines in merges 84 to 89, 212 a running hour, against 29 an hour over the merge-83 stocktake's interval.
-- **Review under [ADR 0051](adr/0051-review-whole-pr.md) cost less than half and left no more behind.** The reviewed PRs of merges 77 to 89 had a mean 3.8 reviewer sessions against 7.9 in merges 66 to 75, review fixes of 14% of the lines first reviewed against 40%, and a median 132 active minutes from opening to merge against 182. Steering 38's audits compared all seven file passes of merges 82 to 89 with the original line by line: no difference the game can reach, and 0.7 to 2.1 minor departures in each 1,000 changed lines, where every earlier regime left 2.1 to 2.9. They are [on #734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-7143124114).
-- The boundary: 1,454 exports and 2,817 callback slots at merge 89, 13 and 194 fewer than at merge 83. #735 is at 111 functions over seven parameters, 68 of them FFI exports.
-- **#1026 is delivered** (#1034, merge 83): `enqueue` takes the newest passing requested run on any of the PR's own commits, and the apt fallback changes host when GitHub's mirror stalls. In merges 84 to 89 a PR merged a median 34 minutes after its last review report, against 63 before, and Full took a median 17.4 minutes against 22.0. Its acceptance is read over merges 84 to 95 ([trackers](#trackers-and-exclusions)).
-- CI on 2026-11-24: four runs failed, two requested `native` runs (#1035 at its first head, #1036 after a review fix) and two platform builds at merge 77. No Full failed. One PR left the queue: #1036, on a conflict with #1044, which merged ahead of it.
-- The platform cadence was red at merge 77 on the hosted macOS image's newer CMake (#1029, fixed by #1030; no code regression and no merge stop) and green at merges 80, 82 and 87. Merge 87's was the first real use of `ci.py macos-fallback`, which set and removed `CI_MACOS_HEAVY` as written.
-- The user's allowances for the session of 2026-11-24 ended with it: a third implementer slot, planners and implementers at high effort, and `gpt-6.2-sol` reviewers on the priority service tier.
+- **#734's lines left fell by 14,971 in merges 84 to 95**, from 98,564 to 83,593 in 20 running hours ([who decides](../AGENTS.md#who-decides)): 749 an hour, against 181 in merges 60 to 75. Merges 84 to 89 fell 8,523 in 9 hours (947 an hour; the steering review counted 8 hours) and merges 90 to 95 fell 6,448 in 12 (537), of which the four hours between the pause at merge 89 and this session's first dispatch ran no pass; in the session's own eight hours the fall is 806 an hour. Eleven of the twelve merges were file passes and one the tools batch, on three slots at the user's allowance in both sessions. 159 of 319 files are finished. At 749 an hour the 83,593 lines are about 112 running hours of passes, before closure and #893.
+- Fork C++ fell by 2,001 lines in merges 84 to 95, 100 a running hour, against 29 an hour over the merge-83 stocktake's interval: 1,698 in merges 84 to 89 and 303 in merges 90 to 95. Original C++ retired rose by 144.
+- **Review:** the twelve PRs had a median 4 review reports, 5.5 review-fix commits and one base-update merge each, at a median 4,444 changed lines and 142 minutes from opening to merge. Five of the eleven passes were over 5,000 changed lines by GitHub's additions and deletions (#1035, #1036, #1049, #1054 and #1061), the largest #1049 at 13,793; #1056 (`company.rs`) is in review at 12,569.
+- The boundary: 1,453 exports and 2,779 callback slots at merge 95, 14 and 232 fewer than at merge 83. #735 is at 102 functions over seven parameters, 68 of them FFI exports.
+- **#1026's acceptance, read over merges 84 to 95** ([trackers](#trackers-and-exclusions)): three of four clauses hold, and Quick is now what a finished PR waits on, which is item 1 of the tools batch #1063.
+- CI in merges 84 to 95: five runs failed on these PRs. Three were requested `native` runs on a PR's own defect (#1035, #1036, #1061), one a Quick gate on a removed CTest case without its record (#1055) and one the queue's Full on a stalled apt mirror (#1055, requeued once). Three PRs left the queue: #1036 and #1055 on a conflict with a pass that merged ahead, and #1055 on that mirror. No Full failed on code.
+- The platform cadence was green at merges 87 and 92, the second without the macOS fallback.
+- The user's allowances for the session that began on 2026-11-24 at 21:00Z: a third implementer slot, planners at high effort, and `gpt-6.2-sol` reviewers on the priority service tier. Implementers ran at medium effort. They end with the session.
 - No rollback has happened since merge 32. Full phase-3 planning is not triggered, and near-full reproduction is not met.
 
 Reproduce the census with `python3 tools/port-metrics.py --whole-fork` (metric version 3).
 
-| Measured quantity | Merge 71 | Merge 83 |
+| Measured quantity | Merge 83 | Merge 95 |
 | --- | ---: | ---: |
-| Original C++ remaining | 221,612 | 221,577 |
-| Fork source glue, including generated records | 31,701 | 31,235 |
-| Compiled source and generated records C++ | 253,313 | 252,812 |
-| Tracked tools C++ evidence | 14,477 | 14,489 |
-| ABI-generated non-record C++ evidence | 5,168 | 5,039 |
-| Measured fork C++ series | 272,958 | 272,340 |
-| Original C++ retired, of 284,355 | 62,743 (22.07%) | 62,778 (22.08%) |
-| Simulation C++ retired, of 61,148 | 41,461 (67.80%) | 41,487 (67.85%) |
-| Historical regex exports / callback slots | 1,467 / 3,073 | 1,467 / 3,011 |
-| Shared-accessor / rebound-callee / orphan-export baseline rows | 46 / 239 / 21 | 45 / 225 / 21 |
-| Exports held only by uncalled members (baseline only shrinks) | 20 | 20 |
+| Original C++ remaining | 221,577 | 221,433 |
+| Fork source glue, including generated records | 31,235 | 29,776 |
+| Compiled source and generated records C++ | 252,812 | 251,209 |
+| Tracked tools C++ evidence | 14,489 | 14,391 |
+| ABI-generated non-record C++ evidence | 5,039 | 4,739 |
+| Measured fork C++ series | 272,340 | 270,339 |
+| Original C++ retired, of 284,355 | 62,778 (22.08%) | 62,922 (22.13%) |
+| Simulation C++ retired, of 61,148 | 41,487 (67.85%) | 41,631 (68.08%) |
+| Historical regex exports / callback slots | 1,467 / 3,011 | 1,453 / 2,779 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 45 / 225 / 21 | 45 / 209 / 21 |
+| Exports held only by uncalled members (baseline only shrinks) | 20 | 19 |
 | Embedded C++ outside the census: oracle recipes | 302 | 302 |
-| Rust / tooling code lines | 197,300 / 74,678 | 201,459 / 78,059 |
+| Rust / tooling code lines | 201,459 / 78,059 | 208,426 / 78,870 |
 
-At merge 89 (`17a38406ed`): original C++ remaining 221,467; fork source glue 29,974; compiled C++ 251,441; tracked tools evidence 14,406; ABI-generated non-record evidence 4,795; measured fork C++ series 270,642; original C++ retired 62,888 (22.12%) and simulation C++ retired 41,597 (68.03%); exports and callback slots 1,454 and 2,817; shared-accessor, rebound-callee and orphan-export baseline rows 45, 217 and 21; Rust and tooling code lines 206,130 and 78,004.
-
-| Source area / phase relationship (merge 83) | Original | Retired | Remaining | Fork glue |
+| Source area / phase relationship (merge 95) | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
-| Simulation logic (phase 1) | 47,424 | 38,024 | 9,400 | 4,989 |
-| Simulation storage (phase 2) | 13,724 | 3,463 | 10,261 | 1,380 |
+| Simulation logic (phase 1) | 47,424 | 38,123 | 9,301 | 4,662 |
+| Simulation storage (phase 2) | 13,724 | 3,508 | 10,216 | 1,378 |
 | NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,097 | 38,697 | 3,255 |
-| Support, graphics and viewport (phase 4) | 32,602 | 1,073 | 31,529 | 539 |
+| Support, graphics and viewport (phase 4) | 32,602 | 1,073 | 31,529 | 538 |
 | GUI and platform (phase 5) | 64,120 | 423 | 63,697 | 465 |
 | Vendored (phase 6) | 55,148 | 2,317 | 52,831 | 0 |
 | Data tables | 17,295 | 4,367 | 12,928 | 14 |
-| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 4,857 |
-| Boundary layer | 0 | 0 | 0 | 15,736 |
+| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 4,796 |
+| Boundary layer | 0 | 0 | 0 | 14,668 |
 
-Coverage remains bounded by the existing saves, NewGRFs, scenarios and retained native fixtures; entry witnesses are not branch coverage. New gaps go on #156's lists, which are its sub-issues #1038, #1039, #1040, #1041, #1042 and #1043 since its body reached GitHub's length limit: this interval's passes added unbunching, road-stop, aircraft-fallback and train news paths that no scenario observes and that are source-reviewed only. #503 deep checks remain user-requested.
+Coverage remains bounded by the existing saves, NewGRFs, scenarios and retained native fixtures; entry witnesses are not branch coverage. New gaps go on #156's lists, which are its sub-issues #1038, #1039, #1040, #1041, #1042 and #1043: this interval's passes added rail-command branches (`build_half_water`, `remove_shore`, `clear_water`, `signal_remove_path_end`) and restored assertions that no scenario reaches, and no Rust test runs a rail command body. #503 deep checks remain user-requested.
 
 ### Cleanup stream inventories
 
-The comment, integer, wrapper, constant and literal rows are analyzer estimates from `tools/code-standards-inventory.py`. Their "in finished files" parts rise as files finish and are mostly rows a reviewer would dismiss, such as export parameters and raw adapters. Root adds the next column at its stocktake ([selection](planning.md#selection)).
+The comment, integer, wrapper, constant, literal and assertion rows are analyzer estimates from `tools/code-standards-inventory.py`, given as "tree; in finished files". Their "in finished files" parts rise as files finish and are mostly rows a reviewer would dismiss, such as export parameters and raw adapters. Root adds the next column at its stocktake ([selection](planning.md#selection)).
 
-| Stream | Inventory | Merge 71 | Merge 83 |
+| Stream | Inventory | Merge 83 | Merge 95 |
 | --- | --- | ---: | ---: |
-| #734 | Workset files with a finished pass, of 319 | 141 | 143 |
-| #734 | Workset lines in finished files, of 190,751 | 105,163 (55.1%) | 110,401 (57.9%) |
-| #734 | Lines left in unfinished workset files | 100,290 | 98,564 |
-| #734 | Explanatory comment lines missing inside matched ported bodies | 2,033; 229 in finished files | 2,035; 237 |
-| #734 | Bare-integer parameters and fields whose concept has a named type | 1,442; 339 in finished files | 1,397; 341 |
-| #734 | Transparent wrapper types / named constants | 362 / 3,937; 97 / 1,267 in finished files | 367 / 4,047; 101 / 1,312 |
-| #734 | Literal sites standing for a named value | 12; 0 in finished files | 12; 0 |
-| #734 | #892's production assertion macro sites (`debug_assert*!` / `assert*!` / `unreachable!`) | 153 in 61 files (6 / 66 / 81) by the merge-83 scan; the merge-71 stocktake's own scan gave 157 in 62 files | 149 in 61 files (6 / 62 / 81) |
-| #735 | Functions over seven parameters | 115 (70 FFI, 20 helpers, 25 commands) | 114 (70, 19, 25) |
-| #735 | `too_many_arguments` ratchet rows / `allow` sites | 42 / 9 | 41 / 8 |
-| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines | 14,477 / 4,853 | 14,489 / 4,857 |
-| #738 | Rule corpus lines | 4,146 | 4,197 |
+| #734 | Workset files with a finished pass, of 319 | 143 | 159 |
+| #734 | Workset lines in finished files, of 190,751 | 110,401 (57.9%) | 133,718 (70.1%) |
+| #734 | Lines left in unfinished workset files | 98,564 | 83,593 |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 2,035; 237 (2,004; 231 by the tool as it is at merge 95) | 1,578; 250 |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,397; 341 | 1,206; 376 |
+| #734 | Transparent wrapper types / named constants | 367 / 4,047; 101 / 1,312 | 380 / 4,080; 118 / 1,467 |
+| #734 | Literal sites standing for a named value | 12; 0 | 12; 0 |
+| #734 | #892's production assertion macro sites at run time (`debug_assert*!` / `assert*!` / `unreachable!`), with compile-time `assert!` beside them | 137 in 52 files; 37 in 16. Compile-time 12 | 123 in 46 files (6 / 43 / 74); 37 in 16 (0 / 14 / 23). Compile-time 15 |
+| #735 | Functions over seven parameters | 114 (70 FFI, 19 helpers, 25 commands) | 102 (68, 16, 18) |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites | 41 / 8 | 32 / 6 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines | 14,489 / 4,857 | 14,391 / 4,796 |
+| #738 | Rule corpus lines | 4,197 | 4,228 |
 | None | Ruff rows | 283 | 283 |
 
-At merge 89, by the same commands: 149 workset files finished, holding 124,081 lines; 90,041 lines left; 1,769 missing comment lines; 1,312 bare-integer sites; 373 wrappers and 4,090 named constants; 12 literal sites; 111 functions over seven parameters (68 FFI, 18 helpers, 25 commands); 41 `too_many_arguments` rows and 7 `allow` sites. The finished-file parts, #892's scan, the `src/tests` lines and the Ruff rows were not measured again.
+The #734 line counts do not close: finished and left lines sum to 217,311 against the denominator of 190,751, since files have grown and passes have added files; 12 finished files (2,441 lines) and 56 unfinished Rust files (14,268 lines) are in no workset, and the manifest names `tree_cmd.rs`, which no longer exists. The lines left are the measure ([selection](planning.md#selection)); #1063's item 5 makes the count one tracked command and lists the files in no workset, which [closure](#cleanup-work-order) places.
 
 Counting commands:
 
-- **#734:** reconcile the issue workset manifest with merged complete-file pass PRs, then count current files with `wc -l`; a deleted finished entry remains in the denominator, and mechanical caller edits do not finish a file. The lines left are the `wc -l` of the workset files that `migration/finished-files.txt` does not list; their fall per running hour gives the stream's remainder. Run `python3 tools/code-standards-inventory.py [--head REV]` for the tree and with the finished paths for that subset. #892's sites have no tool: the scan covers `git ls-files 'rust/*.rs'` less test files, `cfg(test)` items, comments and literals, and each stocktake reruns it on the previous tip, since two scans' exclusions have differed.
+- **#734:** reconcile the issue workset manifest with merged complete-file pass PRs, then count current files with `wc -l`; a deleted finished entry remains in the denominator, and mechanical caller edits do not finish a file. The lines left are the `wc -l` of the workset files that `migration/finished-files.txt` does not list; their fall per running hour gives the stream's remainder. Run `python3 tools/code-standards-inventory.py [--head REV]` for the tree and with the finished paths for that subset; its `Assertion macros` line gives #892's sites, run-time and compile-time apart. The scripts of the merge-95 count are in `.local/stocktake-95/`.
 - **#735:** use the tracked long-signature inventory counter, `migration/clippy-debt.json` (`too_many_arguments` keys) and `git grep 'allow(clippy::too_many_arguments' -- rust/`.
 - **#736, the census baseline rows and the Clippy and Ruff rows:** from `python3 tools/port-metrics.py --whole-fork` (exports and callback slots are its "Boundary" line), `python3 tools/orphan-exports.py --report-uncalled`, `wc -l` of the three baseline files, and the debt files (keys are `sites` entries, diagnostics the sum of their list lengths). Expanded exports: `growth_inventory` in `tools/port-metrics.py`.
 - **#738:** `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`.
 
 ### Speed
 
-The merge-83 profile on clean `298e90e820` is the latest. All seven exit saves compared with no difference. The driver exited 1 on its anchor identity guard for every scenario: an unattended upgrade of the system's `libssh-4` on 2026-11-24 at 06:26Z changed the digest of one linked library, one day after #1024's quiet pass anchored the identity (#275). The library is not on the measured path, and the original's own counts moved by at most 0.04% against the pass, so these projections are computed from the report's instruction counts and the anchors by the [formula](speed.md#instruction-projections). The profile's output is retained in locked `.local/worktrees/root-profile-merge83`, the previous tip for attribution at the next profile; the merge-71 and merge-59 profile checkouts are released.
+The merge-95 profile on clean `1007aa96f8` is the latest. All seven exit saves compared with no difference. The driver exited 1 on its anchor identity guard for every scenario, as it has since an unattended upgrade of the system's `libssh-4` on 2026-11-24 changed the digest of one linked library (#275); the library is not on the measured path, so these projections are computed from the report's instruction counts and the anchors by the [formula](speed.md#instruction-projections). The profile's output is retained in locked `.local/worktrees/root-profile-merge95`, the previous tip for attribution at the next profile; the merge-83 profile checkout is released.
 
-| Scenario | Original Ir | Candidate Ir (merge 83) | Change since merge 75 | Projection (merge 75, the anchor) | Projection (merge 83) |
+| Scenario | Original Ir | Candidate Ir (merge 95) | Change since merge 83 | Projection (merge 83) | Projection (merge 95) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| TGP | 2,265,550,775 | 2,789,779,550 | +0.07% | 1.172488x | 1.174243x |
-| Opus | 21,773,210,518 | 26,209,756,849 | +0.31% | 1.317818x | 1.325993x |
-| Grok | 20,969,144,714 | 25,129,969,613 | +0.27% | 1.335597x | 1.342929x |
-| P1996 | 3,600,042,113 | 4,427,082,350 | +0.05% | 1.319243x | 1.320627x |
-| P2000 | 6,042,476,469 | 7,320,513,061 | −0.18% | 1.401373x | 1.401373x |
-| P2016 | 11,345,807,488 | 13,548,302,804 | −0.40% | 1.343582x | 1.343582x |
-| Drawing (diagnostic) | 2,149,057,585 | 2,154,445,719 | +0.01% | 1.004577x | 1.004738x |
+| TGP | 2,265,550,775 | 2,758,914,444 | −1.11% | 1.174243x | 1.172488x |
+| Opus | 21,773,210,518 | 26,053,743,483 | −0.60% | 1.325993x | 1.317818x |
+| Grok | 20,969,144,714 | 25,010,001,605 | −0.48% | 1.342929x | 1.335597x |
+| P1996 | 3,600,042,113 | 4,413,032,958 | −0.32% | 1.320627x | 1.319243x |
+| P2000 | 6,042,476,469 | 7,281,071,724 | −0.54% | 1.401373x | 1.401373x |
+| P2016 | 11,345,807,488 | 13,459,157,953 | −0.66% | 1.343582x | 1.343582x |
+| Drawing (diagnostic) | 2,149,057,585 | 2,154,231,077 | −0.01% | 1.004738x | 1.004577x |
 
-No scenario rose by 3%, so nothing is attributed, and none is in its band: generation is at 1.174x against 1.235x and the highest play record, P2000, at 1.401x against 1.52x. Each row has one quiet pass on the current [hardware](rust-migration.md#hardware). The merged tip has not been profiled since merge 83, and the merge-95 stocktake profiles it. The passes since counted their own scenarios at base and head ([ADR 0052](adr/0052-speed-on-the-merged-branch-and-per-pass-counts.md)): #1031 +0.38% (Opus) and +0.33% (Grok), unexplained when it merged; #1035 +0.08% and +0.07%; #1036 −0.19% and −0.18% after its review fixes; #1050 +0.05% on P1996; and #1045 level with its base once a pool slot it looked up three times for each vehicle visit was read once. #1044 counted −0.46% on P2000 before its review fixes and was not counted again. The assertion-policy loads in the vehicle walks cost about 78 million instructions on Opus, 0.30% (#275). Until a quiet pass re-anchors, `simulate --instructions` exits 1 after recording its counts, and a pass compares raw candidate counts at base and head.
+Every scenario runs fewer instructions than at merge 83 and than its anchor, so each projection is its anchor's ratio, nothing is attributed, and none is in its band: generation is at 1.172x against 1.235x and the highest play record, P2000, at 1.401x against 1.52x. Each row has one quiet pass on the current [hardware](rust-migration.md#hardware). The passes of merges 90 to 95 counted their own scenarios at base and head ([ADR 0052](adr/0052-speed-on-the-merged-branch-and-per-pass-counts.md)) and explained each rise before review: #1051 −0.89% on Opus, after its implementer traced a rise of 3.1% from a review fix to a predicate without an inline hint and removed it; #1052 level on Opus and Grok; #1054 +0.34% on P1996 and +0.64% on Grok from twelve restored track-helper assertions; #1055 −0.75% on Opus; #1061 +0.33% on P1996 from inlining shifts in the vehicle tick path. The assertion-policy loads in the vehicle walks cost about 78 million instructions on Opus, 0.30% (#275). Until a quiet pass re-anchors, `simulate --instructions` exits 1 after recording its counts, and a pass compares raw candidate counts at base and head. The original's counts equal the merge-83 profile's to the instruction, which a count reused by identity would also give; the next quiet pass measures them again.
 
 ## Course
 
@@ -191,21 +189,21 @@ Root's first actions on resume:
 
 Each stream issue holds its batches, rules, proof and inventory. [Selection](planning.md#selection) ranks cleanup work by stream inventory. File ownership and file-set checks follow [team](team.md#ready-queue-and-pipelining); what a cleanup PR needs to merge is in [integration](root-workflow.md#integration).
 
-Slots: one [implementer slot](team.md#slots) always runs a #734/#735 file pass when one is ready, because the stage exits when the file passes do. With every slot on file passes the lines left fell by 1,065 a running hour in merges 84 to 89; with file passes at 43% of slot time they rose in merges 76 to 83. Another slot takes, in this order: a defect that fails other PRs' runs, a member of the shared-service family below, and otherwise a file pass of its own chain. Each slot works its own chain of passes, on worksets that do not call the other chains' ([sizing](planning.md#sizing)); the [ready queue](#ready-queue) names the chains. #738 is closed at its end state.
+Slots: one [implementer slot](team.md#slots) always runs a #734/#735 file pass when one is ready, because the stage exits when the file passes do. With every slot on file passes the lines left fell by 947 a running hour in merges 84 to 89 and by 806 in the eight session hours of merges 90 to 95; with file passes at 43% of slot time they rose in merges 76 to 83. Another slot takes, in this order: a defect that fails other PRs' runs, a member of the shared-service family below, and otherwise a file pass of its own chain. Each slot works its own chain of passes, on worksets that do not call the other chains' ([sizing](planning.md#sizing)); the [ready queue](#ready-queue) names the chains. #738 is closed at its end state.
 
-1. **Tools batch.** One per stocktake interval, dispatched within it and ranked by its items' measured cost ([selection](planning.md#selection)). The batch of the interval that starts at merge 84 is #1037, with a reviewed plan of about 700 changed lines, no game code and no workflow change: the PR template's "Review groups" section, #1023's dead offload code, `housekeeping.py --apply` made safe to run while reviewers work ([counts](https://github.com/fetch-laboratories/openttd-rust/issues/1037#issuecomment-7143125766)), #892's scan as a row of the inventory tool, the inventory at a pass's head as one command, and a check of field order in shared tables if its planner finds it smaller than the findings it replaces. It takes a slot before merge 95. New inventory visibility is not C++ deletion.
+1. **Tools batch.** One per stocktake interval, dispatched within it and ranked by its items' measured cost ([selection](planning.md#selection)). #1037's batch merged as #1053 (merge 90). The batch of the interval that starts at merge 96 is #1063: Quick's wait before the queue, the apt fallback that did not save a queue run, `simulate --list` starting a build, the profile's `--jobs`, #734's workset count as one tracked command, a retry of `gh`'s 401 in the waits, one command for a reviewer's report, and #940's small fixes that share its files. It changes a workflow, so it queues after root's bootstrap Full ([CI administration](root-workflow.md#ci-administration)). New inventory visibility is not C++ deletion.
 2. **The shared-service family:** shared services, accessors and string IDs that several files need. Merged: news and script events (#982), windows and sound (#1001), errors (#1005), console and chat (#1008), the string IDs (#995, #1006, #1033), the framerate service (#1020) and `BaseStation::xy` (#1028). Left: `Vehicle::Tick`'s dispatch (#1011, after the `ship_control.rs` pass) and the shared crate (#998, with strgen's port in phase 4). The family is closed at these two: root opens a new member only with the counts [selection](planning.md#selection) asks for. Until a member merges, a pass keeps the carriers it would replace and names the work order ([design faults](porting.md#design-faults)).
 3. **#734/#735 file passes.** One PR per workset in the #734 manifest finishes every file it touches, applying the [code standards](porting.md#code-standards) to every line. Sizing, splits and single-file passes follow [sizing](planning.md#sizing); proof follows [cleanup proof](porting.md#cleanup-proof). Each pass reports its files' residue from `tools/code-standards-inventory.py`.
 
    Order, by fan-in (measured at `5af17025a3`). Delivered: the 03 remainder and its residue pass, 23's remainder (#884), 13 Map/terrain with 23's type-bearing files, except 23's `native_test_support.rs` and `native_test_support/movement.rs` (#973), and 09.
-   - (c) 08 (58), 07 (52), 06 (45), 10 (33), 04 (38), 05 (27). Of 08, `vehicle_effect.rs` (#1051), `ship_control.rs` and `disaster.rs` are left, and of 07 `vehicle/occupancy.rs` (#1003). 06 has started (#1052, then #1048). Steering 38 moved 10 (rail, #1046: `rail.rs`, `rail_cmd.rs`, `rail_map.rs` and `track_func.rs`, 4,206 lines) ahead of 04 and 05: the finished train, reservation and pathfinder files call it, so their passes left it two one-call rail-type readers and 91 call sites of track helpers that drop an assertion, and it shares no file with workset 06. The calls between 04 and 06 run both ways (06 to 04 in 2 files, 04 to 06 in 1), so strict fan-in governs.
-   - (d) The rest by fan-in: 16 (67), 21 (62), 15 (42), 18 (37), 11 (28), 14 (27), 17 (26), 12 (25). The leaf worksets 22 (17), 20 (6) and 19 (1) go last. F's closure stays last. Fan-in counts references, not their direction: at the merge-95 stocktake root counts, for each workset still to pass, the finished files that call it, and puts a workset that finished files call ahead of one they do not.
+   - (c) 08, 07, 06, 10, 04, 05. Worksets 07 and 10 are finished (#1055, and #1054 with #1061). Of 08, `ship_control.rs` (#1059) and `disaster.rs` (#1027's fourth part) are left, and of 06 `company.rs` (#1056). 04 is #1057, in four PRs, and 05 is #1060, in three.
+   - (d) The rest by the finished files that reference each, counted at merge 95 (`.local/stocktake-95/11-fanin-output.txt`): 16 (55, #1062), 21 (44), 18 (29), 15 (25), 17 (22), 11 (22), 12 (17), 14 (16). Workset 19 (2) goes last of them, and F's closure stays last of all. Every workset still to pass is referenced by finished files, so the count orders them; the earlier order by all references had 15 ahead of 18 and 14 ahead of 17 and 12. Root counts again at the merge-107 stocktake.
 
-   The single-file passes still to come include `station_cmd.rs` (6,352 lines), `orders.rs` (5,879), `town.rs` (5,784), `company.rs` (3,910) and `industry.rs` (3,757). #734 reports progress in lines finished as well as files.
+   The unfinished files over 1,500 lines, each with a single-file pass, are `orders.rs` (5,879), `company.rs` (3,901, #1056), `cargo_storage.rs` (2,892), `objects.rs` (2,674), `road_cmd.rs` (2,581), `newgrf_vehicle.rs` (2,141), `newgrf_loading.rs` (1,839), `fleet.rs` (1,790), `tunnelbridge_cmd.rs` (1,653), `landscape_generation.rs` (1,573) and `services.rs` (1,543, with F); `test_tables.rs` (2,375) is in no workset. #734 reports progress in lines finished as well as files.
 4. **#736 test evidence.** No transfer remains. The aircraft range probe stays native under #656: #950 projected 10 to 13 changed lines for each net C++ line, above every delivered transfer, and the user approved closing it ([reason](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6860491029)). The classification table in #736's body names each remaining file's owner or boundary, as of 2026-11-14; that closes the stream's inventory without a PR ([ruling](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6834080910)).
 
    What stays native: `tools/migration/aircraft-range.cpp` with `finite_range_probe` (#656 retires it), the Catch2 files that delete whole (#931 closed, since its recipes outweighed the C++ it deleted), `src/tests/train.cpp` (its PBS and reservation cases retire with #725, its speed case with #656), and the ScriptList sections of `tools/migration/script-list-comparison.cpp`, which retire with that file when the script API reader takes the `ScriptList` adapter classes. The console fixtures and Catch2 files that reach live pools (65 files, 14,273 counted lines) retire inside the ports that retire their pools or readers. The 33 files and 3,909 lines of retained boundary evidence leave with their boundaries.
-5. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases. Seventeen Rust files (2,944 lines; `test_tables.rs` is 1,735 of them) are in no workset. Each joins one before closure, the type files with F ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933)). The end state and later stocktakes and steering measure with `tools/code-standards-inventory.py`. The closure residue sweep takes the recorded residue lists ([steering 34's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6789587702), [steering 35's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6834079997), [steering 36's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6847188216) and [steering 37's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-7119259564)) unless a later pass touches the file; its macro sites are #892's, and the three YAPF search-loop copies are #971's and stay. #892 rides remaining file passes, then that sweep and closure; no unrecorded production assertion macro site remains at closure, measured as #892 specifies.
+5. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases. At merge 95, 56 unfinished Rust files (14,268 lines; `test_tables.rs` is 2,375 of them) are in no workset, most of them test modules that passes moved out of their files; #1063's item 5 lists them. Each joins one before closure, the type files with F ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933)). The end state and later stocktakes and steering measure with `tools/code-standards-inventory.py`. The closure residue sweep takes the recorded residue lists ([steering 34's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6789587702), [steering 35's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6834079997), [steering 36's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6847188216) and [steering 37's](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-7119259564)) unless a later pass touches the file; its macro sites are #892's, and the three YAPF search-loop copies are #971's and stay. #892 rides remaining file passes, then that sweep and closure; no unrecorded production assertion macro site remains at closure, measured as #892 specifies.
 
    #734 also owns the `unwrap`/`expect` and release-overflow fidelity gaps recorded in #156: remaining file passes handle their selected files, and closure handles recorded residue in already-finished files. Compare each with the original's preconditions and observable failure behaviour; an occurrence alone is not a defect. This ownership does not expand #892's macro scope or add a census, lint rule or gate.
 6. **#893 cleanup-exit evidence**, after closure and before the first phase-3 reader dispatch: run the coverage measurement, seeded-fault pilot and all-member deep check. Pause implementers for the two host measurements. Read the report and handle findings under [deep checks](deep-checks.md#policy) before dispatch. Phase-3 planning follows its normal trigger and does not wait for these results.
@@ -227,19 +225,19 @@ Then storage, each pool with its save/load chunks, redone from current base with
 
 ## Trackers and exclusions
 
-- #156 (coverage gaps, whose lists are its sub-issues #1038, #1039, #1040, #1041, #1042 and #1043), #275 (speed), #724 and #710 (host) stay open trackers. #710 has [the report lost at the pause of 2026-11-24](https://github.com/fetch-laboratories/openttd-rust/issues/710#issuecomment-7143126308).
+- #156 (coverage gaps, whose lists are its sub-issues #1038, #1039, #1040, #1041, #1042 and #1043), #275 (speed), #724 and #710 (host) stay open trackers. #710 has [the report lost at the pause of 2026-11-24](https://github.com/fetch-laboratories/openttd-rust/issues/710#issuecomment-7143126308) and [a reviewer that stopped on a host approval prompt](https://github.com/fetch-laboratories/openttd-rust/issues/710#issuecomment-7149805139) under a full-access runtime.
+- #1058 owns `CargoSpec::array`, its defaults and its publication in phase 2, queued with the smaller records of #638 and #498; workset 04's growth record for the `CargoSpec` member slots names it.
 - #500 closes with #734's closure. #168 and #199 are closed: #565, #717 and #734 own what remained.
 - #693: #1015's work traced the `network-protocol-loopback` stalls to a thread race in the original's `TCPConnecter`, which can stay in `Resolving` for ever when its resolver finishes first (#1016, a `deferred-improvement`: neither build changes). The harness bounds its waits and retries a session once on that signature while the candidate's copy of the file is identical to the pinned original's, counting each retry in the run's report; stocktakes read the rate there. The `content-protocol` evidence misses stay open on #693: that scenario runs without network debug output, so its logs cannot show the race. The allowance ends when #730 ports the connecter.
 - #503's coverage continuation runs last.
-- #939 lists 35 rules that a script, hook or lint could hold instead of a doc. A candidate joins a [tools batch](planning.md#selection) when its rule was broken in the window just ended, with the count; [steering 37's counts](https://github.com/fetch-laboratories/openttd-rust/issues/939#issuecomment-7119259973) for merges 60 to 75 and [steering 38's](https://github.com/fetch-laboratories/openttd-rust/issues/939#issuecomment-7143125295) for merges 76 to 89 are there, with the Linux GCC cache split by runner image from #1026's plan, which root ranks at the merge-95 stocktake against Full's measured median and drops if Full is under 15 minutes without it.
-- #1023 (dead hard-disk offload code in tools) is an item of #1037.
-- #1026's acceptance is read at the merge-95 stocktake, over merges 84 to 95, as [root settled it](https://github.com/fetch-laboratories/openttd-rust/issues/1026#issuecomment-7125440240): for PRs whose last push needed no fresh `native`, bootstrap or reviewer, a median under 10 minutes from that push to queue entry with no requested run in it; for the others a median under 5 minutes from the later of that run's and that reviewer's end; a passing Full at a median of 15 minutes or less; and at most one PR removed from the queue for a defect in its own code. If Quick is then what a finished PR waits on, root opens a work order that splits it. Over merges 84 to 89 the second class entered the queue a median 0.75 minutes after its gate, Full took a median 17.4 minutes, and no PR left the queue for its own defect; no PR was in the first class, because every final push changed code or merged base and so ran `native` again. From steering 38 those pushes queue on Quick ([checks](workflow.md#checks)), which puts every PR in the first class.
+- #939 lists 35 rules that a script, hook or lint could hold instead of a doc. A candidate joins a [tools batch](planning.md#selection) when its rule was broken in the window just ended, with the count; [steering 37's counts](https://github.com/fetch-laboratories/openttd-rust/issues/939#issuecomment-7119259973) for merges 60 to 75 and [steering 38's](https://github.com/fetch-laboratories/openttd-rust/issues/939#issuecomment-7143125295) for merges 76 to 89 are there, with the Linux GCC cache split by runner image from #1026's plan, which root left out of #1063: Full's median was 14.54 minutes over merges 90 to 95 without it. Root reads it again at the merge-107 stocktake and drops it if the interval's median is under 15.
+- #1026's acceptance, as [root settled it](https://github.com/fetch-laboratories/openttd-rust/issues/1026#issuecomment-7125440240), read over merges 84 to 95: the five PRs whose last push needed no fresh gate entered the queue a median 10.35 minutes after that push with no requested run in the gap, against under 10; the seven others a median 0.78 minutes after their later gate, against under 5; a passing Full took a median 16.11 minutes, against 15 or less, and 14.54 over merges 90 to 95; and no PR left the queue for a defect in its own code, against at most one. Quick is what a finished PR now waits on, so #1063's item 1 splits or reorders it, and #1026 closes when that item is delivered or dropped.
 - #1032 (the economy date as a type through `delete_stale_links`) rides the pass of workset 21 that finishes `timer_game_economy.rs` and `linkgraph/live.rs`.
 - #940 holds the docs cleanup's follow-ups. Root's rulings are recorded there: a worktree is protected only by its whole folder name, and a deep run ends with its session. Its small fixes ride a tools batch where they share its files.
 - #860 lists the development-process changes the user approved: the merge queue ([ADR 0019](adr/0019-merge-queue.md)), the per-merge builds ([ADR 0018](adr/0018-builds-before-every-merge.md)), CI scenario comparison ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)), direct reviewer and implementer messages, and the wind-down-only checkpoint ([ADR 0026](adr/0026-roadmap-commit-timing.md)).
 - #896 (paid CI minutes) stays with its author for the one-day weighted-minutes and network-failure follow-up. The simulation shards are back on Blacksmith; which jobs run on paid runners is the user's decision ([ADR 0009](adr/0009-paid-runner-assignment.md)).
 
-Excluded, with issue placement and return conditions rechecked by steering 38 at merge 89 (65 open issues, none unplaced); near-full reproduction and fork release-source publication triggers are not met:
+Excluded, with issue placement and return conditions rechecked by root at the merge-95 stocktake (65 open issues, none unplaced once the ready queue below names #1060, #1062 and #1063); near-full reproduction and fork release-source publication triggers are not met:
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
@@ -279,13 +277,20 @@ Provisional, for steering 39 to judge:
 
 Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. Root's status comment on #3 holds the queue's state between commits to this section.
 
-Three slots for the session that began on 2026-11-24 at about 21:00Z, at the user's allowance; the standing limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). At merge 93 (`fe9e973700`) they are held by #1055 (#1003, `vehicle/occupancy.rs`, in review), draft #1056 (#1048, `company.rs`) and #1027's third part (`ship_control.rs`, dispatched at merge 93). Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
+Three slots for the session that began on 2026-11-24 at about 21:00Z, at the user's allowance; the standing limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). At merge 95 (`1007aa96f8`) the three are held by #1056 (#1048, `company.rs`) and #1059 (#1027's third part, `ship_control.rs`), both in review, and #1063's implementer. Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
 
-1. **#1046's second part**, the single-file pass for `rail_cmd.rs` (2,856 lines): part 1 merged as #1054 (merge 93). Its planner runs on `rust-migration`; it waits on nothing and takes the next slot to free. It retires #1054's callback-slot growth record.
-2. **#1057: workset 04 (cargo)**, six files and 6,405 lines, of which `cargo_storage.rs` (2,892) has its own pass. It takes four PRs in the order `cargotype.rs` with `cargo_registry.rs`, `cargo_flow.rs`, `cargo_storage.rs`, then `cargo_payment.rs` with `cargomonitor.rs`. Part 1 (about 2,900 changed lines) is planned and reviewed on #1056's head, waits on #1056's merge and follows it in the company chain. Its growth record for the `CargoSpec` member slots names #1058, which owns `CargoSpec::array` in phase 2 with the smaller records of #638 and #498. Workset 05 (orders and fleet, with `orders.rs` at 5,879 lines) comes after it by the [work order](#cleanup-work-order).
-3. **#1027's fourth part**, `disaster.rs` (1,446 lines): planned when part 3 has a PR; it waits on that PR's merge. #1011, which moves `Vehicle::Tick`'s dispatch into Rust with the four controllers' accumulators, also waits on part 3.
+Waiting on nothing but a slot:
 
-Workset 06 finishes with #1056, and workset 10 with #1046's second part. The next tools batch is picked at the merge-95 stocktake; #1037's merged as #1053 (merge 90).
+1. **#1063, the tools batch for merges 96 to 107:** dispatched at merge 95.
+2. **#1062: workset 16 (NewGRF domains)**, 14 files and 7,489 lines, of which `newgrf_vehicle.rs` (2,141) has its own pass. It is first of group (d) by the merge-95 count and takes four PRs; the first (`newgrf.rs`, `newgrf_generic.rs` and seven small files, about 3,750 changed lines before the `GRFFile` handle [root added to it](https://github.com/fetch-laboratories/openttd-rust/issues/1062#issuecomment-7153888902)) is planned on `rust-migration`, and its plan is being corrected and reviewed again. It waits on a slot. Its kept resolver frame names #1064, which root opened for workset 15 (NewGRF loading, 19 files and 8,694 lines), queued in group (d) after worksets 21 and 18.
+
+Planned and reviewed, waiting on a merge:
+
+3. **#1057's first part** (workset 04, cargo: `cargotype.rs` with `cargo_registry.rs`, about 2,900 changed lines): waits on #1056 and follows it in the company chain. The workset takes four PRs, then `cargo_flow.rs`, `cargo_storage.rs`, and `cargo_payment.rs` with `cargomonitor.rs`, one after another. Its growth record for the `CargoSpec` member slots names #1058.
+4. **#1027's fourth part**, `disaster.rs` (about 4,200 changed lines): waits on #1059 and follows it in the vehicle chain; it finishes workset 08 and closes #1027. #1011, which moves `Vehicle::Tick`'s dispatch into Rust with the four controllers' accumulators, also waits on #1059 and has no plan yet.
+5. **#1060's first part** (workset 05, orders and fleet: `orders.rs` with `order_func.rs`, about 15,000 changed lines in one PR by [root's answer](https://github.com/fetch-laboratories/openttd-rust/issues/1060#issuecomment-7151245362)): waits on #1056 and #1059, and takes the first slot free after both. The workset takes three PRs, then `fleet.rs` with `vehiclelist.rs`, and `fleet/transactions.rs` with `fleet/pending.rs`, which follows workset 04's `cargo_storage.rs`.
+
+Five entries stand where [team](team.md#ready-queue-and-pipelining) has up to three: three chains each need their next pass planned on the PR before it, and the free slot needs work that waits on neither open PR.
 
 The train passes take their sites of #999 (order destination reads at the original's observation point). #998 is the work order for one host-buildable crate below `openttd-kernels`, which removes the copies of three kernels ports that `openttd-strgen` keeps under [root's ruling](https://github.com/fetch-laboratories/openttd-rust/pull/995#issuecomment-6975789181); no second build-time consumer has appeared and it removes no fork C++, so it stays behind the passes, selected no later than strgen's port in phase 4. #997 (the native assertion service reports neither the Rust site nor its predicate) is on #892's checklist and rides the closure residue sweep.
 
@@ -293,18 +298,18 @@ Full phase-3 planning remains untriggered: most of the files still to pass are i
 
 ## Resume checkpoint
 
-Paused at the user's request, 2026-11-24 about 17:20Z.
+Written at the merge-95 stocktake, 2026-11-25 about 05:30Z, with the session running; a session can end without warning, and where GitHub or root's status comment on #3 is newer than this section, they are right.
 
-Root's wind-down stopped before its roadmap commit and housekeeping (#710); steering 38 wrote this section the same day from GitHub and the worktrees. No job is running, the merge queue is empty, and #1045 merged as merge 89 during the wind-down. Where GitHub is newer than this section, GitHub is right.
+No merge stop is in force and the merge queue is empty. Six PRs merged in the session: #1053 (tools batch, merge 90), #1051 (`vehicle_effect.rs`, 91), #1052 (company 6a, 92), #1054 (rail part 1, 93), #1055 (`vehicle/occupancy.rs`, 94) and #1061 (`rail_cmd.rs`, 95).
 
-| Draft | Head | State | Next action |
+| PR | Head at the stocktake | State | Next action |
 | --- | --- | --- | --- |
-| #1051 (#1027's second part, `vehicle_effect.rs`) | `ed9cea7654` | Both first reviews are in at `f15d991838`, where its `native` run passed after the pause (run 45444973730). The behaviour findings and porting findings 1, 2, 6 and 7 are fixed; the fix of 1 and 7 is checked in Rust only, with the C++ side and the ABI probe not built (`road.inc` changed). Porting findings 3, 4 and 5 are open | Fix 3 to 5; build, run the ABI probe and preflight; count instructions again at base and head (its base Callgrind output is in a scratchpad that a reboot clears); one re-check; queue on Quick |
-| #1052 (#1047, 6a) | `390a26f973` | Clean; `verify` passed. No preflight, `native`, speed count or review. 34 cleanup records await the porting reviewer. 4,149 changed lines against a plan of 1,950, under the split size | `verify`, preflight, the speed count on both scenarios, the PR body, `native`, both reviewers |
+| #1056 (#1048, `company.rs`) | `5e3d0f0064` | Ready; `native` passed at the head after [root's ruling](https://github.com/fetch-laboratories/openttd-rust/pull/1056#issuecomment-7152060635) moved the nested service-interval observation of `industry-company-acquire` to a Rust test. 12,569 changed lines against a plan of 9,250. It conflicts with base since #1061 | Both first reviews, the base update with its conflict review, fixes, one re-check, queue on Quick |
+| #1059 (#1027's third part, `ship_control.rs`) | `92333e0fe5` | Ready; `native` passed at the head and both first reviews are in. It conflicts with base since #1061 | Fixes, the base update with its conflict review, one re-check, queue on Quick |
 
-Agent: /root (Claude Code steering review) | Model: claude-fable-5-2 | Reasoning effort: xhigh
+The [ready queue](#ready-queue) has what each slot takes next; planners /root/plan-1062 and /root/plan-1063 were running at the stocktake. The implementer limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)) outside the user's session allowances, and the [role table](team.md#roles-and-models) gives each role's model and effort.
 
-The implementer limit is two ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)), and the [role table](team.md#roles-and-models) gives each role's model and effort.
+Agent: /root | Model: claude-fable-5-2 | Reasoning effort: high
 
 `CI_MACOS_HEAVY` is unset and `CI_ON_DEMAND` is `true`. The hooks of #927 are installed in the shared clone (`python3 tools/git_hooks.py install`).
 
@@ -313,15 +318,16 @@ Flakes and limits carried forward:
 - #693: the `network-protocol-loopback` stalls are the original's `TCPConnecter` race (#1016); the harness retries a session once on that signature and counts the retry in the run's report. The `content-protocol` evidence misses are still unexplained. Keep `.local/retained-network-693` and the linked artifacts.
 - The profile driver exits 1 on its anchor identity guard until a quiet pass re-anchors (#275), and deletes `candidate-runtime/` after every run. A system library upgrade is enough to trip it: `libssh-4`'s on 2026-11-24 did, one day after #1024's pass ([speed](#speed)).
 - A branch that forked before merge 83 runs the old apt action in a requested run and can still lose a job to GitHub's stalling mirror: rerun it.
-- A child's last report can fail to reach root (#710): the last of the session of 2026-11-24 did.
+- A child's last report can fail to reach root (#710): the last of the session of 2026-11-24 did. A `gpt-6.2-sol` reviewer can stop on a host approval prompt that only the user can answer, under a full-access runtime; its parent sees only silence (#710).
+- An implementer started at medium effort signs `Reasoning effort: high`: the host does not report the effort to a child, so root's spawn message names the model and effort to sign.
 - Metric scope completeness stays with #736's end-state inventory. No later phase is selected.
 
 Retained state for housekeeping:
 
-- 126 worktrees stand. `python3 tools/housekeeping.py --apply` last ran at merge 77; the merge-82 and merge-87 runs and wind-down's did not apply, and about 54G is removable. `/` has 3.2T free.
-- Keep each open PR's checkout: `t3-c469d4ba-257ed73890023db5` (#1051) and `t3-07730374-7e8241eb876e496d` (#1052, with a scratch `.local/speed-base` inside it that holds no work). #1045's `t3-fb06aeac-6339778ecfcd170e` is merged and can go, and so can `t3-84c5d01a-0a453c83ab85d5ad`, whose one unpushed commit is a local planning merge of #1045's head.
+- 90 worktrees stand. `python3 tools/housekeeping.py --apply` ran at the session's start (69 worktrees, 66.8G) and with the platform cadence at merge 92 (16, 3.0G); `/` has 3.2T free.
+- Keep each open PR's checkout; its status comment names it.
 - A name below protects a worktree only when it is the whole folder name ([housekeeping](root-workflow.md#housekeeping)). The `t3-` names of eight hex digits in this list are whole folder names from an earlier host version.
-- Keep the locked merge-83 profile checkout `.local/worktrees/root-profile-merge83` until the next profile is recorded. Preserve all current speed, deep and evidence anchors; the speed anchors live in the main checkout's `.local/speed-pass`, and `20261123-hardware-f80cbaf` there is the pass the current anchors come from. `.local/stocktake-83/` holds the merge-83 stocktake's counts and scripts until the merge-95 stocktake, and `.local/steering-38/` the audits and replays of steering 38 until steering 39.
+- Keep the locked merge-95 profile checkout `.local/worktrees/root-profile-merge95` until the next profile is recorded. Preserve all current speed, deep and evidence anchors; the speed anchors live in the main checkout's `.local/speed-pass`, and `20261123-hardware-f80cbaf` there is the pass the current anchors come from. `.local/stocktake-95/` holds the merge-95 stocktake's counts and scripts until the merge-107 stocktake, and `.local/steering-38/` the audits and replays of steering 38 until steering 39.
 - Keep `t3-f6bd08df`: three unpushed docs commits from 2026-11-10. Keep `t3-f4cf7a0b` (one unique unpushed commit, `125ea2440a`).
 - The rest is carried forward as preservation guidance from earlier checkpoints; steering 38 found each dirty tree it names still dirty and did not check the others.
   - Keep the planning checkout `t3-20fec9ce` with its private plan, and origin `preserve/housekeeping-foundation-6ab9c20e5d`. Preserve every checkout with uncommitted or unpushed work.

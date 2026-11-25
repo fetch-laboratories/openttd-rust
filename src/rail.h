@@ -385,16 +385,6 @@ inline bool HasPowerOnRail(RailTypes enginetype, RailType tiletype)
 }
 
 /**
- * Test if a RailType disallows build of level crossings.
- * @param rt The RailType to check.
- * @return Whether level crossings are not allowed.
- */
-inline bool RailNoLevelCrossings(RailType rt)
-{
-	return GetRailTypeInfo(rt)->flags.Test(RailTypeFlag::NoLevelCrossing);
-}
-
-/**
  * Test if 90 degree turns are disallowed between two railtypes.
  * @param rt1 First railtype to test for.
  * @param rt2 Second railtype to test for.
@@ -423,48 +413,6 @@ inline Money RailBuildCost(RailType railtype)
 {
 	assert(railtype < RAILTYPE_END);
 	return (_price[PR_BUILD_RAIL] * GetRailTypeInfo(railtype)->cost_multiplier) >> 3;
-}
-
-/**
- * Returns the 'cost' of clearing the specified railtype.
- * @param railtype The railtype being removed.
- * @return The cost.
- */
-inline Money RailClearCost(RailType railtype)
-{
-	/* Clearing rail in fact earns money, but if the build cost is set
-	 * very low then a loophole exists where money can be made.
-	 * In this case we limit the removal earnings to 3/4s of the build
-	 * cost.
-	 */
-	assert(railtype < RAILTYPE_END);
-	return std::max(_price[PR_CLEAR_RAIL], -RailBuildCost(railtype) * 3 / 4);
-}
-
-/**
- * Calculates the cost of rail conversion
- * @param from The railtype we are converting from
- * @param to   The railtype we are converting to
- * @return Cost per TrackBit
- */
-inline Money RailConvertCost(RailType from, RailType to)
-{
-	/* Get the costs for removing and building anew
-	 * A conversion can never be more costly */
-	Money rebuildcost = RailBuildCost(to) + RailClearCost(from);
-
-	/* Conversion between somewhat compatible railtypes:
-	 * Pay 1/8 of the target rail cost (labour costs) and additionally any difference in the
-	 * build costs, if the target type is more expensive (material upgrade costs).
-	 * Upgrade can never be more expensive than re-building. */
-	if (HasPowerOnRail(from, to) || HasPowerOnRail(to, from)) {
-		Money upgradecost = RailBuildCost(to) / 8 + std::max((Money)0, RailBuildCost(to) - RailBuildCost(from));
-		return std::min(upgradecost, rebuildcost);
-	}
-
-	/* make the price the same as remove + build new type for rail types
-	 * which are not compatible in any way */
-	return rebuildcost;
 }
 
 /**

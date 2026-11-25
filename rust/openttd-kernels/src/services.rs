@@ -257,8 +257,12 @@ pub struct Services {
     pub rail_type_acceleration_type: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
     /// `RailTypeInfo::compatible_railtypes`.
     pub rail_type_compatible_railtypes: extern "C" fn(*const crate::rail::RailTypeInfo) -> u64,
+    /// `RailTypeInfo::cost_multiplier`.
+    pub rail_type_cost_multiplier: extern "C" fn(*const crate::rail::RailTypeInfo) -> u16,
     /// `RailTypeInfo::curve_speed`.
     pub rail_type_curve_speed: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
+    /// `RailTypeInfo::flags`.
+    pub rail_type_flags: extern "C" fn(*const crate::rail::RailTypeInfo) -> u8,
     /// `GetRailTypeInfo`, retaining its assertion.
     pub rail_type_info: extern "C" fn(RailType) -> *const crate::rail::RailTypeInfo,
     /// `RailTypeInfo::introduces_railtypes`.
@@ -766,7 +770,9 @@ crate::abi::layouts! {
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
         rail_type_acceleration_type,
         rail_type_compatible_railtypes,
+        rail_type_cost_multiplier,
         rail_type_curve_speed,
+        rail_type_flags,
         rail_type_info,
         rail_type_introduces_railtypes,
         rail_type_introduction_date,
@@ -1099,7 +1105,9 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         copyable_badges: unexpected_copyable,
         rail_type_acceleration_type: unexpected_rail_type_info,
         rail_type_compatible_railtypes: unexpected_rail_type_info,
+        rail_type_cost_multiplier: unexpected_rail_type_info,
         rail_type_curve_speed: unexpected_rail_type_info,
+        rail_type_flags: unexpected_rail_type_info,
         rail_type_info: unexpected_rail_type,
         rail_type_introduces_railtypes: unexpected_rail_type_info,
         rail_type_introduction_date: unexpected_rail_type_info,
@@ -1454,10 +1462,6 @@ impl Cost<'_> {
     /// `EnsureNoVehicleOnGround`.
     pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
         command.no_vehicle_raw(self.0, tile);
-    }
-    /// `EnsureNoTrainOnTrackBits`.
-    pub(crate) fn no_train(self, command: &CommandServices, tile: u32, bits: u8) {
-        command.no_train_raw(self.0, tile, bits);
     }
     /// `TunnelBridgeIsFree` with no ignored vehicle.
     pub(crate) fn wormhole_free(self, command: &CommandServices, tile: u32, end: u32) {

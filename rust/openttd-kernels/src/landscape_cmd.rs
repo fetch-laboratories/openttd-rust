@@ -190,13 +190,9 @@ impl<'a> World<'a> {
                     crate::command_type::DoCommandFlags(flags),
                     self.s,
                 ),
-                MP_RAILWAY => crate::rail_cmd::openttd_rust_rail_clear_tile(
-                    owners.rail,
-                    out.0,
-                    ret,
-                    flags,
-                    tile,
-                ),
+                MP_RAILWAY => {
+                    crate::rail_cmd::clear_tile_track_raw(owners.rail, out.0, ret, flags, tile)
+                }
                 MP_ROAD => crate::road_cmd::openttd_rust_road_clear(
                     (self.s.road_commands)(),
                     out.0,
@@ -253,7 +249,7 @@ impl<'a> World<'a> {
         let owners = unsafe { &*t.owners };
         unsafe {
             match (self.s.tile_type)(tile) {
-                MP_RAILWAY => crate::rail_cmd::openttd_rust_rail_terraform(
+                MP_RAILWAY => crate::rail_cmd::terraform_tile_track_raw(
                     owners.rail,
                     out.0,
                     flags,

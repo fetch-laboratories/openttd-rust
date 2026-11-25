@@ -325,11 +325,11 @@ impl<'a> World<'a> {
                 }
             }
             RAIL => {
-                result = result.saturating_add((self.r.rail_clear_cost)(
+                result = result.saturating_add(crate::rail::rail_clear_cost(
+                    self.s,
                     crate::services::RailType(
                         crate::map_func::World::new(self.s).get_rail_type_raw(tile),
-                    )
-                    .0,
+                    ),
                 ));
             }
             WATER => result = price_raw(PR_CLEAR_AQUEDUCT),
@@ -802,7 +802,8 @@ impl<'a> World<'a> {
                     }
                 }
                 RAIL => cost.add_money(
-                    (self.r.rail_build_cost)(railtype).saturating_mul(i64::from(length)),
+                    crate::rail::rail_build_cost(self.s, crate::services::RailType(railtype))
+                        .saturating_mul(i64::from(length)),
                 ),
                 _ => (),
             }
@@ -952,7 +953,8 @@ impl<'a> World<'a> {
                     .saturating_mul(2),
             ),
             RAIL => cost.add_money(
-                (self.r.rail_build_cost)(railtype).saturating_mul(i64::from(tiles.wrapping_add(2))),
+                crate::rail::rail_build_cost(self.s, crate::services::RailType(railtype))
+                    .saturating_mul(i64::from(tiles.wrapping_add(2))),
             ),
             _ => unreachable!(),
         }

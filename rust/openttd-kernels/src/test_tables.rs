@@ -106,25 +106,6 @@ pub(crate) extern "C" fn unreachable10<A, B, C, D, E, F, G, H, I, J, R>(
     unreachable!("unexpected 10-argument service call")
 }
 
-/// Every 13-argument entry; any call is a test error.
-pub(crate) extern "C" fn unreachable13<A, B, C, D, E, F, G, H, I, J, K, L, M, R>(
-    _: A,
-    _: B,
-    _: C,
-    _: D,
-    _: E,
-    _: F,
-    _: G,
-    _: H,
-    _: I,
-    _: J,
-    _: K,
-    _: L,
-    _: M,
-) -> R {
-    unreachable!("unexpected 13-argument service call")
-}
-
 /// `crate::road_cmd::RoadCommandServices` with every entry unreachable.
 pub(crate) const ROAD_COMMANDS: crate::road_cmd::RoadCommandServices =
     crate::road_cmd::RoadCommandServices {
@@ -292,7 +273,9 @@ pub(crate) const SHIP_LEAVES: crate::ship_control::Leaves = crate::ship_control:
 pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     rail_type_acceleration_type: unreachable1,
     rail_type_compatible_railtypes: unreachable1,
+    rail_type_cost_multiplier: unreachable1,
     rail_type_curve_speed: unreachable1,
+    rail_type_flags: unreachable1,
     rail_type_info: unreachable1,
     rail_type_introduces_railtypes: unreachable1,
     rail_type_introduction_date: unreachable1,
@@ -456,23 +439,10 @@ pub(crate) const RAIL_COMMANDS: crate::rail_cmd::RailCommandServices =
         cost: ptr::null(),
         command: ptr::null(),
         signal: ptr::null(),
-        compatible_rail: unreachable2,
-        powered_rail: unreachable2,
-        train_powered: unreachable2,
-        rail_no_crossings: unreachable1,
+        train: ptr::null(),
         road_no_crossing: unreachable1,
-        rail_build_cost: unreachable1,
-        rail_clear_cost: unreachable1,
-        rail_convert_cost: unreachable2,
         crossing_with_competitor: unreachable0,
         entrance_edge: unreachable4,
-        build_rail: unreachable6,
-        remove_rail: unreachable4,
-        build_signal: unreachable13,
-        remove_signal: unreachable4,
-        convert_rail: unreachable6,
-        parking: unreachable1,
-        train_position: unreachable1,
         layout_changed: unreachable2,
         mark_crossings: unreachable2,
         crossing_removed: unreachable2,
@@ -483,10 +453,6 @@ pub(crate) const RAIL_COMMANDS: crate::rail_cmd::RailCommandServices =
         depot_name: unreachable1,
         delete_depot: unreachable1,
         depot_windows: unreachable1,
-        close_inspect: unreachable1,
-        make_shore: unreachable1,
-        include_train: unreachable2,
-        consist_changed: unreachable1,
     };
 
 /// `crate::services::CommandCostServices` with every entry unreachable.

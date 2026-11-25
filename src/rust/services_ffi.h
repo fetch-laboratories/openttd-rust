@@ -105,7 +105,9 @@ class RailTypeInfo;
 struct OpenTTDSharedServices {
 	uint8_t (*rail_type_acceleration_type)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_acceleration_type);
 	uint64_t (*rail_type_compatible_railtypes)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_compatible_railtypes);
+	uint16_t (*rail_type_cost_multiplier)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_cost_multiplier);
 	uint8_t (*rail_type_curve_speed)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_curve_speed);
+	uint8_t (*rail_type_flags)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_flags);
 	const RailTypeInfo *(*rail_type_info)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_info);
 	uint64_t (*rail_type_introduces_railtypes)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_introduces_railtypes);
 	int32_t (*rail_type_introduction_date)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_introduction_date);

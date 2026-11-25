@@ -88,6 +88,7 @@ rust/openttd-kernels/src/pbs.rs
 rust/openttd-kernels/src/pool.rs
 rust/openttd-kernels/src/pool/tests.rs
 rust/openttd-kernels/src/rail.rs
+rust/openttd-kernels/src/rail_cmd.rs
 rust/openttd-kernels/src/rail_map.rs
 rust/openttd-kernels/src/rail_yapf.rs
 rust/openttd-kernels/src/random_func.rs

@@ -176,7 +176,6 @@ inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callb
 inline bool RustHouseConvert8bitBoolean(uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); }
 inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 /* Typed adapters retain the existing per-component table signatures. */
-inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_RAILTYPES, tile); }
 inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
 template <typename Spec, typename Handle>
 inline void RustSpecCallbackError(const Handle *handle, uint16_t callback, uint16_t result) noexcept

@@ -53,7 +53,13 @@ pub(crate) unsafe fn change_tile_owner(
         match TileType(((*s.shared).tile_type)(tile)) {
             TileType::MP_CLEAR => (s.clear)(tile, old, new),
             TileType::MP_RAILWAY => {
-                rail_cmd::openttd_rust_rail_change_owner(s.rail, context.cost, tile, old, new);
+                rail_cmd::change_tile_owner_track(
+                    s.rail,
+                    context.cost,
+                    TileIndex(tile),
+                    old_owner,
+                    new_owner,
+                );
             }
             TileType::MP_ROAD => {
                 let road = &*context.road;

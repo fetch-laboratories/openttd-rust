@@ -69,6 +69,9 @@ pub const PR_BUILD_WAYPOINT_RAIL: usize = Price::PR_BUILD_WAYPOINT_RAIL.0 as usi
 pub const PR_BUILD_WAYPOINT_BUOY: usize = Price::PR_BUILD_WAYPOINT_BUOY.0 as usize;
 /// `PR_CLEAR_WAYPOINT_BUOY`.
 pub const PR_CLEAR_WAYPOINT_BUOY: usize = Price::PR_CLEAR_WAYPOINT_BUOY.0 as usize;
+/// `LEVELCROSSING_TRACKBIT_FACTOR`: multiplier for how many regular track bits a level
+/// crossing counts.
+pub const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
 /// `ROAD_STOP_TRACKBIT_FACTOR`.
 pub const ROAD_STOP_TRACKBIT_FACTOR: u32 = 2;
 

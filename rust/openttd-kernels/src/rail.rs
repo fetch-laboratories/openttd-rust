@@ -6,6 +6,7 @@
 //! returned [`RailTypeInfoRef`]. A `RailTypeInfoRef` is valid for the call that resolved it.
 use crate::bitmath_func::SetBitIterator;
 use crate::company_type::CompanyID;
+use crate::economy_type::Price;
 use crate::engine_type::VehicleAccelerationModel;
 use crate::map_func::World;
 use crate::rail_type::{RailType, RailTypeLabel, RailTypes};
@@ -53,10 +54,20 @@ impl RailTypeInfoRef<'_> {
     pub(crate) fn compatible_railtypes(self) -> RailTypes {
         RailTypes((self.shared.rail_type_compatible_railtypes)(self.rti))
     }
+    /// `RailTypeInfo::cost_multiplier`: cost multiplier for building this rail type.
+    #[inline]
+    pub(crate) fn cost_multiplier(self) -> u16 {
+        (self.shared.rail_type_cost_multiplier)(self.rti)
+    }
     /// `RailTypeInfo::curve_speed`: multiplier for curve maximum speed advantage.
     #[inline]
     pub(crate) fn curve_speed(self) -> u8 {
         (self.shared.rail_type_curve_speed)(self.rti)
+    }
+    /// `RailTypeInfo::flags`: bit mask of rail type flags.
+    #[inline]
+    pub(crate) fn flags(self) -> RailTypeFlags {
+        RailTypeFlags((self.shared.rail_type_flags)(self.rti))
     }
     /// `RailTypeInfo::introduces_railtypes`: bitmask of which other rail types are
     /// introduced when this rail type is introduced.
@@ -94,6 +105,33 @@ impl RailTypeInfoRef<'_> {
     #[inline]
     pub(crate) fn powered_railtypes(self) -> RailTypes {
         RailTypes((self.shared.rail_type_powered_railtypes)(self.rti))
+    }
+}
+
+/// `RailTypeFlag`: enum holding the rail type flags. Rust reads `NoLevelCrossing` only.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RailTypeFlag(pub u8);
+
+impl RailTypeFlag {
+    /// Bit number for disallowing level crossings.
+    #[allow(
+        non_upper_case_globals,
+        reason = "rail.h's RailTypeFlag::NoLevelCrossing"
+    )]
+    pub const NoLevelCrossing: Self = Self(1);
+}
+
+/// `RailTypeFlags`: the set of [`RailTypeFlag`]s.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RailTypeFlags(pub u8);
+
+impl RailTypeFlags {
+    /// `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, flag: RailTypeFlag) -> bool {
+        crate::base_bitset_type::test(self.0 as u64, flag.0)
     }
 }
 
@@ -204,6 +242,62 @@ pub(crate) fn has_power_on_rail_types(
     tiletype: RailType,
 ) -> bool {
     get_all_powered_rail_types(shared, enginetype).test(tiletype)
+}
+
+/// `RailNoLevelCrossings`: test if a rail type disallows building level crossings.
+pub(crate) fn rail_no_level_crossings(shared: &Shared, rt: RailType) -> bool {
+    get_rail_type_info(shared, rt)
+        .flags()
+        .test(RailTypeFlag::NoLevelCrossing)
+}
+
+/// `RailBuildCost`: returns the cost of building the specified railtype.
+pub(crate) fn rail_build_cost(shared: &Shared, railtype: RailType) -> i64 {
+    crate::services_assert::assert_with(|| railtype < RailType::RAILTYPE_END);
+    crate::company::price(Price::PR_BUILD_RAIL).saturating_mul(i64::from(
+        get_rail_type_info(shared, railtype).cost_multiplier(),
+    )) >> 3
+}
+
+/// `RailClearCost`: returns the 'cost' of clearing the specified railtype.
+pub(crate) fn rail_clear_cost(shared: &Shared, railtype: RailType) -> i64 {
+    /* Clearing rail in fact earns money, but if the build cost is set
+     * very low then a loophole exists where money can be made.
+     * In this case we limit the removal earnings to 3/4s of the build
+     * cost.
+     */
+    crate::services_assert::assert_with(|| railtype < RailType::RAILTYPE_END);
+    std::cmp::max(
+        crate::company::price(Price::PR_CLEAR_RAIL),
+        rail_build_cost(shared, railtype)
+            .saturating_neg()
+            .saturating_mul(3)
+            / 4,
+    )
+}
+
+/// `RailConvertCost`: calculates the cost of rail conversion from `from` to `to`, per
+/// `TrackBit`.
+pub(crate) fn rail_convert_cost(shared: &Shared, from: RailType, to: RailType) -> i64 {
+    /* Get the costs for removing and building anew
+     * A conversion can never be more costly */
+    let rebuildcost = rail_build_cost(shared, to).saturating_add(rail_clear_cost(shared, from));
+
+    /* Conversion between somewhat compatible railtypes:
+     * Pay 1/8 of the target rail cost (labour costs) and additionally any difference in the
+     * build costs, if the target type is more expensive (material upgrade costs).
+     * Upgrade can never be more expensive than re-building. */
+    if has_power_on_rail(shared, from, to) || has_power_on_rail(shared, to, from) {
+        let upgradecost = (rail_build_cost(shared, to) / 8).saturating_add(std::cmp::max(
+            0,
+            rail_build_cost(shared, to).saturating_sub(rail_build_cost(shared, from)),
+        ));
+        return std::cmp::min(upgradecost, rebuildcost);
+    }
+
+    /* make the price the same as remove + build new type for rail types
+     * which are not compatible in any way */
+    rebuildcost
 }
 
 impl World<'_> {
@@ -464,6 +558,8 @@ mod tests {
         introduces: u64,
         compatible: u64,
         powered: u64,
+        cost: u16,
+        flags: u8,
     }
 
     thread_local! {
@@ -500,6 +596,12 @@ mod tests {
     }
     extern "C" fn powered(rti: *const RailTypeInfo) -> u64 {
         read(rti, 'p').powered
+    }
+    extern "C" fn cost(rti: *const RailTypeInfo) -> u16 {
+        read(rti, 'm').cost
+    }
+    extern "C" fn flags(rti: *const RailTypeInfo) -> u8 {
+        read(rti, 'f').flags
     }
     /// The fixture engines in order, each its own shell and lifecycle.
     extern "C" fn next(from: u32) -> EngineRef {
@@ -545,6 +647,8 @@ mod tests {
         let shared = Box::leak(Box::new(Shared {
             settings,
             rail_type_compatible_railtypes: compatible,
+            rail_type_cost_multiplier: cost,
+            rail_type_flags: flags,
             rail_type_info,
             rail_type_introduces_railtypes: introduces,
             rail_type_introduction_date: date,
@@ -627,6 +731,64 @@ mod tests {
         assert!(has_power_on_rail(shared, RailType(2), RailType(1)));
         assert!(has_power_on_rail_types(shared, both, RailType(2)));
         assert!(!has_power_on_rail_types(shared, both, RailType(0)));
+    }
+
+    /// `rail.h`'s cost helpers: the build cost scales `PR_BUILD_RAIL` by the type's
+    /// multiplier in eighths; the clear cost is `PR_CLEAR_RAIL` unless three quarters of the
+    /// negated build cost is larger; conversion between types with power one way takes the
+    /// cheaper of the upgrade and the rebuild, and between unrelated types the rebuild; the
+    /// crossing test follows the type's flag.
+    #[test]
+    fn cost_helpers_follow_rail_h() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let types = [
+            (
+                1,
+                Info {
+                    powered: 0b100,
+                    cost: 8,
+                    flags: 1 << RailTypeFlag::NoLevelCrossing.0,
+                    ..Info::default()
+                },
+            ),
+            (
+                2,
+                Info {
+                    cost: 24,
+                    ..Info::default()
+                },
+            ),
+            (
+                3,
+                Info {
+                    cost: 16,
+                    ..Info::default()
+                },
+            ),
+        ];
+        let set_price = crate::economy_func::tests::set_price;
+        let shared = shared_of(tables(&types));
+        let build = set_price(Price::PR_BUILD_RAIL, 800);
+        let clear = set_price(Price::PR_CLEAR_RAIL, -100);
+
+        assert_eq!(rail_build_cost(shared, RailType(1)), 800);
+        assert_eq!(rail_build_cost(shared, RailType(2)), 2400);
+        assert_eq!(rail_clear_cost(shared, RailType(1)), -100);
+        // Upgrade 2400 / 8 + (2400 - 800) is below the rebuild 2400 + -100.
+        assert_eq!(rail_convert_cost(shared, RailType(1), RailType(2)), 1900);
+        // No power either way: build 1600 plus clear max(-100, -1800).
+        assert_eq!(rail_convert_cost(shared, RailType(2), RailType(3)), 1500);
+
+        set_price(Price::PR_CLEAR_RAIL, -1000);
+        assert_eq!(rail_clear_cost(shared, RailType(1)), -600);
+        // The rebuild 2400 + -600 is now below the upgrade 1900.
+        assert_eq!(rail_convert_cost(shared, RailType(1), RailType(2)), 1800);
+
+        assert!(rail_no_level_crossings(shared, RailType(1)));
+        assert!(!rail_no_level_crossings(shared, RailType(2)));
+
+        set_price(Price::PR_BUILD_RAIL, build);
+        set_price(Price::PR_CLEAR_RAIL, clear);
     }
 
     /// `AddDateIntroducedRailTypes` skips an unused type, one not date introduced, one not

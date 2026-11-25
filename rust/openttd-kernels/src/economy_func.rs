@@ -122,7 +122,7 @@ pub(crate) fn economy_is_in_recession() -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::test_tables::SHARED;
 
@@ -142,7 +142,7 @@ mod tests {
     }
 
     /// Store `_price[index]` and return its earlier value, under `GLOBAL_LOCK`.
-    fn set_price(index: Price, value: i64) -> i64 {
+    pub(crate) fn set_price(index: Price, value: i64) -> i64 {
         let earlier = crate::company::price(index);
         crate::company::testing::set_price(index, value);
         earlier

@@ -15,7 +15,6 @@
 #include "../../signal_type.h"
 #include "../../station_type.h"
 #include "../../track_type.h"
-#include "../../rust/rail_command_ffi.h"
 #include "../../rust/script_rail_ffi.h"
 
 /**
@@ -188,7 +187,7 @@ public:
 	 * @pre ScriptRail::IsRailTypeAvailable(track_rail_type).
 	 * @return Whether a train build for 'engine_rail_type' has power on 'track_rail_type'.
 	 */
-	static bool TrainHasPowerOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type) { return openttd_rust_script_rail_train_has_power(&GetRustScriptHostServices(), &GetRustRailCommandServices(), static_cast<uint32_t>(engine_rail_type), static_cast<uint32_t>(track_rail_type)); }
+	static bool TrainHasPowerOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type) { return openttd_rust_script_rail_train_has_power(&GetRustScriptHostServices(), static_cast<uint32_t>(engine_rail_type), static_cast<uint32_t>(track_rail_type)); }
 
 	/**
 	 * Get the RailType that is used on a tile.
@@ -485,7 +484,7 @@ public:
 	 * @pre IsRailTypeAvailable(railtype)
 	 * @return The baseprice of building the given object.
 	 */
-	static Money GetBuildCost(RailType railtype, BuildType build_type) { return openttd_rust_script_rail_build_cost(&GetRustScriptHostServices(), &GetRustRailCommandServices(), static_cast<uint32_t>(railtype), static_cast<uint32_t>(build_type)); }
+	static Money GetBuildCost(RailType railtype, BuildType build_type) { return openttd_rust_script_rail_build_cost(&GetRustScriptHostServices(), static_cast<uint32_t>(railtype), static_cast<uint32_t>(build_type)); }
 
 	/**
 	 * Get the maximum speed of trains running on this railtype.
