@@ -207,6 +207,13 @@ pub fn set_bit8(value: &mut u8, bit: u8) -> u8 {
     *value
 }
 
+/// `ToggleBit` for byte-sized values such as a `Trackdir`, preserving the original return
+/// value.
+pub fn toggle_bit8(value: &mut u8, bit: u8) -> u8 {
+    *value ^= 1_u8.wrapping_shl(u32::from(bit));
+    *value
+}
+
 /// `SetBit` for 16-bit flag words such as `GroundVehicle::gv_flags`, preserving the
 /// original return value.
 pub fn set_bit16(value: &mut u16, bit: u8) -> u16 {

@@ -999,7 +999,8 @@ impl<'a> Ctx<'a> {
                 _ => unreachable!(),
             },
             MP_RAILWAY => {
-                if is_steep_slope_raw(slope.0) || VALID_LEVEL_CROSSING_SLOPES & (1 << slope.0) == 0
+                if is_steep_slope_raw(slope.0)
+                    || !crate::bitmath_func::has_bit(VALID_LEVEL_CROSSING_SLOPES, slope.0)
                 {
                     cost.error(STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION.0);
                     return;
@@ -1892,7 +1893,7 @@ impl<'a> Ctx<'a> {
                 1 => {
                     !is_steep_slope_raw(slope)
                         && (self.shared.tile_max_z)(tile) == z + get_slope_max_z_raw(slope)
-                        && VALID_LEVEL_CROSSING_SLOPES & (1 << slope) != 0
+                        && crate::bitmath_func::has_bit(VALID_LEVEL_CROSSING_SLOPES, slope)
                 }
                 2 => (self.r.entrance_edge)(
                     tile,
