@@ -1,8 +1,6 @@
 no declaration | openttd_rust_tgp_estimate
 no production user | openttd_rust_abi_layout_named
 no production user | openttd_rust_action2_reset
-no production user | openttd_rust_cargo_build_inverse
-no production user | openttd_rust_cargo_finalise
 no production user | openttd_rust_convert_ground_water
 no production user | openttd_rust_house_class_allocate
 no production user | openttd_rust_house_classes_reset

@@ -15,7 +15,9 @@ rust/openttd-kernels/src/binaryheap.rs
 rust/openttd-kernels/src/bitmath_func.rs
 rust/openttd-kernels/src/builder.rs
 rust/openttd-kernels/src/byte_strings.rs
+rust/openttd-kernels/src/cargo_registry.rs
 rust/openttd-kernels/src/cargopacket.rs
+rust/openttd-kernels/src/cargotype.rs
 rust/openttd-kernels/src/clear_map.rs
 rust/openttd-kernels/src/company_identity.rs
 rust/openttd-kernels/src/company_identity/tests.rs

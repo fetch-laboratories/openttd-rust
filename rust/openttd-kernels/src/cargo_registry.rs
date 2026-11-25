@@ -284,6 +284,10 @@ pub(crate) fn setup_cargo_for_climate(s: &'static Services, l: LandscapeType) {
     // Copy from default cargo by label or index.
     let mut insert = 0;
     while insert < CargoType::NUM_ORIGINAL_CARGO.0 {
+        // `*insert = std::visit(visitor{}, cl)`, whose visitor the table's body holds:
+        // Copy the default cargo by index.
+        // Search for label in default cargo types and copy if found.
+        // Index or label is invalid, this should not happen.
         (s.copy_default_cargo)(l.0, insert);
         let cs = cargo_spec_get(s, CargoType(insert));
 
