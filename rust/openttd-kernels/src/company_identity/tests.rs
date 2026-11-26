@@ -741,11 +741,11 @@ fn set_company_manager_face_style_asserts_its_spec() {
     set_company_manager_face_style(&faces, std::ptr::null_mut(), 4);
 }
 
-thread_local! {
-    static LIVERY_ENGINE: Cell<*const crate::vehicle::OpenTTDEngine> = const { Cell::new(std::ptr::null()) };
-}
+/// The livery test's engine; the test holds the global test lock.
+static LIVERY_ENGINE: std::sync::atomic::AtomicPtr<crate::vehicle::OpenTTDEngine> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 extern "C" fn livery_engine(_: u16) -> *const crate::vehicle::OpenTTDEngine {
-    LIVERY_ENGINE.get()
+    LIVERY_ENGINE.load(std::sync::atomic::Ordering::Relaxed)
 }
 // Cargo 3 is passengers and cargo 4 is goods; each spec pointer is its cargo plus one, which
 // no stub reads through.
@@ -780,7 +780,7 @@ fn engine_livery_scheme_reads_the_cargo_classes_through_the_registry() {
     let mut s = COMPANY_IDENTITY;
     s.capabilities = leak(caps);
     let engine = crate::engine::openttd_rust_engine_new();
-    LIVERY_ENGINE.set(engine);
+    LIVERY_ENGINE.store(engine, std::sync::atomic::Ordering::Relaxed);
     let mut schemes = Vec::new();
     for (kind, misc) in [
         (VehicleType::VEH_SHIP, 0),
