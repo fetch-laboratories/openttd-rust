@@ -1166,7 +1166,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_backup_construct | allow unsafe_code",
-    "source_contract": "`OrderBackup::OrderBackup(v, user)` (src/order_backup.h)",
+    "source_contract": "`OrderBackup::OrderBackup(v, user)` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {

@@ -60,7 +60,7 @@ use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::timer_game_tick::{DAY_TICKS, INVALID_TICKS, TICKS_PER_SECOND};
 use crate::vehicle::{VehicleRef, VehicleServices};
-use crate::vehicle_base::VehState;
+use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_gui::{VehicleInvalidateWindowData, get_window_class_for_vehicle_type};
 use crate::vehicle_type::{VehicleID, VehicleType};
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
@@ -1058,26 +1058,26 @@ impl OrderView<'_> {
         match self.kind() {
             OrderType::OT_GOTO_STATION => {
                 if self.unload_type() == OrderUnloadType::Unload {
-                    order |= 1 << 5;
+                    crate::bitmath_func::set_bit16(&mut order, 5);
                 }
                 if self.is_full_load() {
-                    order |= 1 << 6;
+                    crate::bitmath_func::set_bit16(&mut order, 6);
                 }
                 if self.non_stop().test(OrderNonStopFlag::NoIntermediate) {
-                    order |= 1 << 7;
+                    crate::bitmath_func::set_bit16(&mut order, 7);
                 }
                 order |= gb_u16(self.destination().0, 0, 8) << 8;
             }
             OrderType::OT_GOTO_DEPOT => {
                 if !self.depot_type().test(OrderDepotTypeFlag::PartOfOrders) {
-                    order |= 1 << 6;
+                    crate::bitmath_func::set_bit16(&mut order, 6);
                 }
-                order |= 1 << 7;
+                crate::bitmath_func::set_bit16(&mut order, 7);
                 order |= gb_u16(self.destination().0, 0, 8) << 8;
             }
             OrderType::OT_LOADING => {
                 if self.is_full_load() {
-                    order |= 1 << 6;
+                    crate::bitmath_func::set_bit16(&mut order, 6);
                 }
                 /* If both "no load" and "no unload" are set, return nothing order instead */
                 if self.load_type() == OrderLoadType::NoLoad
@@ -2016,8 +2016,12 @@ pub(crate) fn orders(v: VehicleRef, s: &Leaves) -> Option<OrderListRef> {
 
 /// `std::ranges::any_of(v->Orders(), predicate)`.
 fn any_order(v: VehicleRef, s: &Leaves, predicate: impl Fn(OrderView<'_>) -> bool) -> bool {
-    orders(v, s)
-        .is_some_and(|list| (0..list.len()).any(|index| predicate(list.order(index).view())))
+    any_order_in(order_list(v, s), predicate)
+}
+
+/// `std::ranges::any_of(v->Orders(), predicate)` over the vehicle's resolved list `list`.
+fn any_order_in(list: Option<OrderListRef>, predicate: impl Fn(OrderView<'_>) -> bool) -> bool {
+    list.is_some_and(|list| (0..list.len()).any(|index| predicate(list.order(index).view())))
 }
 
 /// `Vehicle::GetNextStoppingStation`: get the next station the vehicle will stop at, passing
@@ -2047,10 +2051,9 @@ fn assign_suppress_implicit_orders(v: VehicleRef, suppress: bool) {
 
 /// `Vehicle::SkipToNextRealOrderIndex`: advance `cur_real_order_index` to the next real
 /// order. `cur_implicit_order_index` is not touched.
-fn skip_to_next_real_order_index(v: VehicleRef, s: &Leaves) {
+/// `list` is the vehicle's `orders`, resolved by the caller.
+fn skip_to_next_real_order_index(v: VehicleRef, list: Option<OrderListRef>, s: &Leaves) {
     let c = consist(v);
-    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
-    let list = order_list(v, s);
     if num_manual_orders(list).0 > 0 {
         let list = deref_list(list, v, s);
         /* Advance to next real order */
@@ -2077,13 +2080,13 @@ fn skip_to_next_real_order_index(v: VehicleRef, s: &Leaves) {
 /// if needed. Note: `current_order` is not invalidated.
 pub(crate) fn increment_implicit_order_index(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
-    if c.cur_implicit_order_index() == c.cur_real_order_index() {
-        /* Increment real order index as well */
-        skip_to_next_real_order_index(v, s);
-    }
-
     // `this->orders` is resolved once: nothing below replaces the vehicle's list.
     let list = order_list(v, s);
+    if c.cur_implicit_order_index() == c.cur_real_order_index() {
+        /* Increment real order index as well */
+        skip_to_next_real_order_index(v, list, s);
+    }
+
     assert_with(|| c.cur_real_order_index().0 == 0 || c.cur_real_order_index() < num_orders(list));
 
     /* Advance to next implicit order */
@@ -2119,7 +2122,7 @@ pub(crate) fn increment_real_order_index(v: VehicleRef, s: &Leaves) {
         increment_implicit_order_index(v, s);
     } else {
         /* Increment real order only */
-        skip_to_next_real_order_index(v, s);
+        skip_to_next_real_order_index(v, order_list(v, s), s);
         invalidate_vehicle_order(v, 0, s);
     }
 }
@@ -2127,9 +2130,13 @@ pub(crate) fn increment_real_order_index(v: VehicleRef, s: &Leaves) {
 /// `Vehicle::UpdateRealOrderIndex`: skip implicit orders until `cur_real_order_index` is a
 /// non-implicit order.
 pub(crate) fn update_real_order_index(v: VehicleRef, s: &Leaves) {
+    update_real_order_index_in(v, order_list(v, s));
+}
+
+/// `Vehicle::UpdateRealOrderIndex` over the vehicle's `orders` `list`, resolved by the caller:
+/// nothing below replaces it.
+fn update_real_order_index_in(v: VehicleRef, list: Option<OrderListRef>) {
     let c = consist(v);
-    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
-    let list = order_list(v, s);
     let num_orders = list.map_or(VehicleOrderID(0), OrderListRef::get_num_orders);
     /* Make sure the index is valid */
     if c.cur_real_order_index() >= num_orders {
@@ -2188,10 +2195,9 @@ pub(crate) fn has_unbunching_order(v: VehicleRef, s: &Leaves) -> bool {
 }
 
 /// `PreviousOrderIsUnbunching`: check if the previous order is a depot unbunching order.
-fn previous_order_is_unbunching(v: VehicleRef, s: &Leaves) -> bool {
+/// `list` is the vehicle's `orders`, resolved by the caller.
+fn previous_order_is_unbunching(v: VehicleRef, list: Option<OrderListRef>) -> bool {
     let c = consist(v);
-    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
-    let list = order_list(v, s);
     /* If we are headed for the first order, we must wrap around back to the last order. */
     let is_first_order = order_in(list, c.cur_implicit_order_index()).map(|o| o.view().as_ptr())
         == first_order_in(list).map(|o| o.view().as_ptr());
@@ -2222,14 +2228,14 @@ fn previous_order_is_unbunching(v: VehicleRef, s: &Leaves) -> bool {
     reason = "the original's conversion to `TickCounter`"
 )]
 pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
+    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
     /* Don't do anything if this is not our unbunching order. */
-    if !previous_order_is_unbunching(v, s) {
+    if !previous_order_is_unbunching(v, list) {
         return;
     }
 
     let c = consist(v);
-    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
-    let list = order_list(v, s);
     let counter = (s.shared().tick_counter)();
     /* Set the start point for this round trip time. */
     c.set_depot_unbunching_last_departure(counter);
@@ -2249,8 +2255,10 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     while let Some(shared) = u {
         u = next_shared(shared, s);
         /* Ignore vehicles that are manually stopped or crashed. */
-        if shared.vehstatus().test(VehState::Stopped) || shared.vehstatus().test(VehState::Crashed)
-        {
+        if shared.vehstatus().any(
+            VehStates::from_element(VehState::Stopped)
+                .with(VehStates::from_element(VehState::Crashed)),
+        ) {
             continue;
         }
 
@@ -2271,8 +2279,10 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     while let Some(shared) = u {
         u = next_shared(shared, s);
         /* Ignore vehicles that are manually stopped or crashed. */
-        if shared.vehstatus().test(VehState::Stopped) || shared.vehstatus().test(VehState::Crashed)
-        {
+        if shared.vehstatus().any(
+            VehStates::from_element(VehState::Stopped)
+                .with(VehStates::from_element(VehState::Crashed)),
+        ) {
             continue;
         }
 
@@ -2303,7 +2313,7 @@ pub(crate) fn is_waiting_for_unbunching(v: VehicleRef, s: &Leaves) -> bool {
     }
 
     /* Don't do anything if this is not our unbunching order. */
-    if !previous_order_is_unbunching(v, s) {
+    if !previous_order_is_unbunching(v, list) {
         return false;
     }
 
@@ -2329,19 +2339,14 @@ pub(crate) fn measure_unbunching(v: VehicleRef, s: &Leaves) {
             /* This might be our first round trip. */
             c.set_round_trip_time(measured_round_trip);
         } else {
-            /* If we have a previous trip, smooth the effects of outlier trip calculations caused by breakdowns, getting lost, etc. */
-            let min = c.round_trip_time() / 2;
+            /* If we have a previous trip, smooth the effects of outlier trip calculations caused by jams or other interference. */
             // `round_trip_time * 2` is an `int` product before `ClampTo<Ticks>`.
-            let max = c.round_trip_time().wrapping_mul(2);
-            /* `Clamp(a, min, max)`. */
-            assert_with(|| min <= max);
-            c.set_round_trip_time(if measured_round_trip <= min {
-                min
-            } else if measured_round_trip >= max {
-                max
-            } else {
-                measured_round_trip
-            });
+            c.set_round_trip_time(crate::math::clamp(
+                measured_round_trip,
+                c.round_trip_time() / 2,
+                c.round_trip_time().wrapping_mul(2),
+                |condition| assert_with(|| condition),
+            ));
         }
     }
 }
@@ -2455,10 +2460,11 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
 pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
     if is_ground_vehicle(v) {
-        let gv_flags = v.ground_vehicle_flags();
+        let mut gv_flags = v.ground_vehicle_flags();
         if has_bit(gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS) {
             /* Do not delete orders, only skip them */
-            assign_suppress_implicit_orders(v, false);
+            crate::bitmath_func::clr_bit16(&mut gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
+            v.set_ground_vehicle_flags(gv_flags);
             c.set_cur_implicit_order_index(c.cur_real_order_index());
             invalidate_vehicle_order(v, 0, s);
             return;
@@ -2952,7 +2958,7 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
         if sel_ord < c.cur_real_order_index() {
             c.set_cur_real_order_index(VehicleOrderID(c.cur_real_order_index().0.wrapping_sub(1)));
         } else if sel_ord == c.cur_real_order_index() {
-            update_real_order_index(shared, s);
+            update_real_order_index_in(shared, Some(list));
         }
 
         if sel_ord < c.cur_implicit_order_index() {
@@ -3321,8 +3327,8 @@ pub(crate) fn remove_order_from_all_vehicles(
     clippy::redundant_closure_for_method_calls,
     reason = "the view's lifetime is per call"
 )]
-fn check_for_valid_orders(v: VehicleRef, s: &Leaves) -> bool {
-    any_order(v, s, |order| order.is_goto_order())
+fn check_for_valid_orders(list: Option<OrderListRef>) -> bool {
+    any_order_in(list, |order| order.is_goto_order())
 }
 
 /// `OrderConditionCompare`: compare the variable and value based on the given comparator.
@@ -3342,16 +3348,6 @@ pub(crate) fn order_condition_compare(
         OrderConditionComparator::IsFalse => variable == 0,
         _ => not_reached(),
     }
-}
-
-/// `ToPercent16`: converts a "fract" value 0..65535 to "percent" value 0..100.
-#[allow(
-    clippy::cast_possible_wrap,
-    reason = "the original's `uint` result, at most 100"
-)]
-fn to_percent16(i: u32) -> i32 {
-    // `(i * 101) >> 16` of a `uint` fraction is at most 100.
-    ((i * 101) >> 16) as i32
 }
 
 /// `ProcessConditionalOrder`: process a conditional order and determine the next order.
@@ -3377,12 +3373,12 @@ pub(crate) fn process_conditional_order(
         ),
         OrderConditionVariable::Reliability => order_condition_compare(
             occ,
-            to_percent16(u32::from(v.reliability(s.newgrf()))),
+            crate::math::to_percent16(u32::from(v.reliability(s.newgrf()))).cast_signed(),
             value,
         ),
         OrderConditionVariable::MaxReliability => order_condition_compare(
             occ,
-            to_percent16(u32::from((s.base.engine)(v).reliability())),
+            crate::math::to_percent16(u32::from((s.base.engine)(v).reliability())).cast_signed(),
             value,
         ),
         OrderConditionVariable::MaxSpeed => {
@@ -3551,7 +3547,7 @@ pub(crate) fn update_order_dest(
                 update_vehicle_timetable(v, false, s);
                 con.set_cur_real_order_index(next_order);
                 con.set_cur_implicit_order_index(next_order);
-                update_real_order_index(v, s);
+                update_real_order_index_in(v, list);
                 con.set_current_order_time(
                     con.current_order_time().wrapping_add(i32::from(
                         deref_list(list, v, s)
@@ -3669,15 +3665,14 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
     let may_reverse = v.current_order().is_type(OrderType::OT_NOTHING);
 
     /* Check if we've reached a 'via' destination. */
+    let map = crate::map_func::World::new(s.shared());
     if ((v.current_order().is_type(OrderType::OT_GOTO_STATION)
         && v.current_order()
             .non_stop()
             .test(OrderNonStopFlag::NoDestination))
         || v.current_order().is_type(OrderType::OT_GOTO_WAYPOINT))
-        && crate::map_func::World::new(s.shared())
-            .is_tile_type(v.tile(), crate::tile_type::TileType::MP_STATION)
-        && v.current_order().destination().to_station_id()
-            == crate::map_func::World::new(s.shared()).get_station_index(v.tile())
+        && map.is_tile_type(v.tile(), crate::tile_type::TileType::MP_STATION)
+        && v.current_order().destination().to_station_id() == map.get_station_index(v.tile())
     {
         delete_unreached_implicit_orders(v, s);
         /* We set the last visited station here because we do not want
@@ -3698,7 +3693,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
             || c.cur_implicit_order_index()
                 < list.map_or(VehicleOrderID(0), OrderListRef::get_num_orders)
     });
-    update_real_order_index(v, s);
+    update_real_order_index_in(v, list);
 
     let mut order = list
         .and_then(|list| list.get_order_at(c.cur_real_order_index()))
@@ -3711,7 +3706,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
     /* If no order, do nothing. */
     let order = match order {
         Some(order)
-            if v.vehicle_type() != VehicleType::VEH_AIRCRAFT || check_for_valid_orders(v, s) =>
+            if v.vehicle_type() != VehicleType::VEH_AIRCRAFT || check_for_valid_orders(list) =>
         {
             order
         }
@@ -3736,8 +3731,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
         && (v.vehicle_type() == VehicleType::VEH_AIRCRAFT || v.dest_tile() != TileIndex(0))
         && (v.vehicle_type() != VehicleType::VEH_SHIP
             || !order.is_type(OrderType::OT_GOTO_STATION)
-            || TileIndex(ship_station_tile(order.destination().to_station_id(), s))
-                != TileIndex::INVALID)
+            || ship_station_tile(order.destination().to_station_id(), s) != TileIndex::INVALID)
     {
         return false;
     }
@@ -3762,9 +3756,9 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
 /// `Station::Get(st)->ship_station.tile`, read in place through the station command table's
 /// `ship_station` accessor.
 #[allow(unsafe_code)]
-fn ship_station_tile(st: StationID, s: &Leaves) -> u32 {
+fn ship_station_tile(st: StationID, s: &Leaves) -> TileIndex {
     let area = (s.station_commands().ship_station_area)(station_get(st, s));
-    read_field!(area, tile).0
+    read_field!(area, tile)
 }
 
 /// `Command<cmd>::Do(flags, args)` around the Rust body `body` of a command with no tile
