@@ -61,7 +61,11 @@ pub struct TransactionServices {
     pub max_name: usize,
 }
 
-unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
+/// `IsUniqueVehicleName`: test if a name is unique among vehicle names.
+///
+/// # Safety
+/// The tables and the readable name span live for this synchronous call.
+pub(crate) unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     let mut from = 0;
     loop {
         let v = crate::vehicle::VehicleRef::shell_from_record(s.groups.next_vehicle(from));
@@ -99,15 +103,6 @@ unsafe fn owned_primary(
         return (std::ptr::null_mut(), CompanyID(0), None);
     }
     (v, owner, Some(handle))
-}
-/// # Safety
-/// Immutable tables and readable name span live for this synchronous call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_unique_name_abi(
-    s: &TransactionServices,
-    name: ByteSpan,
-) -> u8 {
-    u8::from(unsafe { unique_name(s, name) })
 }
 /// `CmdRenameVehicle`'s arguments.
 #[derive(Clone, Copy)]

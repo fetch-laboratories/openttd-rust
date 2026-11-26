@@ -9,6 +9,7 @@
 #ifndef RUST_ORDERS_FFI_H
 #define RUST_ORDERS_FFI_H
 #include "service_defaults.hpp"
+#include "byte_span_ffi.h"
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 struct OrderList;
@@ -53,6 +54,7 @@ struct OpenTTDStationCommandServices;
 struct OpenTTDVehicle;
 struct OpenTTDVehicleSchedulerServices;
 struct OpenTTDVehicleServices;
+struct OpenTTDVehicleTransactionServices;
 struct OpenTTDOrdersLeaves {
 	/* Pool operations and the owners of C++ shells, until the order pools move (#906). */
 	void *(*allocate_list)() noexcept OPENTTD_SERVICE_DEFAULT(allocate_list);
@@ -69,6 +71,7 @@ struct OpenTTDOrdersLeaves {
 	OpenTTDOrderVector *(*vector)(void *) noexcept OPENTTD_SERVICE_DEFAULT(vector);
 	/* Members still stored in C++ shells: one reader or writer each. */
 	void (*backup_clear_name)(void *backup) noexcept OPENTTD_SERVICE_DEFAULT(backup_clear_name);
+	OpenTTDByteSpan (*backup_name)(const void *backup) noexcept OPENTTD_SERVICE_DEFAULT(backup_name);
 	uint16_t (*backup_service_interval)(const void *backup) noexcept OPENTTD_SERVICE_DEFAULT(backup_service_interval);
 	void (*backup_set_name)(void *backup, const void *v) noexcept OPENTTD_SERVICE_DEFAULT(backup_set_name);
 	void (*backup_set_service_interval)(void *backup, uint16_t interval) noexcept OPENTTD_SERVICE_DEFAULT(backup_set_service_interval);
@@ -82,7 +85,6 @@ struct OpenTTDOrdersLeaves {
 	void (*debug_check_sanity)(void *list) noexcept OPENTTD_SERVICE_DEFAULT(debug_check_sanity);
 	uint32_t (*get_vehicle_cannot_use_station_reason)(void *v, uint16_t st) noexcept OPENTTD_SERVICE_DEFAULT(get_vehicle_cannot_use_station_reason);
 	void (*invalidate_vehicle_order)(void *v, int32_t data) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_vehicle_order);
-	uint8_t (*is_unique_vehicle_name)(const void *backup) noexcept OPENTTD_SERVICE_DEFAULT(is_unique_vehicle_name);
 	/* Commands and the C++ vector the export of GetNextStoppingStation fills. */
 	void (*append_station)(void *next_station, uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(append_station);
 	void (*clear_order_backup_unsafe)(uint32_t tile, uint32_t user) noexcept OPENTTD_SERVICE_DEFAULT(clear_order_backup_unsafe);
@@ -91,6 +93,7 @@ struct OpenTTDOrdersLeaves {
 	const OpenTTDDepotServices *depots;
 	const OpenTTDVehicleSchedulerServices *scheduler;
 	const OpenTTDStationCommandServices *station_commands;
+	const OpenTTDVehicleTransactionServices *vehicle_transactions;
 };
 extern "C" {
 void openttd_rust_order_free(void *);

@@ -537,6 +537,8 @@ pub struct Leaves {
     // Members still stored in C++ shells: one reader or writer each.
     /// `ob->name.clear()`.
     pub backup_clear_name: unsafe extern "C" fn(backup: *mut c_void),
+    /// `ob->name`'s bytes.
+    pub backup_name: unsafe extern "C" fn(backup: *const c_void) -> crate::services::ByteSpan,
     /// `ob->service_interval`.
     pub backup_service_interval: unsafe extern "C" fn(backup: *const c_void) -> u16,
     /// `ob->name = v->name`.
@@ -563,8 +565,6 @@ pub struct Leaves {
     pub get_vehicle_cannot_use_station_reason: unsafe extern "C" fn(v: *mut c_void, st: u16) -> u32,
     /// `InvalidateVehicleOrder(v, data)`.
     pub invalidate_vehicle_order: unsafe extern "C" fn(v: *mut c_void, data: i32),
-    /// `IsUniqueVehicleName(ob->name)`.
-    pub is_unique_vehicle_name: unsafe extern "C" fn(backup: *const c_void) -> u8,
 
     // Commands and the C++ vector the export of `GetNextStoppingStation` fills.
     /// `next_station.push_back(station)` on the export's output vector.
@@ -581,6 +581,8 @@ pub struct Leaves {
     pub scheduler: *const crate::vehicle::scheduler::SchedulerServices,
     /// The station command table, for its station members and command services.
     pub station_commands: *const crate::station_cmd::CommandServicesTable,
+    /// The vehicle transaction table, for `IsUniqueVehicleName`.
+    pub vehicle_transactions: *const crate::vehicle_transactions::TransactionServices,
 }
 
 /// The process-wide tables a body reads through `Leaves`.
@@ -6131,8 +6133,14 @@ fn order_backup_do_restore(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
     }
 
     /* Remove backed up name if it's no longer unique. */
-    // SAFETY: The live backup shell.
-    if unsafe { (s.is_unique_vehicle_name)(ob.shell) } == 0 {
+    // SAFETY: The live backup shell, whose name stays unchanged through the call, and the
+    // process-lifetime transaction table.
+    if !unsafe {
+        crate::vehicle_transactions::unique_name(
+            &*s.vehicle_transactions,
+            (s.backup_name)(ob.shell),
+        )
+    } {
         // SAFETY: As above.
         unsafe { (s.backup_clear_name)(ob.shell) };
     }
@@ -7087,13 +7095,13 @@ crate::abi::layouts! {
         debug_check_sanity,
         get_vehicle_cannot_use_station_reason,
         invalidate_vehicle_order,
-        is_unique_vehicle_name,
         append_station,
         clear_order_backup_unsafe,
         base,
         depots,
         scheduler,
         station_commands,
+        vehicle_transactions,
     };
 }
 

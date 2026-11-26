@@ -1971,6 +1971,7 @@ pub(crate) const ORDERS: crate::orders::Leaves = crate::orders::Leaves {
     next_backup: unreachable1,
     vector: unreachable1,
     backup_clear_name: unreachable1,
+    backup_name: unreachable1,
     backup_service_interval: unreachable1,
     backup_set_name: unreachable2,
     backup_set_service_interval: unreachable2,
@@ -1982,13 +1983,13 @@ pub(crate) const ORDERS: crate::orders::Leaves = crate::orders::Leaves {
     debug_check_sanity: unreachable1,
     get_vehicle_cannot_use_station_reason: unreachable2,
     invalidate_vehicle_order: unreachable2,
-    is_unique_vehicle_name: unreachable1,
     append_station: unreachable2,
     clear_order_backup_unsafe: unreachable2,
     base: &VEHICLE,
     depots: ptr::null(),
     scheduler: ptr::null(),
     station_commands: ptr::null(),
+    vehicle_transactions: ptr::null(),
 };
 
 /// `crate::linkgraph::live::Services` with every entry unreachable.

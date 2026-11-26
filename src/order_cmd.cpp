@@ -50,6 +50,7 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 #include "rust/engine_services.h"
 #include "rust/depot_ffi.h"
 #include "rust/vehicle_ffi.h"
+#include "rust/vehicle_transaction_ffi.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 static_assert(sizeof(VehicleFlags) == sizeof(uint16_t) && alignof(VehicleFlags) == alignof(uint16_t));
@@ -101,6 +102,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.next_backup = RustOrderBackupNext,
 	.vector = [](void *list) noexcept { return static_cast<OrderList *>(list)->GetRustOrders(); },
 	.backup_clear_name = [](void *backup) noexcept { static_cast<OrderBackup *>(backup)->name.clear(); },
+	.backup_name = [](const void *backup) noexcept -> OpenTTDByteSpan { const std::string &name = static_cast<const OrderBackup *>(backup)->name; return {reinterpret_cast<const uint8_t *>(name.data()), name.size()}; },
 	.backup_service_interval = [](const void *backup) noexcept { return static_cast<const OrderBackup *>(backup)->service_interval; },
 	.backup_set_name = [](void *backup, const void *v) noexcept { static_cast<OrderBackup *>(backup)->name = static_cast<const Vehicle *>(v)->name; },
 	.backup_set_service_interval = [](void *backup, uint16_t interval) noexcept { static_cast<OrderBackup *>(backup)->service_interval = interval; },
@@ -112,13 +114,13 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.debug_check_sanity = RustOrderListDebugCheckSanity,
 	.get_vehicle_cannot_use_station_reason = [](void *v, uint16_t st) noexcept -> uint32_t { return GetVehicleCannotUseStationReason(static_cast<const Vehicle *>(v), Station::Get(StationID(st))); },
 	.invalidate_vehicle_order = [](void *v, int32_t data) noexcept { InvalidateVehicleOrder(static_cast<const Vehicle *>(v), data); },
-	.is_unique_vehicle_name = [](const void *backup) noexcept -> uint8_t { return IsUniqueVehicleName(static_cast<const OrderBackup *>(backup)->name); },
 	.append_station = [](void *next_station, uint16_t station) noexcept { static_cast<std::vector<StationID> *>(next_station)->push_back(StationID(station)); },
 	.clear_order_backup_unsafe = [](uint32_t tile, uint32_t user) noexcept { Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(STR_NULL, nullptr, true, false, TileIndex(tile), CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args{TileIndex(tile), static_cast<ClientID>(user)}); },
 	.base = &GetRustVehicleServices(),
 	.depots = &GetRustDepotServices(),
 	.scheduler = &GetRustVehicleSchedulerServices(),
 	.station_commands = &GetRustStationCommandServices(),
+	.vehicle_transactions = &GetRustVehicleTransactionServices(),
 };
 const OpenTTDOrdersLeaves &GetRustOrdersLeaves() { return _rust_orders_leaves; }
 
