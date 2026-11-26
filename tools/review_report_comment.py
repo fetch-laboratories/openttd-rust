@@ -17,6 +17,7 @@ import re
 import sys
 
 import review_report
+import review_start
 import status_comment
 from review_report import Comment
 from status_comment import Target
@@ -36,7 +37,10 @@ def opens_report(target: Target, body: str) -> bool:
 
 
 def refusal(target: Target, agent: str, body: str) -> str | None:
-    """Why the body is not a report the readers can read, or None."""
+    """Why the body is not a report the readers can read, or one from a model
+    off the review row (#1091), or None."""
+    if void := review_start.report_refusal(body):
+        return void
     if target.kind == "issue":
         plan = review_report.reviewed_plan(body)
         if plan is None or plan[0] != target.number:

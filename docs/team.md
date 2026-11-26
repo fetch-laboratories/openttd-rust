@@ -27,7 +27,7 @@ At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-wai
 - Root, a steering review or a navigation review starts a [fathom](skills/fathom/SKILL.md) agent for a case as a thread of its own and does not wait on it: `t3_thread_launch` with the role table's model and effort as `modelSelection`, `workspaceStrategy: {type: "root"}`, a title that names the case, a stable `clientRequestId` and the prompt `/fathom <case issue URL>`.
 - Spawn a fresh agent named for each task; its name is its attribution.
 - The host does not report a child's model or effort to it, so the fixed message that starts a child names the child's own, and the child signs with them. A planner or implementer starts each reviewer on the review row of the [role table](#roles-and-models), never on its own model, and that reviewer's message names the review row's model and effort. `delegate_task` starts a child on its parent's model unless the call names another.
-- Root writes no summary of a child's waiting notice.
+- The host wakes a parent when a child's turn ends with no job held by `t3_background_wait`, and not while one is held: a child that waits on its jobs as [background jobs](#background-jobs) says sends its parent nothing until it messages. Root writes no summary of a waiting notice it does get.
 - An agent's own thread ID is `$T3CODE_THREAD_ID`, or in its thread metadata when that is unset. Children send mid-task messages to the `parentThreadId` in their thread metadata.
 - Every agent-to-agent `t3_thread_send` uses `mode: "queue"` unless the sender means to interrupt: a steer arriving during a Claude Code agent's tool call cancels the call. An agent whose call is cancelled as a message arrives reads the message, reruns the call and carries on unless the message says to stop.
 
@@ -49,7 +49,7 @@ A job's end usually resumes its agent, but not always. Root checks no child's jo
 
 ### Review loop
 
-The review loop is in [review](workflow.md#review). Root reads dispositions, not diffs, and answers only a disagreement between implementer and reviewer, or a policy question no recorded decision answers.
+The review loop is in [review](workflow.md#review). Root reads dispositions, not diffs, and answers only a disagreement between implementer and reviewer, a policy question no recorded decision answers, or a scoped review `ci.py reviewer` sent to it: one more, or what it would review recorded as residue.
 
 ### Ready queue and pipelining
 
