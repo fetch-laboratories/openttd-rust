@@ -295,6 +295,33 @@ fn is_waiting_for_unbunching_follows_the_shared_list_and_departure_time() {
     assert!(is_waiting_for_unbunching(v, s));
 }
 
+/// `OrderList::MoveOrder` rotates the moved order to its new place in both directions, as
+/// `std::rotate` over the original's vector does, and leaves the list unchanged for an equal
+/// pair or an index at or past the order count.
+#[test]
+fn move_order_rotates_the_order_into_place_both_ways() {
+    let s = leaves();
+    for i in 0..6 {
+        push(order_with(|o| o.make_go_to_station(StationID(i))));
+    }
+    let list = super::OrderListRef::of(ptr::without_provenance_mut(1), s);
+    let destinations = || -> Vec<u16> {
+        (0..list.len())
+            .map(|i| list.order(i).view().destination().0)
+            .collect()
+    };
+    list.move_order(VehicleOrderID(1), VehicleOrderID(4));
+    assert_eq!(destinations(), [0, 2, 3, 4, 1, 5]);
+    list.move_order(VehicleOrderID(4), VehicleOrderID(1));
+    assert_eq!(destinations(), [0, 1, 2, 3, 4, 5]);
+    list.move_order(VehicleOrderID(5), VehicleOrderID(0));
+    assert_eq!(destinations(), [5, 0, 1, 2, 3, 4]);
+    list.move_order(VehicleOrderID(2), VehicleOrderID(2));
+    list.move_order(VehicleOrderID(6), VehicleOrderID(0));
+    list.move_order(VehicleOrderID(0), VehicleOrderID(6));
+    assert_eq!(destinations(), [5, 0, 1, 2, 3, 4]);
+}
+
 /// The `OrderView` getters, on orders whose fields are all distinct, against `order_base.h`'s
 /// bit layouts: the unload type is bits 0-2 of `flags`, the load type bits 4-6, the
 /// wait-timetabled flag bit 3 (`wait_time > 0` for a conditional order), and the skip-to
