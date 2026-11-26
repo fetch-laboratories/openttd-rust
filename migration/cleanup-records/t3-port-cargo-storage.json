@@ -1474,5 +1474,30 @@
     "reason": "One isolated child process runs every case, since only that child's policy counts failed checks.",
     "retiring_owner": "none",
     "retirement_condition": "Permanent while the cases share the isolated child."
+  },
+  {
+    "kind": "growth",
+    "counter": "tests_cpp",
+    "added": {
+      "src/tests/station_service.cpp": 8
+    },
+    "reason": "The `Station service` loading case runs the real `prepare_unload` into the typed `stage` (decision 5 and Evidence of #1057 part 3): its deleted `stage` stub made every observation, so the fixture supplies order leaves for `GetNextStoppingStation`, a goods-entry stub that checks the station and cargo, and the `flow_map` stub that makes the same-owner reentry observation, and the case checks the list's keep count after the call.",
+    "existing_alternatives": "Keeping the `stage` stub needs the `Loading::stage` lambda slot the pass deletes; dropping the case loses the same-owner reentry observation ADR 0023 keeps.",
+    "retiring_owner": "#634",
+    "retirement_condition": "Retires with `src/tests/station_service.cpp`, which #736's classification assigns to the station pool's owner (#634)."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/simulation/cargo-registry-console.inc": 1,
+      "tools/simulation/cargomonitor-console.inc": 1,
+      "tools/simulation/orders-console.cpp": 5,
+      "tools/simulation/subsidies-console.inc": 2
+    },
+    "reason": "Each console that is the last C++ user of a facade member the pass deletes calls its export in the `#ifdef WITH_RUST` branch the file already has and keeps the member call for the reference build (decision 4 of #1057 part 3): `StationCargoList::Reserve`, `VehicleCargoList::ActionCount`, `CargoPacket::GetDistance` and `CargoPayment::PayFinalDelivery`. The fixtures' inputs and printed observations do not change.",
+    "existing_alternatives": "Keeping the facade members fails the uncalled-member check, since no production C++ calls them; building the reservation from `Append` and `SetReservedCount` would make the orders fixture's `amount == 7` observation vacuous.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Each line retires with its console: `orders-console.cpp` (#906), `cargo-registry-console.inc` (#634), `subsidies-console.inc` (#635), `cargomonitor-console.inc` (#573), as `tools/kept-fixture-exports.txt` lists them."
   }
 ]

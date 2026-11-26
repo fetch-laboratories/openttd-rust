@@ -1,5 +1,4 @@
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
-src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | f29886bee36a938f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * | 6c04ed067ab54477 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1

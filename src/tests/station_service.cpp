@@ -221,7 +221,7 @@ struct StationLoadingProbe {
 static StationLoadingProbe *_station_loading_probe;
 static OpenTTDCargoList *_station_loading_cargo;
 
-TEST_CASE("Station service - direct prepare stages through the goods entry with same-owner reentry")
+TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
 {
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
 	OpenTTDVehicleOrderState orders{};
