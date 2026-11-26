@@ -82,6 +82,7 @@ When a new commit's tree, outside docs-only files, matches one that already pass
 
 - A [docs-only](workflow.md#change-types) push starts no build; Quick still runs.
 - A push whose tree outside docs-only files already passed Full only refreshes compiler caches; any other push runs the heavy jobs.
+- With `CI_QUEUE_SAVES_CACHES`, the queue's run saves the native build's and Windows x64's compiler caches under the group commit it tests, which is the commit the queue then pushes. With the variable set, that push refreshes neither once it finds the entry itself: the native build's own restore must hit this commit's key for its compilers, and a lookup job must find the key `ci-windows.yml` saves for its runner image before the Windows job starts. When an entry is not there, a failed or evicted save included, the push refreshes it as before. The free-runner builds refresh their caches on every such push.
 
 ## Runners and variables
 
@@ -96,6 +97,7 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 | `CI_WINDOWS_HEAVY` | Windows runner | `blacksmith-4vcpu-windows-2025` | `windows-2022` |
 | `CI_MACOS_HEAVY` | macOS runner | unset, and stays unset: no macOS job runs on a paid runner ([ADR 0009](adr/0009-paid-runner-assignment.md)) | `macos-latest` |
 | `CI_MERGE_QUEUE` | [Merge-queue](#merge-queue) behaviour; set it together with the ruleset | `true` | queue behaviour off |
+| `CI_QUEUE_SAVES_CACHES` | Whether the queue's run saves the paid jobs' compiler caches, so the push of its commit rebuilds nothing ([protected pushes](#protected-pushes)) | unset until Blacksmith's cache is shared across branches ([caches](#caches)) | every such push rebuilds on the paid runners to save them |
 | `CI_ON_DEMAND` | Requested CI: PR pushes skip automatic heavy jobs and `ci:full` label requests are refused | `true` | every PR push runs the heavy jobs |
 | `MIGRATION_CCACHE` | Nothing: no workflow or tool reads it | `true` | no effect |
 
@@ -104,7 +106,9 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 
 ## Caches
 
-- `ci-cache.yml` bounds total cache use to 8 GiB under GitHub's 10 GiB limit.
+- `ci-cache.yml` bounds total cache use to 8 GiB under GitHub's 10 GiB limit. That is the free runners' cache. A Blacksmith runner's cache actions read and write Blacksmith's own cache instead: 25 GB a repository, least recently used entries evicted after seven days, at no charge. `blacksmith cache list` shows its entries and their scope.
+- Blacksmith scopes each cache entry to the branch that saved it, as GitHub does, so a queue run's entry is invisible to the push that follows it. `CI_QUEUE_SAVES_CACHES` works only with that scoping turned off, which the user does in the settings page of Blacksmith's dashboard. Set the variable after it; while an entry is not found, the covered push pays for the Windows lookup and then refreshes as before.
+- The paid native jobs keep the packages `apt-get` downloads in that cache (`package-cache` of the `native-environment` action). apt itself uses a kept archive of the expected name and size without reading its hash, so the cache is restored beside apt's directory, and `tools/apt_archives.py`, which apt runs after every `apt-get update`, moves in only the archives whose SHA-256 the authenticated index lists.
 - Requested dispatches share the `rust-migration` ref's cache-write scope with protected pushes. That is accepted only while every PR comes from the fork's own agents; before the fork accepts outside PRs, enforce candidate cache-write separation by ref or service policy.
 
 ## Native validation

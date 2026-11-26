@@ -2,6 +2,7 @@
 """Exercise request identity and the actual privileged full-result publisher."""
 
 import argparse
+import hashlib
 import io
 import itertools
 import json
@@ -18,9 +19,11 @@ from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any, TypedDict, cast
+from unittest import mock
 from unittest.mock import patch
 from urllib.parse import unquote
 
+import apt_archives
 import ci
 import ci_log
 import preflight_stamp
@@ -1687,6 +1690,184 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
         self.assertEqual(result["deleted"], [])
         self.assertTrue(result["failures"])
 
+    def package_cache(
+        self,
+        restored: Mapping[str, bytes],
+        index: Mapping[str, bytes],
+        fetched: Iterable[str],
+        hook_runs: bool = True,
+    ) -> tuple[dict[str, bytes], str, bool]:
+        """Run the native-environment action's package-cache scripts in order,
+        on stub sudo, apt-get and apt-cache: `restored` is what the cache
+        restore wrote, `index` each archive name and the content apt's index
+        lists for it, and `fetched` the names apt installs, downloading those
+        its own directory lacks. `hook_runs` is whether apt's update reached the
+        hook the setup registered. Return the archives the job would save, what
+        the hook printed and whether the job saves."""
+        action = yaml.safe_load(
+            (ROOT / ".github/actions/native-environment/action.yml").read_text()
+        )
+        steps = action["runs"]["steps"]
+        install = next(
+            number
+            for number, step in enumerate(steps)
+            if step.get("uses") == "./.github/actions/apt-install"
+        )
+        cache = [step for step in steps if "package-cache" in step.get("if", "")]
+        setup, record, collect = (step for step in cache if "run" in step)
+        restore, save = (
+            next(
+                step for step in cache if step.get("uses") == f"actions/cache/{kind}@v4"
+            )
+            for kind in ("restore", "save")
+        )
+        # The cache restores and saves one directory, which is not the one apt
+        # reads; the record follows the restore, and the save the collection.
+        self.assertEqual(restore["with"]["path"], save["with"]["path"])
+        self.assertEqual(restore["with"]["path"], setup["env"]["RESTORED"] + "/*.deb")
+        self.assertNotEqual(setup["env"]["RESTORED"], setup["env"]["ARCHIVES"])
+        order = [steps.index(step) for step in (setup, restore, record)]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(order[-1], install)
+        self.assertLess(install, steps.index(collect))
+        self.assertLess(steps.index(collect), steps.index(save))
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            archives, kept, stubs = (
+                folder / name for name in ("archives", "kept", "bin")
+            )
+            stubs.mkdir()
+            records = "\n\n".join(
+                "Package: {}\nVersion: {}\nArchitecture: {}\nSHA256: {}\n".format(
+                    *cast(tuple[str, str, str], apt_archives.identity(Path(name))),
+                    hashlib.sha256(content).hexdigest(),
+                )
+                for name, content in index.items()
+            )
+            (folder / "index").write_text(records)
+            for name, body in (
+                ("sudo", 'exec "$@"'),
+                ("apt-get", "exit 0"),
+                ("apt-cache", f'cat "{folder / "index"}"'),
+            ):
+                (stubs / name).write_text(f"#!/bin/bash\n{body}\n")
+                (stubs / name).chmod(0o755)
+            env = os.environ | {
+                "PATH": f"{stubs}:{os.environ['PATH']}",
+                "ARCHIVES": str(archives),
+                "RESTORED": str(kept),
+                "APT_CONF": str(folder / "conf"),
+                "GITHUB_WORKSPACE": str(ROOT),
+                "RUNNER_TEMP": directory,
+                "GITHUB_OUTPUT": str(folder / "output"),
+            }
+
+            def run(script: str) -> str:
+                return subprocess.run(
+                    ["bash", "-euo", "pipefail", "-c", script],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+
+            run(setup["run"])
+            for name, content in restored.items():
+                (kept / name).write_bytes(content)
+            run(record["run"])
+            conf = (folder / "conf").read_text()
+            self.assertIn(f'Dir::Cache::archives "{archives}";', conf)
+            # An update whose mirrors all failed returns 0 and skips the success
+            # scripts, so the hook is one apt runs after every update.
+            (hook,) = re.findall(r'APT::Update::Post-Invoke \{ "(.*)"; \};', conf)
+            hooked = run(hook) if hook_runs else ""
+            # apt installs from its own directory alone, by name and size.
+            for name in fetched:
+                if not (archives / name).exists():
+                    (archives / name).write_bytes(index[name])
+            installed = {name: (archives / name).read_bytes() for name in fetched}
+            self.assertEqual(installed, {name: index[name] for name in fetched})
+            run(collect["run"])
+            output = dict(
+                line.split("=", 1)
+                for line in (folder / "output").read_text().splitlines()
+            )
+            saves = evaluate(
+                save["if"],
+                inputs={"package-cache": "true"},
+                steps={"packages-new": {"outputs": output}},
+            )
+            saved = {path.name: path.read_bytes() for path in kept.glob("*.deb")}
+            self.assertEqual(list(archives.glob("*.deb")), [])
+        return saved, hooked, bool(saves)
+
+    def test_paid_native_jobs_install_only_archives_the_index_vouches_for(self) -> None:
+        """apt uses an archive of the expected name and size without reading its
+        hash, so a kept one reaches apt's directory only once the index vouches
+        for it (#896). `package_cache` asserts what apt installed."""
+        lzo, png = "liblzo2-dev_2.10-2build4_amd64.deb", "libpng-dev_1.6.43-5_all.deb"
+        epoch = "ccache_1%3a4.9.1-1_amd64.deb"
+        index = {lzo: b"lzo 2.10", png: b"png", epoch: b"ccache"}
+        wanted = list(index)
+        # A cold cache: everything is downloaded, and the job saves.
+        self.assertEqual(self.package_cache({}, index, wanted), (index, "", True))
+        # A warm cache: nothing is discarded or downloaded, and nothing is saved.
+        self.assertEqual(self.package_cache(index, index, wanted), (index, "", False))
+        # A restored archive of the right name and size but other content is
+        # discarded, downloaded again, and saved over.
+        damaged = dict(index, **{lzo: b"lzo 2.1X"})
+        saved, hooked, saves = self.package_cache(damaged, index, wanted)
+        self.assertEqual((saved, saves), (index, True))
+        self.assertIn(f"discarded {lzo}", hooked)
+        self.assertNotIn(png, hooked)
+        # So are a version the index no longer lists and a name apt never writes.
+        stale = "liblzo2-dev_2.09-1_amd64.deb"
+        saved, hooked, saves = self.package_cache(
+            dict(index, **{stale: b"lzo 2.09", "junk.deb": b"x"}), index, wanted
+        )
+        self.assertEqual((saved, saves), (index, False))
+        self.assertIn(f"discarded {stale}", hooked)
+        self.assertIn("discarded junk.deb", hooked)
+        # With no index to read, no kept archive is trusted.
+        self.assertEqual(self.package_cache(index, {}, []), ({}, mock.ANY, False))
+        # Where apt never runs the hook, it finds no kept archive: the damaged
+        # one is not installed, and everything is downloaded.
+        for kept in (damaged, index):
+            saved, hooked, saves = self.package_cache(
+                kept, index, wanted, hook_runs=False
+            )
+            self.assertEqual((saved, hooked, saves), (index, "", kept is damaged))
+
+    def test_each_native_job_caches_packages_only_on_its_paid_runner(self) -> None:
+        """A free runner's cache is GitHub's 10 GiB, which ci-cache.yml bounds."""
+        action = yaml.safe_load(
+            (ROOT / ".github/actions/native-environment/action.yml").read_text()
+        )
+        for step in action["runs"]["steps"]:
+            if "package-cache" in step.get("if", ""):
+                self.assertFalse(
+                    evaluate(step["if"], inputs={"package-cache": "false"})
+                )
+        native = workflow("rust-migration.yml")["jobs"]
+        reference = workflow("ci-build.yml")["jobs"]["platform-reference"]
+        for body in (
+            *(native[name] for name in ("build", "comparisons", "simulation")),
+            reference,
+        ):
+            (step,) = [
+                step
+                for step in body["steps"]
+                if step.get("uses") == "./.github/actions/native-environment"
+            ]
+            variable = re.fullmatch(
+                r"\$\{\{ vars\.(\w+) \|\| 'ubuntu-24\.04' \}\}", body["runs-on"]
+            )
+            assert variable
+            self.assertEqual(
+                step["with"]["package-cache"],
+                f"${{{{ startsWith(vars.{variable[1]}, 'blacksmith-') }}}}",
+            )
+
     def test_pruning_follows_only_protected_push_runs(self) -> None:
         predicate = job("ci-cache.yml", "prune")["if"]
         for event, branch, expected in (
@@ -2203,7 +2384,10 @@ class PolicyTests(unittest.TestCase):
             contexts: dict[str, Any] = {
                 "inputs": {"checkout-ref": checkout, "profile": profile},
                 "github": {"event_name": event},
-                "needs": {"policy": {"outputs": {"heavy": heavy, "covered": covered}}},
+                "needs": {
+                    "policy": {"outputs": {"heavy": heavy, "covered": covered}},
+                    "windows-saved": {"result": "skipped", "outputs": {}},
+                },
             }
             with self.subTest(profile=profile, event=event, covered=covered):
                 for name, axis, expected in (
@@ -2355,7 +2539,10 @@ class PolicyTests(unittest.TestCase):
             runs_covered = evaluate(
                 build[name]["if"],
                 inputs={"checkout-ref": "", "profile": ""},
-                needs={"policy": {"result": "success", "outputs": outputs}},
+                needs={
+                    "policy": {"result": "success", "outputs": outputs},
+                    "windows-saved": {"result": "skipped", "outputs": {}},
+                },
                 github={"event_name": "push"},
             )
             self.assertTrue(runs_covered, name)
@@ -2373,6 +2560,251 @@ class PolicyTests(unittest.TestCase):
                     needs={"policy": {"outputs": {"covered": covered}}},
                 )
                 self.assertEqual(result, expected)
+
+    def test_a_covered_push_refreshes_no_cache_the_queue_saved(self) -> None:
+        """With CI_QUEUE_SAVES_CACHES the queue's run saves the paid jobs' compiler
+        caches under the commit the queue pushes, and that push refreshes neither
+        once it finds the entry itself; a save that failed leaves none (#896)."""
+        protected = "refs/heads/rust-migration"
+        queued = "refs/heads/gh-readonly-queue/rust-migration/pr-1-x"
+        native = {
+            step["name"]: step["if"]
+            for step in job("rust-migration.yml", "build")["steps"]
+            if "name" in step and "if" in step
+        }
+        tools = "Build native Rust generators without the game"
+        verify = "Check Rust and compare original and migration builds"
+        refresh = "Refresh compiler caches for an already validated merged tree"
+        save = "Save bounded protected-branch compiler caches"
+        for label, event, ref, checkout, covered, variable, hit, expected in (
+            # The entry of this commit, for these compilers, was restored.
+            (
+                "covered push, saved",
+                "push",
+                protected,
+                "",
+                "true",
+                "true",
+                "true",
+                set(),
+            ),
+            # A restore-key match is an older commit's entry, and a failed or
+            # evicted save leaves none: both refresh and save as before.
+            (
+                "covered push, older entry",
+                "push",
+                protected,
+                "",
+                "true",
+                "true",
+                "false",
+                {tools, refresh, save},
+            ),
+            (
+                "covered push, no entry",
+                "push",
+                protected,
+                "",
+                "true",
+                "true",
+                "",
+                {tools, refresh, save},
+            ),
+            (
+                "covered push, variable unset",
+                "push",
+                protected,
+                "",
+                "true",
+                "",
+                "",
+                {tools, refresh, save},
+            ),
+            # An entry saved before the variable was unset still hits; with the
+            # variable unset the push does what it did before.
+            (
+                "covered push, saved, variable unset",
+                "push",
+                protected,
+                "",
+                "true",
+                "",
+                "true",
+                {tools, refresh, save},
+            ),
+            # A rerun of an uncovered push finds its own entry and validates again.
+            (
+                "uncovered push, own entry",
+                "push",
+                protected,
+                "",
+                "",
+                "true",
+                "true",
+                {tools, verify, save},
+            ),
+            (
+                "uncovered push",
+                "push",
+                protected,
+                "",
+                "",
+                "",
+                "",
+                {tools, verify, save},
+            ),
+            (
+                "queue run",
+                "merge_group",
+                queued,
+                "group",
+                "",
+                "true",
+                "false",
+                {tools, verify, save},
+            ),
+            (
+                "queue run, variable unset",
+                "merge_group",
+                queued,
+                "group",
+                "",
+                "",
+                "false",
+                {tools, verify},
+            ),
+            (
+                "requested run",
+                "workflow_dispatch",
+                protected,
+                "merge",
+                "",
+                "true",
+                "false",
+                {tools, verify},
+            ),
+        ):
+            ran = {
+                name
+                for name in (tools, verify, refresh, save)
+                if evaluate(
+                    native[name],
+                    inputs={"checkout-ref": checkout},
+                    github={"event_name": event, "ref": ref},
+                    needs={"policy": {"outputs": {"covered": covered}}},
+                    vars={"CI_QUEUE_SAVES_CACHES": variable},
+                    steps={"cache": {"outputs": {"hit": hit}}},
+                )
+            }
+            self.assertEqual(ran, expected, label)
+        # The hit is the restore's own exact match, on the key the save writes.
+        action = yaml.safe_load(
+            (ROOT / ".github/actions/native-cache/action.yml").read_text()
+        )
+        (restored,) = [
+            step
+            for step in action["runs"]["steps"]
+            if step.get("uses") == "actions/cache/restore@v4"
+        ]
+        (saved,) = [
+            step
+            for step in action["runs"]["steps"]
+            if step.get("uses") == "actions/cache/save@v4"
+        ]
+        hit = "${{ steps." + restored["id"] + ".outputs.cache-hit }}"
+        self.assertEqual(action["outputs"]["hit"]["value"], hit)
+        self.assertEqual(restored["with"]["path"], saved["with"]["path"])
+        self.assertEqual(
+            restored["with"]["key"].replace("steps.identity.outputs", "inputs"),
+            saved["with"]["key"],
+        )
+
+        # Windows: a lookup job reads the key ci-windows.yml saves, for its image.
+        build = workflow("ci-build.yml")["jobs"]
+        windows = {
+            step["name"]: step
+            for step in job("ci-windows.yml", "windows")["steps"]
+            if "name" in step
+        }
+        lookup = build["windows-saved"]
+        for covered, variable, event, ref, expected in (
+            ("true", "true", "push", protected, True),
+            ("true", "", "push", protected, False),
+            ("", "true", "push", protected, False),
+            ("true", "true", "pull_request", protected, False),
+            ("true", "true", "push", "refs/heads/master", False),
+        ):
+            looks = evaluate(
+                lookup["if"],
+                needs={"policy": {"outputs": {"covered": covered}}},
+                vars={"CI_QUEUE_SAVES_CACHES": variable},
+                github={"event_name": event, "ref": ref},
+            )
+            self.assertEqual(looks, expected, (covered, variable, event, ref))
+        self.assertEqual(lookup["needs"], "policy")
+        self.assertEqual(lookup["runs-on"], job("ci-windows.yml", "windows")["runs-on"])
+        self.assertIn("windows-saved", build["windows"]["needs"])
+        steps = {step["id"]: step for step in lookup["steps"] if "id" in step}
+        found = steps["compiler-cache"]["with"]
+        self.assertIs(found["lookup-only"], True)
+        self.assertEqual(
+            lookup["outputs"], {"hit": "${{ steps.compiler-cache.outputs.cache-hit }}"}
+        )
+        restore = windows["Restore compiler cache"]["with"]
+        self.assertEqual(found["path"], restore["path"])
+        # On a push the job has no checkout-ref and its one architecture is x64.
+        self.assertEqual(
+            found["key"],
+            restore["key"]
+            .replace("${{ inputs.arch }}", "x64")
+            .replace("inputs.checkout-ref || github.sha", "github.sha"),
+        )
+        self.assertEqual(
+            steps["runner-image"]["run"].strip(),
+            'echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"',
+        )
+        self.assertIn(
+            steps["runner-image"]["run"].strip(),
+            windows["Identify runner image"]["run"],
+        )
+        self.assertEqual(
+            windows["Save compiler cache"]["with"]["key"],
+            "${{ steps.compiler-cache.outputs.cache-primary-key }}",
+        )
+        # The entry found skips the paid job; a miss, or no lookup, runs it.
+        for found_hit, result, expected in (
+            ("true", "success", False),
+            ("false", "success", True),
+            ("", "success", True),
+            ("", "skipped", True),
+            ("", "failure", True),
+        ):
+            runs_job = evaluate(
+                build["windows"]["if"],
+                inputs={"checkout-ref": "", "profile": ""},
+                needs={
+                    "policy": {"outputs": {"heavy": "false", "covered": "true"}},
+                    "windows-saved": {"result": result, "outputs": {"hit": found_hit}},
+                },
+                github={"event_name": "push"},
+            )
+            self.assertEqual(runs_job, expected, (found_hit, result))
+        # Only a protected push or, with the variable, the queue's run saves.
+        for name in ("Save compiler cache", "Trim compiler cache"):
+            for event, ref, variable, expected in (
+                ("push", protected, "", True),
+                ("merge_group", queued, "true", True),
+                ("merge_group", queued, "", False),
+                ("workflow_dispatch", protected, "true", False),
+                ("pull_request", "refs/pull/1/merge", "true", False),
+            ):
+                saves_cache = evaluate(
+                    windows[name]["if"],
+                    github={"event_name": event, "ref": ref},
+                    vars={"CI_QUEUE_SAVES_CACHES": variable},
+                    steps={"compiler-cache": {"outputs": {"cache-hit": ""}}},
+                )
+                self.assertEqual(bool(saves_cache), expected, (name, event, variable))
 
     def test_cache_refresh_skips_exactly_the_test_and_evidence_steps(self) -> None:
         windows = {
@@ -2470,6 +2902,7 @@ class PolicyTests(unittest.TestCase):
                         }
                     }
                     needs["build"] = {"result": "success"}
+                    needs["windows-saved"] = {"result": "skipped", "outputs": {}}
                     with self.subTest(filename=filename, job=name, cancelled=cancelled):
                         result = evaluate(
                             jobs[name]["if"],
