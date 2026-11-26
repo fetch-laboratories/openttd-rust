@@ -2190,21 +2190,24 @@ pub(crate) fn has_depot_order(v: VehicleRef, s: &Leaves) -> bool {
     any_order(v, s, |order| order.is_type(OrderType::OT_GOTO_DEPOT))
 }
 
-/// `Vehicle::HasFullLoadOrder`: check if the current vehicle has a full load order.
-pub(crate) fn has_full_load_order(v: VehicleRef, s: &Leaves) -> bool {
-    any_order(v, s, |o| {
+/// `Vehicle::HasFullLoadOrder`: check if the current vehicle has a full load order. `list`
+/// is the vehicle's `orders`, resolved by the caller.
+fn has_full_load_order(list: Option<OrderListRef>) -> bool {
+    any_order_in(list, |o| {
         o.is_type(OrderType::OT_GOTO_STATION) && o.is_full_load()
     })
 }
 
 /// `Vehicle::HasConditionalOrder`: check if the current vehicle has a conditional order.
-pub(crate) fn has_conditional_order(v: VehicleRef, s: &Leaves) -> bool {
-    any_order(v, s, |o| o.is_type(OrderType::OT_CONDITIONAL))
+/// `list` is the vehicle's `orders`, resolved by the caller.
+fn has_conditional_order(list: Option<OrderListRef>) -> bool {
+    any_order_in(list, |o| o.is_type(OrderType::OT_CONDITIONAL))
 }
 
 /// `Vehicle::HasUnbunchingOrder`: check if the current vehicle has an unbunching order.
-pub(crate) fn has_unbunching_order(v: VehicleRef, s: &Leaves) -> bool {
-    any_order(v, s, |o| {
+/// `list` is the vehicle's `orders`, resolved by the caller.
+fn has_unbunching_order(list: Option<OrderListRef>) -> bool {
+    any_order_in(list, |o| {
         o.is_type(OrderType::OT_GOTO_DEPOT)
             && o.depot_action_flags().test(OrderDepotActionFlag::Unbunch)
     })
@@ -2415,12 +2418,13 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
     let first = || record(list.first_shared_shell(), s);
     /* Remember if we were first and the old window number before RemoveVehicle()
      * as this changes first if needed. */
-    let were_first = first() == v;
+    let first_before = first();
+    let were_first = first_before == v;
     let vli = VehicleListIdentifier {
         list_type: VehicleListType::VL_SHARED_ORDERS,
         vtype: v.vehicle_type(),
         company: v.owner(),
-        index: first().index(s.newgrf()).0,
+        index: first_before.index(s.newgrf()).0,
     };
 
     list.remove_vehicle(v);
@@ -2826,7 +2830,8 @@ pub(crate) fn get_order_distance(
 )]
 pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID, s: &Leaves) {
     /* Create new order and link in list */
-    match order_list(v, s) {
+    // `v->orders` afterwards: it holds the order, and every shared vehicle holds the same list.
+    let list = match order_list(v, s) {
         None => {
             let list = new_order_list(
                 v,
@@ -2835,14 +2840,17 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
                 s,
             );
             set_order_list(v, Some(list));
+            list
         }
-        Some(list) => list.insert_order_at(new_o, sel_ord, s),
-    }
-    // `v->orders` now holds the order, and every shared vehicle holds the same list.
-    let list = list_of(v, s);
+        Some(list) => {
+            list.insert_order_at(new_o, sel_ord, s);
+            list
+        }
+    };
 
-    let mut u = list.get_first_shared_vehicle(s);
-    delete_order_warnings(record(list.first_shared_shell(), s), s);
+    let first = record(list.first_shared_shell(), s);
+    let mut u = Some(first);
+    delete_order_warnings(first, s);
     while let Some(shared) = u {
         assert_with(|| {
             crate::vehicle_base::order_list(v.0.as_ptr())
@@ -2960,8 +2968,9 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
     let list = list_of(v, s);
     list.delete_order_at(sel_ord);
 
-    let mut u = list.get_first_shared_vehicle(s);
-    delete_order_warnings(record(list.first_shared_shell(), s), s);
+    let first = record(list.first_shared_shell(), s);
+    let mut u = Some(first);
+    delete_order_warnings(first, s);
     while let Some(shared) = u {
         assert_with(|| {
             crate::vehicle_base::order_list(v.0.as_ptr())
@@ -3442,9 +3451,6 @@ pub(crate) fn process_conditional_order(
 /// with conditional orders, which prevents infinite loops; `pbs_look_ahead` whether we are
 /// forecasting orders for pbs reservations in advance, in which case the order indices must
 /// not be modified. Returns true if the order was a new (non-implicit) order.
-#[allow(clippy::too_many_lines, reason = "one function per original body")]
-#[allow(unsafe_code)]
-#[allow(clippy::cast_sign_loss, reason = "the positive `DAY_TICKS` as `uint`")]
 pub(crate) fn update_order_dest(
     v: VehicleRef,
     order: OrderView<'_>,
@@ -3452,8 +3458,29 @@ pub(crate) fn update_order_dest(
     pbs_look_ahead: bool,
     s: &Leaves,
 ) -> bool {
-    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
-    let list = order_list(v, s);
+    update_order_dest_in(
+        v,
+        order_list(v, s),
+        order,
+        conditional_depth,
+        pbs_look_ahead,
+        s,
+    )
+}
+
+/// [`update_order_dest`] with `list`, the vehicle's `orders`, resolved by the caller: nothing
+/// in the body or its recursion replaces the vehicle's list.
+#[allow(clippy::too_many_lines, reason = "one function per original body")]
+#[allow(unsafe_code)]
+#[allow(clippy::cast_sign_loss, reason = "the positive `DAY_TICKS` as `uint`")]
+fn update_order_dest_in(
+    v: VehicleRef,
+    list: Option<OrderListRef>,
+    order: OrderView<'_>,
+    conditional_depth: i32,
+    pbs_look_ahead: bool,
+    s: &Leaves,
+) -> bool {
     if conditional_depth > i32::from(num_orders(list).0) {
         current_order(v).free();
         crate::vehicle_base::set_dest_tile(v, TileIndex(0));
@@ -3609,8 +3636,9 @@ pub(crate) fn update_order_dest(
     };
 
     current_order(v).assign_order(order.copied());
-    update_order_dest(
+    update_order_dest_in(
         v,
+        list,
         order,
         conditional_depth.wrapping_add(1),
         pbs_look_ahead,
@@ -3774,7 +3802,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
         _ => not_reached(),
     }
 
-    update_order_dest(v, order, 0, false, s) && may_reverse
+    update_order_dest_in(v, list, order, 0, false, s) && may_reverse
 }
 
 /// `Station::Get(st)->ship_station.tile`, read in place through the station command table's
@@ -3896,7 +3924,7 @@ pub(crate) fn cmd_insert_order(
                 OrderLoadType::LoadIfPossible | OrderLoadType::NoLoad => {}
 
                 OrderLoadType::FullLoad | OrderLoadType::FullLoadAny => {
-                    if has_unbunching_order(v, s) {
+                    if has_unbunching_order(list) {
                         return cost.error(STR_ERROR_UNBUNCHING_NO_FULL_LOAD.0);
                     }
                 }
@@ -4036,13 +4064,13 @@ pub(crate) fn cmd_insert_order(
                 .depot_action_flags()
                 .test(OrderDepotActionFlag::Unbunch)
             {
-                if has_full_load_order(v, s) {
+                if has_full_load_order(list) {
                     return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD.0);
                 }
-                if has_unbunching_order(v, s) {
+                if has_unbunching_order(list) {
                     return cost.error(STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED.0);
                 }
-                if has_conditional_order(v, s) {
+                if has_conditional_order(list) {
                     return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL.0);
                 }
             }
@@ -4113,7 +4141,7 @@ pub(crate) fn cmd_insert_order(
             if new_order.condition_variable() >= OrderConditionVariable::End {
                 return crate::command_func::cmd_error(cost);
             }
-            if has_unbunching_order(v, s) {
+            if has_unbunching_order(list) {
                 return cost.error(STR_ERROR_UNBUNCHING_NO_CONDITIONAL.0);
             }
 
@@ -4330,9 +4358,10 @@ pub(crate) fn cmd_move_order(
         list.move_order(moving_order, target_order);
 
         /* Update shared list */
-        let mut u = list.get_first_shared_vehicle(s);
+        let first = record(list.first_shared_shell(), s);
+        let mut u = Some(first);
 
-        delete_order_warnings(record(list.first_shared_shell(), s), s);
+        delete_order_warnings(first, s);
 
         let remap = |index: VehicleOrderID| {
             if index == moving_order {
@@ -4572,7 +4601,7 @@ pub(crate) fn cmd_modify_order(
                 OrderLoadType::LoadIfPossible | OrderLoadType::NoLoad => {}
 
                 OrderLoadType::FullLoad | OrderLoadType::FullLoadAny => {
-                    if has_unbunching_order(v, s) {
+                    if has_unbunching_order(list) {
                         return cost.error(STR_ERROR_UNBUNCHING_NO_FULL_LOAD.0);
                     }
                 }
@@ -4589,7 +4618,7 @@ pub(crate) fn cmd_modify_order(
             /* Check if we are allowed to add unbunching. We are always allowed to remove it. */
             if depot_action == OrderDepotAction::Unbunch {
                 /* Only one unbunching order is allowed in a vehicle's orders. If this order already has an unbunching action, no error is needed. */
-                if has_unbunching_order(v, s)
+                if has_unbunching_order(list)
                     && !order
                         .view()
                         .depot_action_flags()
@@ -4598,11 +4627,11 @@ pub(crate) fn cmd_modify_order(
                     return cost.error(STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED.0);
                 }
                 /* We don't allow unbunching if the vehicle has a conditional order. */
-                if has_conditional_order(v, s) {
+                if has_conditional_order(list) {
                     return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL.0);
                 }
                 /* We don't allow unbunching if the vehicle has a full load order. */
-                if has_full_load_order(v, s) {
+                if has_full_load_order(list) {
                     return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD.0);
                 }
             }
@@ -4819,8 +4848,9 @@ pub(crate) fn cmd_modify_order(
 
         /* Update the windows and full load flags, also for vehicles that share the same order list */
         let list = deref_list(list, v, s);
-        let mut u = list.get_first_shared_vehicle(s);
-        delete_order_warnings(record(list.first_shared_shell(), s), s);
+        let first = record(list.first_shared_shell(), s);
+        let mut u = Some(first);
+        delete_order_warnings(first, s);
         while let Some(shared) = u {
             /* Toggle u->current_order "Full load" flag if it changed.
              * However, as the same flag is used for depot orders, check
@@ -6068,10 +6098,11 @@ fn order_backup_construct(ob: OrderBackupRef, v: VehicleRef, user: u32, s: &Leav
 
     /* If we have shared orders, store the vehicle we share the order with. */
     if list.is_some_and(OrderListRef::is_shared) {
-        let clone = if first_shared_in(list, v, s) == Some(v) {
+        let first = first_shared_in(list, v, s);
+        let clone = if first == Some(v) {
             next_shared(v, s)
         } else {
-            first_shared_in(list, v, s)
+            first
         };
         ob.set_clone(clone.map_or(ptr::null_mut(), VehicleRef::shell));
     } else {
