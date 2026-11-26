@@ -2104,20 +2104,24 @@ pub(crate) fn increment_real_order_index(v: VehicleRef, s: &Leaves) {
 /// non-implicit order.
 pub(crate) fn update_real_order_index(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
+    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
+    let num_orders = list.map_or(VehicleOrderID(0), OrderListRef::get_num_orders);
     /* Make sure the index is valid */
-    if c.cur_real_order_index() >= get_num_orders(v, s) {
+    if c.cur_real_order_index() >= num_orders {
         c.set_cur_real_order_index(VehicleOrderID(0));
     }
 
-    if get_num_manual_orders(v, s).0 > 0 {
+    if let Some(list) = list.filter(|list| list.get_num_manual_orders().0 > 0) {
         /* Advance to next real order */
-        while get_order(v, c.cur_real_order_index(), s)
+        while list
+            .get_order_at(c.cur_real_order_index())
             .unwrap()
             .view()
             .is_type(OrderType::OT_IMPLICIT)
         {
             c.set_cur_real_order_index(VehicleOrderID(c.cur_real_order_index().0.wrapping_add(1)));
-            if c.cur_real_order_index() >= get_num_orders(v, s) {
+            if c.cur_real_order_index() >= num_orders {
                 c.set_cur_real_order_index(VehicleOrderID(0));
             }
         }
@@ -3633,14 +3637,20 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
 
     /* Get the current order */
     let c = consist(v);
+    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
     assert_with(|| {
-        c.cur_implicit_order_index().0 == 0 || c.cur_implicit_order_index() < get_num_orders(v, s)
+        c.cur_implicit_order_index().0 == 0
+            || c.cur_implicit_order_index()
+                < list.map_or(VehicleOrderID(0), OrderListRef::get_num_orders)
     });
     update_real_order_index(v, s);
 
-    let mut order = get_order(v, c.cur_real_order_index(), s).map(OrderRef::view);
+    let mut order = list
+        .and_then(|list| list.get_order_at(c.cur_real_order_index()))
+        .map(OrderRef::view);
     if order.is_some_and(|order| order.is_type(OrderType::OT_IMPLICIT)) {
-        assert_with(|| get_num_manual_orders(v, s).0 == 0);
+        assert_with(|| list.map_or(0, |list| list.get_num_manual_orders().0) == 0);
         order = None;
     }
 
