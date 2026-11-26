@@ -141,8 +141,8 @@ inline std::vector<char> limits;
 }
 TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[road][rust]")
 {
-	enum Mode { Rejected, Junction, Destination, MaxCost, Accepted, Startup };
-	for (Mode mode : {Rejected, Junction, Destination, MaxCost, Accepted, Startup}) {
+	enum Mode { Rejected, Junction, Destination, MaxCost, Accepted, OrderLimited, Startup };
+	for (Mode mode : {Rejected, Junction, Destination, MaxCost, Accepted, OrderLimited, Startup}) {
 		CAPTURE(mode);
 		FollowerFixture map;
 		/* One-way NE road along row 2, clear of the map edge, so that no step from its tiles
@@ -166,11 +166,16 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		RoadOrder::limits.clear();
 		map.record.cached_max_speed = 200; // RoadVehicle::GetDisplayMaxSpeed() is 100.
 		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
+		/* The fixture's order limit of 40 caps the vehicle at 80, under its display speed of
+		 * 100, so the accepted step pays 100 * (80 - 40) * 4 / 80 = 200 for the road limit of
+		 * 40 (an unlimited order would pay 240). An order limit of 10 caps it at 20, under the
+		 * road limit, and removes that penalty: 417 - 200 = 217. */
+		if (mode == OrderLimited) map.order_state.current_order.max_speed = 10;
 		OpenTTDRoadYapfInput input{}; input.tile = row + 3; input.slope = 17;
 		auto result = openttd_rust_road_yapf_depot(&input, &map.shared, map.Vehicle(), mode == MaxCost ? 99 : 0);
-		if (mode == Accepted) {
+		if (mode == Accepted || mode == OrderLimited) {
 			CHECK((RoadOrder::limits == std::vector<char>{'R'}));
-			CHECK(result.found == 1); CHECK(result.cost == 417);
+			CHECK(result.found == 1); CHECK(result.cost == (mode == Accepted ? 417 : 217));
 		} else {
 			CHECK(RoadOrder::limits.empty());
 			if (mode == Destination) { CHECK(result.found == 1); CHECK(result.cost == 100); }
