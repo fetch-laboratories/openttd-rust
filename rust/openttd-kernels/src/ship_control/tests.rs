@@ -311,6 +311,7 @@ fn tick_times_the_controller() {
         PerformanceElement,
         testing::{Effect, sampling, take},
     };
+    #[cfg(test)]
     thread_local! {
         static SHIP: Cell<Option<VehicleRef>> = const { Cell::new(None) };
     }

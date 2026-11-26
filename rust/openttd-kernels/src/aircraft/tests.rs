@@ -319,6 +319,7 @@ fn tick_times_a_normal_aircraft_only() {
         testing::{Effect, sampling, take},
     };
     use crate::vehicle_base::{VehState, VehStates};
+    #[cfg(test)]
     thread_local! {
         static AIRCRAFT: std::cell::Cell<Option<crate::vehicle::VehicleRef>> =
             const { std::cell::Cell::new(None) };
