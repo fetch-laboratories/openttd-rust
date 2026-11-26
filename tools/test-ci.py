@@ -8,12 +8,9 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
-import sys
 import tempfile
 import threading
-import time
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
@@ -29,6 +26,7 @@ import ci_log
 import preflight_stamp
 import quick_workflow
 import review_report
+import review_start
 import source_fixture
 import status_comment
 import vcs
@@ -52,6 +50,7 @@ PULL = {
     "mergeable": True,
     "merge_commit_sha": MERGE,
     "body": "Agent: /implementation | Model: m | Reasoning effort: high",
+    "created_at": "2026-11-11T00:00:00Z",
 }
 
 
@@ -2781,6 +2780,10 @@ class RequestTests(unittest.TestCase):
         stamp = patch.object(ci, "require_stamp")
         self.stamp = stamp.start()
         self.addCleanup(stamp.stop)
+        # The one-native-run rule has its own tests, on enqueue's recorded answers.
+        first = patch.object(ci, "require_first_native")
+        first.start()
+        self.addCleanup(first.stop)
 
     def test_request_and_ready_need_a_stamp_before_any_change(self) -> None:
         self.stamp.side_effect = ValueError("no preflight stamp")
@@ -2790,6 +2793,7 @@ class RequestTests(unittest.TestCase):
             profile="native",
             bootstrap=False,
             unstamped=None,
+            diagnose=None,
             head=None,
             wait=False,
         )
@@ -2880,6 +2884,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=False,
                     unstamped=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -2942,6 +2947,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3002,6 +3008,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3034,6 +3041,7 @@ class RequestTests(unittest.TestCase):
                 profile="full",
                 bootstrap=False,
                 unstamped=None,
+                diagnose=None,
                 head=None,
                 wait=False,
                 request_file=Path(directory) / "request.json",
@@ -3252,6 +3260,10 @@ class RequestPathTests(unittest.TestCase):
         stamp = patch.object(ci, "require_stamp")
         self.stamp = stamp.start()
         self.addCleanup(stamp.stop)
+        # The one-native-run rule has its own tests, on enqueue's recorded answers.
+        first = patch.object(ci, "require_first_native")
+        first.start()
+        self.addCleanup(first.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.directory = Path(directory.name)
@@ -3272,6 +3284,7 @@ class RequestPathTests(unittest.TestCase):
                 "profile": "native",
                 "bootstrap": False,
                 "unstamped": None,
+                "diagnose": None,
                 "head": None,
                 "wait": False,
                 "request_file": None,
@@ -4305,6 +4318,12 @@ class EnqueueWorld:
     )
     recorded: ci_log.Run | None = None
     recorded_jobs: list[dict[str, str]] = field(default_factory=list)
+    # The run `request --diagnose 3` names.
+    named: ci_log.Run | None = None
+    # The jobs of run 8, or the error GitHub answers for them, and the annotation
+    # of each job that has one, by job ID.
+    jobs: list[ci_log.Job] | subprocess.CalledProcessError = field(default_factory=list)
+    annotations: dict[int, str] = field(default_factory=dict)
     retry: str | None = None
     entry: dict[str, object] | None = None
     armed: dict[str, object] | None = None
@@ -4342,6 +4361,11 @@ class EnqueueTests(unittest.TestCase):
     def enqueue(self, **options: object) -> tuple[str, list[tuple[str, ...]]]:
         """Run enqueue against an EnqueueWorld of `options`."""
         world = EnqueueWorld(**cast(dict[str, Any], options))
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
+        return self.within(world, lambda: ci.enqueue(args)), self.calls
+
+    def within(self, world: EnqueueWorld, command: Callable[[], str]) -> str:
+        """Run `command` against `world`'s recorded answers."""
         requested = world.requested
         dispatched = world.dispatched
         if dispatched is None:
@@ -4370,7 +4394,11 @@ class EnqueueTests(unittest.TestCase):
             f"compare/rust-migration...{HEAD}": compare,
             f"compare/{HEAD}...rust-migration": {"files": world.base_files},
             "actions/runs/9": world.recorded,
+            "actions/runs/3": world.named,
+            "/annotations": [],
         }
+        for job, message in world.annotations.items():
+            answers[f"check-runs/{job}/annotations"] = [{"message": message}]
         listings: dict[str, object] = {
             "event=workflow_dispatch": [
                 {"workflow_runs": page}
@@ -4378,6 +4406,9 @@ class EnqueueTests(unittest.TestCase):
             ],
             "event=pull_request": [{"workflow_runs": world.labeled}],
             "pulls/170/files": [world.files],
+            "actions/runs/8/jobs": world.jobs
+            if isinstance(world.jobs, subprocess.CalledProcessError)
+            else [{"jobs": world.jobs}],
         }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
@@ -4390,6 +4421,8 @@ class EnqueueTests(unittest.TestCase):
         def gh(*args: str) -> str:
             if args[:2] == ("api", "--paginate"):
                 (pages,) = [v for key, v in listings.items() if key in args[-1]]
+                if isinstance(pages, subprocess.CalledProcessError):
+                    raise pages
                 return json.dumps(pages)
             calls.append(args)
             state = {
@@ -4398,7 +4431,6 @@ class EnqueueTests(unittest.TestCase):
             }
             return json.dumps({"data": {"repository": {"pullRequest": state}}})
 
-        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "api", side_effect=api),
@@ -4420,7 +4452,8 @@ class EnqueueTests(unittest.TestCase):
                 record = {"pr": 170, "head": HEAD, "run_id": 9}
                 (Path(directory) / "old.json").write_text(json.dumps(record))
             self.stamp = stamp
-            return ci.enqueue(args), calls
+            self.overrides = Path(directory) / "overrides.log"
+            return command()
 
     def test_red_quick_or_requested_run_refuses_before_queueing(self) -> None:
         red = dict(self.QUICK, conclusion="failure")
@@ -4470,6 +4503,361 @@ class EnqueueTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     self.enqueue(**options)
                 self.assertEqual(self.calls, [])
+
+    # A merge-group run as GitHub returns it by ID: the failed Full a request names.
+    FAILED_FULL = dict(
+        EJECTED,
+        id=3,
+        event="merge_group",
+        path=".github/workflows/ci-request.yml",
+        display_title="CI full queue refs/heads/gh-readonly-queue/x",
+    )
+
+    def first_native(
+        self, options: Mapping[str, object], diagnose: str | None = None
+    ) -> str:
+        """Run request's one-native-run check on an EnqueueWorld of `options`;
+        return what it logged."""
+        world = EnqueueWorld(**cast(dict[str, Any], dict(options)))
+
+        def check() -> str:
+            ci.require_first_native(
+                "example/fork", 170, "2026-11-11T00:00:00Z", HEAD, diagnose
+            )
+            return self.overrides.read_text() if self.overrides.exists() else ""
+
+        return self.within(world, check)
+
+    def test_a_second_native_run_needs_the_failed_full_it_diagnoses(self) -> None:
+        """The rule of workflow.md's checks, which only the doc held (#896)."""
+        green = self.REQUESTED
+        earlier = dict(green, id=1, display_title=f"CI native PR 170 x-{BASE}")
+        # Run 8 is the one whose jobs the recorded answers hold.
+        later = dict(green, id=8, created_at="2026-11-12T05:00:00Z")
+        rust = dict(later, display_title=f"CI rust PR 170 r-{HEAD}")
+        platform = dict(later, display_title=f"CI platform PR 170 p-{HEAD}")
+        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
+        for label, options in (
+            ("green at the head", {}),
+            (
+                "green on an earlier commit",
+                {"requested": earlier, "commits": [BASE, HEAD]},
+            ),
+            ("a later green rust run", {"dispatched": [green, rust]}),
+            # A later run of any profile, red or still going, reopens nothing.
+            (
+                "a red native since",
+                {"dispatched": [green, dict(later, conclusion="failure")]},
+            ),
+            (
+                "a red platform run since",
+                {"dispatched": [green, dict(platform, conclusion="failure")]},
+            ),
+            (
+                "a platform run still going",
+                {
+                    "dispatched": [
+                        green,
+                        dict(platform, status="in_progress", conclusion=None),
+                    ]
+                },
+            ),
+            # A removal the request does not name waives nothing.
+            ("removed by the queue since", {"queue": [self.EJECTED]}),
+            # A workflow change queues on its bootstrap Full at the head, so it
+            # needs no second native either.
+            ("workflow files, green at the head", {"files": workflow}),
+            (
+                "workflow files, green on an earlier commit",
+                {"requested": earlier, "commits": [BASE, HEAD], "files": workflow},
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"one `native` run.*runs/[12].*enqueue 170.*--diagnose RUN",
+                ):
+                    self.first_native(options)
+
+    def test_native_runs_again_only_where_the_rule_allows(self) -> None:
+        green = self.REQUESTED
+        red = dict(green, conclusion="failure")
+        rust = dict(green, display_title=f"CI rust PR 170 r-{HEAD}")
+        earlier = dict(green, display_title=f"CI native PR 170 x-{BASE}")
+        # A checker-only Full runs Quick alone, so no green Full is a native run.
+        full = dict(earlier, display_title=f"CI full PR 170 f-{BASE}")
+        for label, options in (
+            ("no run yet", {"requested": None}),
+            ("only a red native", {"requested": red}),
+            ("only a green rust run", {"requested": rust}),
+            (
+                "a green Full on an earlier commit",
+                {"requested": full, "commits": [BASE, HEAD]},
+            ),
+        ):
+            with self.subTest(label):
+                self.assertEqual(self.first_native(options), "")
+        (entry,) = self.first_native(
+            {"named": self.FAILED_FULL}, diagnose="3"
+        ).splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "diagnose", "reason": self.EJECTED["html_url"]},
+        )
+        url = "https://github.com/example/fork/actions/runs/3"
+        self.assertIn(url, self.first_native({"named": self.FAILED_FULL}, url))
+
+    def test_diagnose_names_a_failed_full_of_this_pr(self) -> None:
+        failed = self.FAILED_FULL
+        requested = dict(
+            failed,
+            event="workflow_dispatch",
+            head_branch="rust-migration",
+            display_title=f"CI full PR 170 f-{HEAD}",
+        )
+        for label, named in (
+            ("a requested Full", requested),
+            ("a bootstrap Full", dict(requested, event="pull_request")),
+            ("a cancelled group", dict(failed, conclusion="cancelled")),
+        ):
+            with self.subTest(label):
+                self.assertTrue(self.first_native({"named": named}, "3"))
+        other = "gh-readonly-queue/rust-migration/pr-171-" + BASE
+        for label, named, message in (
+            ("a green Full", dict(failed, conclusion="success"), "did not fail"),
+            (
+                "a Full still going",
+                dict(failed, status="in_progress", conclusion=None),
+                "did not fail",
+            ),
+            ("another PR's group", dict(failed, head_branch=other), "not a Full of"),
+            (
+                "another PR's request",
+                dict(requested, display_title=f"CI full PR 171 f-{HEAD}"),
+                "not a Full of",
+            ),
+            (
+                "a failed native",
+                dict(requested, display_title=f"CI native PR 170 n-{HEAD}"),
+                "not a Full of",
+            ),
+            (
+                "another workflow",
+                dict(failed, path=".github/workflows/ci-build.yml"),
+                "not a Full of",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.first_native({"named": named}, "3")
+        with self.assertRaisesRegex(ValueError, "run ID or URL"):
+            self.first_native({}, "the queue's run")
+        # A URL names this repository's run, and no attempt or job of it.
+        run = "actions/runs/3"
+        for url in (
+            f"https://github.com/another/fork/{run}",
+            f"https://github.com/example/fork/{run}/attempts/7",
+            f"https://github.com/example/fork/{run}/job/9",
+        ):
+            with self.subTest(url):
+                with self.assertRaisesRegex(ValueError, "a run of example/fork"):
+                    self.first_native({"named": failed}, url)
+
+    def request_native(
+        self, diagnose: str | None, **options: object
+    ) -> tuple[list[str], list[tuple[str, ...]], str]:
+        """Run `request --profile native` itself on an EnqueueWorld of `options`;
+        return the request records it wrote, its gh writes and what it logged,
+        whether or not it refused."""
+        world = EnqueueWorld(**cast(dict[str, Any], options))
+        args = argparse.Namespace(
+            repo="example/fork",
+            pr=170,
+            profile="native",
+            bootstrap=False,
+            unstamped=None,
+            diagnose=diagnose,
+            head=HEAD,
+            wait=False,
+            request_file=None,
+        )
+        records: list[str] = []
+        logged: list[str] = []
+
+        def request() -> str:
+            try:
+                ci.request(args)
+            except ValueError as refusal:
+                self.refusal = str(refusal)
+            records.extend(path.name for path in ci.REQUESTS.glob("*.json"))
+            if self.overrides.exists():
+                logged.append(self.overrides.read_text())
+            return ""
+
+        self.refusal = ""
+        self.within(world, request)
+        return records, self.calls, "".join(logged)
+
+    def test_request_refuses_before_any_record_or_dispatch(self) -> None:
+        """The check is the request command's own, not only a function beside it."""
+        records, calls, logged = self.request_native(None)
+        self.assertIn("one `native` run", self.refusal)
+        self.assertEqual((records, calls, logged), ([], [], ""))
+        # With no green native yet, the same request dispatches and logs nothing.
+        records, calls, logged = self.request_native(None, requested=None)
+        self.assertEqual((self.refusal, len(records), logged), ("", 1, ""))
+        self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+        self.assertIn("profile=native", calls[0])
+        # A named failed Full dispatches too, and the log names that run.
+        records, calls, logged = self.request_native("3", named=self.FAILED_FULL)
+        self.assertEqual((self.refusal, len(records)), ("", 1))
+        self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+        (entry,) = logged.splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "diagnose", "reason": self.EJECTED["html_url"]},
+        )
+
+    def test_a_platform_run_without_a_macos_runner_is_passed_over(self) -> None:
+        """No macOS job runs on a paid runner (ADR 0009): a platform run whose
+        only failures are macOS jobs GitHub never started, and the jobs that fail
+        with them, leaves the PR to queue on the run before it. Every other
+        failure still refuses."""
+        platform = dict(
+            self.REQUESTED,
+            id=8,
+            display_title=f"CI platform PR 170 p-{HEAD}",
+            conclusion="failure",
+            created_at="2026-11-12T05:00:00Z",
+            html_url="https://github.com/example/fork/actions/runs/8",
+        )
+
+        def job(
+            job_id: int, name: str, conclusion: str, ran: bool = True
+        ) -> ci_log.Job:
+            return {
+                "id": job_id,
+                "run_id": 8,
+                "name": f"platform / {name}",
+                "status": "completed",
+                "conclusion": conclusion,
+                "html_url": f"https://github.com/example/fork/actions/runs/8/job/{job_id}",
+                "runner_id": 7 if ran else 0,
+                "steps": [{"name": "Build", "number": 1, "conclusion": conclusion}]
+                if ran
+                else [],
+            }
+
+        release = "Mac OS (arm64 - Release) / CI"
+        unstarted = job(81, release, "cancelled", ran=False)
+        debug = job(84, "Mac OS (arm64 - Debug) / CI", "success")
+        # As in cadence run 45689219061: the cancellation's annotation fails both
+        # annotation checks, and completion needs macOS.
+        downstream = [
+            job(85, "Check macos annotations", "failure"),
+            job(86, "Check Annotations", "failure"),
+            job(82, "complete", "failure"),
+        ]
+        windows = job(83, "Windows (x64) / CI", "failure")
+        linux = job(87, "Check linux annotations", "failure")
+        capacity = "The job was not acquired by Runner of type hosted even after multiple attempts"
+        usual: dict[str, object] = {
+            "dispatched": [self.REQUESTED, platform],
+            "jobs": [unstarted, debug, *downstream],
+            "annotations": {81: capacity},
+        }
+        entry = {"state": "QUEUED", "position": 1}
+        for label, options in (
+            ("the run failed", {}),
+            (
+                "the run was cancelled",
+                {
+                    "dispatched": [
+                        self.REQUESTED,
+                        dict(platform, conclusion="cancelled"),
+                    ]
+                },
+            ),
+            ("no macOS job started", {"jobs": [unstarted, *downstream]}),
+        ):
+            with self.subTest(label):
+                reported, _ = self.enqueue(**{**usual, "entry": entry, **options})
+                self.assertTrue(reported.startswith("queued"))
+        started = job(81, release, "cancelled")
+        for label, options, message in (
+            (
+                "cancelled by hand",
+                {"annotations": {81: "The run was canceled by @someone."}},
+                "runs/8",
+            ),
+            (
+                "macOS started and was cancelled",
+                {"jobs": [started, debug, *downstream]},
+                "runs/8",
+            ),
+            (
+                "macOS failed",
+                {"jobs": [job(81, release, "failure"), debug, *downstream]},
+                "runs/8",
+            ),
+            (
+                "another build failed too",
+                {"jobs": [unstarted, debug, windows, *downstream]},
+                "runs/8",
+            ),
+            (
+                "another platform's annotations failed too",
+                {"jobs": [unstarted, debug, linux, *downstream]},
+                "runs/8",
+            ),
+            # The macOS job that ran has an annotation of its own, so the checks
+            # did not fail for the cancellation alone.
+            (
+                "the macOS job that ran has a warning",
+                {"annotations": {81: capacity, 84: "unused variable"}},
+                "runs/8",
+            ),
+            ("only downstream jobs failed", {"jobs": [debug, *downstream]}, "runs/8"),
+            # With no run before it, the PR still has no requested run to read.
+            ("no run before it", {"dispatched": [platform]}, "no requested run"),
+            # A jobs read GitHub fails blocks the queue and names what it lacked.
+            (
+                "GitHub did not return the jobs",
+                {"jobs": subprocess.CalledProcessError(1, "gh")},
+                "did not return: the jobs of platform run 8",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.enqueue(**{**usual, **options})
+
+    def test_a_failed_jobs_read_keeps_the_runs_it_read(self) -> None:
+        """`state` shows the PR's runs while its enqueue checks say blocked."""
+        platform: ci_log.Run = {
+            **self.REQUESTED,
+            "id": 8,
+            "display_title": f"CI platform PR 170 p-{HEAD}",
+            "conclusion": "failure",
+        }
+        world = EnqueueWorld(
+            dispatched=[self.REQUESTED, platform],
+            jobs=subprocess.CalledProcessError(1, "gh"),
+        )
+        seen: list[ci.PrRuns] = []
+
+        def read() -> str:
+            seen.append(
+                ci.read_pr_runs("example/fork", 170, "2026-11-11T00:00:00Z", HEAD)
+            )
+            return ""
+
+        self.within(world, read)
+        (runs,) = seen
+        self.assertEqual(
+            [tested.profile for tested in runs.runs], ["native", "platform"]
+        )
+        self.assertEqual(runs.unread, ["the jobs of platform run 8"])
+        self.assertEqual(len(runs.gated()), 2)
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
         entry = {"state": "AWAITING_CHECKS", "position": 2}
@@ -6324,6 +6712,12 @@ class ReportTests(unittest.TestCase):
                 argv = (*argv, "--body-file", str(path))
             with (
                 patch.object(status_comment, "gh", side_effect=github.gh),
+                # These reports sign m-1; ReviewerTests holds the model check.
+                patch.object(review_start, "review_models", return_value={"m-1"}),
+                patch.object(
+                    review_start, "review_pairs", return_value={("m-1", "high")}
+                ),
+                patch.object(review_start, "running_model", return_value=None),
                 patch("sys.argv", ["ci.py", "report", *argv, "--repo", "example/fork"]),
                 patch("sys.stdout", new_callable=io.StringIO) as out,
                 patch("sys.stderr", new_callable=io.StringIO) as err,
@@ -6476,377 +6870,496 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([w[0] for w in github.writes], ["POST"])
 
 
-def mac_job(
-    job_id: int, conclusion: str | None, runner: bool, name: str = "Release"
-) -> ci_log.Job:
-    job: ci_log.Job = {
-        "id": job_id,
-        "run_id": 2,
-        "name": f"platform / Mac OS (arm64 - {name}) / CI",
-        "status": "completed" if conclusion else "in_progress",
-        "conclusion": conclusion,
-        "html_url": f"https://github.com/example/fork/actions/runs/2/job/{job_id}",
-        "runner_id": 1000 + job_id if runner else 0,
-        "steps": [{"name": "Run", "number": 1, "conclusion": conclusion}] * 28
-        if runner
-        else [],
-    }
-    return job
+@dataclass
+class ReviewerFixture:
+    """What GitHub holds for example/fork #170 beyond its reports."""
+
+    models: dict[str, str] = field(default_factory=dict)
+    extra: list[status_comment.Comment] = field(default_factory=list)
+    submitted: list[review_report.Review] = field(default_factory=list)
+    files: tuple[str, ...] = ("rust/openttd-kernels/src/x.rs",)
 
 
-# Each job's failure annotation: the hosted pool never took 1, 2, 8 and 9; job
-# 10 was cancelled by hand. The others ran.
-UNACQUIRED = (
-    "The job was not acquired by Runner of type hosted even after multiple attempts"
-)
-ANNOTATIONS = {1: UNACQUIRED, 2: UNACQUIRED, 8: UNACQUIRED, 9: UNACQUIRED}
-ANNOTATIONS[10] = "The run was canceled by @someone."
+class ReviewerTests(unittest.TestCase):
+    """ci.py reviewer: the review row's call within the review limits, and the
+    report check that refuses a report off the review row (#1091)."""
 
+    URL = "https://github.com/example/fork/pull/170"
 
-class FallbackGitHub:
-    """Runs, their attempts' jobs and the variable, as macos-fallback reads them.
-    A rerun of the last run adds an attempt that shows only on the third read
-    after it, so the wait must outlast reads of the old attempt. Each read of
-    the new attempt shows one more of `rerun_jobs`."""
-
-    APPEARS_AFTER = 2
-
-    def __init__(
-        self,
-        attempts: dict[int, dict[int, list[ci_log.Job]]],
-        rerun_jobs: list[ci_log.Job],
-        variable: str | None,
-        create: str = "",
-    ) -> None:
-        self.attempts = attempts
-        self.rerun_jobs = rerun_jobs
-        self.variable = variable
-        self.create = create  # "", "taken" (someone creates it first) or "lost"
-        self.rerun = False
-        self.reads = 0
-        self.shown = 0
-        self.calls: list[tuple[str, ...]] = []
-        self.on_wait: Callable[[], None] = lambda: None
-
-    def read_variable(self, _repository: str, _name: str) -> str | None:
-        if self.create == "lost unread":
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502")
-        return self.variable
-
-    def preset(self, variable: str | None, create: str) -> None:
-        """The variable before the command runs, and how its create goes."""
-        self.variable = variable
-        self.create = create
-
-    def latest(self, run_id: int) -> int:
-        count = max(self.attempts[run_id])
-        if run_id != max(self.attempts) or not self.rerun:
-            return count
-        self.reads += 1
-        return count + (self.reads > self.APPEARS_AFTER)
-
-    def api(self, _repository: str, path: str) -> dict[str, object]:
-        return {"run_attempt": self.latest(int(path.rsplit("/", 1)[1]))}
-
-    def jobs(self, _repository: str, run_id: int, attempt: int) -> list[ci_log.Job]:
-        if attempt > max(self.attempts[run_id]):
-            self.on_wait()
-            self.shown = min(self.shown + 1, len(self.rerun_jobs))
-            return list(self.rerun_jobs[: self.shown])
-        return list(self.attempts[run_id][attempt])
-
-    def gh(self, *args: str) -> str:
-        self.calls.append(args)
-        if args[0] == "api" and args[-1].endswith("/annotations"):
-            job = int(args[-1].split("/")[-2])
-            note = ANNOTATIONS.get(job)
-            return json.dumps([{"message": note}] if note else [])
-        if args[:3] == ("api", "-X", "POST"):
-            return self.created(args)
-        if args[:2] == ("variable", "delete"):
-            self.variable = None
-        elif args[:2] == ("run", "rerun") and self.create == "rerun fails":
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
-        elif args[:2] == ("run", "rerun"):
-            self.rerun = True
-        return ""
-
-    def created(self, args: tuple[str, ...]) -> str:
-        if self.create == "taken":
-            self.variable = "someone else's"
-        if self.variable is not None:
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 409: Conflict")
-        self.variable = args[-1].removeprefix("value=")
-        if self.create in ("terminated", "interrupted"):
-            # The signal lands while the create's answer is still on its way.
-            held = signal.SIGTERM if self.create == "terminated" else signal.SIGINT
-            os.kill(os.getpid(), held)
-        if self.create in ("lost", "lost unread"):
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502: Bad Gateway")
-        return ""
-
-
-def terminate() -> None:
-    """SIGTERM to this process, as signal-witness.py forwards it."""
-    os.kill(os.getpid(), signal.SIGTERM)
-
-
-class MacosFallbackTests(unittest.TestCase):
-    """ci.py macos-fallback against stubbed gh, never the live repository."""
-
-    CAPACITY = [mac_job(1, "cancelled", False), mac_job(2, "cancelled", False, "Debug")]
-    AGAIN = [mac_job(8, "cancelled", False), mac_job(9, "cancelled", False, "Debug")]
-    STARTED = [mac_job(3, "cancelled", True)]
-    BY_HAND = [mac_job(10, "cancelled", False)]
-    PASSED = [mac_job(4, "success", True), mac_job(5, "success", True, "Debug")]
-    TWO = {1: {1: CAPACITY}, 2: {1: AGAIN}}
-
-    def fallback(
-        self,
-        attempts: dict[int, dict[int, list[ci_log.Job]]],
-        *extra: str,
-        rerun_jobs: list[ci_log.Job] | None = None,
-        names: list[str] | None = None,
-        setup: Callable[[FallbackGitHub], None] = lambda _: None,
-    ) -> tuple[int, list[tuple[str, ...]], str]:
-        """Run macos-fallback on the runs (or `names`) against a FallbackGitHub
-        that `setup` adjusts."""
-        github = FallbackGitHub(
-            attempts, self.PASSED if rerun_jobs is None else rerun_jobs, None
+    def report(
+        self, number: int, agent: str, model: str = "gpt-6.2-sol"
+    ) -> status_comment.Comment:
+        body = (
+            f"Reviewed commit: {HEAD}\n"
+            f"Agent: /root/{agent} | Model: {model} | Reasoning effort: high\n"
+            "Disposition: findings to remediate, whole PR"
         )
-        setup(github)
-        clock = itertools.count(0, 10)
-        runs = names or [str(run) for run in attempts]
-        argv = ["ci.py", "macos-fallback", *runs, "--repo", "x/y"]
+        return FakeComments.comment(
+            number, body, updated=f"2026-11-25T2{number % 10}:00:00Z"
+        )
+
+    def run_reviewer(
+        self,
+        agents: list[str],
+        *argv: str,
+        ledger: Path,
+        pr: ReviewerFixture | None = None,
+    ) -> tuple[int, str, str]:
+        pr = pr or ReviewerFixture()
+        models, submitted, files = pr.models, pr.submitted, pr.files
+        comments = [
+            self.report(1000 + i, a, models.get(a, "gpt-6.2-sol"))
+            for i, a in enumerate(agents)
+        ] + pr.extra
+
+        def gh(
+            *args: str, payload: str | None = None, timeout: float | None = None
+        ) -> str:
+            path = next(a for a in args if a.startswith("repos/"))
+            if path.endswith("/pulls/170"):
+                return json.dumps({"head": {"sha": HEAD}, "html_url": self.URL})
+            if path.endswith("/issues/170/comments?per_page=100"):
+                return json.dumps([comments])
+            if path.endswith("/pulls/170/reviews?per_page=100"):
+                return json.dumps([submitted])
+            if path.endswith("/pulls/170/files?per_page=100"):
+                return json.dumps([[{"filename": name} for name in files]])
+            raise AssertionError(args)
+
         with (
-            patch.object(ci, "api", side_effect=github.api),
-            patch.object(ci, "run_jobs", side_effect=github.jobs),
-            patch.object(ci, "gh", side_effect=github.gh),
-            patch.object(ci, "detached_gh", side_effect=github.gh),
-            patch.object(ci, "variable", side_effect=github.read_variable),
-            patch.object(ci, "failure_logs"),
-            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
-            patch.object(ci.time, "sleep"),
-            patch("sys.argv", [*argv, *extra]),
-            patch("builtins.print") as printed,
-            patch("sys.stderr") as stderr,
-        ):
-            code = ci.main()
-        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
-        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
-        self.left = github.variable
-        writes = [c for c in github.calls if c[0] != "api" or c[1] == "-X"]
-        return code, writes, output
-
-    def test_one_capacity_cancellation_changes_nothing(self) -> None:
-        for label, attempts, names in (
-            ("one attempt", {2: {1: self.CAPACITY}}, None),
-            ("started job", {1: {1: self.STARTED}, 2: {1: self.CAPACITY}}, None),
-            ("cancelled by hand", {1: {1: self.BY_HAND}, 2: {1: self.CAPACITY}}, None),
-            (
-                "one run named twice",
-                {2: {1: self.CAPACITY}},
-                ["2", "https://github.com/x/y/actions/runs/2"],
+            patch.object(status_comment, "gh", side_effect=gh),
+            patch.object(review_start, "LEDGER", ledger),
+            patch.dict(os.environ, {"CLAUDECODE": "1"}),
+            patch(
+                "sys.argv",
+                ["ci.py", "reviewer", "170", *argv, "--repo", "example/fork"],
             ),
+            patch("sys.stdout", new_callable=io.StringIO) as out,
+            patch("sys.stderr", new_callable=io.StringIO) as err,
         ):
-            with self.subTest(label):
-                code, writes, output = self.fallback(attempts, names=names)
-                self.assertEqual((code, writes), (1, []))
-                self.assertIn("Counted 1 hosted-capacity cancellation", output)
+            try:
+                code = ci.main()
+            except SystemExit as stop:
+                code = int(stop.code or 0)
+        return code, out.getvalue(), err.getvalue()
 
-    def test_two_cancellations_set_rerun_wait_and_delete_in_order(self) -> None:
-        code, writes, output = self.fallback(
-            self.TWO, "--pr", "995", "--agent", "/root", "--model", "m", "--effort", "e"
-        )
-        self.assertEqual(code, 0)
+    def test_the_review_row_comes_from_the_role_table(self) -> None:
+        row = review_start.review_row()
+        self.assertEqual(set(row.values()), {("gpt-6.2-sol", "high")})
         self.assertEqual(
-            [call[:3] for call in writes],
-            [
-                ("api", "-X", "POST"),
-                ("run", "rerun", "2"),
-                ("variable", "delete", ci.MACOS_VARIABLE),
-                ("pr", "comment", "995"),
-            ],
+            review_start.target("gpt-6.2-sol", "high"),
+            {
+                "providerInstanceId": "codex",
+                "model": "gpt-6.2-sol",
+                "options": {"reasoningEffort": "high"},
+            },
         )
-        self.assertIn(f"value={ci.MACOS_RUNNER}", writes[0])
-        record = writes[3][writes[3].index("--body") + 1]
-        self.assertIn("set CI_MACOS_HEAVY=blacksmith-6vcpu-macos-26", record)
-        self.assertIn("deleted CI_MACOS_HEAVY", record)
-        self.assertIn("Agent: /root | Model: m | Reasoning effort: e", record)
-        self.assertIsNone(self.left)
-        # Two attempts of one run count as two cancellations too.
-        code, _, _ = self.fallback({2: {1: self.CAPACITY, 2: self.AGAIN}})
-        self.assertEqual(code, 0)
 
-    def test_the_wait_lasts_until_every_rerun_macos_job_completes(self) -> None:
-        # The new attempt lists Release done, and Debug only on the next read.
-        github_jobs = [mac_job(4, "success", True), mac_job(5, None, True, "Debug")]
-        code, writes, _ = self.fallback(
-            self.TWO, "--timeout", "100", rerun_jobs=github_jobs
-        )
-        self.assertEqual(code, 2)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-
-    def test_an_existing_or_racing_variable_is_left_alone(self) -> None:
-        for label, variable, create in (
-            ("already set", "someone's", ""),
-            ("created first by another", None, "taken"),
+    def test_stages_are_read_from_names_old_and_new(self) -> None:
+        for name, stage in (
+            ("review-170-behaviour", "behaviour"),
+            ("review-170-porting-2", "porting"),
+            ("review-170-pr-behaviour", "behaviour"),
+            ("review-170-recheck", "recheck"),
+            ("review-170-recheck-2", "recheck"),
+            ("review-170-records-recheck", "recheck"),
+            ("review-170-base-behaviour", "base"),
+            ("review-170-base85-behaviour", "base"),
+            ("review-170-records-porting-3", "scoped"),
+            ("review-170-porting-control", "scoped"),
         ):
-            with self.subTest(label):
-                code, writes, output = self.fallback(
-                    self.TWO,
-                    setup=lambda fake, v=variable, c=create: fake.preset(v, c),
-                )
-                self.assertEqual(code, 1)
-                self.assertEqual([c[:3] for c in writes], [("api", "-X", "POST")])
-                self.assertIn("already exists", output)
-                self.assertNotEqual(self.left, None)
-        # A create whose answer was lost: reported, not deleted, not rerun.
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "lost")
-        )
-        self.assertEqual(code, 1)
-        self.assertEqual([c[:2] for c in writes], [("api", "-X")])
-        self.assertIn("owner unknown", output)
-        self.assertEqual(self.left, ci.MACOS_RUNNER)
-        # The read-back fails too: both are reported and the change recorded.
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "lost unread")
-        )
-        self.assertEqual(code, 1)
-        self.assertIn("reading it back failed too", output)
-        self.assertIn("**macOS fallback**", output)
+            self.assertEqual(review_start.stage(170, "/root/" + name), stage, name)
 
-    def test_sigterm_during_the_create_still_deletes_what_it_created(self) -> None:
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "terminated")
-        )
-        self.assertEqual(code, 128 + signal.SIGTERM)
-        self.assertEqual(
-            [c[:2] for c in writes], [("api", "-X"), ("variable", "delete")]
-        )
-        self.assertIn("stopped: SIGTERM", output)
-        self.assertIsNone(self.left)
-
-    def test_ctrl_c_during_the_create_still_deletes_what_it_created(self) -> None:
-        seen: list[FallbackGitHub] = []
-
-        def setup(fake: FallbackGitHub) -> None:
-            fake.preset(None, "interrupted")
-            seen.append(fake)
-
-        with self.assertRaises(KeyboardInterrupt):
-            self.fallback(self.TWO, setup=setup)
-        (fake,) = seen
-        writes = [c[:2] for c in fake.calls if c[0] != "api" or c[1] == "-X"]
-        self.assertEqual(writes, [("api", "-X"), ("variable", "delete")])
-        self.assertIsNone(fake.variable)
-
-    def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
-        self,
-    ) -> None:
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "rerun fails")
-        )
-        self.assertEqual(code, 1)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-        self.assertIn("stopped:", output)
-        self.assertIn("deleted CI_MACOS_HEAVY", output)
-        self.assertIsNone(self.left)
-        code, writes, output = self.fallback(
-            self.TWO, "--timeout", "60", rerun_jobs=[mac_job(6, None, True)]
-        )
-        self.assertEqual(code, 2)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-        self.assertIn("deleted CI_MACOS_HEAVY", output)
-        # signal-witness.py forwards SIGTERM to a background job.
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: setattr(fake, "on_wait", terminate)
-        )
-        self.assertEqual(code, 128 + signal.SIGTERM)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-        self.assertIn("stopped: SIGTERM", output)
-        self.assertIsNone(self.left)
-        # A macOS job that fails on the paid runner fails the command, deleted.
-        failing = [mac_job(7, "failure", True), mac_job(5, "success", True, "Debug")]
-        code, _, output = self.fallback(self.TWO, rerun_jobs=failing)
-        self.assertEqual(code, 1)
-        self.assertIsNone(self.left)
-
-    def test_a_run_with_no_failed_macos_job_is_refused(self) -> None:
-        passed = {1: {1: self.CAPACITY}, 2: {1: self.AGAIN, 2: self.PASSED}}
-        code, writes, output = self.fallback(passed)
-        self.assertEqual((code, writes), (1, []))
-        self.assertIn("no failed macOS job", output)
-
-
-# A gh for macos-fallback's whole command, state kept in files beside it: two
-# runs whose macOS jobs no hosted runner took, and a create that holds its
-# answer back long enough for a signal to reach the command's process group.
-FAKE_GH = """
-import json, pathlib, signal, sys, time
-# The real gh, a Go program, unblocks these signals whatever mask it inherits.
-signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
-state = pathlib.Path(sys.argv[0]).parent
-args = sys.argv[1:]
-job = {"id": 1, "run_id": 2, "name": "platform / Mac OS (arm64 - Release) / CI",
-       "status": "completed", "conclusion": "cancelled", "html_url": "u",
-       "runner_id": 0, "steps": []}
-note = "The job was not acquired by Runner of type hosted even after multiple attempts"
-if args[:3] == ["api", "-X", "POST"]:
-    (state / "variable").write_text("blacksmith")
-    (state / "posting").touch()
-    time.sleep(3)
-elif args[:2] == ["variable", "list"]:
-    held = state / "variable"
-    print(json.dumps([{"name": "CI_MACOS_HEAVY", "value": held.read_text()}]
-                     if held.exists() else []))
-elif args[:2] == ["variable", "delete"]:
-    (state / "variable").unlink(missing_ok=True)
-elif args[:2] == ["run", "rerun"]:
-    (state / "rerun").touch()
-elif args[-1].endswith("/annotations"):
-    print(json.dumps([{"message": note}]))
-elif "/jobs" in args[-1]:
-    print(json.dumps([{"jobs": [job]}]))
-elif args[0] == "api":
-    print(json.dumps({"run_attempt": 1}))
-"""
-
-
-class MacosFallbackGroupSignalTests(unittest.TestCase):
-    def test_a_group_sigterm_during_the_create_still_deletes_the_variable(
-        self,
-    ) -> None:
-        """signal-witness.py and Ctrl-C signal the whole process group; the
-        create's gh runs in its own session, so its outcome is known and the
-        variable it set is deleted (#1013)."""
+    def test_the_first_call_is_on_the_review_row_with_the_fixed_message(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            folder = Path(directory)
-            (folder / "gh").write_text(f"#!{sys.executable}\n{FAKE_GH}")
-            (folder / "gh").chmod(0o755)
-            environment = {
-                **os.environ,
-                "PATH": f"{folder}{os.pathsep}{os.environ['PATH']}",
-            }
-            command = [sys.executable, str(ROOT / "tools/ci.py"), "macos-fallback"]
-            process = subprocess.Popen(
-                [*command, "1", "2", "--repo", "x/y", "--interval", "1"],
-                env=environment,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                start_new_session=True,
+            code, out, err = self.run_reviewer([], "behaviour", ledger=Path(directory))
+            self.assertEqual(code, 0, err)
+            call = json.loads(out)
+            self.assertEqual(call["target"]["model"], "gpt-6.2-sol")
+            self.assertEqual(call["target"]["providerInstanceId"], "codex")
+            self.assertEqual(call["isolation"], "worktree")
+            self.assertEqual(
+                call["task"],
+                f"Review PR {self.URL} under `docs/review-brief.md` for behaviour. You are "
+                "/root/review-170-behaviour, on gpt-6.2-sol at high effort. Review the whole PR.",
             )
-            deadline = time.monotonic() + 30
-            while not (folder / "posting").exists() and time.monotonic() < deadline:
-                time.sleep(0.05)
-            self.assertTrue((folder / "posting").exists(), "the create never started")
-            os.killpg(process.pid, signal.SIGTERM)
-            output, _ = process.communicate(timeout=60)
-            self.assertEqual(process.returncode, 128 + signal.SIGTERM, output)
-            self.assertFalse((folder / "variable").exists(), output)
-            self.assertIn("deleted CI_MACOS_HEAVY", output)
+            # The start is counted before its report lands: a second is refused.
+            code, _, err = self.run_reviewer([], "behaviour", ledger=Path(directory))
+            self.assertEqual(code, 1)
+            self.assertIn("a second whole-PR behaviour review", err)
+
+    def test_a_re_check_names_every_first_stage_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agents = ["review-170-behaviour", "review-170-porting"]
+            code, out, err = self.run_reviewer(
+                agents, "recheck", "--commits", "aaa", "bbb", ledger=Path(directory)
+            )
+            self.assertEqual(code, 0, err)
+            task = json.loads(out)["task"]
+            self.assertIn(
+                "You are /root/review-170-recheck, on gpt-6.2-sol at high effort.", task
+            )
+            self.assertIn("commits aaa bbb against the findings in", task)
+            self.assertIn("#issuecomment-1000 ", task)
+            self.assertIn("#issuecomment-1001.", task)
+            code, _, err = self.run_reviewer(
+                agents + ["review-170-recheck"],
+                "recheck",
+                "--commits",
+                "c",
+                ledger=Path(directory),
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("a second re-check", err)
+
+    def test_a_third_scoped_review_goes_to_root_first(self) -> None:
+        agents = [
+            "review-170-behaviour",
+            "review-170-porting",
+            "review-170-recheck",
+            "review-170-records-porting",
+            "review-170-base-behaviour",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            code, out, err = self.run_reviewer(
+                agents, "records", "--commits", "c1", ledger=ledger
+            )
+            self.assertEqual(code, 0, err)
+            self.assertIn(
+                "/root/review-170-records-porting-2,", json.loads(out)["task"]
+            )
+            # A base update's review does not count; the start above does.
+            code, out, err = self.run_reviewer(
+                agents, "records", "--commits", "c2", ledger=ledger
+            )
+            self.assertEqual(code, 1)
+            self.assertEqual(out, "")
+            self.assertIn("Send root this line", err)
+            self.assertIn(
+                f"PR #170, head {HEAD[:10]}: a records review of c2 would be a "
+                "scoped review after 2 others",
+                err,
+            )
+            self.assertIn(
+                "(behaviour, porting, recheck, records-porting, base-behaviour, records-porting-2)",
+                err,
+            )
+            self.assertEqual(len(json.loads((ledger / "170.json").read_text())), 1)
+            self.assertEqual(
+                self.run_reviewer(agents, "base", "--commits", "c2", ledger=ledger)[0],
+                0,
+            )
+            code, out, _ = self.run_reviewer(
+                agents,
+                "records",
+                "--commits",
+                "c2",
+                "--root",
+                "approve",
+                "--root-answer",
+                "one more, then residue",
+                ledger=ledger,
+            )
+            self.assertEqual(code, 0)
+            self.assertIn(
+                "/root/review-170-records-porting-3,", json.loads(out)["task"]
+            )
+            entries = json.loads((ledger / "170.json").read_text())
+            self.assertEqual(entries[-1]["root"], "one more, then residue")
+
+    def test_an_adr_limit_is_not_lifted_by_root(self) -> None:
+        agents = ["review-170-behaviour", "review-170-recheck"]
+        with tempfile.TemporaryDirectory() as directory:
+            code, out, err = self.run_reviewer(
+                agents,
+                "recheck",
+                "--commits",
+                "c",
+                "--root",
+                "approve",
+                "--root-answer",
+                "residue",
+                ledger=Path(directory),
+            )
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("a second re-check", err)
+        self.assertNotIn("Send root", err)
+
+    def test_a_re_check_waits_for_every_first_stage_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            self.assertEqual(self.run_reviewer([], "porting", ledger=ledger)[0], 0)
+            code, _, err = self.run_reviewer(
+                ["review-170-behaviour"], "recheck", "--commits", "c", ledger=ledger
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("it needs a porting report", err)
+            agents = ["review-170-behaviour", "review-170-porting"]
+            code, _, err = self.run_reviewer(
+                agents, "recheck", "--commits", "c", ledger=ledger
+            )
+            self.assertEqual(code, 0, err)
+
+    def test_a_start_can_be_printed_again_or_released(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            _, first, _ = self.run_reviewer([], "behaviour", ledger=ledger)
+            code, again, _ = self.run_reviewer(
+                [], "behaviour", "--again", ledger=ledger
+            )
+            self.assertEqual((code, again), (0, first))
+            self.assertEqual(len(json.loads((ledger / "170.json").read_text())), 1)
+            code, out, _ = self.run_reviewer(
+                [], "--release", "review-170-behaviour", ledger=ledger
+            )
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads((ledger / "170.json").read_text()), [])
+            self.assertEqual(self.run_reviewer([], "behaviour", ledger=ledger)[0], 0)
+            # A start whose reviewer reported is a review, not a start to free.
+            code, _, err = self.run_reviewer(
+                ["review-170-behaviour"],
+                "--release",
+                "review-170-behaviour",
+                ledger=ledger,
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("has reported", err)
+
+    def test_a_ledger_it_cannot_read_is_named_not_taken_as_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "170.json").write_text("{not json")
+            code, _, err = self.run_reviewer([], "behaviour", ledger=Path(directory))
+        self.assertEqual(code, 1)
+        self.assertIn("is not a ledger of starts", err)
+
+    def test_reports_with_no_disposition_or_off_the_row_spend_nothing(self) -> None:
+        open_ended = FakeComments.comment(
+            1100,
+            f"Reviewed commit: {HEAD}\n"
+            "Agent: /root/review-170-behaviour | Model: gpt-6.2-sol | Reasoning effort: high\n"
+            "Still reading.",
+        )
+        submitted: list[review_report.Review] = [
+            {
+                "html_url": "https://github.com/example/fork/pull/170#pullrequestreview-9",
+                "state": "COMMENTED",
+                "commit_id": HEAD,
+                "submitted_at": "2026-11-25T20:00:00Z",
+                "body": "Agent: /root/review-170-porting | Model: claude-opus-5-5 | "
+                "Reasoning effort: medium\nDisposition: accepted, whole PR",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            for kind in ("behaviour", "porting"):
+                code, _, err = self.run_reviewer(
+                    [],
+                    kind,
+                    ledger=ledger,
+                    pr=ReviewerFixture(extra=[open_ended], submitted=submitted),
+                )
+                self.assertEqual(code, 0, err)
+
+    def test_a_re_check_needs_the_first_stage_the_pr_shape_needs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            only = ["review-170-behaviour"]
+            code, _, err = self.run_reviewer(
+                only, "recheck", "--commits", "c", ledger=ledger
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("it needs a porting report", err)
+            # A porting report off the review row is no porting report.
+            both = ["review-170-behaviour", "review-170-porting"]
+            off = {"review-170-porting": "claude-opus-5-5"}
+            code, _, _ = self.run_reviewer(
+                both,
+                "recheck",
+                "--commits",
+                "c",
+                ledger=ledger,
+                pr=ReviewerFixture(models=off),
+            )
+            self.assertEqual(code, 1)
+            # A PR with no game code has the behaviour review alone.
+            code, _, err = self.run_reviewer(
+                only,
+                "recheck",
+                "--commits",
+                "c",
+                ledger=ledger,
+                pr=ReviewerFixture(files=("tools/x.py",)),
+            )
+            self.assertEqual(code, 0, err)
+
+    def test_root_must_approve_in_so_many_words(self) -> None:
+        agents = ["review-170-records-porting", "review-170-records-porting-2"]
+        with tempfile.TemporaryDirectory() as directory:
+            code, _, _ = self.run_reviewer(
+                agents,
+                "records",
+                "--commits",
+                "c",
+                "--root",
+                "record it as residue and queue",
+                ledger=Path(directory),
+            )
+            self.assertEqual(code, 2)
+            code, _, err = self.run_reviewer(
+                agents,
+                "records",
+                "--commits",
+                "c",
+                "--root",
+                "approve",
+                ledger=Path(directory),
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("--root-answer", err)
+
+    def test_an_ambiguous_retry_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            for commit in ("a", "b"):
+                self.run_reviewer([], "records", "--commits", commit, ledger=ledger)
+            code, _, err = self.run_reviewer([], "records", "--again", ledger=ledger)
+            self.assertEqual(code, 1)
+            self.assertIn("name the one whose dispatch failed", err)
+            code, out, _ = self.run_reviewer(
+                [], "records", "--again", "review-170-records-porting", ledger=ledger
+            )
+            self.assertEqual(code, 0)
+            self.assertIn("commits a.", json.loads(out)["task"])
+
+    def test_a_ledger_entry_without_a_usable_call_is_refused(self) -> None:
+        entry = {
+            "name": "review-170-behaviour",
+            "kind": "behaviour",
+            "at": "x",
+            "call": None,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "170.json").write_text(json.dumps([entry]))
+            code, _, err = self.run_reviewer(
+                [], "behaviour", "--again", ledger=Path(directory)
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("is not a ledger of starts", err)
+
+    def test_a_comment_with_two_attributions_is_no_review(self) -> None:
+        two = FakeComments.comment(
+            1200,
+            f"Reviewed commit: {HEAD}\n"
+            "Agent: /root/review-170-behaviour | Model: gpt-6.2-sol | Reasoning effort: high\n"
+            "Agent: /root/review-170-porting | Model: gpt-6.2-sol | Reasoning effort: high\n"
+            "Disposition: accepted, whole PR",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            code, _, err = self.run_reviewer(
+                [], "behaviour", ledger=Path(directory), pr=ReviewerFixture(extra=[two])
+            )
+        self.assertEqual(code, 0, err)
+
+    def test_a_void_review_counts_for_nothing(self) -> None:
+        agents = ["review-170-behaviour", "review-170-porting"]
+        models = {a: "claude-opus-5-5" for a in agents}
+        with tempfile.TemporaryDirectory() as directory:
+            code, out, err = self.run_reviewer(
+                agents,
+                "behaviour",
+                ledger=Path(directory),
+                pr=ReviewerFixture(models=models),
+            )
+            self.assertEqual(code, 0, err)
+            self.assertIn("/root/review-170-behaviour-2,", json.loads(out)["task"])
+            code, out, err = self.run_reviewer(
+                agents,
+                "--check",
+                ledger=Path(directory),
+                pr=ReviewerFixture(models=models),
+            )
+            self.assertIn("VOID, off the review row", out)
+            self.assertIn("Past the limits: 0\n", out)
+        chain = ["review-170-behaviour", "review-170-porting", "review-170-recheck"] + [
+            f"review-170-records-porting-{n}" for n in (1, 2, 3, 4)
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            _, out, _ = self.run_reviewer(chain, "--check", ledger=Path(directory))
+            self.assertIn(
+                "Past the limits: 2 (review-170-records-porting-3, "
+                "review-170-records-porting-4)",
+                out,
+            )
+            self.assertFalse((Path(directory) / "171.json").exists())
+
+    def test_a_report_off_the_review_row_is_refused(self) -> None:
+        signed = (
+            f"Reviewed commit: {HEAD}\n"
+            "Agent: /root/rev | Model: claude-opus-5-5 | Reasoning effort: medium\n"
+            "Disposition: accepted, whole PR"
+        )
+        right = signed.replace("claude-opus-5-5", "gpt-6.2-sol").replace(
+            "medium", "high"
+        )
+        low = right.replace("effort: high", "effort: low")
+        self.assertIn(
+            "gpt-6.2-sol at Reasoning effort: low",
+            review_start.report_refusal(low, environ={}) or "",
+        )
+        self.assertIn(
+            "signed Model: claude-opus-5-5",
+            review_start.report_refusal(signed, environ={}) or "",
+        )
+        self.assertIsNone(review_start.report_refusal(right, environ={}))
+        with tempfile.TemporaryDirectory() as directory:
+            proc = Path(directory)
+            (proc / "42").mkdir()
+            (proc / "42" / "cmdline").write_bytes(
+                b"claude\0--effort=medium\0--model=claude-opus-5-5\0"
+            )
+            claude = {"CLAUDECODE": "1", "CLAUDE_PID": "42"}
+            self.assertEqual(
+                review_start.running_model(claude, proc), "claude-opus-5-5"
+            )
+            # Signing the review row's model does not hide the process's own.
+            why = review_start.report_refusal(right, environ=claude, proc=proc)
+            self.assertIn("you run on claude-opus-5-5", why or "")
+            self.assertEqual(
+                review_start.running_model(
+                    {"CLAUDECODE": "1", "CLAUDE_PID": "7"}, proc
+                ),
+                "a Claude Code model",
+            )
+        github = FakeComments([])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "report.md"
+            path.write_text(signed)
+            with (
+                patch.object(status_comment, "gh", side_effect=github.gh),
+                patch.object(review_start, "running_model", return_value=None),
+                patch(
+                    "sys.argv",
+                    [
+                        "ci.py",
+                        "report",
+                        "170",
+                        "--agent",
+                        "/root/rev",
+                        "--body-file",
+                        str(path),
+                        "--repo",
+                        "example/fork",
+                    ],
+                ),
+                patch("sys.stdout", new_callable=io.StringIO),
+                patch("sys.stderr", new_callable=io.StringIO) as err,
+            ):
+                self.assertEqual(ci.main(), 1)
+        self.assertIn(
+            "not posted: the report is signed Model: claude-opus-5-5", err.getvalue()
+        )
+        self.assertEqual(github.writes, [])
 
 
 class FailureCountTests(unittest.TestCase):
