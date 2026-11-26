@@ -44,6 +44,16 @@
 - Internal signatures use the original's wrapper types. FFI exports, `repr(C)` records, service tables and generated declarations pass C++ class types such as `PoolID` and `StrongType` as their base integers, because MSVC returns class types through a hidden pointer.
 - A Rust-defined `extern "C"` function or callback returns a 0-or-1 `u8`, not `bool`, and C++ compares it `!= 0`.
 
+### Where `unsafe` sits
+
+While C++ stores a record, Rust reaches it through a raw pointer or a pool ID, and what makes the access valid is the original's own precondition: the pointer or ID names a live record, the game-state mutex is held, the map is allocated. Rust cannot check it without a check [fidelity](#fidelity) forbids, and the original's callers meet it as they always have.
+
+- The module or type states those preconditions once ([comments](#comments)), and each `unsafe` block's `SAFETY` line cites that contract.
+- A function whose only precondition is one the original has is a safe `fn`, whatever safe Rust could pass it, in game code and test code alike. That safe code could breach it is not a finding, and moving `unsafe` out to its callers is not a remedy.
+- `unsafe fn` and its `# Safety` section are for an obligation Rust adds beyond the original: a reference or borrow that must end before a callback or must not alias a raw pointer, a slice or table whose lifetime the caller keeps, a null the original checks for, a layout or transmute. A safe function that leaves such an obligation to its callers, a call site that breaks one, and a contract or `SAFETY` line that misstates what the code relies on are findings.
+- A call that passes a pointer or ID where the original's call could not pass a dead one is a [fidelity](#fidelity) finding.
+- An existing `unsafe fn` whose only precondition is the original's may stay; a pass converts neither form.
+
 ### Design faults
 
 Fix these before integration; root grants no exceptions. A file pass fixes every one in the files it finishes and cannot leave one as residue. The rule's one exception is a carrier whose replacement several files need and another work order builds: a shared service with its own work order ([integration](root-workflow.md#integration)), or shared accessors that belong in a file whose own pass has an issue that lists the carrier. Until that work order merges, a pass keeps the carrier and names the work order in its PR body.
