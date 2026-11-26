@@ -360,11 +360,12 @@ pub unsafe extern "C" fn openttd_rust_consist_reset(p: *mut Consist) {
     ConsistRef(p).reset_depot_unbunching();
 }
 /// The consist part of `BaseConsist::CopyConsistPropertiesFrom` for the C++ callers, which
-/// copy `name` before it and `service_interval` after it.
+/// copy `name` before it and `service_interval` after it. No member this copies reads or
+/// shares storage with `service_interval`, so the later write stores the same values.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_consist_copy(p: *mut Consist, src: *const Consist) {
-    ConsistRef(p).copy_consist_properties_from(ConsistRef(src.cast_mut()));
+    ConsistRef(p).copy_consist_properties_from(ConsistRef(src.cast_mut()), || {});
 }
 /// The vehicle's order members, with the current order uninitialised until C++ constructs it.
 #[allow(unsafe_code)]
@@ -742,10 +743,14 @@ impl ConsistRef {
     }
 
     /// `BaseConsist::CopyConsistPropertiesFrom`, for the members this owner holds: copy
-    /// properties of other `BaseConsist`. The callers copy `name` before these members and
-    /// `service_interval` after them; the original copies `service_interval` between the
-    /// timetable members and the order indices, and no member here reads it.
-    pub(crate) fn copy_consist_properties_from(self, src: Self) {
+    /// properties of other `BaseConsist`. The callers copy `name` before these members;
+    /// `copy_service_interval` copies `service_interval`, which the caller's record holds,
+    /// at the original's point between the timetable members and the order indices.
+    pub(crate) fn copy_consist_properties_from(
+        self,
+        src: Self,
+        copy_service_interval: impl FnOnce(),
+    ) {
         if ptr::eq(self.0, src.0) {
             return;
         }
@@ -753,6 +758,8 @@ impl ConsistRef {
         self.set_current_order_time(src.current_order_time());
         self.set_lateness_counter(src.lateness_counter());
         self.set_timetable_start(src.timetable_start());
+
+        copy_service_interval();
 
         self.set_cur_real_order_index(src.cur_real_order_index());
         self.set_cur_implicit_order_index(src.cur_implicit_order_index());
@@ -6070,9 +6077,10 @@ fn order_backup_construct(ob: OrderBackupRef, v: VehicleRef, user: u32, s: &Leav
 fn copy_consist_properties_to_backup(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
     // SAFETY: The live backup and vehicle shells.
     unsafe { (s.backup_set_name)(ob.shell, v.shell()) };
-    ob.consist.copy_consist_properties_from(consist(v));
-    // SAFETY: As above.
-    unsafe { (s.backup_set_service_interval)(ob.shell, v.get_service_interval(s.newgrf())) };
+    ob.consist.copy_consist_properties_from(consist(v), || {
+        // SAFETY: As above.
+        unsafe { (s.backup_set_service_interval)(ob.shell, v.get_service_interval(s.newgrf())) };
+    });
 }
 
 /// `v->CopyConsistPropertiesFrom(ob)`: copy properties of other `BaseConsist`.
@@ -6080,11 +6088,12 @@ fn copy_consist_properties_to_backup(ob: OrderBackupRef, v: VehicleRef, s: &Leav
 fn copy_consist_properties_from_backup(v: VehicleRef, ob: OrderBackupRef, s: &Leaves) {
     // SAFETY: The live vehicle and backup shells.
     unsafe { (s.vehicle_set_name)(v.shell(), ob.shell) };
-    consist(v).copy_consist_properties_from(ob.consist);
-    // SAFETY: As above.
-    unsafe {
-        (s.vehicle_set_service_interval)(v.shell(), (s.backup_service_interval)(ob.shell));
-    }
+    consist(v).copy_consist_properties_from(ob.consist, || {
+        // SAFETY: As above.
+        unsafe {
+            (s.vehicle_set_service_interval)(v.shell(), (s.backup_service_interval)(ob.shell));
+        }
+    });
 }
 
 /// `OrderBackup::DoRestore`: restore the data of this order to the given vehicle.
