@@ -2782,6 +2782,10 @@ class RequestTests(unittest.TestCase):
         stamp = patch.object(ci, "require_stamp")
         self.stamp = stamp.start()
         self.addCleanup(stamp.stop)
+        # The one-native-run rule has its own tests, on enqueue's recorded answers.
+        first = patch.object(ci, "require_first_native")
+        first.start()
+        self.addCleanup(first.stop)
 
     def test_request_and_ready_need_a_stamp_before_any_change(self) -> None:
         self.stamp.side_effect = ValueError("no preflight stamp")
@@ -2791,6 +2795,7 @@ class RequestTests(unittest.TestCase):
             profile="native",
             bootstrap=False,
             unstamped=None,
+            again=None,
             head=None,
             wait=False,
         )
@@ -2881,6 +2886,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=False,
                     unstamped=None,
+                    again=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -2943,6 +2949,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    again=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3003,6 +3010,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    again=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3035,6 +3043,7 @@ class RequestTests(unittest.TestCase):
                 profile="full",
                 bootstrap=False,
                 unstamped=None,
+                again=None,
                 head=None,
                 wait=False,
                 request_file=Path(directory) / "request.json",
@@ -3253,6 +3262,10 @@ class RequestPathTests(unittest.TestCase):
         stamp = patch.object(ci, "require_stamp")
         self.stamp = stamp.start()
         self.addCleanup(stamp.stop)
+        # The one-native-run rule has its own tests, on enqueue's recorded answers.
+        first = patch.object(ci, "require_first_native")
+        first.start()
+        self.addCleanup(first.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.directory = Path(directory.name)
@@ -3273,6 +3286,7 @@ class RequestPathTests(unittest.TestCase):
                 "profile": "native",
                 "bootstrap": False,
                 "unstamped": None,
+                "again": None,
                 "head": None,
                 "wait": False,
                 "request_file": None,
@@ -4343,6 +4357,11 @@ class EnqueueTests(unittest.TestCase):
     def enqueue(self, **options: object) -> tuple[str, list[tuple[str, ...]]]:
         """Run enqueue against an EnqueueWorld of `options`."""
         world = EnqueueWorld(**cast(dict[str, Any], options))
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
+        return self.within(world, lambda: ci.enqueue(args)), self.calls
+
+    def within(self, world: EnqueueWorld, command: Callable[[], Any]) -> Any:
+        """Run `command` against `world`'s recorded answers."""
         requested = world.requested
         dispatched = world.dispatched
         if dispatched is None:
@@ -4399,7 +4418,6 @@ class EnqueueTests(unittest.TestCase):
             }
             return json.dumps({"data": {"repository": {"pullRequest": state}}})
 
-        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "api", side_effect=api),
@@ -4421,7 +4439,8 @@ class EnqueueTests(unittest.TestCase):
                 record = {"pr": 170, "head": HEAD, "run_id": 9}
                 (Path(directory) / "old.json").write_text(json.dumps(record))
             self.stamp = stamp
-            return ci.enqueue(args), calls
+            self.overrides = Path(directory) / "overrides.log"
+            return command()
 
     def test_red_quick_or_requested_run_refuses_before_queueing(self) -> None:
         red = dict(self.QUICK, conclusion="failure")
@@ -4471,6 +4490,80 @@ class EnqueueTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     self.enqueue(**options)
                 self.assertEqual(self.calls, [])
+
+    def first_native(self, again: str | None = None, **options: object) -> str:
+        """Run request's one-native-run check on an EnqueueWorld of `options`;
+        return what it logged."""
+        world = EnqueueWorld(**cast(dict[str, Any], options))
+
+        def check() -> str:
+            pull = dict(PULL, created_at="2026-11-11T00:00:00Z")
+            ci.require_first_native("example/fork", 170, pull, HEAD, again)
+            return self.overrides.read_text() if self.overrides.exists() else ""
+
+        return self.within(world, check)
+
+    def test_a_second_native_run_is_refused_while_the_newest_is_green(self) -> None:
+        """The rule of workflow.md's checks, which only the doc held (#896)."""
+        green = self.REQUESTED
+        earlier = dict(green, id=1, display_title=f"CI native PR 170 x-{BASE}")
+        later = dict(green, id=7, created_at="2026-11-12T05:00:00Z")
+        rust = dict(later, display_title=f"CI rust PR 170 r-{HEAD}")
+        commits = [BASE, HEAD]
+        full = dict(green, display_title=f"CI full PR 170 f-{HEAD}")
+        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
+        for label, options in (
+            ("green at the head", {}),
+            ("green on an earlier commit", {"requested": earlier, "commits": commits}),
+            ("a green Full", {"requested": full}),
+            ("a later green rust run", {"dispatched": [green, rust]}),
+            # A removal before the green run is what that run diagnosed.
+            (
+                "removed before the green run",
+                {"queue": [dict(self.EJECTED, created_at="2026-11-12T01:00:00Z")]},
+            ),
+            ("a merged group", {"queue": [dict(self.EJECTED, conclusion="success")]}),
+            # A workflow change's passing run is already at its head.
+            ("workflow files, green at the head", {"files": workflow}),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(
+                    ValueError, r"one `native` run.*runs/2.*ci\.py enqueue 170"
+                ):
+                    self.first_native(**options)
+
+    def test_native_runs_again_for_a_red_run_a_removal_or_a_reason(self) -> None:
+        green = self.REQUESTED
+        red = dict(
+            green, id=7, conclusion="failure", created_at="2026-11-12T05:00:00Z"
+        )
+        running = dict(red, status="in_progress", conclusion=None)
+        rust = dict(green, display_title=f"CI rust PR 170 r-{HEAD}")
+        earlier = dict(green, display_title=f"CI native PR 170 x-{BASE}")
+        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
+        for label, options in (
+            ("no run yet", {"requested": None}),
+            ("only a green rust run", {"requested": rust}),
+            ("a red run since", {"dispatched": [green, red]}),
+            ("a run still going", {"dispatched": [green, running]}),
+            ("removed by the queue since", {"queue": [self.EJECTED]}),
+            # enqueue needs a workflow change's passing run at its head.
+            (
+                "workflow files, green on an earlier commit",
+                {
+                    "requested": earlier,
+                    "commits": [BASE, HEAD],
+                    "files": workflow,
+                },
+            ),
+        ):
+            with self.subTest(label):
+                self.assertEqual(self.first_native(**options), "")
+        (entry,) = self.first_native(again="flaky shard").splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "again", "reason": "flaky shard"},
+        )
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
         entry = {"state": "AWAITING_CHECKS", "position": 2}
