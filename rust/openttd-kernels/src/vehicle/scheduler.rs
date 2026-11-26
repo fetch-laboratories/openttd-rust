@@ -1200,12 +1200,13 @@ mod tests {
         /// sprite. Its `animation_state` 0 survives `BreakdownSmokeTick`.
         fn new_vehicle(index: usize) -> *mut Shell {
             let shell = new_vehicle_of(index, VehicleType::VEH_EFFECT);
+            let fresh = record(index);
             // SAFETY: The fresh record.
             unsafe {
-                (*record(index)).effect = crate::effect::openttd_rust_effect_new();
-                (*record(index)).subtype =
+                (*fresh).effect = crate::effect::openttd_rust_effect_new();
+                (*fresh).subtype =
                     crate::effectvehicle_func::EffectVehicleType::EV_BREAKDOWN_SMOKE.0;
-                (*record(index)).progress = 7;
+                (*fresh).progress = 7;
             }
             shell
         }

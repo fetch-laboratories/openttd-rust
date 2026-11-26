@@ -118,6 +118,7 @@ fn free(v: Ship) {
     // SAFETY: The test's record and owner, each freed once.
     unsafe {
         openttd_rust_ship_state_destroy(v.s.as_ptr());
+        crate::orders::openttd_rust_consist_delete((*v.v.0.as_ptr()).consist);
         VehicleRecord::delete(v.v.0.as_ptr());
     }
 }

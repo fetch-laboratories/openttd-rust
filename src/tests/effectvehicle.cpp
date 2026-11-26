@@ -160,8 +160,9 @@ TEST_CASE("Effect vehicles - zero construction, nested save staging and pool cle
  * diagnoses when devirtualizing delete. */
 static bool TickEffect(EffectVehicle *v)
 {
-	if (openttd_rust_effect_run(v->rust_state.get(), RustVehicle(v), &GetRustVehicleServices(), &GetRustSharedServices()) != 0) return true;
-	GetRustVehicleServices().destroy(RustVehicle(v));
+	OpenTTDVehicle *record = RustVehicle(v);
+	if (openttd_rust_effect_run(v->rust_state.get(), record, &GetRustVehicleServices(), &GetRustSharedServices()) != 0) return true;
+	GetRustVehicleServices().destroy(record);
 	return false;
 }
 
