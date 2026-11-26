@@ -1212,10 +1212,10 @@ mod tests {
     /// What the application calls on the native side, in its order.
     #[derive(Debug, PartialEq)]
     enum Event {
-        GetOrCreateDataFlows(u16),
-        FlowMap(u16),
-        DataIsEmpty(u16),
-        ClearData(u16),
+        GetOrCreateDataFlows(StationID),
+        FlowMap(StationID),
+        DataIsEmpty(StationID),
+        ClearData(StationID),
         Window(WindowClass, WindowNumber, i32, bool),
     }
     const STATIONS: usize = 4;
@@ -1229,17 +1229,17 @@ mod tests {
     fn record(event: Event) {
         EVENTS.with(|events| events.borrow_mut().push(event));
     }
-    fn live(station: u16) -> *mut FlowStatMap {
-        LIVE.get()[usize::from(station - 100)]
+    fn live(station: StationID) -> *mut FlowStatMap {
+        LIVE.get()[usize::from(station.0 - 100)]
     }
     /// A goods entry is its station's live map; this returns the station.
-    fn station_of(ge: *const GoodsEntry) -> u16 {
+    fn station_of(ge: *const GoodsEntry) -> StationID {
         let index = LIVE
             .get()
             .iter()
             .position(|&map| map.cast_const().cast() == ge)
             .unwrap();
-        100 + index as u16
+        StationID(100 + index as u16)
     }
     extern "C" fn clear_data(ge: *mut GoodsEntry) {
         record(Event::ClearData(station_of(ge)));
@@ -1269,8 +1269,8 @@ mod tests {
             std::ptr::without_provenance_mut(usize::from(id) + 1)
         }
     }
-    fn id(st: *mut BaseStation) -> u16 {
-        (st.addr() - 1) as u16
+    fn id(st: *mut BaseStation) -> StationID {
+        StationID((st.addr() - 1) as u16)
     }
     extern "C" fn is_station(_: *mut BaseStation) -> bool {
         true
@@ -1279,7 +1279,7 @@ mod tests {
         42
     }
     extern "C" fn node_id(st: *mut BaseStation, _: u8) -> u16 {
-        id(st) - 100
+        id(st).0 - 100
     }
     extern "C" fn goods_entry(st: *mut BaseStation, _: u8) -> *const GoodsEntry {
         live(id(st)).cast_const().cast()
@@ -1288,7 +1288,7 @@ mod tests {
         !MANUAL.get()
     }
     extern "C" fn cargo_owner(st: *mut BaseStation, _: u8) -> *const crate::cargo_storage::List {
-        if id(st) == 100 {
+        if id(st) == StationID(100) {
             CARGO_LIST.get()
         } else {
             std::ptr::null()
@@ -1455,7 +1455,7 @@ mod tests {
             }
             crate::window_func::testing::observe(None);
 
-            let live0 = unsafe { &*live(100) };
+            let live0 = unsafe { &*live(StationID(100)) };
             // Origin 1's only share went to deleted station 102.
             assert!(live0.find(StationID(1)).is_none());
             assert!(live0.find(StationID(3)).is_some());
@@ -1465,19 +1465,26 @@ mod tests {
                     .find(StationID(102))
                     .is_none()
             );
-            assert!(unsafe { &*live(101) }.find(StationID(102)).is_some());
-            let window = |station: i32| {
+            assert!(
+                unsafe { &*live(StationID(101)) }
+                    .find(StationID(102))
+                    .is_some()
+            );
+            let window = |station: StationID| {
                 Event::Window(
                     WindowClass::WC_STATION_VIEW,
-                    WindowNumber(station),
+                    WindowNumber::from(station),
                     0,
                     false,
                 )
             };
-            let mut expected = vec![Event::GetOrCreateDataFlows(100)];
+            let mut expected = vec![Event::GetOrCreateDataFlows(StationID(100))];
             if manual {
                 // Both reroutes find no flow from origin 7, so both packets lose their hop.
-                expected.extend([Event::FlowMap(100), Event::FlowMap(100)]);
+                expected.extend([
+                    Event::FlowMap(StationID(100)),
+                    Event::FlowMap(StationID(100)),
+                ]);
                 assert!(live0.find(StationID(7)).is_none());
                 let mut moved = unsafe { crate::cargo_storage::tests::counts_and_keys(list) };
                 moved.sort_unstable();
@@ -1490,15 +1497,15 @@ mod tests {
                 assert_eq!(kept, [(1, 106), (2, 107), (3, 108)]);
             }
             expected.extend([
-                Event::DataIsEmpty(100),
-                window(100),
-                Event::GetOrCreateDataFlows(101),
-                Event::DataIsEmpty(101),
-                window(101),
-                Event::GetOrCreateDataFlows(103),
-                Event::DataIsEmpty(103),
-                Event::ClearData(103),
-                window(103),
+                Event::DataIsEmpty(StationID(100)),
+                window(StationID(100)),
+                Event::GetOrCreateDataFlows(StationID(101)),
+                Event::DataIsEmpty(StationID(101)),
+                window(StationID(101)),
+                Event::GetOrCreateDataFlows(StationID(103)),
+                Event::DataIsEmpty(StationID(103)),
+                Event::ClearData(StationID(103)),
+                window(StationID(103)),
             ]);
             EVENTS.with(|events| assert_eq!(*events.borrow(), expected));
 
