@@ -1479,7 +1479,7 @@
     "kind": "growth",
     "counter": "tests_cpp",
     "added": {
-      "src/tests/station_service.cpp": 8
+      "src/tests/station_service.cpp": 9
     },
     "reason": "The `Station service` loading case runs the real `prepare_unload` into the typed `stage` (decision 5 and Evidence of #1057 part 3): its deleted `stage` stub made every observation, so the fixture supplies order leaves for `GetNextStoppingStation`, a goods-entry stub that checks the station and cargo, and the `flow_map` stub that makes the same-owner reentry observation, and the case checks the list's keep count after the call.",
     "existing_alternatives": "Keeping the `stage` stub needs the `Loading::stage` lambda slot the pass deletes; dropping the case loses the same-owner reentry observation ADR 0023 keeps.",

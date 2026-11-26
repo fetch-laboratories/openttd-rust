@@ -266,6 +266,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	loading.cargo = &storage;
 	/* The Rust-owned list holds one packet, kept since nothing accepts it. */
 	_station_loading_cargo = openttd_rust_cargo_list_new(true);
+	REQUIRE(CargoPacket::CanAllocateItem());
 	openttd_rust_vehicle_cargo_list_append(_station_loading_cargo, &storage, new CargoPacket(StationID::Invalid(), 1, {Source::Invalid, SourceType::Industry}), VehicleCargoList::MTA_KEEP);
 	loading.cargo_capacity = [](OpenTTDVehicle *) noexcept { return OpenTTDCargoCapacity{_station_loading_cargo, 0}; };
 	loading.unload_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
