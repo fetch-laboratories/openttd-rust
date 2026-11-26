@@ -821,33 +821,26 @@ impl ClassSpec for crate::station_cmd::RoadSpec {
         &ROADSTOP_SERVICES
     }
     /// `RoadStopClass::IsUIAvailable`.
-    fn is_ui_available(_class: &RoadStopClass, _index: u32) -> bool {
+    fn is_ui_available(_class: crate::newgrf_class::ClassRef<Self>, _index: u32) -> bool {
         true
     }
     /// `RoadStopClass::InsertDefaults`.
     fn insert_defaults() {
+        const MAX: RoadStopClassID = RoadStopClassID::ROADSTOP_CLASS_MAX;
         /* Set up initial data */
+        RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_DEFAULT, MAX))
+            .set_name(STR_STATION_CLASS_DFLT);
+        // SAFETY: A null spec is inserted with no store.
         unsafe {
-            (*RoadStopClass::get(RoadStopClass::allocate(
-                ROADSTOP_CLASS_LABEL_DEFAULT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            )))
-            .name = STR_STATION_CLASS_DFLT;
-            (*RoadStopClass::get(RoadStopClass::allocate(
-                ROADSTOP_CLASS_LABEL_DEFAULT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            )))
-            .insert(std::ptr::null_mut());
-            (*RoadStopClass::get(RoadStopClass::allocate(
-                ROADSTOP_CLASS_LABEL_WAYPOINT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            )))
-            .name = STR_STATION_CLASS_WAYP;
-            (*RoadStopClass::get(RoadStopClass::allocate(
-                ROADSTOP_CLASS_LABEL_WAYPOINT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            )))
-            .insert(std::ptr::null_mut());
+            RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_DEFAULT, MAX))
+                .insert(std::ptr::null_mut());
+        }
+        RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, MAX))
+            .set_name(STR_STATION_CLASS_WAYP);
+        // SAFETY: As above.
+        unsafe {
+            RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, MAX))
+                .insert(std::ptr::null_mut());
         }
     }
 }

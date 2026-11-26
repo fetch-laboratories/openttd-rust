@@ -91,19 +91,16 @@ impl ClassSpec for crate::objects::Spec {
     }
     /// `ObjectClass::IsUIAvailable`.
     #[allow(unsafe_code)]
-    fn is_ui_available(class: &ObjectClass, index: u32) -> bool {
+    fn is_ui_available(class: crate::newgrf_class::ClassRef<Self>, index: u32) -> bool {
         // SAFETY: Only the object instantiation's table names the object table.
         crate::objects::ever_available(unsafe { &*Self::services().object }, class.get_spec(index))
     }
     /// `ObjectClass::InsertDefaults`.
-    #[allow(unsafe_code)]
     fn insert_defaults() {
         let max = ObjectClassID::OBJECT_CLASS_MAX;
-        unsafe {
-            (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"LTHS"), max))).name =
-                STR_OBJECT_CLASS_LTHS;
-            (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"TRNS"), max))).name =
-                STR_OBJECT_CLASS_TRNS;
-        }
+        ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"LTHS"), max))
+            .set_name(STR_OBJECT_CLASS_LTHS);
+        ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"TRNS"), max))
+            .set_name(STR_OBJECT_CLASS_TRNS);
     }
 }

@@ -476,9 +476,8 @@ impl Ctx<'_> {
         if u32::from(spec_class.0) >= StationClass::get_class_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        // SAFETY: `Get` returns a class of the registry, after the bound check above.
-        let cls = unsafe { &*StationClass::get(spec_class) };
-        if !crate::newgrf_station::is_waypoint_class(cls.global_id) {
+        let cls = StationClass::get(spec_class);
+        if !crate::newgrf_station::is_waypoint_class(cls.global_id()) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         if u32::from(args.spec_index) >= cls.get_spec_count() {
@@ -505,8 +504,7 @@ impl Ctx<'_> {
         }
         /* Make sure the area below consists of clear tiles. (OR tiles belonging to a certain rail station) */
         let mut est = StationID::INVALID;
-        // SAFETY: `Get` returns a class of the registry.
-        let spec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(args.spec_index));
+        let spec = StationClass::get(spec_class).get_spec(u32::from(args.spec_index));
         (self.s.waypoint_layout_init)(layout, spec, count);
         /* Check whether the tiles we're building on are valid rail or not. */
         let offset = self.offs_by_other_axis(axis);
@@ -687,17 +685,14 @@ impl Ctx<'_> {
         if u32::from(spec_class.0) >= RoadStopClass::get_class_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        // SAFETY: `Get` returns a class of the registry, after the bound check above.
-        let cls = unsafe { &*RoadStopClass::get(spec_class) };
-        if !crate::newgrf_station::is_waypoint_class(cls.global_id) {
+        let cls = RoadStopClass::get(spec_class);
+        if !crate::newgrf_station::is_waypoint_class(cls.global_id()) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         if u32::from(args.spec_index) >= cls.get_spec_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        // SAFETY: `Get` returns a class of the registry.
-        let roadstopspec =
-            unsafe { &*RoadStopClass::get(spec_class) }.get_spec(u32::from(args.spec_index));
+        let roadstopspec = RoadStopClass::get(spec_class).get_spec(u32::from(args.spec_index));
         let Some((count, reuse, station_to_join)) =
             self.waypoint_parts_and_join(axis, width, height, args.station_to_join)
         else {

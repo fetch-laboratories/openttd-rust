@@ -1221,33 +1221,26 @@ impl ClassSpec for crate::station_cmd::RailSpec {
         &STATION_SERVICES
     }
     /// `StationClass::IsUIAvailable`.
-    fn is_ui_available(_class: &StationClass, _index: u32) -> bool {
+    fn is_ui_available(_class: crate::newgrf_class::ClassRef<Self>, _index: u32) -> bool {
         true
     }
     /// `StationClass::InsertDefaults`.
     fn insert_defaults() {
+        const MAX: StationClassID = StationClassID::STAT_CLASS_MAX;
         /* Set up initial data */
+        StationClass::get(StationClass::allocate(STATION_CLASS_LABEL_DEFAULT, MAX))
+            .set_name(STR_STATION_CLASS_DFLT);
+        // SAFETY: A null spec is inserted with no store.
         unsafe {
-            (*StationClass::get(StationClass::allocate(
-                STATION_CLASS_LABEL_DEFAULT,
-                StationClassID::STAT_CLASS_MAX,
-            )))
-            .name = STR_STATION_CLASS_DFLT;
-            (*StationClass::get(StationClass::allocate(
-                STATION_CLASS_LABEL_DEFAULT,
-                StationClassID::STAT_CLASS_MAX,
-            )))
-            .insert(std::ptr::null_mut());
-            (*StationClass::get(StationClass::allocate(
-                STATION_CLASS_LABEL_WAYPOINT,
-                StationClassID::STAT_CLASS_MAX,
-            )))
-            .name = STR_STATION_CLASS_WAYP;
-            (*StationClass::get(StationClass::allocate(
-                STATION_CLASS_LABEL_WAYPOINT,
-                StationClassID::STAT_CLASS_MAX,
-            )))
-            .insert(std::ptr::null_mut());
+            StationClass::get(StationClass::allocate(STATION_CLASS_LABEL_DEFAULT, MAX))
+                .insert(std::ptr::null_mut());
+        }
+        StationClass::get(StationClass::allocate(STATION_CLASS_LABEL_WAYPOINT, MAX))
+            .set_name(STR_STATION_CLASS_WAYP);
+        // SAFETY: As above.
+        unsafe {
+            StationClass::get(StationClass::allocate(STATION_CLASS_LABEL_WAYPOINT, MAX))
+                .insert(std::ptr::null_mut());
         }
     }
 }

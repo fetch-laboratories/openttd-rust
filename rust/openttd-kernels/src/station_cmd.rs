@@ -1703,8 +1703,7 @@ impl Ctx<'_> {
         let invalid_dirs = crate::direction_func::axis_to_diag_dirs(axis, |ok| {
             crate::movement::native_assert(self.shared, ok);
         });
-        // SAFETY: `Get` returns a class of the registry.
-        let statspec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(spec_index));
+        let statspec = StationClass::get(spec_class).get_spec(u32::from(spec_index));
         let slope_cb = !statspec.is_null() && (self.s.rail_spec_info)(statspec).slope_callback;
         self.check_buildable(ret, tile_cur, invalid_dirs, allowed_z, false, false);
         if !ret.ok() {
@@ -2011,9 +2010,8 @@ impl Ctx<'_> {
         if u32::from(spec_class.0) >= StationClass::get_class_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        // SAFETY: `Get` returns a class of the registry, after the bound check above.
-        let cls = unsafe { &*StationClass::get(spec_class) };
-        if crate::newgrf_station::is_waypoint_class(cls.global_id) {
+        let cls = StationClass::get(spec_class);
+        if crate::newgrf_station::is_waypoint_class(cls.global_id()) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         if u32::from(spec_index) >= cls.get_spec_count() {
@@ -2102,8 +2100,7 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
         }
-        // SAFETY: `Get` returns a class of the registry.
-        let statspec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(spec_index));
+        let statspec = StationClass::get(spec_class).get_spec(u32::from(spec_index));
         let tile_delta = self
             .map()
             .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
@@ -3345,9 +3342,8 @@ impl Ctx<'_> {
         if u32::from(spec_class.0) >= RoadStopClass::get_class_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        // SAFETY: `Get` returns a class of the registry, after the bound check above.
-        let cls = unsafe { &*RoadStopClass::get(spec_class) };
-        if crate::newgrf_station::is_waypoint_class(cls.global_id) {
+        let cls = RoadStopClass::get(spec_class);
+        if crate::newgrf_station::is_waypoint_class(cls.global_id()) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         if u32::from(spec_index) >= cls.get_spec_count() {
