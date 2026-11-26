@@ -158,6 +158,10 @@ fn owned_vehicles(
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`VehicleDefaultSettings::servint_*` is `uint16_t`; every `order_func.h` default fits"
+)]
 fn update_all_service_interval(s: &Services, new_value: i32) {
     let (vds, company) = vehicle_defaults(s);
     let defaults = if new_value != 0 {
@@ -178,10 +182,6 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
         ]
     };
     // The `uint` defaults convert to the `uint16_t` members, as the original's assignments do.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "`VehicleDefaultSettings::servint_*` is `uint16_t`; every `order_func.h` default fits"
-    )]
     let defaults = defaults.map(|default| default as u16);
     write_field!(vds, servint_trains, defaults[0]);
     write_field!(vds, servint_roadveh, defaults[1]);
@@ -228,20 +228,16 @@ fn update_service_interval(s: &Services, kind: u8, new_value: i32) {
     set_window_classes_dirty(WindowClass::WC_VEHICLE_DETAILS);
 }
 
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "the `order_func.h` defaults are small `uint` constants returned as `int32_t`"
+)]
 fn default_service_interval(s: &Services, def: i32, kind: u8) -> i32 {
     let (vds, _) = vehicle_defaults(s);
     // The `uint` constants convert to the callback's `int32_t`; every one fits.
-    #[allow(
-        clippy::cast_possible_wrap,
-        reason = "the `order_func.h` defaults are small `uint` constants returned as `int32_t`"
-    )]
     if read_field!(vds, servint_ispercent) {
         return DEF_SERVINT_PERCENT as i32;
     }
-    #[allow(
-        clippy::cast_possible_wrap,
-        reason = "the `order_func.h` defaults are small `uint` constants returned as `int32_t`"
-    )]
     if (s.clock.using_wallclock_units)(menu()) {
         return (match kind {
             VEH_TRAIN => DEF_SERVINT_MINUTES_TRAINS,
@@ -254,6 +250,10 @@ fn default_service_interval(s: &Services, def: i32, kind: u8) -> i32 {
     def
 }
 
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "the `order_func.h` limits are small `uint` constants stored as the range's `int32_t`"
+)]
 fn service_interval_range(s: &Services) -> Range {
     let (vds, _) = vehicle_defaults(s);
     let (min, max) = if read_field!(vds, servint_ispercent) {
@@ -263,10 +263,6 @@ fn service_interval_range(s: &Services) -> Range {
     } else {
         (MIN_SERVINT_DAYS, MAX_SERVINT_DAYS)
     };
-    #[allow(
-        clippy::cast_possible_wrap,
-        reason = "the `order_func.h` limits are small `uint` constants stored as the range's `int32_t`"
-    )]
     Range {
         min: min as i32,
         max,

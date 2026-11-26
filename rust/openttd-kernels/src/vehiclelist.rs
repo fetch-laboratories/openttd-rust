@@ -43,6 +43,10 @@ impl VehicleListIdentifier {
     /// `VehicleListIdentifier::ToWindowNumber`: pack a `VehicleListIdentifier` in 32 bits so
     /// it can be used as unique `WindowNumber`.
     #[must_use]
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "the original's conversion to `WindowNumber`"
+    )]
     pub fn to_window_number(&self) -> crate::window_type::WindowNumber {
         use crate::services_assert::assert_with;
         const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
@@ -57,10 +61,6 @@ impl VehicleListIdentifier {
         assert_with(|| self.list_type < VehicleListType::VLT_END);
 
         // `c << 28 | type << 23 | vtype << 26 | index` in `uint`, as the `int` window number.
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "the original's conversion to `WindowNumber`"
-        )]
         crate::window_type::WindowNumber(
             (u32::from(c) << 28
                 | u32::from(self.list_type.0) << 23

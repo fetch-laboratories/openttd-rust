@@ -189,9 +189,9 @@ static Result RustOpaqueHandleRead(void *shell) noexcept
 /** Typed legacy-context adapter; the native operation remains defined once. */
 template <auto Operation, typename... Args>
 static auto RustOpaqueVehicleInvoke(void *shell, Args... args) noexcept { return Operation(static_cast<Vehicle *>(shell), args...); }
-/** Legacy orders width/handle adapter for a shared map read at a vehicle's tile. */
-template <typename Result, auto Read>
-static Result RustOpaqueVehicleTileRead(void *shell) noexcept { return Read(RustVehicleTile(static_cast<const Vehicle *>(shell))); }
+/** `v->name = source->name` for a typed legacy-context source, such as an `OrderBackup`. */
+template <typename Source>
+static void RustOpaqueVehicleCopyName(void *shell, const void *source) noexcept { static_cast<Vehicle *>(shell)->name = static_cast<const Source *>(source)->name; }
 inline bool RustVehicleOldEnough(const Vehicle *v) noexcept { return RustVehicleEconomyAge(v) > VEHICLE_PROFIT_MIN_AGE; }
 
 /** Indexed callback adapter for a canonical field setter. */

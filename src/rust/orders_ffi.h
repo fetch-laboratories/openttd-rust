@@ -88,8 +88,8 @@ struct OpenTTDOrdersLeaves {
 	void (*clear_order_backup_unsafe)(uint32_t tile, uint32_t user) noexcept OPENTTD_SERVICE_DEFAULT(clear_order_backup_unsafe);
 	/* Tables. */
 	const OpenTTDVehicleServices *base;
-	const OpenTTDDepotServices *(*depots)() noexcept OPENTTD_SERVICE_DEFAULT(depots);
-	const OpenTTDVehicleSchedulerServices *(*scheduler)() noexcept OPENTTD_SERVICE_DEFAULT(scheduler);
+	const OpenTTDDepotServices *depots;
+	const OpenTTDVehicleSchedulerServices *scheduler;
 	const OpenTTDStationCommandServices *station_commands;
 };
 extern "C" {
@@ -116,6 +116,7 @@ uint8_t openttd_rust_list_complete(void *, const OpenTTDOrdersLeaves *);
 void openttd_rust_add_shared(OpenTTDVehicle *, OpenTTDVehicle *, const OpenTTDOrdersLeaves *);
 void openttd_rust_delete_implicit(OpenTTDVehicle *, const OpenTTDOrdersLeaves *);
 uint8_t openttd_rust_wait_unbunching(OpenTTDVehicle *, const OpenTTDOrdersLeaves *);
+void openttd_rust_leave_unbunching(void *, const OpenTTDOrdersLeaves *);
 void openttd_rust_increment_implicit(OpenTTDVehicle *, const OpenTTDOrdersLeaves *);
 void openttd_rust_increment_real(OpenTTDVehicle *, const OpenTTDOrdersLeaves *);
 void openttd_rust_update_real(OpenTTDVehicle *, const OpenTTDOrdersLeaves *);

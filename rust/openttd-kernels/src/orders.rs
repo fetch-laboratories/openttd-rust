@@ -574,9 +574,9 @@ pub struct Leaves {
     /// The base vehicle table.
     pub base: &'static VehicleServices,
     /// The depot table, for `Depot::GetIfValid`.
-    pub depots: extern "C" fn() -> *const crate::depot_cmd::Services,
+    pub depots: *const crate::depot_cmd::Services,
     /// The vehicle scheduler's table: the controllers' tables and the vehicle pool.
-    pub scheduler: extern "C" fn() -> *const crate::vehicle::scheduler::SchedulerServices,
+    pub scheduler: *const crate::vehicle::scheduler::SchedulerServices,
     /// The station command table, for its station members and command services.
     pub station_commands: *const crate::station_cmd::CommandServicesTable,
 }
@@ -600,8 +600,8 @@ impl Leaves {
     }
     /// The vehicle scheduler table.
     fn scheduler(&self) -> &'static crate::vehicle::scheduler::SchedulerServices {
-        // SAFETY: The getter returns the process-lifetime scheduler table.
-        unsafe { &*(self.scheduler)() }
+        // SAFETY: The table names the process-lifetime scheduler table.
+        unsafe { &*self.scheduler }
     }
     /// The station command table.
     fn station_commands(&self) -> &'static crate::station_cmd::CommandServicesTable {
@@ -625,8 +625,8 @@ impl Leaves {
     }
     /// The depot table.
     fn depots(&self) -> &'static crate::depot_cmd::Services {
-        // SAFETY: The getter returns the process-lifetime depot table.
-        unsafe { &*(self.depots)() }
+        // SAFETY: The table names the process-lifetime depot table.
+        unsafe { &*self.depots }
     }
     /// The station catchment table, for `Station::GetIfValid`.
     fn catchment(&self) -> &'static crate::station::CatchmentServices {
@@ -934,12 +934,12 @@ impl OrderView<'_> {
     }
     /// `Order::GetConditionVariable`: what variable do we have to compare?
     #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the five bits of `GB(dest, 11, 5)`"
+    )]
     pub(crate) fn condition_variable(self) -> OrderConditionVariable {
         // `GB` of the 16-bit destination's top five bits always fits the `uint8_t` enum.
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "the five bits of `GB(dest, 11, 5)`"
-        )]
         OrderConditionVariable(gb_u16(read_field!(self.0, dest), 11, 5) as u8)
     }
     /// `Order::GetConditionComparator`: what is the comparator to use?
@@ -1417,25 +1417,25 @@ impl OrderListRef {
     }
     /// `OrderList::GetNext`: get the order after the given one or the first one, if the given
     /// one is the last one.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the original's static_cast"
+    )]
     pub(crate) fn get_next(self, cur: VehicleOrderID) -> VehicleOrderID {
         if self.len() == 0 {
             return VehicleOrderID::INVALID_VEH_ORDER_ID;
         }
         // `(cur + 1) % GetNumOrders()` in `int`, narrowed to `VehicleOrderID`.
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "the original's static_cast"
-        )]
         VehicleOrderID(((i32::from(cur.0) + 1) % i32::from(self.get_num_orders().0)) as u8)
     }
     /// `OrderList::GetNumOrders`: get number of orders in the order list.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the original's static_cast"
+    )]
     pub(crate) fn get_num_orders(self) -> VehicleOrderID {
         // The original's static_cast of `std::size(orders)` to `VehicleOrderID`.
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "the original's static_cast"
-        )]
         VehicleOrderID(self.len() as u8)
     }
     /// `OrderList::GetNumManualOrders`: get number of manually added orders in the order list.
@@ -1603,9 +1603,9 @@ fn for_each_backup(s: &Leaves, mut body: impl FnMut(OrderBackupRef)) {
 }
 
 /// `BaseStation::owner` of a station a lookup returned.
+#[allow(unsafe_code)]
 fn base_station_owner(st: *mut crate::station::BaseStation, s: &Leaves) -> Owner {
     // SAFETY: The station command table names the process-lifetime station table.
-    #[allow(unsafe_code)]
     let station = unsafe { &*s.station_commands().station };
     CompanyID((station.station_owner)(st))
 }
@@ -2189,6 +2189,10 @@ fn previous_order_is_unbunching(v: VehicleRef, s: &Leaves) -> bool {
 
 /// `Vehicle::LeaveUnbunchingDepot`: leave an unbunching depot and calculate the next departure
 /// time for shared order vehicles.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "the original's conversion to `TickCounter`"
+)]
 pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     /* Don't do anything if this is not our unbunching order. */
     if !previous_order_is_unbunching(v, s) {
@@ -2230,10 +2234,6 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     /* Calculate the separation by finding the average travel time, then calculating equal separation (minimum 1 tick) between vehicles. */
     let separation = (total_travel_time / num_vehicles / num_vehicles).max(1);
     // `TickCounter + Ticks`: the `int32_t` separation converts to `uint64_t`.
-    #[allow(
-        clippy::cast_sign_loss,
-        reason = "the original's conversion to `TickCounter`"
-    )]
     let next_departure = (s.shared().tick_counter)().wrapping_add(separation as u64);
 
     /* Set the departure time of all vehicles that we share orders with. */
@@ -2278,6 +2278,10 @@ pub(crate) fn is_waiting_for_unbunching(v: VehicleRef, s: &Leaves) -> bool {
 }
 
 /// The unbunching round-trip measurement of `VehicleEnterDepot`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the original's `Ticks` result"
+)]
 pub(crate) fn measure_unbunching(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
     if v.current_order()
@@ -2286,10 +2290,6 @@ pub(crate) fn measure_unbunching(v: VehicleRef, s: &Leaves) {
         && c.depot_unbunching_last_departure() > 0
     {
         // `TickCounter - TickCounter` narrowed to `Ticks`.
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "the original's `Ticks` result"
-        )]
         let measured_round_trip =
             (s.shared().tick_counter)().wrapping_sub(c.depot_unbunching_last_departure()) as i32;
         if c.round_trip_time() == 0 {
@@ -2345,6 +2345,10 @@ pub(crate) fn add_to_shared(v: VehicleRef, shared_chain: VehicleRef, s: &Leaves)
 
 /// `Vehicle::RemoveFromShared`: removes the vehicle from the shared order list.
 #[allow(unsafe_code)]
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "the original's conversion to `int`"
+)]
 pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
     let orders = vehicle_orders(v);
     /* Remember if we were first and the old window number before RemoveVehicle()
@@ -2394,10 +2398,6 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
         /* If we were the first one, update to the new first one.
          * Note: FirstShared() is already the new first */
         // `index.base() | (1U << 31)` passed as the `int` data.
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "the original's conversion to `int`"
-        )]
         invalidate_window_data(
             get_window_class_for_vehicle_type(v.vehicle_type()),
             vli.to_window_number(),
@@ -2457,6 +2457,11 @@ pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
 /// The order part of `Vehicle::BeginLoading`: prepare everything to begin the loading when
 /// arriving at a station.
 #[allow(clippy::too_many_lines, reason = "one function per original body")]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the original's conversions"
+)]
 pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
     if v.current_order().is_type(OrderType::OT_GOTO_STATION)
@@ -2517,7 +2522,6 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                     || get_num_manual_orders(v, s).0 == 0
                 {
                     // `GetOrder(int)` narrows the index to `VehicleOrderID`.
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     let Some(order) =
                         get_order(v, VehicleOrderID(target_index as u8), s).map(OrderRef::view)
                     else {
@@ -2547,7 +2551,6 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                     if suppress_implicit_orders {
                         /* Skip to the found order */
                         // `int` stored in `VehicleOrderID`.
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                         c.set_cur_implicit_order_index(VehicleOrderID(target_index as u8));
                         invalidate_vehicle_order(v, 0, s);
                     } else {
@@ -2683,6 +2686,11 @@ pub(crate) fn get_location(
 /// are resolved and the bigger distance of the two order branches is returned. `prev` is the
 /// origin order, `cur` the destination order and `conditional_depth` an internal parameter
 /// for resolving conditional orders.
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "the original's conversions"
+)]
 pub(crate) fn get_order_distance(
     prev: VehicleOrderID,
     cur: VehicleOrderID,
@@ -2703,7 +2711,6 @@ pub(crate) fn get_order_distance(
         conditional_depth = conditional_depth.wrapping_add(1);
 
         // The `uint` results are taken as `int`, compared, and returned as `uint`.
-        #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
         {
             let dist1 = get_order_distance(
                 prev,
@@ -2733,6 +2740,12 @@ pub(crate) fn get_order_distance(
 
 /// `InsertOrder`: insert a new order but skip the validation. `new_o` is the new order and
 /// `sel_ord` the position the order should be inserted at.
+#[allow(unsafe_code)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the original's conversions"
+)]
 pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID, s: &Leaves) {
     /* Create new order and link in list */
     match order_list(v, s) {
@@ -2740,7 +2753,6 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
             let list = new_order_list(
                 v,
                 // SAFETY: The new list's live vector; no handle addresses its orders yet.
-                #[allow(unsafe_code)]
                 |list| unsafe { (*list.vector).insert(0, new_o) },
                 s,
             );
@@ -2767,7 +2779,6 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
             /* Check if we don't go out of bound */
             if cur < u32::from(get_num_orders(shared, s).0) {
                 // `uint` stored in `VehicleOrderID`; it is below the order count.
-                #[allow(clippy::cast_possible_truncation)]
                 c.set_cur_real_order_index(VehicleOrderID(cur as u8));
             }
         }
@@ -2782,7 +2793,6 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
             /* Check if we don't go out of bound */
             if cur < u32::from(get_num_orders(shared, s).0) {
                 // `uint` stored in `VehicleOrderID`; it is below the order count.
-                #[allow(clippy::cast_possible_truncation)]
                 c.set_cur_implicit_order_index(VehicleOrderID(cur as u8));
             }
         }
@@ -2810,7 +2820,6 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
                 }
                 if order_id == cur_order_id {
                     // `(order_id + 1) % GetNumOrders()` in `int`, narrowed.
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     order.set_condition_skip_to_order(VehicleOrderID(
                         ((i32::from(order_id.0) + 1) % i32::from(get_num_orders(v, s).0)) as u8,
                     ));
@@ -2861,6 +2870,11 @@ fn cancel_loading_due_to_deleted_order(v: VehicleRef) {
 
 /// `DeleteOrder`: delete an order but skip the parameter validation. `sel_ord` is the id of
 /// the order to be deleted.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the original's conversions"
+)]
 pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
     order_list(v, s).unwrap().delete_order_at(sel_ord);
 
@@ -2936,7 +2950,6 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
                     order_id = (order_id + 1) % i32::from(get_num_orders(v, s).0);
                 }
                 // The `int` result stored in `VehicleOrderID`.
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 order.set_condition_skip_to_order(VehicleOrderID(order_id as u8));
             }
             cur_order_id = VehicleOrderID(cur_order_id.0.wrapping_add(1));
@@ -3271,14 +3284,13 @@ pub(crate) fn order_condition_compare(
 }
 
 /// `ToPercent16`: converts a "fract" value 0..65535 to "percent" value 0..100.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "the original's `uint` result, at most 100"
+)]
 fn to_percent16(i: u32) -> i32 {
     // `(i * 101) >> 16` of a `uint` fraction is at most 100.
-    #[allow(
-        clippy::cast_possible_wrap,
-        reason = "the original's `uint` result, at most 100"
-    )]
-    let percent = ((i * 101) >> 16) as i32;
-    percent
+    ((i * 101) >> 16) as i32
 }
 
 /// `ProcessConditionalOrder`: process a conditional order and determine the next order.
@@ -3354,6 +3366,8 @@ pub(crate) fn process_conditional_order(
 /// forecasting orders for pbs reservations in advance, in which case the order indices must
 /// not be modified. Returns true if the order was a new (non-implicit) order.
 #[allow(clippy::too_many_lines, reason = "one function per original body")]
+#[allow(unsafe_code)]
+#[allow(clippy::cast_sign_loss, reason = "the positive `DAY_TICKS` as `uint`")]
 pub(crate) fn update_order_dest(
     v: VehicleRef,
     order: OrderView<'_>,
@@ -3389,7 +3403,6 @@ pub(crate) fn update_order_dest(
                 /* If the vehicle can't find its destination, delay its next search.
                  * In case many vehicles are in this state, use the vehicle index to spread out pathfinder calls. */
                 // `v->index % Ticks::DAY_TICKS` compares with the `uint16_t` fraction in `uint`.
-                #[allow(clippy::cast_sign_loss, reason = "the positive `DAY_TICKS` as `uint`")]
                 let spread = v.index(s.newgrf()).0 % (DAY_TICKS as u32);
                 if !(v.dest_tile() == TileIndex(0)
                     && u32::from(crate::timer_game_common::economy_fraction()) != spread)
@@ -3414,7 +3427,6 @@ pub(crate) fn update_order_dest(
 
                         if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
                             let a = v.aircraft_state();
-                            #[allow(unsafe_code)]
                             let (state, targetairport) =
                                 (read_field!(a, state), read_field!(a, targetairport));
                             if state == crate::airport::FLYING
@@ -3442,7 +3454,6 @@ pub(crate) fn update_order_dest(
                 if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
                     let a = v.aircraft_state();
                     let destination = v.current_order().destination();
-                    #[allow(unsafe_code)]
                     let targetairport = read_field!(a, targetairport);
                     if DestinationID(targetairport) != destination {
                         /* The aircraft is now heading for a different hangar than the next in the orders */
@@ -3744,6 +3755,7 @@ pub(crate) struct CmdInsertOrder<'a> {
     clippy::too_many_lines,
     reason = "the original body, with its comments"
 )]
+#[allow(unsafe_code)]
 pub(crate) fn cmd_insert_order(
     s: &Leaves,
     cost: Cost<'_>,
@@ -3881,7 +3893,6 @@ pub(crate) fn cmd_insert_order(
                     }
 
                     // SAFETY: The live depot `Depot::GetIfValid` returned.
-                    #[allow(unsafe_code)]
                     let xy = TileIndex(unsafe { (s.depots().xy)(dp) });
                     let map = crate::map_func::World::new(s.shared());
                     if !check_ownership(map.owner(xy), cost, s) {
@@ -4342,6 +4353,10 @@ pub(crate) struct CmdModifyOrder {
     clippy::too_many_lines,
     reason = "the original body, with its comments"
 )]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the original's static_cast to `uint8_t`"
+)]
 pub(crate) fn cmd_modify_order(
     s: &Leaves,
     cost: Cost<'_>,
@@ -4411,10 +4426,6 @@ pub(crate) fn cmd_modify_order(
     }
 
     // `static_cast<..>(data)` of the `uint16_t` data to each `uint8_t` enumeration.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "the original's static_cast to `uint8_t`"
-    )]
     let byte = data as u8;
     match mof {
         ModifyOrderFlags::MOF_NON_STOP => {
@@ -4783,6 +4794,7 @@ pub(crate) struct CmdCloneOrder {
     clippy::too_many_lines,
     reason = "the original body, with its comments"
 )]
+#[allow(unsafe_code)]
 pub(crate) fn cmd_clone_order(
     s: &Leaves,
     cost: Cost<'_>,
@@ -4960,7 +4972,6 @@ pub(crate) fn cmd_clone_order(
                     assert_with(|| list.get_num_orders().0 == 0);
                     assert_with(|| !list.is_shared());
                     // SAFETY: The emptied, unshared list's live shell, deleted once.
-                    #[allow(unsafe_code)]
                     unsafe {
                         (s.delete_list)(list.shell());
                     }
@@ -4970,7 +4981,6 @@ pub(crate) fn cmd_clone_order(
                 let list = new_order_list(
                     dst,
                     // SAFETY: The new list's live vector and the local copies outside it.
-                    #[allow(unsafe_code)]
                     |list| unsafe { (*list.vector).assign(dst_orders.as_ptr(), dst_orders.len()) },
                     s,
                 );
@@ -5079,6 +5089,10 @@ pub(crate) fn cmd_order_refit(
 
 /// `GetStartTickFromDate` over the current `date`, `date_fract` and tick `counter`: get the
 /// `TimerGameTick::TickCounter` tick of a given date, the first tick of `start_date`.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "the original's conversion to `TickCounter`"
+)]
 pub(crate) fn get_start_tick_from_date(
     start_date: i32,
     date: i32,
@@ -5093,15 +5107,15 @@ pub(crate) fn get_start_tick_from_date(
 
     /* Return the current tick plus the offset. */
     // `TickCounter + Ticks`: the `int32_t` offset converts to `uint64_t`.
-    #[allow(
-        clippy::cast_sign_loss,
-        reason = "the original's conversion to `TickCounter`"
-    )]
     counter.wrapping_add(tick_offset as u64)
 }
 
 /// `GetDateFromStartTick` over the current `date`, `date_fract` and tick `counter`: get the
 /// date when we reach the `TimerGameTick::TickCounter` `start_tick` of a timetable.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the original's `Ticks` result"
+)]
 pub(crate) fn get_date_from_start_tick(
     start_tick: u64,
     date: i32,
@@ -5110,10 +5124,6 @@ pub(crate) fn get_date_from_start_tick(
 ) -> i32 {
     /* Calculate the offset in ticks from the current counter tick. */
     // `TickCounter - TickCounter` narrowed to `Ticks`.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "the original's `Ticks` result"
-    )]
     let mut tick_offset = start_tick.wrapping_sub(counter) as i32;
 
     /* Compensate for the current date_fract. */
@@ -5239,6 +5249,11 @@ pub(crate) struct CmdChangeTimetable {
 
 /// `CmdChangeTimetable`: change timetable data of an order.
 #[allow(clippy::too_many_lines, reason = "one function per original body")]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the original's conversions"
+)]
 pub(crate) fn cmd_change_timetable(
     s: &Leaves,
     cost: Cost<'_>,
@@ -5319,7 +5334,6 @@ pub(crate) fn cmd_change_timetable(
 
     if flags.test(DoCommandFlag::Execute) {
         // The `int` times are the `uint16_t` data or member values they were read from.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         match mtf {
             ModifyTimetableFlags::MTF_WAIT_TIME => {
                 /* Set time if changing the value or confirming an estimated time as timetabled. */
@@ -5584,6 +5598,12 @@ pub(crate) struct CmdSetTimetableStart {
 }
 
 /// `CmdSetTimetableStart`: set the start date of the timetable.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "the original's conversion to `TickCounter`"
+)]
 pub(crate) fn cmd_set_timetable_start(
     s: &Leaves,
     cost: Cost<'_>,
@@ -5660,7 +5680,6 @@ pub(crate) fn cmd_set_timetable_start(
         }
 
         // `(uint)vehs.size()` stored in `int`.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         let num_vehs = vehs.len() as i32;
 
         if num_vehs >= 2 {
@@ -5685,10 +5704,6 @@ pub(crate) fn cmd_set_timetable_start(
             c.set_vehicle_flags(c.vehicle_flags().reset(VehicleFlag::TIMETABLE_STARTED));
             /* Do multiplication, then division to reduce rounding errors. */
             // `TickCounter + int`: the `int` quotient converts to `uint64_t`.
-            #[allow(
-                clippy::cast_sign_loss,
-                reason = "the original's conversion to `TickCounter`"
-            )]
             c.set_timetable_start(
                 start_tick.wrapping_add((idx.wrapping_mul(total_duration) / num_vehs) as u64),
             );
@@ -5790,6 +5805,11 @@ pub(crate) fn cmd_autofill_timetable(
 /// `UpdateVehicleTimetable`: update the timetable for the vehicle. `travelling` says whether
 /// we just travelled or waited at a station.
 #[allow(clippy::too_many_lines, reason = "one function per original body")]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the original's `Ticks` store"
+)]
 pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leaves) {
     let c = consist(v);
     let time_taken = c.current_order_time();
@@ -5829,10 +5849,6 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
 
         if c.timetable_start() != 0 {
             // `TickCounter - TickCounter` stored in `Ticks`.
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "the original's `Ticks` store"
-            )]
             c.set_lateness_counter(
                 (s.shared().tick_counter)().wrapping_sub(c.timetable_start()) as i32,
             );
@@ -5883,7 +5899,6 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
          * processing of different orders when filling the timetable. */
         // `CeilDiv(std::max(time_taken, 1), TICKS_PER_SECOND) * TICKS_PER_SECOND` as `uint`,
         // passed to `ChangeTimetable`'s `uint16_t`.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let time_to_set = (crate::math::ceil_div(time_taken.max(1) as u32, TICKS_PER_SECOND as u32)
             .wrapping_mul(TICKS_PER_SECOND as u32)) as u16;
 
@@ -5965,6 +5980,7 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
 
 /// `OrderBackup::OrderBackup(v, user)`, the constructor of `ob`: create an order backup for
 /// the given vehicle. `user` is the user that is requesting the backup.
+#[allow(unsafe_code)]
 fn order_backup_construct(ob: OrderBackupRef, v: VehicleRef, user: u32, s: &Leaves) {
     ob.set_user(user);
     ob.set_tile(v.tile());
@@ -5984,7 +6000,6 @@ fn order_backup_construct(ob: OrderBackupRef, v: VehicleRef, user: u32, s: &Leav
         /* Else copy the orders */
         let span = orders(v, s);
         // SAFETY: The backup's live vector and the vehicle's distinct live orders.
-        #[allow(unsafe_code)]
         unsafe {
             (*ob.vector).assign(
                 span.map_or(ptr::null(), |list| list.data().cast_const()),
@@ -6172,10 +6187,10 @@ pub(crate) fn cmd_clear_order_backup(
 
 /// `OrderBackup::ResetUser`: reset an user's `OrderBackup` if needed. `_network_server`;
 /// must not be used from a command.
+#[allow(unsafe_code)]
 pub(crate) fn order_backup_reset_user(user: u32, s: &'static Leaves) {
     let p = (s.shared().command_post)();
     // SAFETY: The command table returns the process-lifetime company table.
-    #[allow(unsafe_code)]
     let company = unsafe { &*((p.command)().company)() };
     assert_with(|| (company.network_server)());
 
@@ -6194,10 +6209,10 @@ pub(crate) fn order_backup_reset_user(user: u32, s: &'static Leaves) {
 /// `OrderBackup::Reset`: reset the `OrderBackup`s from GUI/game logic. `t` is the tile of the
 /// order backup; `from_gui` says whether the call came from the GUI, i.e. whether it must be
 /// synced over the network.
+#[allow(unsafe_code)]
 pub(crate) fn order_backup_reset(t: TileIndex, from_gui: bool, s: &Leaves) {
     let p = (s.shared().command_post)();
     // SAFETY: The command table returns the process-lifetime company table.
-    #[allow(unsafe_code)]
     let company = unsafe { &*((p.command)().company)() };
     /* The user has CLIENT_ID_SERVER as default when network play is not active,
      * but compiled it. A network client has its own variable for the unique
@@ -6205,7 +6220,6 @@ pub(crate) fn order_backup_reset(t: TileIndex, from_gui: bool, s: &Leaves) {
      * default is just plain and simple: 0. */
     let user = if (company.finance.networking)() && !(company.network_server)() {
         // SAFETY: The session table names the process-lifetime network frame table.
-        #[allow(unsafe_code)]
         let network = unsafe { &*(p.session)().network };
         crate::network_client::own_client_id(network.client).0
     } else {
@@ -6527,6 +6541,12 @@ pub extern "C" fn openttd_rust_add_shared(
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_delete_implicit(v: VehicleRef, s: &'static Leaves) {
     delete_unreached_implicit_orders(v, s);
+}
+/// `Vehicle::LeaveUnbunchingDepot`, for the orders console's direct call of the Rust body.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_leave_unbunching(v: *mut c_void, s: &'static Leaves) {
+    leave_unbunching_depot(record(v, s), s);
 }
 /// `Vehicle::IsWaitingForUnbunching`, after the facade's `assert(this->IsInDepot())`.
 #[allow(unsafe_code)]
@@ -7015,6 +7035,6 @@ crate::abi::layouts! {
     };
 }
 
-#[cfg(test)]
 #[allow(unsafe_code)] // The tests build and read the fixture's native owners in place.
+#[cfg(test)]
 mod tests;

@@ -104,8 +104,8 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.backup_service_interval = [](const void *backup) noexcept { return static_cast<const OrderBackup *>(backup)->service_interval; },
 	.backup_set_name = [](void *backup, const void *v) noexcept { static_cast<OrderBackup *>(backup)->name = static_cast<const Vehicle *>(v)->name; },
 	.backup_set_service_interval = [](void *backup, uint16_t interval) noexcept { static_cast<OrderBackup *>(backup)->service_interval = interval; },
-	.vehicle_set_name = [](void *v, const void *backup) noexcept { static_cast<Vehicle *>(v)->name = static_cast<const OrderBackup *>(backup)->name; },
-	.vehicle_set_service_interval = [](void *v, uint16_t interval) noexcept { static_cast<Vehicle *>(v)->service_interval = interval; },
+	.vehicle_set_name = RustOpaqueVehicleCopyName<OrderBackup>,
+	.vehicle_set_service_interval = RustOpaqueVehicleInvoke<RustVehicleSetServiceInterval, uint16_t>,
 	.base_station_get_if_valid = [](uint16_t index) noexcept { return BaseStation::GetIfValid(StationID(index)); },
 	.depot_get = [](uint16_t index) noexcept { return Depot::Get(DepotID(index))->xy.base(); },
 	.waypoint_get_if_valid = [](uint16_t index) noexcept -> BaseStation * { return Waypoint::GetIfValid(StationID(index)); },
@@ -116,8 +116,8 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.append_station = [](void *next_station, uint16_t station) noexcept { static_cast<std::vector<StationID> *>(next_station)->push_back(StationID(station)); },
 	.clear_order_backup_unsafe = [](uint32_t tile, uint32_t user) noexcept { Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(STR_NULL, nullptr, true, false, TileIndex(tile), CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args{TileIndex(tile), static_cast<ClientID>(user)}); },
 	.base = &GetRustVehicleServices(),
-	.depots = []() noexcept { return &GetRustDepotServices(); },
-	.scheduler = []() noexcept { return &GetRustVehicleSchedulerServices(); },
+	.depots = &GetRustDepotServices(),
+	.scheduler = &GetRustVehicleSchedulerServices(),
 	.station_commands = &GetRustStationCommandServices(),
 };
 const OpenTTDOrdersLeaves &GetRustOrdersLeaves() { return _rust_orders_leaves; }

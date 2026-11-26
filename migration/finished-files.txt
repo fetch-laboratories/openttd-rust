@@ -93,6 +93,9 @@ rust/openttd-kernels/src/newgrf_layout.rs
 rust/openttd-kernels/src/newgrf_sound.rs
 rust/openttd-kernels/src/newgrf_townname.rs
 rust/openttd-kernels/src/node_hash.rs
+rust/openttd-kernels/src/order_func.rs
+rust/openttd-kernels/src/orders.rs
+rust/openttd-kernels/src/orders/tests.rs
 rust/openttd-kernels/src/packet.rs
 rust/openttd-kernels/src/pathfinder_func.rs
 rust/openttd-kernels/src/pbs.rs

@@ -47,11 +47,10 @@ use std::ptr::{self, null_mut};
 /// The fixture pool's slot count: indices at or past it are outside the pool.
 const SLOTS: usize = 8;
 
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     static POOL: Cell<*mut PoolDescriptor> = const { Cell::new(null_mut()) };
     static POOL_VIEW: Cell<*const PoolDescriptor> = const { Cell::new(ptr::null()) };
-    static SCHEDULER: Cell<*const crate::vehicle::scheduler::SchedulerServices> =
-        const { Cell::new(ptr::null()) };
     static LIST: Cell<*mut List> = const { Cell::new(null_mut()) };
     static VECTOR: Cell<*mut Vector> = const { Cell::new(null_mut()) };
     static INVALIDATED: RefCell<Vec<(u32, i32)>> = const { RefCell::new(Vec::new()) };
@@ -74,9 +73,6 @@ extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {
     const TABLE: crate::newgrf_vehicle::Services =
         crate::newgrf_vehicle::TEST_TABLE.with_id(vehicle_id);
     ptr::from_ref(&TABLE)
-}
-extern "C" fn scheduler() -> *const crate::vehicle::scheduler::SchedulerServices {
-    SCHEDULER.get()
 }
 unsafe extern "C" fn list(_: *mut c_void) -> *mut List {
     LIST.get()
@@ -129,10 +125,10 @@ fn leaves() -> &'static Leaves {
     }));
     POOL.set(pool);
     POOL_VIEW.set(pool);
-    SCHEDULER.set(leak(crate::vehicle::scheduler::SchedulerServices {
+    let scheduler = leak(crate::vehicle::scheduler::SchedulerServices {
         pool: POOL_VIEW.with(|view| leak(view.get())),
         ..crate::test_tables::SCHEDULER
-    }));
+    });
     LIST.set(openttd_rust_orderlist_new());
     VECTOR.set(openttd_rust_order_vector_new(construct, destroy));
     INVALIDATED.with_borrow_mut(Vec::clear);
@@ -513,6 +509,7 @@ enum Constructed {
     /// `CommandCost(msg, extra_msg)`.
     ErrorExtra(u32, u32),
 }
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     static CONSTRUCTED: RefCell<Vec<Constructed>> = const { RefCell::new(Vec::new()) };
 }
@@ -818,6 +815,7 @@ fn shared_window(first: u32) -> WindowNumber {
 /// orders invalidated; when the first vehicle leaves a longer list, that window is
 /// invalidated with the new first's index and bit 31.
 #[test]
+#[allow(clippy::cast_possible_wrap, reason = "the original's `int` data")]
 fn remove_from_shared_closes_or_renumbers_the_shared_orders_window() {
     use crate::window_func::testing::{Effect, take};
     let s = leaves();
@@ -854,7 +852,6 @@ fn remove_from_shared_closes_or_renumbers_the_shared_orders_window() {
     share(&[first, second, third]);
     take();
     remove_from_shared(first, s);
-    #[allow(clippy::cast_possible_wrap, reason = "the original's `int` data")]
     let data = (3u32 | (1 << 31)) as i32;
     assert_eq!(
         take(),
@@ -877,6 +874,10 @@ fn remove_from_shared_closes_or_renumbers_the_shared_orders_window() {
 /// `VehicleListIdentifier::ToWindowNumber`: `c << 28 | type << 23 | vtype << 26 | index`,
 /// with `OWNER_NONE` packed as `0xF`.
 #[test]
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "the original's `int` window number"
+)]
 fn to_window_number_packs_the_original_fields() {
     let number = |list_type, vtype, company, index| {
         VehicleListIdentifier {
@@ -888,10 +889,6 @@ fn to_window_number_packs_the_original_fields() {
         .to_window_number()
         .0
     };
-    #[allow(
-        clippy::cast_possible_wrap,
-        reason = "the original's `int` window number"
-    )]
     let expected =
         |c: u32, t: u32, vt: u32, index: u32| (c << 28 | t << 23 | vt << 26 | index) as i32;
     assert_eq!(

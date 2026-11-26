@@ -356,7 +356,6 @@ pub(crate) unsafe fn get(pool: &Pool, index: VehicleID) -> Option<crate::vehicle
 /// `GetPoolSize()` or a free slot.
 pub(crate) fn get_if_valid(pool: &Pool, index: VehicleID) -> Option<crate::vehicle::VehicleRef> {
     // SAFETY: The scheduler's process-lifetime pool descriptor; nothing mutates the pool here.
-    #[allow(unsafe_code)]
     unsafe {
         if (index.0 as usize) < pool.pool_size() {
             get(pool, index)

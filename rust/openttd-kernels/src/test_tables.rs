@@ -2026,8 +2026,8 @@ pub(crate) const ORDERS: crate::orders::Leaves = crate::orders::Leaves {
     append_station: unreachable2,
     clear_order_backup_unsafe: unreachable2,
     base: &VEHICLE,
-    depots: unreachable0,
-    scheduler: unreachable0,
+    depots: ptr::null(),
+    scheduler: ptr::null(),
     station_commands: ptr::null(),
 };
 

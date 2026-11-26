@@ -88,8 +88,6 @@ rebound | RustIsLocalCompany | src/economy.cpp | local_company
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
 rebound | RustMaxBridgeHeight | src/landscape.cpp | max_bridge_height
 rebound | RustMaxBridgeHeight | src/tunnelbridge_cmd.cpp | max_bridge_height
-rebound | RustNetworkServer | src/order_cmd.cpp | network_server
-rebound | RustNetworkServer | src/rust/company_adapter.cpp | network_server
 rebound | RustOnWater | src/industry_cmd.cpp | on_water
 rebound | RustOnWater | src/landscape.cpp | on_water
 rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | invalidate_grf
@@ -195,4 +193,3 @@ rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | openttd_orders_tick_counter | src/rust/services.cpp | tick_counter
