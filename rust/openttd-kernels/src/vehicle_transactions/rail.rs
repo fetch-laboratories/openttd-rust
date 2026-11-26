@@ -880,15 +880,20 @@ fn take_orders(new_head: R, old: R) {
     write_field!(view, orders, orders);
 }
 fn add_to_shared(x: Ctx, v: R, chain: R) {
-    unsafe {
-        crate::orders::openttd_rust_add_shared(Ctx::sh(v).cast(), Ctx::sh(chain).cast(), x.c.orders)
-    };
+    crate::orders::add_to_shared(
+        crate::vehicle::VehicleRef::of(v),
+        crate::vehicle::VehicleRef::of(chain),
+        x.c.orders,
+    );
 }
 /// `DeleteVehicleOrders(v)` with its default arguments.
 fn delete_orders(x: Ctx, v: R) {
-    unsafe {
-        crate::orders::openttd_rust_delete_vehicle_orders(Ctx::sh(v).cast(), 0, 1, x.c.orders)
-    };
+    crate::orders::delete_vehicle_orders(
+        crate::vehicle::VehicleRef::of(v),
+        false,
+        true,
+        x.c.orders,
+    );
 }
 fn mark_dirty(x: Ctx, v: R) {
     crate::train::mark_dirty(
@@ -1231,7 +1236,9 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
         restore_train_backup(x, &original);
         return (cost.error)(out, error.0);
     }
-    if crate::vehicle_base::order_list(first).is_null() && (x.c.orders.list_capacity)() == 0 {
+    if crate::vehicle_base::order_list(first).is_null()
+        && (x.c.orders.list_can_allocate_item)() == 0
+    {
         /* Restore the train we had. */
         restore_train_backup(x, &original);
         return (cost.error)(out, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
@@ -1263,9 +1270,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
         }
         x.count_vehicle(new_head, 1); // after copying over the profit, if required
     } else if unsafe { (x.g.primary)(Ctx::sh(v)) } && backup_order {
-        unsafe {
-            crate::orders::openttd_rust_backup_create(Ctx::sh(v).cast(), user.0, x.c.orders);
-        };
+        crate::orders::order_backup_backup(crate::vehicle::VehicleRef::of(v), user.0, x.c.orders);
     }
     /* We need to update the information about the train. */
     normalise_train_head(x, new_head);

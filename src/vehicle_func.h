@@ -284,6 +284,4 @@ void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles);
 bool VehiclesHaveSameEngineList(const Vehicle *v1, const Vehicle *v2);
 bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2);
 
-bool IsUniqueVehicleName(const std::string &name);
-
 #endif /* VEHICLE_FUNC_H */

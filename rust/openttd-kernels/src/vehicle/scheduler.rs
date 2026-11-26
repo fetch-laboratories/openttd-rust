@@ -79,7 +79,7 @@ impl SchedulerServices {
         // SAFETY: The table's descriptor address and the descriptor live for the process.
         unsafe { Pool::from_descriptor(*self.pool) }
     }
-    fn aircraft(&self) -> &aircraft::Leaves {
+    pub(crate) fn aircraft(&self) -> &aircraft::Leaves {
         // SAFETY: Each table link is a process-lifetime table.
         unsafe { &*self.aircraft }
     }
@@ -87,19 +87,19 @@ impl SchedulerServices {
         // SAFETY: As `aircraft`.
         unsafe { &*self.disaster }
     }
-    fn road(&self) -> &road::Leaves {
+    pub(crate) fn road(&self) -> &road::Leaves {
         // SAFETY: As `aircraft`.
         unsafe { &*self.road }
     }
-    fn shared(&self) -> &services::Services {
+    pub(crate) fn shared(&self) -> &services::Services {
         // SAFETY: As `aircraft`.
         unsafe { &*self.shared }
     }
-    fn ship(&self) -> &ship_control::Leaves {
+    pub(crate) fn ship(&self) -> &ship_control::Leaves {
         // SAFETY: As `aircraft`.
         unsafe { &*self.ship }
     }
-    fn train(&self) -> &train::Leaves {
+    pub(crate) fn train(&self) -> &train::Leaves {
         // SAFETY: As `aircraft`.
         unsafe { &*self.train }
     }

@@ -1,4 +1,5 @@
 #include "controller-orders.hpp"
+#include "vehicle_tables.inc"
 #pragma once
 #include "rust/ship_control_ffi.h"
 #include "rust/ship_yapf_ffi.h"
@@ -38,6 +39,7 @@ static constexpr uint32_t SHIP_MAP_LOG_X = 9, SHIP_MAP_WIDTH = 1 << SHIP_MAP_LOG
 static constexpr uint32_t SHIP_TILE = 10 + 200 * SHIP_MAP_WIDTH, SHIP_DEST = SHIP_TILE + 4;
 static void ShipBoundary()
 {
+	BindVehicleWindows();
 	using Owner = std::unique_ptr<OpenTTDShipState, decltype(&openttd_rust_ship_state_destroy)>;
 	Owner state(openttd_rust_ship_state_new(), openttd_rust_ship_state_destroy);
 	CHECK(openttd_rust_ship_get_state(state.get()) == 0 && openttd_rust_ship_get_rotation(state.get()) == 255);
@@ -102,17 +104,18 @@ static void ShipBoundary()
 	ship_engine->vehicle_info.ship.max_speed = 100;
 
 	/* The list's one order is a plain depot order, whose tile is the ship's destination. */
-	ControllerOrders orders(&ship_vehicle, {.type = OT_GOTO_DEPOT, .flags = 0, .destination = 0x1234, .refit_cargo = 254, .wait_time = 0, .travel_time = 0, .max_speed = UINT16_MAX});
+	ControllerOrders orders(&ship_vehicle, {.type = OT_GOTO_DEPOT, .flags = 0, .dest = 0x1234, .refit_cargo = 254, .wait_time = 0, .travel_time = 0, .max_speed = UINT16_MAX});
 	static ControllerOrders *ship_orders;
 	ship_orders = &orders;
 	ship_probe.record.orders = orders.vehicle.get();
 	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &ship_orders->services; };
-	orders.services.vehicle = [](void *v) noexcept { CHECK(v == &ship_probe); return ship_orders->vehicle.get(); };
-	orders.services.consist = [](void *) noexcept { return &ship_orders->consist; };
-	orders.services.vehicle_type = [](void *) noexcept { return uint64_t{2}; };
-	orders.services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2 && ship_probe.stage++ == 0); };
-	orders.services.depot_tile = [](uint16_t destination) noexcept { CHECK(destination == 0x1234); return uint64_t{SHIP_DEST}; };
-	orders.services.set_destination = [](void *, uint32_t tile) noexcept { ship_probe.record.dest_tile = tile; };
+	orders.services.invalidate_vehicle_order = [](void *v, int32_t reason) noexcept { CHECK(v == &ship_probe && reason == -2 && ship_probe.stage++ == 0); };
+	/* The depot order's tile is `Depot::Get(dest)->xy`, through the shared depot table. */
+	static int ship_depot;
+	static OpenTTDDepotServices ship_depots{};
+	ship_depots.get = [](uint16_t destination) noexcept { CHECK(destination == 0x1234); return reinterpret_cast<Depot *>(&ship_depot); };
+	ship_depots.xy = [](const Depot *d) noexcept { CHECK(d == reinterpret_cast<const Depot *>(&ship_depot)); return uint32_t{SHIP_DEST}; };
+	orders.services.depots = &ship_depots;
 	/* The search reads the ship's engine first of what the fixture serves. */
 	ship_vehicle.engine = [](OpenTTDVehicle *v) noexcept -> const OpenTTDEngine * {
 		CHECK(v == &ship_probe.record && ship_probe.stage++ == 1 && ship_probe.record.dest_tile == SHIP_DEST);

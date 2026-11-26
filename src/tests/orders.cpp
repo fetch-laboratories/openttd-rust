@@ -12,6 +12,14 @@
 #include "../base_consist.h"
 #include "../timer/timer_game_economy.h"
 #include "../rust/services_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/station_service_ffi.h"
+#include "../rust/orders_ffi.h"
+#include "../rust/station_catchment_ffi.h"
+#include "../rust/vehicle_maintenance_ffi.h"
+#include "../ground_vehicle.hpp"
+#include "../timer/timer_game_tick.h"
+#include "../vehicle_base.h"
 #include "../rust/command_services.h"
 #include "../rust/station_command_ffi.h"
 #include "../rust/vehicle_ffi.h"
@@ -40,7 +48,7 @@ TEST_CASE("Order vector preserves values and allocation invalidation")
 	original.emplace(original.begin() + 2, std::move(original[0]));
 	orders.erase(orders.begin() + 1);
 	original.erase(original.begin() + 1);
-	orders.Move(2, 9);
+	std::rotate(orders.begin() + 2, orders.begin() + 3, orders.begin() + 10);
 	std::rotate(original.begin() + 2, original.begin() + 3, original.begin() + 10);
 	for (size_t i = 0; i < original.size(); ++i) CHECK(orders[i].Equals(original[i]));
 	auto allocation = orders.data();
@@ -51,13 +59,26 @@ TEST_CASE("Order vector preserves values and allocation invalidation")
 	CHECK(orders[1].Equals(Order{}));
 }
 namespace {
-struct TimetableDateFixture {
-	OpenTTDVehicle record{};
-	OpenTTDVehicleOrderState vehicle{};
-	OpenTTDOrderListState list{};
-	RustOrderVector orders;
-	bool primary = true;
-	TimetableDateFixture() { this->vehicle.orders = this; this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); }
+/* A live road vehicle in `_vehicle_pool` with its order list, built and
+ * retired as `vehicle_scheduler.cpp` builds its vehicles. */
+struct LiveOrdersVehicle {
+	Vehicle *v;
+	LiveOrdersVehicle()
+	{
+		REQUIRE(Vehicle::CanAllocateItem());
+		REQUIRE(OrderList::CanAllocateItem());
+		this->v = new Vehicle(VEH_ROAD);
+		SetBit(this->v->Record().subtype, GVSF_FRONT);
+		this->v->Record().owner = CompanyID(0).base();
+		this->v->orders = new OrderList(this->v);
+	}
+	~LiveOrdersVehicle()
+	{
+		delete this->v->orders;
+		this->v->orders = nullptr;
+		delete this->v;
+	}
+	VehicleID Id() const { return this->v->index; }
 };
 }
 TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
@@ -65,67 +86,80 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	const auto saved_date = TimerGameEconomy::date;
 	const auto saved_fraction = TimerGameEconomy::date_fract;
 	TimerGameEconomy::date_fract = 0;
-	TimetableDateFixture fixture;
-	OpenTTDOrdersLeaves leaves{};
-	leaves.vehicle = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->vehicle; };
-	leaves.list = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->list; };
-	leaves.vector = [](void *v) noexcept { return static_cast<TimetableDateFixture *>(v)->orders.GetRustOwner(); };
-	leaves.primary_vehicle = [](void *) noexcept -> uint64_t { return 1; };
-	auto base = GetRustVehicleServices();
-	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
-
-	OpenTTDStationCommandServices station{};
-	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
-	leaves.base = &base; leaves.station_commands = &station;
+	LiveOrdersVehicle fixture;
 	AutoRestoreBackup<CompanyID> actor(_current_company, CompanyID(0));
-	leaves.tick_counter = []() noexcept -> uint64_t { return UINT64_MAX; };
-	leaves.maximum_date = []() noexcept -> uint64_t { return INT32_MAX; };
-	struct Case { int32_t date; uint64_t tick; bool valid; };
-	for (const Case test : {Case{INT32_MIN, UINT64_MAX, false}, Case{-1, 73, true}, Case{0, UINT64_MAX, true}, Case{INT32_MAX, UINT64_MAX, true}, Case{INT32_MAX, 73, false}}) {
-		CAPTURE(test.date, test.tick);
+	struct Case { int32_t date; uint64_t days; bool valid; };
+	const int32_t max_date = EconomyTime::MAX_DATE.base();
+	for (const Case test : {Case{INT32_MIN, 0, false}, Case{-1, 1, true}, Case{0, 0, true}, Case{max_date, 0, true}, Case{max_date, 1, false}, Case{INT32_MAX, 0, false}, Case{INT32_MAX, 1, false}}) {
+		CAPTURE(test.date, test.days);
 		TimerGameEconomy::date = TimerGameEconomy::Date{test.date};
+		const uint64_t tick = TimerGameTick::counter + test.days * Ticks::DAY_TICKS;
 		CommandCost result;
-		CHECK(openttd_rust_timetable_start(&fixture, 0, 0, test.tick, &result, &leaves) == uint32_t(test.valid));
+		openttd_rust_timetable_start(0, fixture.Id().base(), 0, tick, &result, &GetRustOrdersLeaves());
 		CHECK(result.Failed() == !test.valid);
 		if (!test.valid) CHECK(result.GetErrorMessage() == INVALID_STRING_ID);
 	}
 	TimerGameEconomy::date = saved_date;
 	TimerGameEconomy::date_fract = saved_fraction;
 }
+namespace {
+/* The destination arm's station lookup and owner slots, on copies of the
+ * production tables. */
+const OpenTTDStationCatchmentServices *_order_test_catchment;
+struct DestinationStub {
+	OpenTTDOrdersLeaves leaves = GetRustOrdersLeaves();
+	OpenTTDVehicleServices base = *GetRustOrdersLeaves().base;
+	OpenTTDVehicleMaintenanceServices maintenance = *GetRustOrdersLeaves().base->maintenance;
+	OpenTTDSharedServices shared = *GetRustOrdersLeaves().base->maintenance->shared;
+	OpenTTDStationCatchmentServices catchment = *GetRustSharedServices().station_catchment();
+	OpenTTDStationCommandServices commands = *GetRustOrdersLeaves().station_commands;
+	OpenTTDStationServices station = *GetRustOrdersLeaves().station_commands->station;
+	DestinationStub()
+	{
+		_order_test_catchment = &this->catchment;
+		this->catchment.station_if_valid = []([[maybe_unused]] uint16_t id) noexcept { return reinterpret_cast<BaseStation *>(&_order_test_catchment); };
+		this->shared.station_catchment = []() noexcept { return _order_test_catchment; };
+		this->maintenance.shared = &this->shared;
+		this->base.maintenance = &this->maintenance;
+		this->station.station_owner = [](OpenTTDBaseStation *) noexcept -> uint8_t { return OWNER_WATER.base(); };
+		this->commands.station = &this->station;
+		this->leaves.base = &this->base;
+		this->leaves.station_commands = &this->commands;
+	}
+};
+}
 TEST_CASE("Orders ownership - early validation and complete native error storage")
 {
-	TimetableDateFixture fixture;
-	OpenTTDOrdersLeaves leaves{};
-	leaves.vehicle = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->vehicle; };
-	leaves.primary_vehicle = [](void *v) noexcept -> uint64_t { return static_cast<TimetableDateFixture *>(v)->primary; };
-	auto base = GetRustVehicleServices();
-	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
-
-	OpenTTDStationCommandServices station{};
-	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
-	leaves.base = &base; leaves.station_commands = &station;
+	LiveOrdersVehicle fixture;
+	DestinationStub destination_stub;
 	AutoRestoreBackup<CompanyID> actor(_current_company, CompanyID(0));
 	AutoRestoreBackup<CompanyID> observer(_local_company, CompanyID(0));
 	Order order; order.MakeGoToStation(StationID(0));
-	fixture.primary = false;
-	for (void *v : {static_cast<void *>(nullptr), static_cast<void *>(&fixture)}) {
+	ClrBit(fixture.v->Record().subtype, GVSF_FRONT);
+	/* An unused pool index, then a vehicle that is not primary. */
+	const VehicleID unused{fixture.Id().base() + 1};
+	REQUIRE(!Vehicle::IsValidID(unused));
+	for (VehicleID veh : {unused, fixture.Id()}) {
 		CommandCost result;
-		CHECK(openttd_rust_command_insert(v, 0, 0, &order, &result, &leaves) == 0);
+		openttd_rust_command_insert(0, veh.base(), 0, &order, &result, &GetRustOrdersLeaves());
 		CHECK(result.GetErrorMessage() == INVALID_STRING_ID);
 		CHECK(result.Failed());
 	}
-	fixture.primary = true;
+	SetBit(fixture.v->Record().subtype, GVSF_FRONT);
 	for (CompanyID local : {CompanyID(0), COMPANY_SPECTATOR}) {
 		_local_company = local;
 		for (bool destination : {false, true}) {
-			fixture.record.owner = destination ? 0 : OWNER_NONE.base();
-			leaves.vehicle_type = destination ? +[](void *) noexcept -> uint64_t { return VEH_ROAD; } : OpenTTDOrdersLeaves{}.vehicle_type;
-			leaves.valid_station = []([[maybe_unused]] uint16_t id) noexcept -> uint64_t { return 1; };
-			leaves.station_owner = []([[maybe_unused]] uint16_t id) noexcept -> uint64_t { return OWNER_WATER.base(); };
+			fixture.v->Record().owner = destination ? 0 : OWNER_NONE.base();
+			const OpenTTDOrdersLeaves &leaves = destination ? destination_stub.leaves : GetRustOrdersLeaves();
 			for (bool timetable : {false, true}) {
 				if (timetable && destination) continue;
 				CommandCost result;
-				CHECK((timetable ? openttd_rust_timetable_start(&fixture, 0, 0, 0, &result, &leaves) : openttd_rust_command_insert(&fixture, 0, 0, &order, &result, &leaves)) == 0);
+				if (timetable) {
+					openttd_rust_timetable_start(0, fixture.Id().base(), 0, 0, &result, &leaves);
+				} else {
+					openttd_rust_command_insert(0, fixture.Id().base(), 0, &order, &result, &leaves);
+				}
+				CHECK(result.Failed());
 				Owner owner = destination ? OWNER_WATER : OWNER_NONE;
 				CHECK(result.GetErrorMessage() == STR_ERROR_OWNED_BY);
 				CHECK(result.GetErrorOwner() == (local == 0 ? owner : INVALID_OWNER));

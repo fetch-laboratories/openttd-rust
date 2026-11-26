@@ -319,7 +319,7 @@ pub(crate) fn is_waiting_for_unbunching(
     is_in_depot: impl FnOnce() -> bool,
 ) -> bool {
     crate::services_assert::assert_with(is_in_depot);
-    crate::orders::VisitOrders::new(orders).is_waiting_for_unbunching(v)
+    crate::orders::is_waiting_for_unbunching(v, orders)
 }
 
 /// `GroundVehicle<T>` members, one C++ template instance per vehicle type.

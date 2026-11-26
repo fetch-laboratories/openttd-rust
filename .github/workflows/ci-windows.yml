@@ -223,8 +223,10 @@ jobs:
         path: ${{ runner.temp }}/vcpkg-binary-cache
         key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
 
+    # With CI_QUEUE_SAVES_CACHES the queue's run saves the cache under the group commit it
+    # tests, which is the commit the queue then pushes, and the covered push skips this job.
     - name: Trim compiler cache
-      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' || github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true'
       shell: bash
       env:
         CCACHE_CONFIGPATH: ${{ github.workspace }}/migration/ccache.conf
@@ -233,7 +235,7 @@ jobs:
       run: '"$CCACHE_EXE" --cleanup'
 
     - name: Save compiler cache
-      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && steps.compiler-cache.outputs.cache-hit != 'true'
+      if: (github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' || github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true') && steps.compiler-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/ccache

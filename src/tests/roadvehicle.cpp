@@ -139,7 +139,7 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 			r.order_max_speed = static_cast<uint16_t>(state * 257);
 			record.direction = 1;
 			record.vehstatus = static_cast<uint8_t>((hidden & 1) | 128);
-			ground.cache.cached_max_track_speed = r.max_track_speed; orders.current.max_speed = r.order_max_speed;
+			ground.cache.cached_max_track_speed = r.max_track_speed; orders.current_order.max_speed = r.order_max_speed;
 			tail_record.direction = direction;
 			tail_record.vehstatus = static_cast<uint8_t>((hidden >> 1) | 64);
 			/* Pinned GetCurrentMaxSpeed loop: this->state, assignment (not min), then bridge. */

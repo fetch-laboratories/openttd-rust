@@ -57,18 +57,18 @@ fn aircraft() -> Vehicle {
         crate::vehicle_type::VehicleType::VEH_AIRCRAFT,
     );
     let orders = Box::leak(Box::new(crate::orders::VehicleOrders {
-        current: std::mem::MaybeUninit::new(crate::orders::Order {
-            kind: crate::order_type::OrderType::OT_NOTHING.0,
+        current_order: std::mem::MaybeUninit::new(crate::orders::Order {
+            r#type: crate::order_type::OrderType::OT_NOTHING.0,
             flags: 0,
-            destination: 0,
-            refit: crate::cargo_type::CARGO_NO_REFIT,
-            wait: 0,
-            travel: 0,
-            speed: u16::MAX,
+            dest: 0,
+            refit_cargo: crate::cargo_type::CARGO_NO_REFIT,
+            wait_time: 0,
+            travel_time: 0,
+            max_speed: u16::MAX,
         }),
         orders: std::ptr::null_mut(),
-        next: std::ptr::null_mut(),
-        previous: std::ptr::null_mut(),
+        next_shared: std::ptr::null_mut(),
+        previous_shared: std::ptr::null_mut(),
     }));
     // SAFETY: The record is live and owned by the test.
     unsafe { (*handle).orders = orders };

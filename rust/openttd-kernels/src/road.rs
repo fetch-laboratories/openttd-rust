@@ -45,7 +45,6 @@ use crate::order_type::{
     DestinationID, OrderDepotActionFlags, OrderDepotTypeFlag, OrderDepotTypeFlags,
     OrderNonStopFlag, OrderNonStopFlags, OrderType,
 };
-use crate::orders::Closest;
 use crate::pathfinder_type::FindDepotData;
 use crate::raw_field::{read_field, write_field};
 use crate::road_type::{RoadBits, RoadTramType, RoadType, RoadTypes};
@@ -81,6 +80,7 @@ use crate::track_type::{TrackBits, TrackStatus, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::maintenance;
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices};
+use crate::vehicle_base::Closest;
 use crate::vehicle_base::ClosestDepot;
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
@@ -877,7 +877,7 @@ impl<'a> Game<'a> {
             v.set_reverse_ctr(180);
 
             /* Unbunching data is no longer valid. */
-            crate::orders::reset_unbunching(v.v);
+            crate::orders::reset_depot_unbunching(v.v);
         }
 
         true
@@ -1706,7 +1706,7 @@ impl<'a> Game<'a> {
             }
 
             maintenance::vehicle_service_in_depot(v.v, self.vs);
-            crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.v);
+            crate::orders::leave_unbunching_depot(v.v, self.vs.orders());
 
             self.start_road_veh_sound(v.v);
 
@@ -2654,8 +2654,7 @@ impl<'a> Game<'a> {
                 /* If we were already heading for a depot but it has
                  * suddenly moved farther away, we continue our normal
                  * schedule? */
-                // SAFETY: The current order belongs to this live serialized record.
-                unsafe { crate::orders::make_dummy(v.v.current_order_pointer()) };
+                crate::orders::make_dummy(v.v);
                 service!(self.vs.start_stop_dirty)(v.v);
             }
             return;
@@ -2679,17 +2678,13 @@ impl<'a> Game<'a> {
             GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
         );
         write_field!(v.v.ground(), flags, gv_flags);
-        // SAFETY: The current order belongs to this live serialized record.
-        unsafe {
-            crate::orders::make_go_to_depot(
-                v.v.current_order_pointer(),
-                DestinationID(depot),
-                OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::Service),
-                OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate),
-                OrderDepotActionFlags::EMPTY,
-                crate::cargo_type::CargoType::CARGO_NO_REFIT,
-            );
-        }
+        crate::orders::current_order(v.v).make_go_to_depot(
+            DestinationID(depot),
+            OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::Service),
+            OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate),
+            OrderDepotActionFlags::EMPTY,
+            crate::cargo_type::CargoType::CARGO_NO_REFIT,
+        );
         set_dest_tile(v, rfdd.tile);
         service!(self.vs.start_stop_dirty)(v.v);
     }
@@ -2845,6 +2840,12 @@ pub(crate) fn current_max_speed(ss: &Services, v: VehicleRef) -> i32 {
     get_current_max_speed(ss, || world.get_or_init(|| World::new(ss)), Part::of(v))
 }
 
+/// `RoadVehicle::SetDestTile` on a live road vehicle record, for the Rust dispatch of the
+/// virtual.
+pub(crate) fn set_dest_tile_of(v: VehicleRef, tile: TileIndex) {
+    set_dest_tile(Part::of(v), tile);
+}
+
 /// `RoadVehicle::SetDestTile`.
 fn set_dest_tile(v: Part, tile: TileIndex) {
     if tile == v.v.dest_tile() {
@@ -2977,6 +2978,11 @@ pub unsafe extern "C" fn openttd_rust_road_update_cache(
     leaves: *const Leaves,
 ) {
     entry!(leaves).road_veh_update_cache(Part::new(v, state), same_length);
+}
+/// `RoadVehicle::FindClosestDepot` on a live road vehicle record, for the Rust dispatch of
+/// the virtual.
+pub(crate) fn find_closest_depot(v: VehicleRef, leaves: &Leaves) -> ClosestDepot {
+    entry!(leaves).find_closest_depot(Part::of(v))
 }
 /// `RoadVehicle::OnNewCalendarDay`, for the scheduler's dispatch over a live road vehicle
 /// record.

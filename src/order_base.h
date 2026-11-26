@@ -284,7 +284,6 @@ public:
 	void emplace_back(Order &&order) { openttd_rust_order_vector_insert(this->owner.get(), this->size(), &order); }
 	Order *emplace(Order *pos, Order &&order) { size_t index = this->empty() ? 0 : pos - this->data(); openttd_rust_order_vector_insert(this->owner.get(), index, &order); return this->data() + index; }
 	void erase(Order *pos) { openttd_rust_order_vector_erase(this->owner.get(), pos - this->data()); }
-	void Move(size_t from, size_t to) { openttd_rust_order_vector_move(this->owner.get(), from, to); }
 	OpenTTDOrderVector *GetRustOwner() const { return this->owner.get(); }
 };
 
@@ -313,8 +312,8 @@ private:
 	friend class SlOrders;
 
 	std::unique_ptr<OpenTTDOrderListState, decltype(&openttd_rust_orderlist_delete)> rust_state{openttd_rust_orderlist_new(), openttd_rust_orderlist_delete};
-	VehicleOrderID &num_manual_orders = this->rust_state->manual;
-	uint &num_vehicles = this->rust_state->vehicles;
+	VehicleOrderID &num_manual_orders = this->rust_state->num_manual_orders;
+	uint &num_vehicles = this->rust_state->num_vehicles;
 	Vehicle *&first_shared = *new (std::addressof(this->rust_state->first_shared)) Vehicle *{nullptr};
 	RustOrderVector orders;
 	uint32_t old_order_index = 0;

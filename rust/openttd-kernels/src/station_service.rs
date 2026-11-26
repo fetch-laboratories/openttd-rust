@@ -1604,9 +1604,13 @@ fn get_next_stopping_station(front: VehicleRef, l: &Loading) -> Vec<StationID> {
     let mut next_station = Vec::new();
     // SAFETY: The static base services outlive this synchronous call.
     let vehicle = unsafe { &*l.vehicle };
-    crate::orders::get_next_stopping_station(front, vehicle.orders(), &mut |station| {
-        next_station.push(station);
-    });
+    crate::orders::get_next_stopping_station(
+        front,
+        &mut |station| {
+            next_station.push(station);
+        },
+        vehicle.orders(),
+    );
     next_station
 }
 /// `v->orders != nullptr`: the vehicle's order list is assigned.

@@ -70,7 +70,7 @@ pub(super) fn servicing(shell: *mut c_void, ind: *mut Industry, s: &Services) ->
     let commands = unsafe { &*(shared.station_commands)() };
     let vehicles = unsafe { &*commands.vehicle };
     let grf = unsafe { &*(vehicles.newgrf)() };
-    let orders = crate::orders::VisitOrders::new(unsafe { &*(vehicles.orders)() });
+    let orders: &crate::orders::Leaves = unsafe { &*(vehicles.orders)() };
     let resolver = unsafe { &*s.resolver };
     let subsidies = unsafe { &*(resolver.lifecycle().subsidies)() };
     let local_company = || CompanyID((shared.local_company)());
@@ -118,22 +118,21 @@ pub(super) fn servicing(shell: *mut c_void, ind: *mut Industry, s: &Services) ->
         // Check orders of the vehicle.
         // We cannot check the first of shared orders only, since the first vehicle in such a chain
         // may have a different cargo type.
-        let list = orders.list(v);
-        if list.is_null() {
+        let Some(list) = crate::orders::orders(v, orders) else {
             continue;
-        }
-        for index in 0..orders.stored_count(list) {
-            let o = orders.stored_order(list, index);
-            if OrderType(o.kind()) == OrderType::OT_GOTO_STATION
-                && OrderUnloadType(o.unload()) != OrderUnloadType::Transfer
+        };
+        for index in 0..list.len() {
+            let o = list.order(index).view();
+            if o.kind() == OrderType::OT_GOTO_STATION
+                && o.unload_type() != OrderUnloadType::Transfer
             {
                 // Vehicle visits a station to load or unload
-                let st = (subsidies.station)(o.destination)
+                let st = (subsidies.station)(o.destination().0)
                     .cast_mut()
                     .cast::<crate::station::BaseStation>();
                 crate::movement::native_assert(shared, !st.is_null());
                 // Same cargo produced by industry is dropped here => not serviced by vehicle v
-                if OrderUnloadType(o.unload()) == OrderUnloadType::Unload && !c_accepts {
+                if o.unload_type() == OrderUnloadType::Unload && !c_accepts {
                     break;
                 }
                 if unsafe {

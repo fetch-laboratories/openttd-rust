@@ -25,6 +25,7 @@ pub struct Services {
     pub(crate) desync_logging: extern "C" fn() -> bool,
     pub(crate) log: extern "C" fn(u8, ByteSpan, bool),
     pub(crate) network: extern "C" fn() -> &'static crate::network_command::Services,
+    pub(crate) pack_clear_order_backup: extern "C" fn(u32, u32) -> CommandData,
     pub(crate) pack_colour: extern "C" fn(bool, u8) -> CommandData,
     pub(crate) pack_control: extern "C" fn(u8, u8, u8, u32) -> CommandData,
     pub(crate) pack_pause: extern "C" fn(PauseMode, bool) -> CommandData,
@@ -34,7 +35,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCommandPostServices" ["probe"] => Services {
         command, control_begin, control_end, desync_logging, log,
-        network, pack_colour, pack_control, pack_pause, session,
+        network, pack_clear_order_backup, pack_colour, pack_control, pack_pause, session,
     };
 }
 
@@ -90,6 +91,41 @@ pub(crate) fn colour(shared: &crate::services::Services, primary: bool, colour: 
 
 /// `CmdCompanyCtrl` executed for a `Post`; human creation and deletion never request the AI
 /// startup action, so the frame needs no continuation.
+/// `Command<CMD_CLEAR_ORDER_BACKUP>::Post(tile, user_id)`: the command's traits are
+/// `CommandFlag::ClientID` and `CommandType::ServerSetting`, and an unset client ID posts as
+/// the server's, as `SetClientIds` sets it.
+pub(crate) fn clear_order_backup(
+    orders: &'static crate::orders::Leaves,
+    tile: crate::tile_type::TileIndex,
+    user_id: crate::network_type::ClientID,
+) -> bool {
+    let p = (orders.shared().command_post)();
+    let client = if user_id.0 == crate::network_type::INVALID_CLIENT_ID {
+        crate::network_type::CLIENT_ID_SERVER
+    } else {
+        user_id.0
+    };
+    crate::command::post(
+        p,
+        crate::command_type::Commands::CMD_CLEAR_ORDER_BACKUP.0,
+        COMMAND_TYPE_SERVER_SETTING,
+        CommandFlag::CLIENT_ID,
+        client != crate::network_type::INVALID_CLIENT_ID,
+        |out, flags| {
+            crate::orders::cmd_clear_order_backup(
+                orders,
+                out,
+                crate::command_type::DoCommandFlags(flags),
+                crate::orders::CmdClearOrderBackup {
+                    tile,
+                    user_id: crate::network_type::ClientID(client),
+                },
+            );
+        },
+        || (p.pack_clear_order_backup)(tile.0, client),
+    )
+}
+
 fn control_cost(
     p: &Services,
     out: Cost<'_>,

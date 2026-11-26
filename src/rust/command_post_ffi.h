@@ -14,6 +14,7 @@ struct OpenTTDCommandPostServices {
 	bool (*desync_logging)() noexcept OPENTTD_SERVICE_DEFAULT(desync_logging);
 	void (*log)(uint8_t, OpenTTDByteSpan, bool) noexcept OPENTTD_SERVICE_DEFAULT(log);
 	const OpenTTDNetworkCommandServices &(*network)() noexcept OPENTTD_SERVICE_DEFAULT(network);
+	OpenTTDCommandData (*pack_clear_order_backup)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pack_clear_order_backup);
 	OpenTTDCommandData (*pack_colour)(bool, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(pack_colour);
 	OpenTTDCommandData (*pack_control)(uint8_t, uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pack_control);
 	OpenTTDCommandData (*pack_pause)(PauseMode, bool) noexcept OPENTTD_SERVICE_DEFAULT(pack_pause);

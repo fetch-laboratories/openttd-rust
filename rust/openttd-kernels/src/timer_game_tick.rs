@@ -3,6 +3,8 @@
 pub const TOWN_GROWTH_TICKS: u16 = 70;
 /// `Ticks::DAY_TICKS`.
 pub const DAY_TICKS: i32 = 74;
+/// `Ticks::INVALID_TICKS`: representation of an invalid number of ticks.
+pub const INVALID_TICKS: i32 = -1;
 /// `Ticks::TICKS_PER_SECOND`.
 pub const TICKS_PER_SECOND: i32 = 37;
 /// `Ticks::INDUSTRY_PRODUCE_TICKS`.

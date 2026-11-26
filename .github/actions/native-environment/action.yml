@@ -1,14 +1,73 @@
 name: Native migration environment
 description: Install the pinned native toolchain and fetch only the pinned reference
+inputs:
+  package-cache:
+    description: >-
+      Keep the downloaded packages in the Actions cache. For a runner whose cache is
+      beside it: on the paid runners the download was 28 of a job's 43 seconds in
+      apt-get, and a stalled mirror cost 60 more (#896).
+    default: 'false'
 runs:
   using: composite
   steps:
+  # apt uses an archive already in its directory when its name and size are the ones
+  # it expects, without reading its hash. So the cache is restored beside that
+  # directory, and tools/apt_archives.py, which apt runs after every update that
+  # reaches its scripts, moves in only the archives whose SHA-256 the index lists.
+  # Where the hook does not run, apt finds none and downloads them all.
+  - if: inputs.package-cache == 'true'
+    shell: bash
+    env:
+      ARCHIVES: /var/tmp/ci-apt-archives
+      RESTORED: /var/tmp/ci-apt-restored
+      APT_CONF: /etc/apt/apt.conf.d/90ci-archives
+    run: |
+      sudo mkdir -p "$ARCHIVES/partial" "$RESTORED"
+      sudo chmod -R a+rwX "$ARCHIVES" "$RESTORED"
+      # Post-Invoke, not Post-Invoke-Success: an update whose mirrors all failed
+      # returns 0 on the lists it kept and skips the success scripts. If the check
+      # itself cannot run, no kept archive is trusted.
+      printf '%s\n' \
+        "Dir::Cache::archives \"$ARCHIVES\";" \
+        "APT::Update::Post-Invoke { \"python3 '$GITHUB_WORKSPACE/tools/apt_archives.py' admit '$RESTORED' '$ARCHIVES' || rm -f '$RESTORED'/*.deb\"; };" |
+        sudo tee "$APT_CONF" > /dev/null
+  - if: inputs.package-cache == 'true'
+    id: packages
+    uses: actions/cache/restore@v4
+    with:
+      path: /var/tmp/ci-apt-restored/*.deb
+      key: apt-archives-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      restore-keys: apt-archives-v1-${{ runner.os }}-${{ runner.arch }}-
+  - if: inputs.package-cache == 'true'
+    shell: bash
+    env:
+      RESTORED: /var/tmp/ci-apt-restored
+    run: python3 "$GITHUB_WORKSPACE/tools/apt_archives.py" record "$RESTORED" "$RUNNER_TEMP/apt-archives-restored.json"
   - uses: ./.github/actions/apt-install
     with:
       packages: >-
         ccache ninja-build libsdl2-dev liblzma-dev libpng-dev
         libcurl4-openssl-dev libfreetype-dev libfontconfig-dev libharfbuzz-dev
         libicu-dev liblzo2-dev openttd-opengfx
+  # Save only when this job holds an archive the restored set lacked, after dropping
+  # the ones the indexes no longer offer, so the entry does not grow. The shards of
+  # one run share a key: the first saves, and the others' saves are refused with a
+  # warning, since they hold the same archives.
+  - if: inputs.package-cache == 'true'
+    id: packages-new
+    shell: bash
+    env:
+      ARCHIVES: /var/tmp/ci-apt-archives
+      RESTORED: /var/tmp/ci-apt-restored
+    run: |
+      sudo apt-get autoclean > /dev/null || true
+      sudo chmod -R a+rwX "$ARCHIVES" "$RESTORED"
+      python3 "$GITHUB_WORKSPACE/tools/apt_archives.py" collect "$ARCHIVES" "$RESTORED" "$RUNNER_TEMP/apt-archives-restored.json" | tee -a "$GITHUB_OUTPUT"
+  - if: inputs.package-cache == 'true' && steps.packages-new.outputs.added != '0'
+    uses: actions/cache/save@v4
+    with:
+      path: /var/tmp/ci-apt-restored/*.deb
+      key: ${{ steps.packages.outputs.cache-primary-key }}
   - shell: bash
     run: |
       baseline=$(python3 -c 'import json; print(json.load(open("migration/baseline.json"))["commit"])')

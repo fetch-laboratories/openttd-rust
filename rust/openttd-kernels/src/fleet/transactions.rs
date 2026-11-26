@@ -298,20 +298,19 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
         0,
         DoCommandFlag::EXECUTE,
         |flags| {
-            // SAFETY: `out` is the caller's live native cost, and `new` and `old` are live
-            // vehicle shells.
-            unsafe {
-                crate::orders::cmd_clone_order(
-                    s.orders,
-                    out.cast(),
-                    flags & DoCommandFlag::EXECUTE != 0,
-                    crate::orders::CmdCloneOrder {
-                        action: CloneOptions::CO_SHARE,
-                        veh_dst: new.cast(),
-                        veh_src: old.cast(),
-                    },
-                )
-            };
+            // SAFETY: `new` and `old` are live vehicle shells.
+            let (veh_dst, veh_src) =
+                unsafe { ((b.groups.vehicle_id)(new), (b.groups.vehicle_id)(old)) };
+            crate::orders::cmd_clone_order(
+                s.orders,
+                crate::services::Cost(out.cast(), b.cost),
+                crate::command_type::DoCommandFlags(flags),
+                crate::orders::CmdCloneOrder {
+                    action: CloneOptions::CO_SHARE,
+                    veh_dst: crate::vehicle_type::VehicleID(veh_dst),
+                    veh_src: crate::vehicle_type::VehicleID(veh_src),
+                },
+            );
         },
     );
 }

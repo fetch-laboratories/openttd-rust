@@ -52,6 +52,13 @@ pub(crate) const fn ceil_div(a: u32, b: u32) -> u32 {
     a.wrapping_add(b).wrapping_sub(1) / b
 }
 
+/// `ToPercent16`: converts a "fract" value 0..65535 to "percent" value 0..100. `i` is the
+/// value to convert, range 0..65535; returns a value in range 0..100.
+pub(crate) fn to_percent16(i: u32) -> u32 {
+    crate::services_assert::assert_with(|| i < 65536);
+    (i * 101) >> 16
+}
+
 /// `Clamp` (`int` overload): clamp a value between an interval. Returns `min` when the
 /// value is at or below it, `max` when at or above it, otherwise the value.
 pub(crate) fn clamp(a: i32, min: i32, max: i32, check: impl Fn(bool)) -> i32 {

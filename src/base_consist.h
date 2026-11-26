@@ -38,14 +38,14 @@ struct BaseConsist {
 	TimerGameTick::Ticks &current_order_time = this->rust_orders->current_order_time;
 	TimerGameTick::Ticks &lateness_counter = this->rust_orders->lateness_counter;
 	TimerGameTick::TickCounter &timetable_start = this->rust_orders->timetable_start;
-	TimerGameTick::TickCounter &depot_unbunching_last_departure = this->rust_orders->last_departure;
-	TimerGameTick::TickCounter &depot_unbunching_next_departure = this->rust_orders->next_departure;
+	TimerGameTick::TickCounter &depot_unbunching_last_departure = this->rust_orders->depot_unbunching_last_departure;
+	TimerGameTick::TickCounter &depot_unbunching_next_departure = this->rust_orders->depot_unbunching_next_departure;
 	TimerGameTick::Ticks &round_trip_time = this->rust_orders->round_trip_time;
 
 	uint16_t service_interval = 0; ///< The interval for (automatic) servicing; either in days or %.
 
-	VehicleOrderID &cur_real_order_index = this->rust_orders->real_index;
-	VehicleOrderID &cur_implicit_order_index = this->rust_orders->implicit_index;
+	VehicleOrderID &cur_real_order_index = this->rust_orders->cur_real_order_index;
+	VehicleOrderID &cur_implicit_order_index = this->rust_orders->cur_implicit_order_index;
 	/* EnumBitSet is a C++ class: begin its typed lifetime in Rust-owned storage. */
 	VehicleFlags &vehicle_flags = *new (std::addressof(this->rust_orders->vehicle_flags)) VehicleFlags{};
 

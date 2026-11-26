@@ -18,6 +18,10 @@ use crate::window_type::WindowClass;
 pub struct VehicleInvalidateWindowData(pub i32);
 
 impl VehicleInvalidateWindowData {
+    /// Removed / replaced all orders (after deleting / sharing).
+    pub const VIWD_REMOVE_ALL_ORDERS: Self = Self(-1);
+    /// Other order modifications.
+    pub const VIWD_MODIFY_ORDERS: Self = Self(-2);
     /// Vehicle composition was changed.
     pub const VIWD_CONSIST_CHANGED: Self = Self(-3);
 }

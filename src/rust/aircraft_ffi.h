@@ -79,7 +79,6 @@ void OPENTTD_RUST_CALL openttd_rust_aircraft_position(const OpenTTDAircraftLeave
 void OPENTTD_RUST_CALL openttd_rust_aircraft_cache(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_flight_bounds(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t *, int32_t *);
 int32_t OPENTTD_RUST_CALL openttd_rust_aircraft_flight_level(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, uint8_t *, bool);
-void OPENTTD_RUST_CALL openttd_rust_aircraft_missing_orders(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 uint32_t OPENTTD_RUST_CALL openttd_rust_aircraft_crash(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_next_airport(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_leave_hangar(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, uint8_t);

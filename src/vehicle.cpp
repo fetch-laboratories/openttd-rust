@@ -1246,7 +1246,7 @@ PaletteID GetVehiclePalette(const Vehicle *v)
  */
 void Vehicle::DeleteUnreachedImplicitOrders()
 {
-	openttd_rust_delete_implicit(this, &GetRustOrdersLeaves());
+	openttd_rust_delete_implicit(this->record, &GetRustOrdersLeaves());
 }
 
 /**
@@ -1300,7 +1300,7 @@ void Vehicle::ReleaseUnitNumber()
  */
 bool Vehicle::IsWaitingForUnbunching() const
 {
-	assert(this->IsInDepot()); return openttd_rust_wait_unbunching(const_cast<Vehicle *>(this), &GetRustOrdersLeaves()) != 0;
+	assert(this->IsInDepot()); return openttd_rust_wait_unbunching(this->record, &GetRustOrdersLeaves()) != 0;
 };
 
 /**
@@ -1402,7 +1402,7 @@ void Vehicle::SetNext(Vehicle *next)
  */
 void Vehicle::AddToShared(Vehicle *shared_chain)
 {
-	openttd_rust_add_shared(this, shared_chain, &GetRustOrdersLeaves());
+	openttd_rust_add_shared(this->record, shared_chain->record, &GetRustOrdersLeaves());
 }
 
 static const IntervalTimer<TimerGameEconomy> _economy_vehicles_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::VEHICLE}, [](auto)

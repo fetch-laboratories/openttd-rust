@@ -193,17 +193,6 @@ void GetCustomRotorIcon(EngineID engine, EngineImageType image_type, VehicleSpri
 }
 
 /**
- * Check if a wagon is currently using a wagon override
- * @param v The wagon to check
- * @return true if it is using an override, false otherwise
- */
-bool UsesWagonOverride(const Vehicle *v)
-{
-	assert(v->GetType() == VEH_TRAIN);
-	return Train::From(v)->tcache.cached_override != nullptr;
-}
-
-/**
  * Evaluate a newgrf callback for vehicles
  * @param callback The callback to evaluate
  * @param param1   First parameter of the callback

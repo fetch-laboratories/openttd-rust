@@ -11,6 +11,11 @@ outputs:
   prefix:
     description: Compatibility prefix
     value: ${{ steps.identity.outputs.prefix }}
+  hit:
+    description: >-
+      'true' when the restored entry is this commit's own: the caches a run of this
+      commit saved, for these compilers
+    value: ${{ steps.restore.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -32,6 +37,7 @@ runs:
           output.write(f"prefix={identity['prefix']}\n")
       PY
   - if: inputs.save != 'true'
+    id: restore
     uses: actions/cache/restore@v4
     with:
       path: |

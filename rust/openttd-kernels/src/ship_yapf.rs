@@ -1621,18 +1621,18 @@ mod tests {
         };
         ENGINE.set(&raw mut lifecycle);
         let mut orders = crate::orders::VehicleOrders {
-            current: std::mem::MaybeUninit::new(crate::orders::Order {
-                kind: OrderType::OT_GOTO_STATION.0 | 0x40,
+            current_order: std::mem::MaybeUninit::new(crate::orders::Order {
+                r#type: OrderType::OT_GOTO_STATION.0 | 0x40,
                 flags: 0,
-                destination: 4321,
-                refit: 0,
-                wait: 0,
-                travel: 0,
-                speed: 0,
+                dest: 4321,
+                refit_cargo: 0,
+                wait_time: 0,
+                travel_time: 0,
+                max_speed: 0,
             }),
             orders: ptr::null_mut(),
-            next: ptr::null_mut(),
-            previous: ptr::null_mut(),
+            next_shared: ptr::null_mut(),
+            previous_shared: ptr::null_mut(),
         };
         let record = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),

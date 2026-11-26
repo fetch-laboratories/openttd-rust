@@ -206,11 +206,6 @@ pub(crate) fn is_hangar_tile_in(
 ) -> bool {
     world.kind(t) == TileType::MP_STATION && is_hangar_in(world, t, s)
 }
-/// Raw adapter for `orders.rs`, which #825 holds; delegates to `is_hangar_tile`.
-#[inline]
-pub(crate) fn is_hangar_tile_raw(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
-    is_hangar_tile(TileIndex(tile), s)
-}
 
 /// The `assert(IsRoadWaypointTile(t))` precondition of the road waypoint
 /// accessors.
