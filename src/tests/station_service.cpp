@@ -241,12 +241,8 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 		CHECK(cargo == 0);
 		return reinterpret_cast<const GoodsEntry *>(&_station_loading_probe->goods);
 	};
-	/* The vehicle has no order list: the next stations are found through its order state. */
+	/* The vehicle's order state has no order list, so GetNextStoppingStation finds no station. */
 	OpenTTDOrdersLeaves leaves{};
-	leaves.vehicle = [](void *shell) noexcept {
-		CHECK(shell == &_station_loading_probe->vehicle);
-		return _station_loading_probe->orders;
-	};
 	static const OpenTTDOrdersLeaves *loading_leaves;
 	loading_leaves = &leaves;
 	OpenTTDVehicleServices vehicle{};
