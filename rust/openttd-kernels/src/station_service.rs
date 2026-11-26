@@ -758,13 +758,8 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
     let mut waiting_changed = false;
     byte_inc_sat(unsafe { &raw mut (*state).fields.time_since_load });
     byte_inc_sat(unsafe { &raw mut (*state).fields.time_since_unload });
-    // `CargoSpec::Iterate()`: each slot's spec, tested with `IsValid`.
-    let registry = unsafe { &*w.cargo_registry };
-    for cargo in (0..NUM_CARGO).map(CargoType) {
-        let cs = crate::cargotype::cargo_spec_get(registry, cargo);
-        if !cs.is_valid() {
-            continue;
-        }
+    for cs in crate::cargotype::iterate(unsafe { &*w.cargo_registry }) {
+        let cargo = cs.index();
         let ge = unsafe { cp(state, cargo) };
         /* The station might not currently be moving this cargo. */
         if !goods_entry::has_rating(unsafe { goods_status(ge) }) {
