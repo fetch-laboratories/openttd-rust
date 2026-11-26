@@ -653,7 +653,7 @@ fn record_if(shell: *mut c_void, s: &Leaves) -> Option<VehicleRef> {
 
 /// The consist owner of a live vehicle record.
 #[allow(unsafe_code)]
-fn consist(v: VehicleRef) -> ConsistRef {
+pub(crate) fn consist(v: VehicleRef) -> ConsistRef {
     ConsistRef(read_field!(v.0.as_ptr(), consist))
 }
 
@@ -670,71 +670,71 @@ pub(crate) struct ConsistRef(*mut Consist);
 #[allow(unsafe_code)]
 impl ConsistRef {
     /// `current_order_time`.
-    fn current_order_time(self) -> i32 {
+    pub(crate) fn current_order_time(self) -> i32 {
         read_field!(self.0, current_order_time)
     }
-    fn set_current_order_time(self, value: i32) {
+    pub(crate) fn set_current_order_time(self, value: i32) {
         write_field!(self.0, current_order_time, value);
     }
     /// `lateness_counter`.
-    fn lateness_counter(self) -> i32 {
+    pub(crate) fn lateness_counter(self) -> i32 {
         read_field!(self.0, lateness_counter)
     }
-    fn set_lateness_counter(self, value: i32) {
+    pub(crate) fn set_lateness_counter(self, value: i32) {
         write_field!(self.0, lateness_counter, value);
     }
     /// `timetable_start`.
-    fn timetable_start(self) -> u64 {
+    pub(crate) fn timetable_start(self) -> u64 {
         read_field!(self.0, timetable_start)
     }
-    fn set_timetable_start(self, value: u64) {
+    pub(crate) fn set_timetable_start(self, value: u64) {
         write_field!(self.0, timetable_start, value);
     }
     /// `depot_unbunching_last_departure`.
-    fn depot_unbunching_last_departure(self) -> u64 {
+    pub(crate) fn depot_unbunching_last_departure(self) -> u64 {
         read_field!(self.0, depot_unbunching_last_departure)
     }
-    fn set_depot_unbunching_last_departure(self, value: u64) {
+    pub(crate) fn set_depot_unbunching_last_departure(self, value: u64) {
         write_field!(self.0, depot_unbunching_last_departure, value);
     }
     /// `depot_unbunching_next_departure`.
-    fn depot_unbunching_next_departure(self) -> u64 {
+    pub(crate) fn depot_unbunching_next_departure(self) -> u64 {
         read_field!(self.0, depot_unbunching_next_departure)
     }
-    fn set_depot_unbunching_next_departure(self, value: u64) {
+    pub(crate) fn set_depot_unbunching_next_departure(self, value: u64) {
         write_field!(self.0, depot_unbunching_next_departure, value);
     }
     /// `round_trip_time`.
-    fn round_trip_time(self) -> i32 {
+    pub(crate) fn round_trip_time(self) -> i32 {
         read_field!(self.0, round_trip_time)
     }
-    fn set_round_trip_time(self, value: i32) {
+    pub(crate) fn set_round_trip_time(self, value: i32) {
         write_field!(self.0, round_trip_time, value);
     }
     /// `cur_real_order_index`.
-    fn cur_real_order_index(self) -> VehicleOrderID {
+    pub(crate) fn cur_real_order_index(self) -> VehicleOrderID {
         VehicleOrderID(read_field!(self.0, cur_real_order_index))
     }
-    fn set_cur_real_order_index(self, value: VehicleOrderID) {
+    pub(crate) fn set_cur_real_order_index(self, value: VehicleOrderID) {
         write_field!(self.0, cur_real_order_index, value.0);
     }
     /// `cur_implicit_order_index`.
-    fn cur_implicit_order_index(self) -> VehicleOrderID {
+    pub(crate) fn cur_implicit_order_index(self) -> VehicleOrderID {
         VehicleOrderID(read_field!(self.0, cur_implicit_order_index))
     }
-    fn set_cur_implicit_order_index(self, value: VehicleOrderID) {
+    pub(crate) fn set_cur_implicit_order_index(self, value: VehicleOrderID) {
         write_field!(self.0, cur_implicit_order_index, value.0);
     }
     /// `vehicle_flags`.
-    fn vehicle_flags(self) -> VehicleFlags {
+    pub(crate) fn vehicle_flags(self) -> VehicleFlags {
         VehicleFlags(read_field!(self.0, vehicle_flags))
     }
-    fn set_vehicle_flags(self, value: VehicleFlags) {
+    pub(crate) fn set_vehicle_flags(self, value: VehicleFlags) {
         write_field!(self.0, vehicle_flags, value.0);
     }
 
     /// `BaseConsist::ResetDepotUnbunching`: resets all the data used for depot unbunching.
-    fn reset_depot_unbunching(self) {
+    pub(crate) fn reset_depot_unbunching(self) {
         self.set_depot_unbunching_last_departure(0);
         self.set_depot_unbunching_next_departure(0);
         self.set_round_trip_time(0);
@@ -744,7 +744,7 @@ impl ConsistRef {
     /// properties of other `BaseConsist`. The caller copies `name` before and
     /// `service_interval` between the timetable members and the order indices, which no
     /// member here reads.
-    fn copy_consist_properties_from(self, src: Self) {
+    pub(crate) fn copy_consist_properties_from(self, src: Self) {
         if ptr::eq(self.0, src.0) {
             return;
         }
@@ -6692,11 +6692,6 @@ pub extern "C" fn openttd_rust_remove_destination(
     );
 }
 
-/// The live native `CommandCost` a command facade passes.
-fn cost_arg(out: *mut CommandCost, s: &'static Leaves) -> Cost<'static> {
-    s.cost(out)
-}
-
 /// `CmdInsertOrder`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
@@ -6710,7 +6705,7 @@ pub extern "C" fn openttd_rust_command_insert(
 ) {
     cmd_insert_order(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdInsertOrder {
             veh: VehicleID(veh),
@@ -6731,7 +6726,7 @@ pub extern "C" fn openttd_rust_command_delete(
 ) {
     cmd_delete_order(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdDeleteOrder {
             veh_id: VehicleID(veh_id),
@@ -6751,7 +6746,7 @@ pub extern "C" fn openttd_rust_command_skip(
 ) {
     cmd_skip_to_order(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdSkipToOrder {
             veh_id: VehicleID(veh_id),
@@ -6772,7 +6767,7 @@ pub extern "C" fn openttd_rust_command_move(
 ) {
     cmd_move_order(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdMoveOrder {
             veh: VehicleID(veh),
@@ -6795,7 +6790,7 @@ pub extern "C" fn openttd_rust_command_modify(
 ) {
     cmd_modify_order(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdModifyOrder {
             veh: VehicleID(veh),
@@ -6818,7 +6813,7 @@ pub extern "C" fn openttd_rust_command_clone(
 ) {
     cmd_clone_order(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdCloneOrder {
             action: CloneOptions(action),
@@ -6840,7 +6835,7 @@ pub extern "C" fn openttd_rust_command_refit(
 ) {
     cmd_order_refit(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdOrderRefit {
             veh: VehicleID(veh),
@@ -6861,7 +6856,7 @@ pub extern "C" fn openttd_rust_command_clear_backup(
 ) {
     cmd_clear_order_backup(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdClearOrderBackup {
             tile: TileIndex(tile),
@@ -6883,7 +6878,7 @@ pub extern "C" fn openttd_rust_timetable_change(
 ) {
     cmd_change_timetable(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdChangeTimetable {
             veh: VehicleID(veh),
@@ -6906,7 +6901,7 @@ pub extern "C" fn openttd_rust_timetable_bulk(
 ) {
     cmd_bulk_change_timetable(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdBulkChangeTimetable {
             veh: VehicleID(veh),
@@ -6927,7 +6922,7 @@ pub extern "C" fn openttd_rust_timetable_on_time(
 ) {
     cmd_set_vehicle_on_time(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdSetVehicleOnTime {
             veh: VehicleID(veh),
@@ -6948,7 +6943,7 @@ pub extern "C" fn openttd_rust_timetable_start(
 ) {
     cmd_set_timetable_start(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdSetTimetableStart {
             veh_id: VehicleID(veh_id),
@@ -6970,7 +6965,7 @@ pub extern "C" fn openttd_rust_timetable_autofill(
 ) {
     cmd_autofill_timetable(
         s,
-        cost_arg(out, s),
+        s.cost(out),
         DoCommandFlags(flags),
         CmdAutofillTimetable {
             veh: VehicleID(veh),

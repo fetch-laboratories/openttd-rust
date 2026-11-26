@@ -978,8 +978,7 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::cur_real_order_index`: the index of the current real order
     /// (non-implicit, non-implicit-only).
     pub(crate) fn cur_real_order_index(self) -> crate::order_type::VehicleOrderID {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        crate::order_type::VehicleOrderID(read_field!(consist, cur_real_order_index))
+        crate::orders::consist(self).cur_real_order_index()
     }
     /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed to
     /// the player, dispatched on the vehicle's type to each override; other types take the
@@ -998,22 +997,18 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::cur_implicit_order_index`: the index to the current implicit order.
     pub(crate) fn cur_implicit_order_index(self) -> crate::order_type::VehicleOrderID {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        crate::order_type::VehicleOrderID(read_field!(consist, cur_implicit_order_index))
+        crate::orders::consist(self).cur_implicit_order_index()
     }
     /// `Vehicle::lateness_counter`: how many ticks late (or early if negative) this vehicle is.
     pub(crate) fn lateness_counter(self) -> i32 {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        read_field!(consist, lateness_counter)
+        crate::orders::consist(self).lateness_counter()
     }
     /// `Vehicle::current_order_time`: how many ticks have passed since this order started.
     pub(crate) fn current_order_time(self) -> i32 {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        read_field!(consist, current_order_time)
+        crate::orders::consist(self).current_order_time()
     }
     pub(crate) fn set_current_order_time(self, value: i32) {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        write_field!(consist, current_order_time, value);
+        crate::orders::consist(self).set_current_order_time(value);
     }
     /// `Vehicle::vcache.cached_vis_effect`: the visual effect to show.
     pub(crate) fn cached_vis_effect(self) -> u8 {
@@ -1270,8 +1265,7 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::vehicle_flags`, read in place from the record's consist state.
     #[inline]
     pub(crate) fn vehicle_flags(self) -> VehicleFlags {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        VehicleFlags(read_field!(consist, vehicle_flags))
+        crate::orders::consist(self).vehicle_flags()
     }
     /// `Vehicle::ServiceIntervalIsCustom`.
     #[inline]
