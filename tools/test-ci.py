@@ -4320,6 +4320,9 @@ class EnqueueWorld:
     recorded_jobs: list[dict[str, str]] = field(default_factory=list)
     # The run `request --diagnose 3` names.
     named: ci_log.Run | None = None
+    # The jobs of run 8 and the annotation each of its jobs carries.
+    jobs: list[dict[str, Any]] = field(default_factory=list)
+    annotation: str = ""
     retry: str | None = None
     entry: dict[str, object] | None = None
     armed: dict[str, object] | None = None
@@ -4391,6 +4394,7 @@ class EnqueueTests(unittest.TestCase):
             f"compare/{HEAD}...rust-migration": {"files": world.base_files},
             "actions/runs/9": world.recorded,
             "actions/runs/3": world.named,
+            "/annotations": [{"message": world.annotation}],
         }
         listings: dict[str, object] = {
             "event=workflow_dispatch": [
@@ -4399,6 +4403,7 @@ class EnqueueTests(unittest.TestCase):
             ],
             "event=pull_request": [{"workflow_runs": world.labeled}],
             "pulls/170/files": [world.files],
+            "actions/runs/8/jobs": [{"jobs": world.jobs}],
         }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
@@ -4683,6 +4688,94 @@ class EnqueueTests(unittest.TestCase):
         records, calls = self.request_native("3", named=self.FAILED_FULL)
         self.assertEqual(len(records), 1)
         self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+
+    def test_a_platform_run_without_a_macos_runner_is_passed_over(self) -> None:
+        """No macOS job runs on a paid runner (ADR 0009): a platform run whose
+        only failures are macOS jobs GitHub never started leaves the PR to queue
+        on the run before it, and every other failure still refuses."""
+        platform = dict(
+            self.REQUESTED,
+            id=8,
+            display_title=f"CI platform PR 170 p-{HEAD}",
+            conclusion="failure",
+            created_at="2026-11-12T05:00:00Z",
+            html_url="https://github.com/example/fork/actions/runs/8",
+        )
+        unstarted = {
+            "id": 81,
+            "name": "platform / Mac OS (arm64 - Release) / CI",
+            "conclusion": "cancelled",
+            "runner_id": 0,
+            "steps": [],
+        }
+        complete = {"id": 82, "name": "platform / complete", "conclusion": "failure"}
+        windows = {
+            "id": 83,
+            "name": "platform / Windows (x64) / CI",
+            "conclusion": "failure",
+        }
+        capacity = "The job was not acquired by Runner of type hosted even after multiple attempts"
+        runs = [self.REQUESTED, platform]
+        entry = {"state": "QUEUED", "position": 1}
+        for label, options in (
+            ("the run failed", {}),
+            (
+                "the run was cancelled",
+                {
+                    "dispatched": [
+                        self.REQUESTED,
+                        dict(platform, conclusion="cancelled"),
+                    ]
+                },
+            ),
+        ):
+            with self.subTest(label):
+                reported, _ = self.enqueue(
+                    **{
+                        "dispatched": runs,
+                        "jobs": [unstarted, complete],
+                        "annotation": capacity,
+                        "entry": entry,
+                        **options,
+                    }
+                )
+                self.assertTrue(reported.startswith("queued"))
+        started = dict(unstarted, runner_id=7, steps=[{"name": "Build"}])
+        for label, options, message in (
+            (
+                "cancelled by hand",
+                {"annotation": "The run was canceled by @someone."},
+                "runs/8",
+            ),
+            (
+                "macOS started and was cancelled",
+                {"jobs": [started, complete]},
+                "runs/8",
+            ),
+            (
+                "macOS failed",
+                {"jobs": [dict(started, conclusion="failure"), complete]},
+                "runs/8",
+            ),
+            (
+                "another build failed too",
+                {"jobs": [unstarted, windows, complete]},
+                "runs/8",
+            ),
+            ("only the completion job failed", {"jobs": [complete]}, "runs/8"),
+            # With no run before it, the PR still has no requested run to read.
+            ("no run before it", {"dispatched": [platform]}, "no requested run"),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.enqueue(
+                        **{
+                            "dispatched": runs,
+                            "jobs": [unstarted, complete],
+                            "annotation": capacity,
+                            **options,
+                        }
+                    )
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
         entry = {"state": "AWAITING_CHECKS", "position": 2}
