@@ -12,6 +12,8 @@
 #include "../base_consist.h"
 #include "../timer/timer_game_economy.h"
 #include "../rust/services_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/station_service_ffi.h"
 #include "../rust/orders_ffi.h"
 #include "../rust/station_catchment_ffi.h"
 #include "../rust/vehicle_maintenance_ffi.h"
