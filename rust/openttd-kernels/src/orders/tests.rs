@@ -228,29 +228,45 @@ fn view(o: &Order) -> OrderView<'_> {
     unsafe { OrderView::of(o) }
 }
 
-/// Run `body` in a child of this test binary and require the child to end at the native
-/// unreachable path, which aborts the process.
+/// Exit code of [`ends_unreachable`]'s child at the bound native `NOT_REACHED`.
+const NOT_REACHED_EXIT: i32 = 87;
+/// What the bound native `NOT_REACHED` writes before it ends the child.
+const NOT_REACHED_MARKER: &str = "openttd-rust test: orders reached the native NOT_REACHED";
+
+/// Run `body` in a child of this test binary whose native `NOT_REACHED` callback is bound
+/// to write a marker and exit, and require the child to end through that callback.
 fn ends_unreachable(name: &str, body: impl FnOnce()) {
-    use std::os::unix::process::ExitStatusExt;
-    const CHILD: &str = "OPENTTD_ORDERS_UNREACHABLE_CHILD";
-    if std::env::var(CHILD).ok().as_deref() == Some(name) {
-        body();
-        // Reaching this line would mean the unreachable path returned.
-        std::process::exit(0);
+    extern "C" fn record_not_reached() {
+        eprintln!("{NOT_REACHED_MARKER}");
+        std::process::exit(NOT_REACHED_EXIT);
     }
-    let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", name])
-        .env(CHILD, name)
-        .output()
-        .unwrap();
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    // A panicking stub aborts too, at the `extern "C"` boundary; it writes its panic first.
-    assert!(
-        output.status.signal() == Some(6) && !stderr.contains("panicked"),
-        "{name} must end at the native unreachable path: {:?}\n{}{stderr}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-    );
+    extern "C" fn abort_on_failure(condition: bool) {
+        if !condition {
+            std::process::abort();
+        }
+    }
+    if crate::services_assert::isolate_test_ends(name, NOT_REACHED_EXIT, NOT_REACHED_MARKER) {
+        return;
+    }
+    // `assert_with` reads only `assertions` of the bound map statics.
+    let map = leak(crate::map_func::MapStatics {
+        base: ptr::null(),
+        extended: ptr::null(),
+        size: ptr::null(),
+        log_x: ptr::null(),
+        log_y: ptr::null(),
+        assertions: true,
+    });
+    let shared = leak(crate::services::Services {
+        not_reached: record_not_reached,
+        map,
+        ..crate::test_tables::SHARED
+    });
+    // SAFETY: The leaked map statics live through the child's last assertion.
+    unsafe { crate::services_assert::bind_test_policy(abort_on_failure, shared) };
+    body();
+    // Reaching this line would mean the unreachable path returned.
+    std::process::exit(0);
 }
 
 /// `Vehicle::IsWaitingForUnbunching` past its depot assertion: a vehicle sharing a
