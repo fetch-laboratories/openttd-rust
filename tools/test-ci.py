@@ -6598,6 +6598,16 @@ def terminate() -> None:
     os.kill(os.getpid(), signal.SIGTERM)
 
 
+@dataclass
+class ReviewerFixture:
+    """What GitHub holds for example/fork #170 beyond its reports."""
+
+    models: dict[str, str] = field(default_factory=dict)
+    extra: list[status_comment.Comment] = field(default_factory=list)
+    submitted: list[review_report.Review] = field(default_factory=list)
+    files: tuple[str, ...] = ("rust/openttd-kernels/src/x.rs",)
+
+
 class ReviewerTests(unittest.TestCase):
     """ci.py reviewer: the review row's call within the review limits, and the
     report check that refuses a report off the review row (#1091)."""
@@ -6621,16 +6631,14 @@ class ReviewerTests(unittest.TestCase):
         agents: list[str],
         *argv: str,
         ledger: Path,
-        models: dict[str, str] | None = None,
-        extra: list[status_comment.Comment] | None = None,
-        submitted: list[review_report.Review] | None = None,
-        files: tuple[str, ...] = ("rust/openttd-kernels/src/x.rs",),
+        pr: ReviewerFixture | None = None,
     ) -> tuple[int, str, str]:
-        models = models or {}
+        pr = pr or ReviewerFixture()
+        models, submitted, files = pr.models, pr.submitted, pr.files
         comments = [
             self.report(1000 + i, a, models.get(a, "gpt-6.2-sol"))
             for i, a in enumerate(agents)
-        ] + (extra or [])
+        ] + pr.extra
 
         def gh(
             *args: str, payload: str | None = None, timeout: float | None = None
@@ -6641,7 +6649,7 @@ class ReviewerTests(unittest.TestCase):
             if path.endswith("/issues/170/comments?per_page=100"):
                 return json.dumps([comments])
             if path.endswith("/pulls/170/reviews?per_page=100"):
-                return json.dumps([submitted or []])
+                return json.dumps([submitted])
             if path.endswith("/pulls/170/files?per_page=100"):
                 return json.dumps([[{"filename": name} for name in files]])
             raise AssertionError(args)
@@ -6874,7 +6882,10 @@ class ReviewerTests(unittest.TestCase):
             ledger = Path(directory)
             for kind in ("behaviour", "porting"):
                 code, _, err = self.run_reviewer(
-                    [], kind, ledger=ledger, extra=[open_ended], submitted=submitted
+                    [],
+                    kind,
+                    ledger=ledger,
+                    pr=ReviewerFixture(extra=[open_ended], submitted=submitted),
                 )
                 self.assertEqual(code, 0, err)
 
@@ -6891,12 +6902,22 @@ class ReviewerTests(unittest.TestCase):
             both = ["review-170-behaviour", "review-170-porting"]
             off = {"review-170-porting": "claude-opus-5-5"}
             code, _, _ = self.run_reviewer(
-                both, "recheck", "--commits", "c", ledger=ledger, models=off
+                both,
+                "recheck",
+                "--commits",
+                "c",
+                ledger=ledger,
+                pr=ReviewerFixture(models=off),
             )
             self.assertEqual(code, 1)
             # A PR with no game code has the behaviour review alone.
             code, _, err = self.run_reviewer(
-                only, "recheck", "--commits", "c", ledger=ledger, files=("tools/x.py",)
+                only,
+                "recheck",
+                "--commits",
+                "c",
+                ledger=ledger,
+                pr=ReviewerFixture(files=("tools/x.py",)),
             )
             self.assertEqual(code, 0, err)
 
@@ -6964,7 +6985,7 @@ class ReviewerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             code, _, err = self.run_reviewer(
-                [], "behaviour", ledger=Path(directory), extra=[two]
+                [], "behaviour", ledger=Path(directory), pr=ReviewerFixture(extra=[two])
             )
         self.assertEqual(code, 0, err)
 
@@ -6973,12 +6994,18 @@ class ReviewerTests(unittest.TestCase):
         models = {a: "claude-opus-5-5" for a in agents}
         with tempfile.TemporaryDirectory() as directory:
             code, out, err = self.run_reviewer(
-                agents, "behaviour", ledger=Path(directory), models=models
+                agents,
+                "behaviour",
+                ledger=Path(directory),
+                pr=ReviewerFixture(models=models),
             )
             self.assertEqual(code, 0, err)
             self.assertIn("/root/review-170-behaviour-2,", json.loads(out)["task"])
             code, out, err = self.run_reviewer(
-                agents, "--check", ledger=Path(directory), models=models
+                agents,
+                "--check",
+                ledger=Path(directory),
+                pr=ReviewerFixture(models=models),
             )
             self.assertIn("VOID, off the review row", out)
             self.assertIn("Past the limits: 0\n", out)
