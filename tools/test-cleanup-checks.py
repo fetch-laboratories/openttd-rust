@@ -1507,6 +1507,7 @@ class CarryTests(unittest.TestCase):
             "#[allow(unsafe_code)]\npub unsafe fn read(p: *const u8) -> u8 {\n"
             "    /** The tag. */\n    let _ = 1/* unused */;\n"
             '    let _ = b"x y";\n    let _ = r#"a\n/// b"#;\n'
+            "    let _ = stringify!(><);\n    let _ = stringify!(/** Alpha */ 1);\n"
             "    // SAFETY: the caller's live record.\n    unsafe { *p }\n}\n"
         )
         kept = {
@@ -1521,6 +1522,10 @@ class CarryTests(unittest.TestCase):
             "operation": body.replace("unsafe { *p }", "unsafe { *p.add(1) }"),
             "byte string spacing": body.replace('b"x y"', 'b"x  y"'),
             "raw string line": body.replace("/// b", "/// c"),
+            "raw string prefix": body.replace('r#"a', 'br#"a'),
+            "raw string word": body.replace('r#"a', 'r#"      a'),
+            "macro spacing": body.replace("stringify!(><)", "stringify!(> <)"),
+            "macro doc": body.replace("/** Alpha */ 1", "/** Beta */ 1"),
         }
         script = Path(__file__).with_name("lint-policy.py")
         site = "rust/x.rs | fn read | allow unsafe_code"

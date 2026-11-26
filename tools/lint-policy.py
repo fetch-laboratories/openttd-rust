@@ -357,13 +357,19 @@ def scope_code(path: str, text: str, scope: str) -> list[str] | None:
 
 
 def code_tokens(node: Node) -> list[str]:
-    """Leaf token texts below `node`, skipping comment subtrees."""
+    """Leaf token texts below `node`, skipping comment subtrees.
+
+    A literal is one token spelled in full, and a macro's input is its exact
+    source, comments and spacing included: `stringify!` sees both.
+    """
     tokens, stack = [], [node]
     while stack:
         current = stack.pop()
         if current.type in COMMENTS:
             continue
-        if current.child_count == 0:
+        if current.type.endswith("_literal") or current.type == "token_tree":
+            tokens.append(current.text.decode())
+        elif current.child_count == 0:
             tokens.append(current.text.decode())
         else:
             stack.extend(reversed(current.children))
