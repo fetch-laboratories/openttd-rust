@@ -109,12 +109,6 @@
 #include "safeguards.h"
 
 /**
- * Static instance of FlowStat::SharesMap.
- * Note: This instance is created on task start.
- *       Lazy creation on first usage results in a data race between the CDist threads.
- */
-
-/**
  * Check whether the given tile is a hangar.
  * @param t the tile to of whether it is a hangar.
  * @pre IsTileType(t, MP_STATION)
@@ -326,14 +320,6 @@ static const OpenTTDStationServices _rust_station_services = {
 static const OpenTTDStationLinks _rust_station_links = {
 	.graphs = &GetRustLiveGraphServices(),
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
-	.delete_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
-		if (ge.HasData()) ge.GetData().flows.DeleteFlows(StationID(destination));
-	},
-	.restrict_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
-		if (ge.HasData()) ge.GetData().flows.RestrictFlows(StationID(destination));
-	},
 	.order_list = [](uint16_t id) noexcept -> OpenTTDOrderList * {
 		return OrderList::GetIfValid(OrderListID(id));
 	},

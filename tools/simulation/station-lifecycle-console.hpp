@@ -161,7 +161,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 			if (cargo == 0) {
 				survivor->goods[cargo].link_graph = graph->index; survivor->goods[cargo].node = graph->AddNode(survivor);
 				(*graph)[1].AddEdge(0, 12, 3, 8, {EdgeUpdateMode::Increase, EdgeUpdateMode::Unrestricted});
-				auto &data = survivor->goods[cargo].GetOrCreateData(); data.flows.AddFlow(victim->index, victim->index, 7); data.flows.AddFlow(survivor->index, victim->index, 7); data.flows.AddFlow(survivor->index, survivor->index, 9);
+				auto &data = survivor->goods[cargo].GetOrCreateData(); data.flows.emplace(victim->index, FlowStat(victim->index, 7)); FlowStat flow(victim->index, 7); flow.AppendShare(survivor->index, 9); data.flows.emplace(survivor->index, flow);
 				data.cargo.Append(new CargoPacket(survivor->index, 5, Source{survivor->town->index, SourceType::Town}), victim->index);
 			}
 			LinkGraphSchedule::instance.Queue(graph);

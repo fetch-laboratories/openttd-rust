@@ -1188,8 +1188,6 @@ pub(crate) unsafe fn move_goods_to_station(
 pub struct Links {
     pub(crate) graphs: &'static live::Services,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
-    pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
-    pub(crate) restrict_flows: extern "C" fn(*mut BaseStation, u8, u16),
     pub(crate) order_list: extern "C" fn(u16) -> *mut NativeOrderList,
     pub(crate) order_pool_size: extern "C" fn() -> usize,
     pub(crate) order_count: extern "C" fn(*mut NativeOrderList) -> usize,
@@ -1390,8 +1388,12 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
                     crate::witness::hit(crate::witness::STATION_STALE_REMOVE);
                     to_remove.push((l.graphs.node)(to, cargo.0));
                     let to_index = StationID((l.graphs.station_id)(to));
-                    (l.delete_flows)(from, cargo.0, to_index.0);
+                    let ge = (l.goods_entry)(from, cargo.0);
+                    let flows = (l.storage().flow_map)(ge.cast());
                     unsafe {
+                        if !flows.is_null() {
+                            (*flows).delete_flows(to_index);
+                        }
                         reroute_cargo(
                             from,
                             cargo,
@@ -1409,8 +1411,12 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
                     crate::witness::hit(crate::witness::STATION_STALE_RESTRICT);
                     unsafe { &mut *lg }.nodes[usize::from(node)].edges[index].restrict();
                     let to_index = StationID((l.graphs.station_id)(to));
-                    (l.restrict_flows)(from, cargo.0, to_index.0);
+                    let ge = (l.goods_entry)(from, cargo.0);
+                    let flows = (l.storage().flow_map)(ge.cast());
                     unsafe {
+                        if !flows.is_null() {
+                            (*flows).restrict_flows(to_index);
+                        }
                         reroute_cargo(
                             from,
                             cargo,
@@ -2659,8 +2665,6 @@ crate::abi::layouts! {
     "OpenTTDStationLinks" ["probe"] => Links {
         graphs,
         automatic_distribution,
-        delete_flows,
-        restrict_flows,
         order_list,
         order_pool_size,
         order_count,

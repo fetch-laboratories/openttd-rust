@@ -141,55 +141,44 @@ pub struct GoodsEntry {
 /// `GoodsEntry::GetVia(source, excluded, excluded2)`: get the best next hop
 /// for a cargo packet from station `source`, optionally excluding one or two
 /// stations. Returns the chosen next hop or `StationID::Invalid()` if none was
-/// found.
+/// found. `flows` is `&GetData().flows`, null where the entry has no data;
+/// `random_range` is `RandomRange`.
 /// # Safety
-/// The map is live and serialized; the random callback changes only the RNG.
+/// A non-null `flows` is live and serialized; `random_range` changes only the
+/// random state.
 pub(crate) unsafe fn goods_get_via(
-    map: *mut crate::cargo_flow::FlowMap,
+    flows: *mut crate::cargo_flow::FlowStatMap,
     source: StationID,
     excluded: StationID,
     excluded2: StationID,
-    random: impl FnMut() -> u32,
+    random_range: impl FnMut(u32) -> u32,
 ) -> StationID {
-    // `!HasData()`.
-    if map.is_null() {
+    if flows.is_null() {
         return StationID::INVALID;
     }
-    // The fork's flow-map lookup: operation 1 is `flows.find(source)`.
-    let entry = unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, u32::from(source.0), 1) };
-    if entry.found == 0 {
+    // SAFETY: The caller's live flows.
+    let Some(flow) = unsafe { &*flows }.find(source) else {
         return StationID::INVALID;
-    }
-    let mut restricted = 0;
-    // The fork's flow dispatch: mode 2 is `FlowStat::GetVia(excluded, excluded2)`.
-    StationID(unsafe {
-        crate::cargo_flow::flow_via(
-            entry.flow,
-            2,
-            excluded.0,
-            excluded2.0,
-            &raw mut restricted,
-            random,
-        )
-    })
+    };
+    flow.get_via_excluded(excluded, excluded2, random_range)
 }
 /// Temporary raw adapter for `cargo_storage.rs`; delegates to [`goods_get_via`].
 /// # Safety
 /// As [`goods_get_via`].
 pub(crate) unsafe fn goods_get_via_raw(
-    map: *mut crate::cargo_flow::FlowMap,
+    flows: *mut crate::cargo_flow::FlowStatMap,
     source: u16,
     excluded: u16,
     excluded2: u16,
-    random: impl FnMut() -> u32,
+    random_range: impl FnMut(u32) -> u32,
 ) -> u16 {
     unsafe {
         goods_get_via(
-            map,
+            flows,
             StationID(source),
             StationID(excluded),
             StationID(excluded2),
-            random,
+            random_range,
         )
     }
     .0

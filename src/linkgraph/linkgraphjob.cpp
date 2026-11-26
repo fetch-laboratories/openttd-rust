@@ -8,7 +8,6 @@
 /** @file linkgraphjob.cpp Definition of link graph job classes used for cargo distribution. */
 
 #include "../stdafx.h"
-#include "../window_func.h"
 #include "linkgraphjob.h"
 #include "../rust/services_linkgraph.h"
 #include "linkgraphschedule.h"
@@ -40,53 +39,24 @@ void LinkGraphJob::JoinThread()
 	}
 }
 
-/** Call-scoped native leaves; no owned graph query reenters Rust from a leaf. */
-struct CargoFlowContext { LinkGraphJob *job; CargoType cargo; };
-static bool CargoDataIsEmpty(void *context, uint16_t node) noexcept
-{
-	const auto &ctx = *static_cast<CargoFlowContext *>(context);
-	return Station::Get(StationID(ctx.job->Graph()->nodes[node].station))->goods[ctx.cargo].GetData().IsEmpty();
-}
+/** GoodsEntry::ClearData, for the job's application. */
+static void GoodsEntryClearData(GoodsEntry *ge) noexcept { ge->ClearData(); }
 
-static OpenTTDCargoFlowMap *CargoLiveFlows(void *context, uint16_t node) noexcept
-{
-	const auto &ctx = *static_cast<CargoFlowContext *>(context);
-	auto &job = *ctx.job;
-	return Station::Get(StationID(job.Graph()->nodes[node].station))->goods[ctx.cargo].GetOrCreateData().flows.RustState();
-}
+/** GoodsEntry::GetData().IsEmpty(), for the job's application. */
+static bool GoodsEntryDataIsEmpty(const GoodsEntry *ge) noexcept { return ge->GetData().IsEmpty(); }
 
-static void CargoFlowReroute(void *context, uint16_t node, uint16_t via) noexcept
-{
-	const auto &ctx = *static_cast<CargoFlowContext *>(context);
-	auto &job = *ctx.job;
-	Station *st = Station::Get(StationID(job.Graph()->nodes[node].station));
-	RerouteCargo(st, ctx.cargo, StationID(via), st->index);
-}
+/** &GoodsEntry::GetOrCreateData().flows, for the job's application. */
+static OpenTTDCargoFlowMap *GoodsEntryGetOrCreateDataFlows(GoodsEntry *ge) noexcept { return ge->GetOrCreateData().flows.RustState(); }
 
-static void CargoFlowFinish(void *context, uint16_t node, uint8_t clear) noexcept
+static OpenTTDCargoFlowServices CargoFlowServices(LinkGraphJob *job)
 {
-	const auto &ctx = *static_cast<CargoFlowContext *>(context);
-	auto &job = *ctx.job;
-	Station *st = Station::Get(StationID(job.Graph()->nodes[node].station));
-	if (clear != 0) st->goods[ctx.cargo].ClearData();
-	InvalidateWindowData(WC_STATION_VIEW, st->index, ctx.cargo);
-}
-
-static OpenTTDCargoFlowServices CargoFlowServices(CargoFlowContext *context)
-{
-	LinkGraphJob *job = context->job;
-	LinkGraph *graph = job == nullptr ? nullptr : LinkGraph::GetIfValid(job->LinkGraphIndex());
-	OpenTTDLiveGraph *live = graph == nullptr ? nullptr : graph->RustState();
 	return {
+		.clear_data = GoodsEntryClearData,
+		.data_is_empty = GoodsEntryDataIsEmpty,
+		.get_or_create_data_flows = GoodsEntryGetOrCreateDataFlows,
 		.job = job == nullptr ? nullptr : &job->Record(),
-		.live_graph = live,
-		.context = context,
-		.stations = &GetRustStationServices(),
 		.links = &GetRustStationLinks(),
-		.data_is_empty = CargoDataIsEmpty,
-		.live_flows = CargoLiveFlows,
-		.reroute = CargoFlowReroute,
-		.finish = CargoFlowFinish,
+		.stations = &GetRustStationServices(),
 	};
 }
 
@@ -99,8 +69,7 @@ LinkGraphJob::~LinkGraphJob()
 
 	if (!CleaningPool()) {
 		assert(!this->IsJobAborted());
-		CargoFlowContext context{this, this->Cargo()};
-		auto services = CargoFlowServices(&context);
+		auto services = CargoFlowServices(this);
 		openttd_rust_flow_apply(&services);
 	}
 	_link_graph_job_pool.RetireRecord(this->index.base(), this, this->record);
@@ -114,4 +83,4 @@ static_assert(Ticks::DAY_TICKS == 74);
 
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoFlowServices.hpp"
-bool CheckAbi_linkgraphjob() { CargoFlowContext context{nullptr, INVALID_CARGO}; return AbiServicesComplete(CargoFlowServices(&context)); }
+bool CheckAbi_linkgraphjob() { return AbiServicesComplete(CargoFlowServices(nullptr)); }

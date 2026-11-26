@@ -849,7 +849,7 @@ mod tests {
             0
         }
         extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-        extern "C" fn flow_map(_: *const c_void) -> *mut crate::cargo_flow::FlowMap {
+        extern "C" fn flow_map(_: *const c_void) -> *mut crate::cargo_flow::FlowStatMap {
             null_mut()
         }
         extern "C" fn packet_next(_: *mut c_void) -> *mut c_void {
