@@ -498,25 +498,20 @@ fn check_if_ship_needs_service(t: &Tables<'_>, v: Ship) {
 
     let Some(depot) = find_closest_ship_depot(t, v.v, max_distance) else {
         if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT) {
-            // SAFETY: The current order belongs to this live serialized record.
-            unsafe { crate::orders::make_dummy(v.v.current_order_pointer()) };
+            crate::orders::make_dummy(v.v);
             t.start_stop_dirty(v.v);
         }
         return;
     };
     crate::witness::hit(crate::witness::SHIP_AUTO_SERVICE);
 
-    // SAFETY: The current order belongs to this live serialized record.
-    unsafe {
-        crate::orders::make_go_to_depot(
-            v.v.current_order_pointer(),
-            DestinationID(depot.index),
-            OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::Service),
-            OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate),
-            OrderDepotActionFlags::EMPTY,
-            crate::cargo_type::CargoType::CARGO_NO_REFIT,
-        );
-    }
+    crate::orders::current_order(v.v).make_go_to_depot(
+        DestinationID(depot.index),
+        OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::Service),
+        OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate),
+        OrderDepotActionFlags::EMPTY,
+        crate::cargo_type::CargoType::CARGO_NO_REFIT,
+    );
     set_dest_tile(v, TileIndex(depot.xy));
     t.start_stop_dirty(v.v);
 }
@@ -719,7 +714,7 @@ fn check_ship_stay_in_depot(t: &Tables<'_>, v: Ship) -> bool {
     );
 
     maintenance::vehicle_service_in_depot(v.v, t.vs);
-    crate::orders::VisitOrders::new(t.vs.orders()).leave_unbunching_depot(v.v);
+    crate::orders::leave_unbunching_depot(v.v, t.vs.orders());
     (t.vs.play_leave_station_sound)(v.v);
     invalidate_window_data(
         WindowClass::WC_VEHICLE_DEPOT,
@@ -1175,11 +1170,9 @@ fn ship_controller(t: &Tables<'_>, v: Ship) {
                             /* We got within 3 tiles of our target buoy, so let's skip to our
                              * next order */
                             crate::witness::hit(crate::witness::SHIP_BUOY);
-                            crate::orders::VisitOrders::new(t.vs.orders())
-                                .update_timetable(v.v, true);
+                            crate::orders::update_vehicle_timetable(v.v, true, t.vs.orders());
                             crate::orders::increment_real_order_index(v.v, t.vs.orders());
-                            // SAFETY: The current order belongs to this live serialized record.
-                            unsafe { crate::orders::make_dummy(v.v.current_order_pointer()) };
+                            crate::orders::make_dummy(v.v);
                         } else if v.v.current_order().is_type(OrderType::OT_GOTO_DEPOT)
                             && v.v.dest_tile() == gp.new_tile
                         {
@@ -1478,6 +1471,15 @@ pub(crate) unsafe fn cmd_build_ship(
     shell
 }
 
+/// `Ship::FindClosestDepot` on a live ship record, for the Rust dispatch of the virtual.
+pub(crate) fn find_closest_depot_of(
+    v: VehicleRef,
+    leaves: &Leaves,
+    shared: &Services,
+) -> ClosestDepot {
+    let t = Tables::new(leaves, shared);
+    find_closest_depot(&t, Ship::of(v))
+}
 /// `Ship::FindClosestDepot`.
 pub(crate) fn find_closest_depot(t: &Tables<'_>, v: Ship) -> ClosestDepot {
     let Some(depot) = find_closest_ship_depot(t, v.v, MAX_SHIP_DEPOT_SEARCH_DISTANCE) else {
@@ -1530,14 +1532,14 @@ pub unsafe extern "C" fn openttd_rust_ship_find_depot(
     v: VehicleRef,
     leaves: *const Leaves,
     shared: *const Services,
-    closest: *mut crate::orders::Closest,
+    closest: *mut crate::vehicle_base::Closest,
 ) {
     // SAFETY: As this function's contract.
     let t = unsafe { Tables::new(&*leaves, &*shared) };
     let result = find_closest_depot(&t, Ship::of(v));
     // SAFETY: As this function's contract.
     unsafe {
-        closest.write(crate::orders::Closest {
+        closest.write(crate::vehicle_base::Closest {
             tile: result.location.0,
             destination: result.destination.0,
             reverse: u8::from(result.reverse),

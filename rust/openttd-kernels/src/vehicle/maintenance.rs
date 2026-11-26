@@ -421,7 +421,7 @@ fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
 fn needs_automatic_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     getter::<C>();
     let orders = base.orders();
-    if crate::orders::VisitOrders::new(orders).has_depot_order(v) {
+    if crate::orders::has_depot_order(v, orders) {
         return false;
     }
     let current_order = v.current_order();
@@ -1473,15 +1473,15 @@ mod tests {
                 (*record).engine_type = OLD;
                 (*record).owner = CompanyID(0);
                 (*record).consist = Box::into_raw(Box::new(Consist {
-                    time: 0,
-                    lateness: 0,
-                    start: 0,
-                    last_departure: 0,
-                    next_departure: 0,
-                    round_trip: 0,
-                    real: 0,
-                    implicit: 0,
-                    flags: 0,
+                    current_order_time: 0,
+                    lateness_counter: 0,
+                    timetable_start: 0,
+                    depot_unbunching_last_departure: 0,
+                    depot_unbunching_next_departure: 0,
+                    round_trip_time: 0,
+                    cur_real_order_index: 0,
+                    cur_implicit_order_index: 0,
+                    vehicle_flags: 0,
                 }));
                 (*record).orders = crate::orders::openttd_rust_vehicle_orders_new();
             }
@@ -1501,14 +1501,14 @@ mod tests {
         fn order(&self, kind: OrderType) {
             // SAFETY: The fixture's order state.
             unsafe {
-                (*(*self.record).orders).current.write(Order {
-                    kind: kind.0,
+                (*(*self.record).orders).current_order.write(Order {
+                    r#type: kind.0,
                     flags: 0,
-                    destination: 0,
-                    refit: 0,
-                    wait: 0,
-                    travel: 0,
-                    speed: 0,
+                    dest: 0,
+                    refit_cargo: 0,
+                    wait_time: 0,
+                    travel_time: 0,
+                    max_speed: 0,
                 });
             }
         }

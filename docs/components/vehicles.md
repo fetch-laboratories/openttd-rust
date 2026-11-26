@@ -271,3 +271,10 @@
 - C++ keeps: the base table's pool and shell operations, the fields the shell still stores, unported viewport, sound, window, NewGRF-error and path-result bodies, and links to other tables.
 - Checks: the Rust tests of `vehicle.rs`, `orders.rs`, `road.rs`, `newgrf_vehicle.rs` and `occupancy.rs`, and the aircraft, road, ship and disaster ABI fixtures.
 - PRs: #1031.
+
+## Orders file pass (#1060, first part)
+
+- `orders.rs` (with `orders/tests.rs`) and `order_func.rs` are finished: one function per original body of `order_cmd.cpp`, `timetable_cmd.cpp`, `order_backup.cpp` and the order members of `vehicle.cpp` and `vehicle_base.h`. The records `Order`, `Consist`, `VehicleOrders`, `List` and `Backup` take the original members' names; `OrderView` reads and `OrderRef` writes an order in place, and `OrderListRef` is the list handle. The commands take IDs and keep each original's guard order; `Command<>::Do` is `command::nested` around the Rust bodies. `FindClosestDepot` and `SetDestTile` dispatch in `vehicle_base.rs`.
+- C++ keeps the order, list and backup pools and shells (#906), the station, waypoint and depot lookups (#634, #638), the names and service intervals stored in C++ shells, `GetVehicleCannotUseStationReason`, `InvalidateVehicleOrder`, `DebugCheckSanity` and `Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe`, each one slot of `OpenTTDOrdersLeaves`.
+- Checks: the `orders-` scenarios and the default `fleet-` scenarios; `orders::tests` for the views and writers, unbunching, the command costs and the window, news and fatal paths the harness cannot see; `src/tests/orders.cpp` on live pool vehicles; the aircraft, road and ship ABI probes.
+- Limits: the aircraft arms of `UpdateOrderDest` and `FindClosestDepot`, `OrderBackup::ResetUser`'s post and order-pool exhaustion have no fixture (#156).

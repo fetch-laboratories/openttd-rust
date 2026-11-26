@@ -82,9 +82,7 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 /* Typed signature adapter for synchronous pathfinder vehicle contexts. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
-inline void OPENTTD_RUST_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
-inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
 inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { return RustVehicle(VehicleOf(v)->GetNextArticulatedPart()); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
@@ -97,7 +95,6 @@ inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNu
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->GetTile().base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
-inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
 inline OrderUnloadType RustVehicleOrderUnloadType(const Vehicle *v) noexcept { return v->current_order.GetUnloadType(); }
 inline OrderLoadType RustVehicleOrderLoadType(const Vehicle *v) noexcept { return v->current_order.GetLoadType(); }
 inline TimerGameCalendar::Date RustVehicleCalendarService(const Vehicle *v) noexcept { return v->date_of_last_service_newgrf; }
@@ -116,7 +113,6 @@ bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
-inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return v->Record().vehstatus; }
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
 inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->SetTile(tile); }
 inline uint8_t RustVehicleBreakdownDelay(const Vehicle *v) noexcept { return v->breakdown_delay; }
@@ -133,7 +129,6 @@ inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept {
 inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept { return v->date_of_last_service; }
 inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return RustVehicleLastService(VehicleOf(v)).base(); }
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
-inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->Record().reliability; }
 template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
 {
 	if constexpr (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Handle>>, OpenTTDVehicle>) return VehicleOf(v)->index.base();
@@ -155,12 +150,9 @@ ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
-inline int32_t RustVehicleX(const Vehicle *v) noexcept { return v->Record().x_pos; }
-inline int32_t RustVehicleY(const Vehicle *v) noexcept { return v->Record().y_pos; }
 inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->Record().x_pos = x; }
 inline void RustWriteVehicleY(Vehicle *v, int32_t y) noexcept { v->Record().y_pos = y; }
 inline void RustWriteVehicleZ(Vehicle *v, int32_t z) noexcept { v->Record().z_pos = z; }
-inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return v->Record().cur_speed; }
 inline int64_t RustVehicleProfit(const Vehicle *v) noexcept { return v->profit_this_year; }
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return v->GetType(); }
 
@@ -190,9 +182,9 @@ static Result RustOpaqueHandleRead(void *shell) noexcept
 /** Typed legacy-context adapter; the native operation remains defined once. */
 template <auto Operation, typename... Args>
 static auto RustOpaqueVehicleInvoke(void *shell, Args... args) noexcept { return Operation(static_cast<Vehicle *>(shell), args...); }
-/** Legacy orders width/handle adapter for a shared map read at a vehicle's tile. */
-template <typename Result, auto Read>
-static Result RustOpaqueVehicleTileRead(void *shell) noexcept { return Read(RustVehicleTile(static_cast<const Vehicle *>(shell))); }
+/** `v->name = source->name` for a typed legacy-context source, such as an `OrderBackup`. */
+template <typename Source>
+static void RustOpaqueVehicleCopyName(void *shell, const void *source) noexcept { static_cast<Vehicle *>(shell)->name = static_cast<const Source *>(source)->name; }
 inline bool RustVehicleOldEnough(const Vehicle *v) noexcept { return RustVehicleEconomyAge(v) > VEHICLE_PROFIT_MIN_AGE; }
 
 /** Indexed callback adapter for a canonical field setter. */
@@ -200,7 +192,6 @@ template <typename Value, auto Write>
 static void RustIndexedVehicleWrite(uint32_t id, Value value) noexcept { Write(Vehicle::Get(VehicleID(id)), value); }
 
 /** Base vehicle cargo and articulated fields shared by loading and link refresh. */
-inline bool RustVehicleUsesWagonOverride(const Vehicle *v) noexcept { return UsesWagonOverride(v); }
 inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->cargo_subtype; }
 inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->cargo_type; }
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }

@@ -20,6 +20,10 @@ impl VehicleFlag {
     pub const BUILT_AS_PROTOTYPE: Self = Self(2);
     /// Whether the vehicle has started running on the timetable yet.
     pub const TIMETABLE_STARTED: Self = Self(3);
+    /// Whether the vehicle should fill in the timetable automatically.
+    pub const AUTOFILL_TIMETABLE: Self = Self(4);
+    /// Whether non-destructive auto-fill should preserve waiting times.
+    pub const AUTOFILL_PRESERVE_WAIT_TIME: Self = Self(5);
     /// Don't load anymore during the next load cycle.
     pub const STOP_LOADING: Self = Self(6);
     /// Service interval is custom.
@@ -37,11 +41,24 @@ impl VehicleFlags {
     pub const fn test(self, element: VehicleFlag) -> bool {
         self.0 & (1 << element.0) != 0
     }
+    /// `EnumBitSet::Set`: the set with `element` added.
+    #[must_use]
+    pub const fn set(self, element: VehicleFlag) -> Self {
+        Self(self.0 | (1 << element.0))
+    }
+    /// `EnumBitSet::Reset`: the set with `element` removed.
+    #[must_use]
+    pub const fn reset(self, element: VehicleFlag) -> Self {
+        Self(self.0 & !(1 << element.0))
+    }
+    /// `EnumBitSet::Flip`: the set with `element` toggled.
+    #[must_use]
+    pub const fn flip(self, element: VehicleFlag) -> Self {
+        Self(self.0 ^ (1 << element.0))
+    }
 }
 
 /// `VehicleFlags` mask of `VehicleFlag::CargoUnloading`.
 pub const VF_CARGO_UNLOADING: u16 = 1 << VehicleFlag::CARGO_UNLOADING.0;
 /// `VehicleFlags` mask of `VehicleFlag::BuiltAsPrototype`.
 pub const VF_BUILT_AS_PROTOTYPE: u16 = 1 << VehicleFlag::BUILT_AS_PROTOTYPE.0;
-/// `VehicleFlags` mask of `VehicleFlag::TimetableStarted`.
-pub const VF_TIMETABLE_STARTED: u16 = 1 << VehicleFlag::TIMETABLE_STARTED.0;

@@ -312,16 +312,6 @@ CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, Vehicl
 }
 
 /**
- * Test if a name is unique among vehicle names.
- * @param name Name to test.
- * @return True ifffffff the name is unique.
- */
-bool IsUniqueVehicleName(const std::string &name)
-{
-	return openttd_rust_vehicle_unique_name(&GetRustVehicleTransactionServices(), {reinterpret_cast<const uint8_t *>(name.data()), name.size()});
-}
-
-/**
  * Clone the custom name of a vehicle, adding or incrementing a number.
  * @param src Source vehicle, with a custom name.
  * @param dst Destination vehicle.

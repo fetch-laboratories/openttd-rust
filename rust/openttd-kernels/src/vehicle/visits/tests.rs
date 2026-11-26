@@ -157,16 +157,6 @@ extern "C" fn money(_: *const crate::services::CommandCost) -> i64 {
     MONEY.get()
 }
 
-// The orders leaves map a fixture shell, which is its record, to the record's owners.
-unsafe extern "C" fn order_vehicle(
-    shell: *mut std::ffi::c_void,
-) -> *mut crate::orders::VehicleOrders {
-    unsafe { (*shell.cast::<OpenTTDVehicle>()).orders }
-}
-unsafe extern "C" fn order_consist(shell: *mut std::ffi::c_void) -> *mut crate::orders::Consist {
-    unsafe { (*shell.cast::<OpenTTDVehicle>()).consist }
-}
-
 /// The visit table over the recording leaves, with `edit` applied to the shared, station
 /// and loading tables first.
 fn visits(
@@ -211,8 +201,6 @@ fn visits(
         ..crate::test_tables::VEHICLE
     });
     let orders = leak(crate::orders::Leaves {
-        vehicle: order_vehicle,
-        consist: order_consist,
         base: vehicles,
         ..crate::test_tables::ORDERS
     });
@@ -282,13 +270,13 @@ fn vehicle(kind: VehicleType, owner: crate::company_type::CompanyID, current: Or
 }
 const fn order(kind: OrderType, flags: u8, refit: u8) -> Order {
     Order {
-        kind: kind.0,
+        r#type: kind.0,
         flags,
-        destination: 0,
-        refit,
-        wait: 0,
-        travel: 0,
-        speed: u16::MAX,
+        dest: 0,
+        refit_cargo: refit,
+        wait_time: 0,
+        travel_time: 0,
+        max_speed: u16::MAX,
     }
 }
 

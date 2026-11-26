@@ -61,7 +61,11 @@ pub struct TransactionServices {
     pub max_name: usize,
 }
 
-unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
+/// `IsUniqueVehicleName`: test if a name is unique among vehicle names.
+///
+/// # Safety
+/// The tables and the readable name span live for this synchronous call.
+pub(crate) unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     let mut from = 0;
     loop {
         let v = crate::vehicle::VehicleRef::shell_from_record(s.groups.next_vehicle(from));
@@ -99,15 +103,6 @@ unsafe fn owned_primary(
         return (std::ptr::null_mut(), CompanyID(0), None);
     }
     (v, owner, Some(handle))
-}
-/// # Safety
-/// Immutable tables and readable name span live for this synchronous call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_unique_name_abi(
-    s: &TransactionServices,
-    name: ByteSpan,
-) -> u8 {
-    u8::from(unsafe { unique_name(s, name) })
 }
 /// `CmdRenameVehicle`'s arguments.
 #[derive(Clone, Copy)]
@@ -693,13 +688,14 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         (s.value)(front).saturating_neg(),
     );
     if flags.test(DoCommandFlag::Execute) {
+        // SAFETY: `front` is the live sold vehicle's shell, resolved once for the backup and
+        // the deletion.
+        let record = unsafe { vehicle_ref(front, s.vehicles) };
         if unsafe { (b.groups.primary)(front) } && backup_order {
-            unsafe {
-                crate::orders::openttd_rust_backup_create(front.cast(), client_id.0, s.orders);
-            };
+            crate::orders::order_backup_backup(record, client_id.0, s.orders);
         }
         // No owner access or retained reference crosses the deleting callback.
-        (s.vehicles.destroy)(unsafe { vehicle_ref(front, s.vehicles) });
+        (s.vehicles.destroy)(record);
     }
 }
 /// `CmdStartStopVehicle`'s arguments.
@@ -857,7 +853,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */
-        crate::orders::reset_unbunching(handle);
+        crate::orders::reset_depot_unbunching(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.
         (unsafe { &*s.vehicles.maintenance }.mark_dirty)(handle);
         set_window_widget_dirty(

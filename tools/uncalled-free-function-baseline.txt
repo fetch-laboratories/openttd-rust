@@ -1,12 +1,2 @@
 # C++ free functions that no code calls. A change that deletes a function's last caller
 # deletes the function too; this list only shrinks (tools/orphan-exports.py).
-MapSvcIsLevelCrossing | #1077 src/rust/services_map.h
-RustEngineReliability | #1077 src/rust/vehicle_services.h
-RustTileVirtXY | #1077 src/rust/services_map.h
-RustVehicleOrderDestination | #1077 src/rust/vehicle_services.h
-RustVehicleSpeed | #1077 src/rust/vehicle_services.h
-RustVehicleStatus | #1077 src/rust/vehicle_services.h
-RustVehicleUsesWagonOverride | #1077 src/rust/vehicle_services.h
-RustVehicleX | #1077 src/rust/vehicle_services.h
-RustVehicleY | #1077 src/rust/vehicle_services.h
-Shared_disallowed_road_directions | #1077 src/rust/services_map.h

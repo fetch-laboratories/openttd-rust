@@ -691,21 +691,6 @@ mod controller {
         assert_eq!(shell_ptr, shell());
         RECORD.get().cast()
     }
-    unsafe extern "C" fn order_vehicle(
-        shell_ptr: *mut std::ffi::c_void,
-    ) -> *mut crate::orders::VehicleOrders {
-        assert_eq!(shell_ptr, shell());
-        bay().orders
-    }
-    unsafe extern "C" fn order_consist(
-        shell_ptr: *mut std::ffi::c_void,
-    ) -> *mut crate::orders::Consist {
-        assert_eq!(shell_ptr, shell());
-        bay().consist
-    }
-    unsafe extern "C" fn road_vehicle_type(_: *mut std::ffi::c_void) -> u64 {
-        u64::from(crate::vehicle_type::VehicleType::VEH_ROAD.0)
-    }
     extern "C" fn bay_primary(tile: u32, kind: RoadStopType) -> *mut crate::road_stop::Stop {
         assert_eq!((tile, kind), (TILE.0, RoadStopType::Bus));
         (&raw const STOP_SHELL).cast_mut().cast()
@@ -877,15 +862,17 @@ mod controller {
         BAY.set(&raw const bay_owners);
         // SAFETY: The fresh order owner; its current order starts here.
         unsafe {
-            (*bay_owners.orders).current.write(crate::orders::Order {
-                kind: OrderType::OT_GOTO_STATION.0,
-                flags: 0,
-                destination: STATION.0,
-                refit: 254,
-                wait: 0,
-                travel: 0,
-                speed: u16::MAX,
-            });
+            (*bay_owners.orders)
+                .current_order
+                .write(crate::orders::Order {
+                    r#type: OrderType::OT_GOTO_STATION.0,
+                    flags: 0,
+                    dest: STATION.0,
+                    refit_cargo: 254,
+                    wait_time: 0,
+                    travel_time: 0,
+                    max_speed: u16::MAX,
+                });
         }
 
         let settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
@@ -908,10 +895,12 @@ mod controller {
                 })),
                 ..*f.game().vs
             }));
+        // SAFETY: The fixture's live record; the bodies read its order owners in place.
+        unsafe {
+            (*f.record).orders = bay_owners.orders;
+            (*f.record).consist = bay_owners.consist;
+        }
         let orders = Box::leak(Box::new(crate::orders::Leaves {
-            vehicle: order_vehicle,
-            consist: order_consist,
-            vehicle_type: road_vehicle_type,
             base: vehicles,
             ..crate::test_tables::ORDERS
         }));
@@ -1042,7 +1031,7 @@ mod controller {
             );
             assert_eq!((*f.record).last_station_visited, STATION);
             assert_eq!(
-                (*bay_owners.orders).current.assume_init_ref().kind & 0x0F,
+                (*bay_owners.orders).current_order.assume_init_ref().r#type & 0x0F,
                 OrderType::OT_LOADING.0
             );
             assert_eq!(
@@ -1095,13 +1084,6 @@ mod controller {
         static SERVICE_PENALTY: Cell<u32> = const { Cell::new(0) };
         static SERVICE_ORDERS: Cell<*mut crate::orders::VehicleOrders> =
             const { Cell::new(std::ptr::null_mut()) };
-    }
-    /// The vehicle's order owner, for the search's current order speed limit.
-    unsafe extern "C" fn service_order_vehicle(
-        shell_ptr: *mut std::ffi::c_void,
-    ) -> *mut crate::orders::VehicleOrders {
-        assert_eq!(shell_ptr, shell());
-        SERVICE_ORDERS.get()
     }
     extern "C" fn service_tile_type(tile: u32) -> u8 {
         // SAFETY: The test's live 4096-tile map; `tile` is on it.
@@ -1321,24 +1303,21 @@ mod controller {
         }));
         let orders = crate::orders::openttd_rust_vehicle_orders_new();
         SERVICE_ORDERS.set(orders);
-        movement.orders = Box::leak(Box::new(crate::orders::Leaves {
-            vehicle: service_order_vehicle,
-            ..crate::test_tables::ORDERS
-        }));
+        movement.orders = &crate::test_tables::ORDERS;
         // SAFETY: The fixture's live record and its fresh order owner.
         unsafe {
             (*f.record).orders = orders;
             (*f.record).shell = shell().cast();
             (*f.record).consist = Box::leak(Box::new(crate::orders::Consist {
-                time: 0,
-                lateness: 0,
-                start: 0,
-                last_departure: 0,
-                next_departure: 0,
-                round_trip: 0,
-                real: 0,
-                implicit: 0,
-                flags: 0,
+                current_order_time: 0,
+                lateness_counter: 0,
+                timetable_start: 0,
+                depot_unbunching_last_departure: 0,
+                depot_unbunching_next_departure: 0,
+                round_trip_time: 0,
+                cur_real_order_index: 0,
+                cur_implicit_order_index: 0,
+                vehicle_flags: 0,
             }));
         }
         BUS.set(true);
@@ -1356,14 +1335,14 @@ mod controller {
                 r.dest_tile = TileIndex(42);
                 r.cur_speed = 0;
                 (*r.ground).flags = 0;
-                (*orders).current.write(crate::orders::Order {
-                    kind: OrderType::OT_NOTHING.0,
+                (*orders).current_order.write(crate::orders::Order {
+                    r#type: OrderType::OT_NOTHING.0,
                     flags: 0,
-                    destination: 0,
-                    refit: 0,
-                    wait: 0,
-                    travel: 0,
-                    speed: 0,
+                    dest: 0,
+                    refit_cargo: 0,
+                    wait_time: 0,
+                    travel_time: 0,
+                    max_speed: 0,
                 });
             }
             f.state.fields.state = Trackdir::TRACKDIR_X_NE.0;

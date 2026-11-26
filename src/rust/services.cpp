@@ -376,10 +376,6 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 };
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 
-extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
-{
-	return RustStationShipTile(RustStationGet<Station *>(destination));
-}
 
 static uint32_t SharedRandom(void *) noexcept { return Random(); }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept

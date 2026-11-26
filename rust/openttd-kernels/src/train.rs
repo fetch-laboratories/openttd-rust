@@ -38,7 +38,6 @@ use crate::newgrf_properties::PropertyID;
 use crate::news_func::{add_tile_news_item, add_vehicle_advice_news_item, add_vehicle_news_item};
 use crate::news_type::{AdviceType, NewsType};
 use crate::order_type::{OrderNonStopFlag, OrderStopLocation, OrderType};
-use crate::orders::Closest;
 use crate::pathfinder_type::FindDepotData;
 use crate::pbs::Pbs;
 use crate::rail_type::{RailType, RailTypes};
@@ -65,6 +64,7 @@ use crate::train_reservation as reservation;
 use crate::train_state::State;
 use crate::transport_type::TransportType;
 use crate::vehicle::{EngineRef, RailVehicleTypes, VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_base::Closest;
 use crate::vehicle_base::{ClosestDepot, VehState};
 use crate::vehicle_gui::VehicleInvalidateWindowData;
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
@@ -2126,7 +2126,7 @@ impl Game<'_> {
                 }
 
                 /* Unbunching data is no longer valid. */
-                crate::orders::reset_unbunching(v.vehicle());
+                crate::orders::reset_depot_unbunching(v.vehicle());
             }
         }
     }
@@ -2197,7 +2197,7 @@ impl Game<'_> {
             self.set_vehicle_view_dirty(t);
 
             /* Unbunching data is no longer valid. */
-            crate::orders::reset_unbunching(t.vehicle());
+            crate::orders::reset_depot_unbunching(t.vehicle());
         }
     }
 
@@ -2321,7 +2321,7 @@ impl Game<'_> {
 
         crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
         maintenance::vehicle_service_in_depot(v.vehicle(), self.vs);
-        crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(v.vehicle());
+        crate::orders::leave_unbunching_depot(v.vehicle(), self.vs.orders());
         (self.vs.play_leave_station_sound)(v.vehicle());
         set_window_classes_dirty(WindowClass::WC_TRAINS_LIST);
 
@@ -4068,8 +4068,7 @@ impl Game<'_> {
                 /* If we were already heading for a depot but it has
                  * suddenly moved farther away, we continue our normal
                  * schedule? */
-                // SAFETY: The current order belongs to this live serialized record.
-                unsafe { crate::orders::make_dummy(v.vehicle().current_order_pointer()) };
+                crate::orders::make_dummy(v.vehicle());
                 self.set_start_stop_dirty(v);
             }
             return;
@@ -4092,23 +4091,17 @@ impl Game<'_> {
             GroundVehicleFlags::GVF_SUPPRESS_IMPLICIT_ORDERS.0,
         );
         write_field!(v.vehicle().ground(), flags, gv_flags);
-        // SAFETY: The current order belongs to this live serialized record.
-        unsafe {
-            crate::orders::make_go_to_depot(
-                v.vehicle().current_order_pointer(),
-                depot,
-                crate::order_type::OrderDepotTypeFlags::from_element(
-                    crate::order_type::OrderDepotTypeFlag::Service,
-                ),
-                crate::order_type::OrderNonStopFlags::from_element(
-                    OrderNonStopFlag::NoIntermediate,
-                ),
-                crate::order_type::OrderDepotActionFlags::from_element(
-                    crate::order_type::OrderDepotActionFlag::NearestDepot,
-                ),
-                crate::cargo_type::CargoType::CARGO_NO_REFIT,
-            );
-        }
+        crate::orders::current_order(v.vehicle()).make_go_to_depot(
+            depot,
+            crate::order_type::OrderDepotTypeFlags::from_element(
+                crate::order_type::OrderDepotTypeFlag::Service,
+            ),
+            crate::order_type::OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate),
+            crate::order_type::OrderDepotActionFlags::from_element(
+                crate::order_type::OrderDepotActionFlag::NearestDepot,
+            ),
+            crate::cargo_type::CargoType::CARGO_NO_REFIT,
+        );
         v.vehicle().set_dest_tile(tfdd.tile);
         self.set_start_stop_dirty(v);
     }
@@ -4488,18 +4481,47 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_direction(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    entry_game!(leaves, services).cmd_reverse_train_direction(
-        &CommandContext {
-            rail: build.rail,
-            common: build.refit.common,
-            out,
-            flags: crate::command_type::DoCommandFlags(flags),
-        },
+    cmd_reverse_train_direction(
+        build,
+        out,
+        crate::command_type::DoCommandFlags(flags),
         CmdReverseTrainDirection {
             veh_id: VehicleID(veh_id),
             reverse_single_veh,
         },
+        // SAFETY: As this function's contract.
+        unsafe { &*leaves },
+        // SAFETY: As this function's contract.
+        unsafe { &*services },
     );
+}
+/// `CmdReverseTrainDirection`, for the Rust callers; `out` is the command's live native
+/// result.
+pub(crate) fn cmd_reverse_train_direction(
+    build: &crate::vehicle_transactions::build::Services,
+    out: *mut crate::services::CommandCost,
+    flags: crate::command_type::DoCommandFlags,
+    args: CmdReverseTrainDirection,
+    leaves: &Leaves,
+    services: &Services,
+) {
+    Game::new(leaves, services).cmd_reverse_train_direction(
+        &CommandContext {
+            rail: build.rail,
+            common: build.refit.common,
+            out,
+            flags,
+        },
+        args,
+    );
+}
+/// `Train::FindClosestDepot` on a live train record, for the Rust dispatch of the virtual.
+pub(crate) fn find_closest_depot(
+    v: VehicleRef,
+    leaves: &Leaves,
+    services: &Services,
+) -> ClosestDepot {
+    Game::new(leaves, services).find_closest_depot(Handle::from_record(v.0.as_ptr()))
 }
 /// `CmdForceTrainProceed`, over the positional base integers of the command.
 /// # Safety

@@ -25,6 +25,8 @@ pub struct Services {
     pub rail: &'static crate::rail_cmd::RailCommandServices,
     /// `Depot::GetIfValid`.
     pub depot: extern "C" fn(DepotID) -> *mut Depot,
+    /// `Depot::Get`, with its native assertion on an invalid index.
+    pub get: extern "C" fn(DepotID) -> *mut Depot,
     /// `Depot::GetPoolSize`.
     pub pool_size: extern "C" fn() -> u32,
     pub xy: unsafe extern "C" fn(*const Depot) -> u32,
@@ -36,7 +38,7 @@ pub struct Services {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDDepotServices" ["probe"] => Services { shared, command, costs, rail, depot, pool_size, xy, name, set_name, renamed };
+    "OpenTTDDepotServices" ["probe"] => Services { shared, command, costs, rail, depot, get, pool_size, xy, name, set_name, renamed };
 }
 
 /// `IsUniqueDepotName`, in `Depot::Iterate` order.

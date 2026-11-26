@@ -62,6 +62,10 @@ pub struct AdviceType(pub u8);
 impl AdviceType {
     /// Next (order) destination is too far for the aircraft type.
     pub const AircraftDestinationTooFar: Self = Self(0);
+    /// Autorenew or autoreplace failed.
+    pub const AutorenewFailed: Self = Self(1);
+    /// Something wrong with the order, e.g. invalid or duplicate entries, too few entries.
+    pub const Order: Self = Self(2);
     /// The refit order failed to execute.
     pub const RefitFailed: Self = Self(3);
     /// The train got stuck and needs to be unstuck manually.

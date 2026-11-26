@@ -174,6 +174,74 @@ impl GroundVehicleSubtypeFlags {
     pub const GVSF_MULTIHEADED: Self = Self(5);
 }
 
+/// The boundary form of `ClosestDepot` for the train, road vehicle and ship exports that the
+/// C++ overrides of `Vehicle::FindClosestDepot` call; the Rust dispatch does not use it.
+#[repr(C)]
+#[derive(Default)]
+pub struct Closest {
+    pub tile: u32,
+    pub destination: u16,
+    pub reverse: u8,
+    pub found: u8,
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDOrdersClosest" ["probe"] => Closest {
+        tile,
+        destination,
+        reverse,
+        found,
+    };
+}
+
+/// Virtual `Vehicle::FindClosestDepot`: find the closest depot for this vehicle and tell us
+/// the location, `DestinationID` and whether we should reverse; dispatched on the vehicle's
+/// type to each override, with the base class's not-found result for the other types.
+pub(crate) fn find_closest_depot(
+    v: crate::vehicle::VehicleRef,
+    c: &crate::vehicle::scheduler::SchedulerServices,
+) -> ClosestDepot {
+    match v.vehicle_type() {
+        VehicleType::VEH_TRAIN => crate::train::find_closest_depot(v, c.train(), c.shared()),
+        VehicleType::VEH_ROAD => crate::road::find_closest_depot(v, c.road()),
+        VehicleType::VEH_SHIP => {
+            crate::ship_control::find_closest_depot_of(v, c.ship(), c.shared())
+        }
+        VehicleType::VEH_AIRCRAFT => {
+            // `Aircraft::FindClosestDepot`.
+            let id = v.index(c.vehicle().newgrf());
+            let station = crate::aircraft::find_closest_depot(
+                c.aircraft(),
+                crate::aircraft::Vehicle::of(v, id),
+            );
+            if station == StationID::INVALID {
+                ClosestDepot::default()
+            } else {
+                ClosestDepot::new(
+                    TileIndex((c.shared().station_xy)(station.0)),
+                    crate::order_type::DestinationID(station.0),
+                    false,
+                )
+            }
+        }
+        _ => ClosestDepot::default(),
+    }
+}
+
+/// Virtual `Vehicle::SetDestTile`: set the destination of this vehicle, dispatched on the
+/// vehicle's type to the road vehicle's and ship's overrides; the other types take the base
+/// class's store.
+pub(crate) fn set_dest_tile(v: crate::vehicle::VehicleRef, tile: TileIndex) {
+    match v.vehicle_type() {
+        VehicleType::VEH_ROAD => crate::road::set_dest_tile_of(v, tile),
+        VehicleType::VEH_SHIP => {
+            crate::ship_control::set_dest_tile(crate::ship_control::Ship::of(v), tile);
+        }
+        _ => v.set_dest_tile(tile),
+    }
+}
+
 /// Structure to return information about the closest depot location,
 /// and whether it could be found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -281,6 +349,18 @@ pub(crate) const fn pool_id(index: usize) -> VehicleID {
 pub(crate) unsafe fn get(pool: &Pool, index: VehicleID) -> Option<crate::vehicle::VehicleRef> {
     // SAFETY: The caller's live descriptor.
     std::ptr::NonNull::new(unsafe { pool.record(index) }).map(crate::vehicle::VehicleRef)
+}
+/// `Vehicle::GetIfValid(index)`: the vehicle at `index`, or `None` for an index at or past
+/// `GetPoolSize()` or a free slot.
+pub(crate) fn get_if_valid(pool: &Pool, index: VehicleID) -> Option<crate::vehicle::VehicleRef> {
+    // SAFETY: The scheduler's process-lifetime pool descriptor; nothing mutates the pool here.
+    unsafe {
+        if (index.0 as usize) < pool.pool_size() {
+            get(pool, index)
+        } else {
+            None
+        }
+    }
 }
 /// `Vehicle::Iterate()`'s `PoolIterator::ValidateIndex` from `index` and its `*it`: the first
 /// valid vehicle at or after it, as its ID, its shell (`Vehicle::Get(index)`) and its record,
@@ -893,13 +973,12 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn current_order_pointer(self) -> *mut crate::orders::Order {
         let orders = read_field!(self.0.as_ptr(), orders);
         // SAFETY: The native Order lifetime begins during Vehicle construction.
-        unsafe { std::ptr::addr_of_mut!((*orders).current).cast() }
+        unsafe { std::ptr::addr_of_mut!((*orders).current_order).cast() }
     }
     /// `Vehicle::cur_real_order_index`: the index of the current real order
     /// (non-implicit, non-implicit-only).
     pub(crate) fn cur_real_order_index(self) -> crate::order_type::VehicleOrderID {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        crate::order_type::VehicleOrderID(read_field!(consist, real))
+        crate::orders::consist(self).cur_real_order_index()
     }
     /// Virtual `Vehicle::GetDisplayMaxSpeed`: the maximum speed in km-ish/h as displayed to
     /// the player, dispatched on the vehicle's type to each override; other types take the
@@ -918,22 +997,18 @@ impl crate::vehicle::VehicleRef {
     }
     /// `Vehicle::cur_implicit_order_index`: the index to the current implicit order.
     pub(crate) fn cur_implicit_order_index(self) -> crate::order_type::VehicleOrderID {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        crate::order_type::VehicleOrderID(read_field!(consist, implicit))
+        crate::orders::consist(self).cur_implicit_order_index()
     }
     /// `Vehicle::lateness_counter`: how many ticks late (or early if negative) this vehicle is.
     pub(crate) fn lateness_counter(self) -> i32 {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        read_field!(consist, lateness)
+        crate::orders::consist(self).lateness_counter()
     }
     /// `Vehicle::current_order_time`: how many ticks have passed since this order started.
     pub(crate) fn current_order_time(self) -> i32 {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        read_field!(consist, time)
+        crate::orders::consist(self).current_order_time()
     }
     pub(crate) fn set_current_order_time(self, value: i32) {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        write_field!(consist, time, value);
+        crate::orders::consist(self).set_current_order_time(value);
     }
     /// `Vehicle::vcache.cached_vis_effect`: the visual effect to show.
     pub(crate) fn cached_vis_effect(self) -> u8 {
@@ -1190,8 +1265,7 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::vehicle_flags`, read in place from the record's consist state.
     #[inline]
     pub(crate) fn vehicle_flags(self) -> VehicleFlags {
-        let consist = read_field!(self.0.as_ptr(), consist);
-        VehicleFlags(read_field!(consist, flags))
+        crate::orders::consist(self).vehicle_flags()
     }
     /// `Vehicle::ServiceIntervalIsCustom`.
     #[inline]
@@ -1308,10 +1382,6 @@ impl crate::vehicle::VehicleRef {
     #[inline]
     pub(crate) fn set_last_station_visited(self, value: StationID) {
         write_field!(self.0.as_ptr(), last_station_visited, value);
-    }
-    #[inline]
-    pub(crate) fn set_last_station_visited_raw(self, value: u16) {
-        self.set_last_station_visited(StationID(value));
     }
     pub(crate) fn cached_max_speed(self) -> u16 {
         read_field!(self.0.as_ptr(), cached_max_speed)
