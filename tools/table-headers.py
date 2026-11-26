@@ -26,7 +26,9 @@ INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*([<"])([^>"\n]+)[>"]', re.M)
 HEADER_SUFFIXES = (".h", ".hpp")
 # Translation phases 2 and 3: a comment becomes one space; literals are kept whole, so a
 # quoted header name or a string holding "//" or "/*" is not taken for a comment.
-LEXEME = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', re.S)
+LEXEME = re.compile(
+    r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', re.S
+)
 
 
 def directives(text: str) -> str:

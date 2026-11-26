@@ -57,12 +57,14 @@ class TableHeaderTests(unittest.TestCase):
         )
         self.assertEqual(len(self.hits(files)), 1)
 
-    def test_splices_and_comments_inside_a_directive_are_read_as_the_compiler_does(self) -> None:
+    def test_splices_and_comments_inside_a_directive_are_read_as_the_compiler_does(
+        self,
+    ) -> None:
         for text in (
             '#include \\\n"rust/shared_services_table.h"\n',
             '#in\\\nclude "rust/shared_services_table.h"\n',
             '# /* note */ include "rust/shared_services_table.h"\n',
-            '/* a */ #include <rust/shared_services_table.h> // b\n',
+            "/* a */ #include <rust/shared_services_table.h> // b\n",
         ):
             with self.subTest(text=text):
                 self.assertEqual(len(self.hits(tree({"src/map_func.h": text}))), 1)
