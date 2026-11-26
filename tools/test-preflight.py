@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check preflight's reading of Quick and the pinned commit checker checkout."""
 
+import contextlib
 import importlib.util
 import io
 import json
@@ -21,7 +22,7 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from types import ModuleType, SimpleNamespace
 from typing import cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import git_hooks
 import preflight
@@ -940,6 +941,128 @@ class PushTests(unittest.TestCase):
             self.assertEqual(json.loads(entry)["reason"], "wip")
             preflight_stamp.record("base", code)
             self.assertEqual(self.push(repo, code), "")
+
+    def hook_push(
+        self, repo: Path, sha: str, ref: str, url: str, queue: object
+    ) -> tuple[int, str, Mock, Mock]:
+        """Run the production pre-push entry with the queue reader patched; queue
+        is the BranchQueue it returns or the exception it raises."""
+        reader = Mock(side_effect=queue) if isinstance(queue, Exception) else Mock()
+        reader.return_value = queue
+        fast = Mock(return_value=[preflight.Step("Fast", ["true"])])
+        stdin = io.StringIO(f"refs/heads/work {sha} {ref} {git_hooks.ZERO}\n")
+        output, errors = io.StringIO(), io.StringIO()
+        with (
+            patch.object(git_hooks.ci, "branch_queue", reader),
+            patch.object(git_hooks, "fast_tier", fast),
+            patch.object(preflight.migration, "LOCAL", repo / ".local"),
+            patch.object(preflight_stamp, "common_local", return_value=repo / ".local"),
+            patch.object(sys, "stdin", stdin),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            code = git_hooks.main(["git_hooks.py", "pre-push", "origin", url])
+        return code, output.getvalue() + errors.getvalue(), reader, fast
+
+    def test_a_push_to_the_base_waits_for_an_empty_merge_queue(self) -> None:
+        base = "refs/heads/rust-migration"
+        url = "https://github.com/owner/name.git"
+        queued = git_hooks.ci.BranchQueue(
+            (git_hooks.ci.QueueMember(state="QUEUED", position=1, number=1066),), 1
+        )
+        empty = git_hooks.ci.BranchQueue((), 0)
+        with scratch_repo() as repo:
+            docs = commit(repo, "Doc: Only", {"docs/x.md": "x\n"})
+            code, output, reader, fast = self.hook_push(repo, docs, base, url, queued)
+            self.assertEqual(code, 1)
+            self.assertIn("#1066 queued at position 1", output)
+            self.assertIn("push when the queue is empty", output)
+            reader.assert_called_once_with("owner/name", "rust-migration")
+            fast.assert_not_called()  # Refused before any fast-tier work.
+            code, output, _, fast = self.hook_push(repo, docs, base, url, empty)
+            self.assertEqual(code, 0)  # On to the docs-only decision.
+            self.assertIn("docs-only change", output)
+            fast.assert_called_once()
+            work = commit(repo, "Add: Code", {"tools/z.py": "z = 1\n"})
+            code, output, _, _ = self.hook_push(repo, work, base, url, empty)
+            self.assertEqual(code, 1)  # And to the stamp decision.
+            self.assertIn("no preflight stamp", output)
+
+    def test_a_push_of_another_ref_reads_no_queue(self) -> None:
+        queued = git_hooks.ci.BranchQueue(
+            (git_hooks.ci.QueueMember(state="QUEUED", position=1, number=1066),), 1
+        )
+        with scratch_repo() as repo:
+            docs = commit(repo, "Doc: Only", {"docs/x.md": "x\n"})
+            code, _, reader, _ = self.hook_push(
+                repo, docs, "refs/heads/t3/work", "https://github.com/o/n", queued
+            )
+        self.assertEqual(code, 0)
+        reader.assert_not_called()
+
+    def test_a_queue_larger_than_its_page_is_counted(self) -> None:
+        page = tuple(
+            git_hooks.ci.QueueMember(state="AWAITING_CHECKS", position=n, number=n)
+            for n in range(1, 11)
+        )
+        with scratch_repo() as repo:
+            docs = commit(repo, "Doc: Only", {"docs/x.md": "x\n"})
+            code, output, _, _ = self.hook_push(
+                repo,
+                docs,
+                "refs/heads/rust-migration",
+                "https://github.com/o/n",
+                git_hooks.ci.BranchQueue(page, 12),
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("holds 12 PRs", output)
+        self.assertIn("#10 queued awaiting_checks at position 10 and 2 more", output)
+
+    def test_a_failed_queue_read_refuses_the_push(self) -> None:
+        with scratch_repo() as repo:
+            docs = commit(repo, "Doc: Only", {"docs/x.md": "x\n"})
+            for error in (
+                git_hooks.ci.QueueUnread("no merge queue reads for o/n"),
+                subprocess.CalledProcessError(1, ["gh"], stderr="HTTP 500"),
+            ):
+                with self.subTest(error=type(error).__name__):
+                    code, output, _, fast = self.hook_push(
+                        repo,
+                        docs,
+                        "refs/heads/rust-migration",
+                        "git@github.com:o/n.git",
+                        error,
+                    )
+                    self.assertEqual(code, 1)
+                    self.assertIn("pre-push check could not run", output)
+                    fast.assert_not_called()
+                    self.assertIn(str(error), output)
+
+    def test_the_queue_read_is_for_the_push_destination(self) -> None:
+        """A clone may fetch from one repository and push to another."""
+        empty = git_hooks.ci.BranchQueue((), 0)
+        with scratch_repo() as repo:
+            subprocess.run(
+                ["git", "remote", "add", "origin", "https://github.com/fetch/other"],
+                cwd=repo,
+                check=True,
+            )
+            docs = commit(repo, "Doc: Only", {"docs/x.md": "x\n"})
+            for url in (
+                "https://github.com/push/dest.git",
+                "git@github.com:push/dest.git",
+                "ssh://git@github.com/push/dest",
+            ):
+                with self.subTest(url=url):
+                    _, _, reader, _ = self.hook_push(
+                        repo, docs, "refs/heads/rust-migration", url, empty
+                    )
+                    reader.assert_called_once_with("push/dest", "rust-migration")
+            code, _, reader, _ = self.hook_push(
+                repo, docs, "refs/heads/rust-migration", str(repo), empty
+            )
+        self.assertEqual(code, 0)
+        reader.assert_not_called()  # A path destination has no merge queue.
 
     def test_pre_commit_runs_the_pinned_diff_rules_on_staged_files(self) -> None:
         try:

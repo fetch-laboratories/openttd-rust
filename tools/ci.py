@@ -82,14 +82,14 @@ WRITES = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
 
 def read_only(args: tuple[str, ...]) -> bool:
     """Whether a gh call only reads: a REST GET, a variable list, a repo view or
-    the fixed QUEUE_STATE query (a POST that changes nothing). No mutation and no
-    pr, workflow or run subcommand is a read here."""
+    the fixed QUEUE_STATE or BASE_QUEUE query (a POST that changes nothing). No
+    mutation and no pr, workflow or run subcommand is a read here."""
     if args[:2] in (("variable", "list"), ("repo", "view")):
         return True
     if args[:1] != ("api",):
         return False
     if args[1:2] == ("graphql",):
-        return f"query={QUEUE_STATE}" in args
+        return f"query={QUEUE_STATE}" in args or f"query={BASE_QUEUE}" in args
     return not any(arg.split("=", 1)[0] in WRITES for arg in args[1:])
 
 
@@ -1118,6 +1118,24 @@ class QueueEntry(TypedDict):
     position: int
 
 
+class QueueMember(QueueEntry):
+    """A queued PR as BASE_QUEUE names it."""
+
+    number: int
+
+
+@dataclass(frozen=True)
+class BranchQueue:
+    """A branch's merge queue: the first entries and how many it holds in all."""
+
+    entries: tuple[QueueMember, ...]
+    total: int
+
+
+class QueueUnread(Exception):
+    """The merge queue could not be read, which is not an empty queue."""
+
+
 class QueueState(TypedDict):
     """The fields of QUEUE_STATE's pull request that queue_wait reads."""
 
@@ -1183,6 +1201,59 @@ def queue_state(repository: str, pr: int) -> QueueState:
         )
     )
     return answer["data"]["repository"]["pullRequest"]
+
+
+# The queue of a branch, whatever PR is asking. A merge group holds at most five
+# entries (the ruleset's max_entries_to_build), but the queue may hold more, so
+# totalCount and not the page says whether it is empty.
+BASE_QUEUE = """
+query($owner: String!, $name: String!, $branch: String!) {
+  repository(owner: $owner, name: $name) {
+    mergeQueue(branch: $branch) {
+      entries(first: 10) {
+        totalCount
+        nodes { state position pullRequest { number } }
+      }
+    }
+  }
+}
+"""
+
+
+def branch_queue(repository: str, branch: str) -> BranchQueue:
+    """The merge queue of a protected branch. GraphQL answers `mergeQueue: null`
+    for a branch with no queue; for the branch asked about that means the read
+    missed, so it raises QueueUnread rather than report an empty queue."""
+    owner, name = repository.split("/", 1)
+    answer = json.loads(
+        gh(
+            "api",
+            "graphql",
+            "-f",
+            f"query={BASE_QUEUE}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"branch={branch}",
+        )
+    )
+    queue = ((answer.get("data") or {}).get("repository") or {}).get("mergeQueue")
+    if queue is None:
+        raise QueueUnread(f"no merge queue reads for {repository} {branch}")
+    entries = queue["entries"]
+    return BranchQueue(
+        tuple(
+            QueueMember(
+                state=node["state"],
+                position=node["position"],
+                number=node["pullRequest"]["number"],
+            )
+            for node in entries["nodes"]
+        ),
+        int(entries["totalCount"]),
+    )
 
 
 def queue_runs(repository: str, pr: int) -> list[QueueRun]:
