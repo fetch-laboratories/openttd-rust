@@ -449,14 +449,6 @@ pub(crate) fn spec_callback_mask(
     // SAFETY: Callers pass a spec from `GetIndustrySpec`, live for the process.
     crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*spec).callback_mask })
 }
-/// Temporary raw adapter for [`get_industry_spec`]; every caller widens an `IndustryType`.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "GetIndustrySpec takes IndustryType (uint8_t); every raw caller widens one"
-)]
-pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
-    get_industry_spec(IndustryType(id as u8))
-}
 /// The per-file specs of `file`, created empty on first use.
 ///
 /// # Safety
