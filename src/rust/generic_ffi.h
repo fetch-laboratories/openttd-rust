@@ -7,33 +7,32 @@
 #ifndef RUST_GENERIC_FFI_H
 #define RUST_GENERIC_FFI_H
 #include "services_ffi.h"
-enum class WaterClass : uint8_t;
 struct GRFFile;
 struct SpriteGroup;
 struct ResolverObject;
 struct OpenTTDResolverState;
 struct OpenTTDSpriteGroupServices;
 struct ScopeResolver;
+struct OpenTTDGlobalVariableServices;
 struct OpenTTDGenericScope {
-	uint8_t cargo, selection, source, destination, distance, event, count, station_size, feature;
-	bool ai;
+	uint8_t cargo_type, default_selection, src_industry, dst_industry, distance, event, count, station_size, feature;
+	bool ai_callback;
 };
 struct OpenTTDGenericInvocation {
-	OpenTTDGenericScope scope;
+	OpenTTDGenericScope generic_scope;
 	uint16_t callback;
-	uint32_t param1;
-	const GRFFile *file;
-	const SpriteGroup *root;
+	uint32_t callback_param1;
+	const GRFFile *grffile;
+	const SpriteGroup *root_spritegroup;
 };
 struct OpenTTDGenericResult { const GRFFile *file; uint16_t result; };
 struct OpenTTDGenericServices {
-	const OpenTTDSharedServices *shared;
+	uint16_t (*callback_frame)(const OpenTTDGenericInvocation *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_frame);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
-	uint16_t (*evaluate)(const OpenTTDGenericInvocation *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate);
 	const OpenTTDSpriteGroupServices *common;
-	bool (*enabled)() noexcept OPENTTD_SERVICE_DEFAULT(enabled);
-	WaterClass (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
-	void (*sound)(const GRFFile *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
+	const OpenTTDGlobalVariableServices *global;
+	void (*play_tile_sound)(const GRFFile *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(play_tile_sound);
+	const OpenTTDSharedServices *shared;
 };
 const OpenTTDGenericServices &GetRustGenericServices() noexcept;
 extern "C" {

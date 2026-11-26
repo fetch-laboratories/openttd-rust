@@ -891,7 +891,12 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
         } else {
             e.success();
         }
-    } else if (e.s.shared().grf_file_version)(unsafe { (*call.its).grf_prop.grffile }) < 7 {
+    } else if unsafe {
+        crate::newgrf::GRFFileRef::of(e.s.shared(), (*call.its).grf_prop.grffile.cast())
+    }
+    .grf_version()
+        < 7
+    {
         if callback_res.callback != 0 {
             e.success();
         } else {

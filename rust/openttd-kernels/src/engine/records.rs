@@ -4,7 +4,7 @@
 //! no record borrow survives mutation, native reentry or destruction.
 #![allow(unsafe_code, clippy::struct_field_names)]
 use crate::engine_type::EngineID;
-use crate::newgrf::CargoLabel;
+use crate::newgrf::CargoLabelChoice;
 use crate::table::strings::{
     STR_VEHICLE_NAME_AIRCRAFT_SAMPSON_U52, STR_VEHICLE_NAME_ROAD_VEHICLE_MPS_REGAL_BUS,
     STR_VEHICLE_NAME_SHIP_MPS_OIL_TANKER, STR_VEHICLE_NAME_TRAIN_ENGINE_RAIL_KIRBY_PAUL_TANK_STEAM,
@@ -94,7 +94,7 @@ crate::abi::shared_records! {
         pub load_amount: u8,
         pub climates: u8 => "LandscapeTypes",
         pub cargo_type: u8 => "CargoType",
-        pub cargo_label: CargoLabel => "OpenTTDNewGRFCargoLabel",
+        pub cargo_label: CargoLabelChoice => "OpenTTDNewGRFCargoLabel",
         pub refit_mask: u64 => "CargoTypes",
         pub refit_cost: u8,
         pub misc_flags: u8 => "EngineMiscFlags",
@@ -198,7 +198,7 @@ impl Default for EngineInfo {
             load_amount: 0,
             climates: 0,
             cargo_type: 0,
-            cargo_label: CargoLabel {
+            cargo_label: CargoLabelChoice {
                 value: 0,
                 mixed: false,
             },
@@ -258,7 +258,7 @@ pub unsafe extern "C" fn openttd_rust_engine_construct(
         record.vehicle_info_type = kind;
         record.info.base_life = 255;
         record.info.cargo_type = crate::cargo_type::INVALID_CARGO;
-        record.info.cargo_label = CargoLabel {
+        record.info.cargo_label = CargoLabelChoice {
             value: if kind == VehicleType::AIRCRAFT {
                 crate::cargo_type::CT_INVALID
             } else {

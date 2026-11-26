@@ -19,7 +19,6 @@ use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 
 use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
-use crate::newgrf_callbacks::CBID_HOUSE_ALLOW_CONSTRUCTION;
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -280,12 +279,11 @@ pub(crate) unsafe fn town_get_variable(
     // Get a variable from the persistent storage; the shared storage reads the
     // GrfID stored in register 100h.
     if variable == 0x7C {
-        let file = (s.shared().resolver_grf_file)(ro);
         return unsafe {
             newgrf_storage::openttd_rust_storage_town_get(
                 &*s.storage,
                 scope.town.cast(),
-                file,
+                (s.shared().resolver_grf_file)(ro),
                 parameter,
             )
         };
@@ -416,13 +414,12 @@ pub(crate) unsafe fn town_store_psa(
     if scope.readonly {
         return;
     }
-    let file = (s.shared().resolver_grf_file)(ro);
     unsafe {
         newgrf_storage::openttd_rust_storage_town(
             &*s.storage,
             scope.town.cast(),
             scope.readonly,
-            file,
+            (s.shared().resolver_grf_file)(ro),
             pos,
             value,
         );
@@ -659,7 +656,12 @@ pub(crate) unsafe fn house_get_variable(
         // Land info for nearby tiles.
         0x62 => (shared.nearby_tile_information)(
             (shared.nearby_tile)(parameter as u8, tile),
-            (shared.grf_file_version)((s.shared().resolver_grf_file)(ro)) >= 8,
+            // SAFETY: A resolver's file is live while it resolves.
+            unsafe {
+                crate::newgrf::GRFFileRef::of(shared, (s.shared().resolver_grf_file)(ro).cast())
+            }
+            .grf_version()
+                >= 8,
         ),
         // Current animation frame of nearby house tiles.
         0x63 => {
@@ -693,8 +695,8 @@ pub(crate) unsafe fn house_get_variable(
             }
             let nearby_house_id = (unsafe { &*l.houses }.house_type)(testtile);
             let hs = (s.nearby_spec)(nearby_house_id);
-            let file = (s.shared().resolver_grf_file)(ro);
-            let same_file = if hs.file == file { 1 } else { 2 };
+            let grffile: *const crate::newgrf::GRFFile = (s.shared().resolver_grf_file)(ro).cast();
+            let same_file = if hs.file == grffile.cast() { 1 } else { 2 };
             // Information about the grf local classid if the house has a class.
             let houseclass = if hs.house_class == HOUSE_NO_CLASS {
                 0
@@ -892,13 +894,17 @@ pub(super) unsafe fn allow_construction(
         tile: tile.0,
         view: 0,
         house,
-        callback: CBID_HOUSE_ALLOW_CONSTRUCTION.0,
+        callback: CallbackID::CBID_HOUSE_ALLOW_CONSTRUCTION.0,
         initial_random: random_bits,
         prospective: true,
     };
     let result = unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) };
     result == crate::newgrf_callbacks::CALLBACK_FAILED
-        || (unsafe { &*l.houses }.convert_8bit)(house, CBID_HOUSE_ALLOW_CONSTRUCTION.0, result)
+        || (unsafe { &*l.houses }.convert_8bit)(
+            house,
+            CallbackID::CBID_HOUSE_ALLOW_CONSTRUCTION.0,
+            result,
+        )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_root(scope: *const HouseScope) -> *const c_void {

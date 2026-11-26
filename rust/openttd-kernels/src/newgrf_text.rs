@@ -78,48 +78,119 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
     s: &Services,
     grfid: u32,
     stringid: u32,
-    mut language: u8,
+    language: u8,
     new_scheme: bool,
     allow_newlines: bool,
     text: *const u8,
     length: usize,
     default: u32,
 ) -> u32 {
-    if !new_scheme {
-        if language & 3 != 0 {
-            language = 1;
+    add_grf_string(
+        s,
+        &AddGRFString {
+            grfid,
+            stringid: GRFStringID(stringid),
+            langid_to_add: language,
+            new_scheme,
+            allow_newlines,
+            text_to_add: unsafe { crate::utf8::borrow(text, length) },
+            def_string: StringID(default),
+        },
+    )
+    .0
+}
+
+/// The parameters of `AddGRFString`, in its order.
+pub(crate) struct AddGRFString<'a> {
+    pub(crate) grfid: u32,
+    pub(crate) stringid: GRFStringID,
+    pub(crate) langid_to_add: u8,
+    pub(crate) new_scheme: bool,
+    pub(crate) allow_newlines: bool,
+    pub(crate) text_to_add: &'a [u8],
+    pub(crate) def_string: StringID,
+}
+
+/// `GRFBaseLanguages`: explains the newgrf shift bit positioning. The grf base will not be
+/// used in order to find the string, but rather for jumping from standard langID scheme to the
+/// new one.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GRFBaseLanguages(u8);
+impl GRFBaseLanguages {
+    const GRFLB_AMERICAN: Self = Self(0x01);
+    const GRFLB_ENGLISH: Self = Self(0x02);
+    const GRFLB_GERMAN: Self = Self(0x04);
+    const GRFLB_FRENCH: Self = Self(0x08);
+    const GRFLB_SPANISH: Self = Self(0x10);
+}
+
+/// `GRFExtendedLanguages`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GRFExtendedLanguages(u8);
+impl GRFExtendedLanguages {
+    const GRFLX_ENGLISH: Self = Self(0x01);
+    const GRFLX_GERMAN: Self = Self(0x02);
+    const GRFLX_FRENCH: Self = Self(0x03);
+    const GRFLX_SPANISH: Self = Self(0x04);
+}
+
+/// `AddGRFString`.
+pub(crate) fn add_grf_string(s: &Services, args: &AddGRFString<'_>) -> StringID {
+    let mut langid_to_add = args.langid_to_add;
+    // When working with the old language scheme (grf_version is less than 7) and
+    // English or American is among the set bits, simply add it as English in
+    // the new scheme, i.e. as langid = 1.
+    // If English is set, it is pretty safe to assume the translations are not
+    // actually translated.
+    if !args.new_scheme {
+        if langid_to_add & (GRFBaseLanguages::GRFLB_AMERICAN.0 | GRFBaseLanguages::GRFLB_ENGLISH.0)
+            != 0
+        {
+            langid_to_add = GRFExtendedLanguages::GRFLX_ENGLISH.0;
         } else {
-            let mut result = STR_EMPTY.0;
-            for (mask, language_id) in [(4, 2), (8, 3), (16, 4)] {
-                if language & mask != 0 {
-                    result = unsafe {
-                        openttd_rust_grf_text_add(
-                            s,
-                            grfid,
-                            stringid,
-                            language_id,
-                            true,
-                            allow_newlines,
-                            text,
-                            length,
-                            default,
-                        )
-                    };
+            let mut ret = STR_EMPTY;
+            for (base, extended) in [
+                (
+                    GRFBaseLanguages::GRFLB_GERMAN,
+                    GRFExtendedLanguages::GRFLX_GERMAN,
+                ),
+                (
+                    GRFBaseLanguages::GRFLB_FRENCH,
+                    GRFExtendedLanguages::GRFLX_FRENCH,
+                ),
+                (
+                    GRFBaseLanguages::GRFLB_SPANISH,
+                    GRFExtendedLanguages::GRFLX_SPANISH,
+                ),
+            ] {
+                if langid_to_add & base.0 != 0 {
+                    ret = add_grf_string(
+                        s,
+                        &AddGRFString {
+                            langid_to_add: extended.0,
+                            new_scheme: true,
+                            ..*args
+                        },
+                    );
                 }
             }
-            return result;
+            return ret;
         }
     }
-    let index = unsafe { prepare(grfid, stringid, default) };
+    let language = langid_to_add;
+    let (grfid, stringid) = (args.grfid, args.stringid.0);
+    let index = unsafe { prepare(grfid, stringid, args.def_string.0) };
     if index == usize::MAX {
-        return STR_EMPTY.0;
+        return STR_EMPTY;
     }
     let newtext = translate(
         s,
         grfid,
         language,
-        allow_newlines,
-        unsafe { crate::utf8::borrow(text, length) },
+        args.allow_newlines,
+        args.text_to_add,
         SCC_NEWGRF_PRINT_WORD_STRING_ID,
     );
     unsafe { publish(index, language, newtext.as_ptr(), newtext.len()) };
@@ -134,7 +205,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
         Bytes(&newtext),
         id
     );
-    id
+    StringID(id)
 }
 
 struct Text {
@@ -171,9 +242,12 @@ unsafe fn prepare(grfid: u32, stringid: u32, default: u32) -> usize {
     {
         return index;
     }
+    // Too many strings allocated, return empty.
     if texts.len() == TAB_SIZE_NEWGRF {
         return usize::MAX;
     }
+
+    // We didn't find our stringid and grfid in the list, allocate a new id.
     let index = texts.len();
     texts.push(Entry {
         grfid,

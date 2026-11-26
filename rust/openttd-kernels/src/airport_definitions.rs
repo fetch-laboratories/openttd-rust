@@ -18,6 +18,7 @@ use crate::airport::{
 };
 use crate::debug::grf_msg;
 use crate::direction_type::Direction;
+use crate::newgrf::GRFFileRef;
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::override_manager::{self, Manager};
@@ -133,7 +134,7 @@ crate::abi::layouts! {
 #[allow(clippy::too_many_lines)] // The complete AirportChangeInfo property switch.
 unsafe fn airport_change_info(
     s: &Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     first: u32,
     last: u32,
     prop: u32,
@@ -153,12 +154,12 @@ unsafe fn airport_change_info(
         }
 
         /* Allocate industry specs if they haven't been allocated already. */
-        if (s.airport_count)(file) < last as usize {
-            (s.airport_resize)(file, last as usize);
+        if (s.airport_count)(grffile.as_ptr().cast_mut().cast()) < last as usize {
+            (s.airport_resize)(grffile.as_ptr().cast_mut().cast(), last as usize);
         }
 
         for id in first..last {
-            let mut r#as = (s.airport_get)(file, id as usize);
+            let mut r#as = (s.airport_get)(grffile.as_ptr().cast_mut().cast(), id as usize);
 
             if r#as.is_null() && prop != 0x08 && prop != 0x09 {
                 grf_msg!(
@@ -197,7 +198,7 @@ unsafe fn airport_change_info(
                      * do anything */
                     if r#as.is_null() {
                         r#as = (s.airport_new)(
-                            file,
+                            grffile.as_ptr().cast_mut().cast(),
                             id as usize,
                             (s.airport_base)(u16::from(subs_id)),
                         );
@@ -205,12 +206,15 @@ unsafe fn airport_change_info(
                         (s.shared().specs().airport().substitute().set_enabled)(r#as, true);
                         (s.shared().specs().airport().set_local_id)(r#as, id as u16);
                         (s.airport_set_substitute)(r#as, u16::from(subs_id));
-                        (s.shared().specs().airport().set_file)(r#as, file);
+                        (s.shared().specs().airport().set_file)(
+                            r#as,
+                            grffile.as_ptr().cast_mut().cast(),
+                        );
                         /* override the default airport */
                         override_manager::add(
                             override_manager::airport(),
                             id as u16,
-                            (s.shared().grf_file_id)(file),
+                            grffile.grfid(),
                             u32::from(subs_id),
                         );
                     }
@@ -250,7 +254,7 @@ unsafe fn airport_change_info(
                                 let tempid = override_manager::get(
                                     override_manager::airport_tile(),
                                     local_tile_id,
-                                    (s.shared().grf_file_id)(file),
+                                    grffile.grfid(),
                                 );
 
                                 if tempid == INVALID_AIRPORTTILE {
@@ -330,7 +334,7 @@ unsafe fn airport_change_info(
 
                 // Badge list
                 0x12 => buf.badges(
-                    crate::newgrf::GSF_AIRPORTS,
+                    crate::newgrf::GrfSpecFeature::GSF_AIRPORTS.0,
                     (s.shared().specs().airport().badge_list)(r#as),
                 )?,
 
@@ -344,7 +348,7 @@ unsafe fn airport_change_info(
 /// `AirportTilesChangeInfo`: define properties for airport tiles.
 unsafe fn airport_tiles_change_info(
     s: &Services,
-    file: *mut c_void,
+    grffile: GRFFileRef<'_>,
     first: u32,
     last: u32,
     prop: u32,
@@ -364,12 +368,12 @@ unsafe fn airport_tiles_change_info(
         }
 
         /* Allocate airport tile specs if they haven't been allocated already. */
-        if (s.tile_count)(file) < last as usize {
-            (s.tile_resize)(file, last as usize);
+        if (s.tile_count)(grffile.as_ptr().cast_mut().cast()) < last as usize {
+            (s.tile_resize)(grffile.as_ptr().cast_mut().cast(), last as usize);
         }
 
         for id in first..last {
-            let mut tsp = (s.tile_get)(file, id as usize);
+            let mut tsp = (s.tile_get)(grffile.as_ptr().cast_mut().cast(), id as usize);
 
             if prop != 0x08 && tsp.is_null() {
                 grf_msg!(
@@ -397,7 +401,11 @@ unsafe fn airport_tiles_change_info(
 
                     /* Allocate space for this airport tile. */
                     if tsp.is_null() {
-                        tsp = (s.tile_new)(file, id as usize, (s.tile_base)(subs_id));
+                        tsp = (s.tile_new)(
+                            grffile.as_ptr().cast_mut().cast(),
+                            id as usize,
+                            (s.tile_base)(subs_id),
+                        );
 
                         (s.shared().specs().airport_tile().substitute().set_enabled)(tsp, true);
 
@@ -405,12 +413,15 @@ unsafe fn airport_tiles_change_info(
 
                         (s.shared().specs().airport_tile().set_local_id)(tsp, id as u16);
                         (s.tile_set_substitute)(tsp, u16::from(subs_id));
-                        (s.shared().specs().airport_tile().set_file)(tsp, file);
+                        (s.shared().specs().airport_tile().set_file)(
+                            tsp,
+                            grffile.as_ptr().cast_mut().cast(),
+                        );
                         // pre-reserve the tile slot
                         override_manager::airport_tile_add_entity_id(
                             override_manager::airport_tile(),
                             id as u16,
-                            (s.shared().grf_file_id)(file),
+                            grffile.grfid(),
                             u16::from(subs_id),
                         );
                     }
@@ -434,7 +445,7 @@ unsafe fn airport_tiles_change_info(
                     override_manager::add(
                         override_manager::airport_tile(),
                         id as u16,
-                        (s.shared().grf_file_id)(file),
+                        grffile.grfid(),
                         u32::from(override_id),
                     );
                 }
@@ -457,7 +468,7 @@ unsafe fn airport_tiles_change_info(
                 // Badge list. AirportTilesChangeInfo uses the tram feature for badge-seen
                 // bookkeeping.
                 0x12 => buf.badges(
-                    crate::newgrf::GSF_TRAMTYPES,
+                    crate::newgrf::GrfSpecFeature::GSF_TRAMTYPES.0,
                     (s.shared().specs().airport_tile().badge_list)(tsp),
                 )?,
 
@@ -483,7 +494,16 @@ macro_rules! parser_entry {
             let s = unsafe { &*s };
             let mut reader = unsafe { Reader::new(native, &*s.reader) };
             u8::from(
-                match unsafe { $parser(s, file, first, last, prop, &mut reader) } {
+                match unsafe {
+                    $parser(
+                        s,
+                        GRFFileRef::of(s.shared(), file.cast()),
+                        first,
+                        last,
+                        prop,
+                        &mut reader,
+                    )
+                } {
                     Ok(value) => {
                         unsafe {
                             result.write(value.0);

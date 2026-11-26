@@ -113,15 +113,9 @@ inline bool RustSpecHasSpriteGroups(const Spec *spec) noexcept { return spec->gr
 inline bool RustHouseHasSpriteGroups(uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); }
 
 inline uint32_t RustGRFParameter(const GRFFile *file, uint32_t parameter) noexcept { return file->GetParam(parameter); }
-inline uint8_t RustGRFPalette(const GRFFile *file) noexcept { return GetGRFConfig(file->grfid)->palette & GRFP_USE_MASK; }
 inline int32_t RustGRFTrainPitch(const GRFFile *file) noexcept { return file->traininfo_vehicle_pitch; }
 inline uint32_t RustGRFTrainWidth(const GRFFile *file) noexcept { return file->traininfo_vehicle_width; }
-inline uint8_t RustGRFMiscBits() noexcept
-{
-	extern GrfMiscBits _misc_grf_features;
-	assert(!_misc_grf_features.Test(GrfMiscBit::TrainWidth32Pixels));
-	return _misc_grf_features.base();
-}
+inline uint8_t RustGRFMiscBits() noexcept { extern GrfMiscBits _misc_grf_features; return _misc_grf_features.base(); }
 inline uint32_t RustNewGRFVersion() noexcept { return _openttd_newgrf_version; }
 
 /* Keep the native map wrapping, station-axis handling and signed-offset default. */

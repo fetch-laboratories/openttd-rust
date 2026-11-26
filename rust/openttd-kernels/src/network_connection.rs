@@ -766,7 +766,8 @@ pub(crate) fn send_newgrf_check(
     };
     let is_static = |config| {
         let flags = unsafe { (s.grf.config_flags)(config) };
-        flags & (1 << crate::newgrf_config::STATIC) != 0
+        crate::newgrf_config::GRFConfigFlags(flags)
+            .test(crate::newgrf_config::GRFConfigFlag::Static)
     };
 
     let mut grf_count = 0_u32;

@@ -24,6 +24,44 @@ pub const fn test(data: u64, value: u8) -> bool {
     data & 1_u64.wrapping_shl(value as u32) != 0
 }
 
+/// `BaseBitSet::Set(Tvalue_type value)`: `data | (1ULL << value)`, shifting at the original
+/// 64-bit width as [`test`] does. The caller stores the result to its set's `Tstorage`, which
+/// drops an element beyond that width as the original's assignment does.
+#[must_use]
+pub const fn set(data: u64, value: u8) -> u64 {
+    data | 1_u64.wrapping_shl(value as u32)
+}
+
+/// [`set`] on a `uint8_t` storage.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "BaseBitSet::Set stores to a uint8_t Tstorage (core/base_bitset_type.hpp)"
+)]
+pub const fn set_u8(data: u8, value: u8) -> u8 {
+    set(data as u64, value) as u8
+}
+
+/// [`set`] on a `uint16_t` storage.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "BaseBitSet::Set stores to a uint16_t Tstorage (core/base_bitset_type.hpp)"
+)]
+pub const fn set_u16(data: u16, value: u8) -> u16 {
+    set(data as u64, value) as u16
+}
+
+/// [`set`] on a `uint32_t` storage.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "BaseBitSet::Set stores to a uint32_t Tstorage (core/base_bitset_type.hpp)"
+)]
+pub const fn set_u32(data: u32, value: u8) -> u32 {
+    set(data as u64, value) as u32
+}
+
 /// Bitwise operators shared by native bit-mask enums and unmasked `EnumBitSet`s.
 /// Each wrapper keeps its original storage width, including unnamed high bits.
 macro_rules! impl_bitset_ops {
@@ -91,6 +129,29 @@ mod tests {
                 VehicleEnterTileStates(0xff).test(VehicleEnterTileState(element)),
                 expected,
                 "VehicleEnterTileStates element {element}"
+            );
+        }
+    }
+
+    /// Pinned `core/base_bitset_type.hpp:51-55` shifts `1ULL` and stores to `Tstorage`: a
+    /// one-element `u8` set (`RoadStopCallbackMasks`) and `u16` set (`VehicleCallbackMasks`)
+    /// hold the element's bit below their width and are empty from it up to 63.
+    #[test]
+    fn single_element_sets_store_at_the_original_width() {
+        use crate::newgrf_callbacks::{
+            RoadStopCallbackMask, RoadStopCallbackMasks, VehicleCallbackMask, VehicleCallbackMasks,
+        };
+        for element in 0..64_u8 {
+            let byte = RoadStopCallbackMasks::from_element(RoadStopCallbackMask(element));
+            let expected_byte = if element < 8 { 1_u8 << element } else { 0 };
+            assert_eq!(byte.0, expected_byte, "u8 set element {element}");
+            let word = VehicleCallbackMasks::from_element(VehicleCallbackMask(element));
+            let expected_word = if element < 16 { 1_u16 << element } else { 0 };
+            assert_eq!(word.0, expected_word, "u16 set element {element}");
+            assert_eq!(
+                super::set(0, element),
+                1_u64 << element,
+                "u64 element {element}"
             );
         }
     }

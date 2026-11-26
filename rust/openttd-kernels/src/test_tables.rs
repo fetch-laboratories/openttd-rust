@@ -354,6 +354,8 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     grf_file_at_or_null: unreachable1,
     grf_file_id: unreachable1,
     grf_file_name: unreachable1,
+    grf_file_traininfo_vehicle_pitch: unreachable1,
+    grf_file_traininfo_vehicle_width: unreachable1,
     grf_parameter: unreachable2,
     newgrf_specs: ptr::null(),
     resolver_grf_file: unreachable1,

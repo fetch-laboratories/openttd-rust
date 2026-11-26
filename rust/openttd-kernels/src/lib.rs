@@ -94,7 +94,7 @@ mod movement;
 #[cfg(feature = "native-test-support")]
 mod native_test_support;
 mod network_config;
-mod newgrf;
+pub mod newgrf;
 mod news_func;
 pub mod news_type;
 #[cfg(test)]

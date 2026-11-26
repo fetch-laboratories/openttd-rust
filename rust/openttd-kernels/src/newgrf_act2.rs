@@ -36,7 +36,7 @@ use crate::newgrf_commons::{
     TLF_PALETTE_REG_FLAGS, TLF_PALETTE_VAR10, TLF_SPRITE, TLF_SPRITE_REG_FLAGS, TLF_SPRITE_VAR10,
     TLF_VAR10_FLAGS, TLR_MAX_VAR10,
 };
-use crate::newgrf_layout::{Layout, LayoutSequence as Sequence, PalSprite};
+use crate::newgrf_layout::{DrawTileSeqStruct, NewGRFSpriteLayout, PalSpriteID};
 use crate::newgrf_loading::{self as loading, Services as LoadingServices};
 use crate::newgrf_spritegroup::{
     DSG_SIZE_BYTE, DSG_SIZE_DWORD, DSG_SIZE_WORD, DSGA_OP_ADD, DSGA_TYPE_NONE, GroupResult, Handle,
@@ -100,12 +100,12 @@ pub struct ProductionStorage {
 }
 #[repr(C)]
 pub struct LayoutStorage {
-    pub(crate) ground: *mut PalSprite,
+    pub(crate) ground: *mut PalSpriteID,
     pub(crate) consistent_max_offset: *mut u32,
 }
 #[repr(C)]
 pub struct SequenceStorage {
-    pub(crate) image: *mut PalSprite,
+    pub(crate) image: *mut PalSpriteID,
     pub(crate) x: *mut i8,
     pub(crate) y: *mut i8,
     pub(crate) z: *mut i8,
@@ -115,7 +115,7 @@ pub struct SequenceStorage {
 }
 #[repr(C)]
 pub struct Services {
-    pal_sprite_storage: unsafe extern "C" fn(*mut PalSprite) -> PalSpriteStorage,
+    pal_sprite_storage: unsafe extern "C" fn(*mut PalSpriteID) -> PalSpriteStorage,
     callback_new: unsafe extern "C" fn(u16) -> Handle,
     group_index: unsafe extern "C" fn(Handle) -> u32,
     group_get: unsafe extern "C" fn(u32) -> Handle,
@@ -138,15 +138,15 @@ pub struct Services {
     loading_reserve: unsafe extern "C" fn(Handle, usize),
     loading_append: unsafe extern "C" fn(Handle, Handle),
     production_storage: unsafe extern "C" fn(Handle) -> ProductionStorage,
-    group_layout: unsafe extern "C" fn(Handle) -> *mut Layout,
-    layout_allocate: unsafe extern "C" fn(*mut Layout, u32),
-    pub(crate) layout_storage: unsafe extern "C" fn(*mut Layout) -> LayoutStorage,
-    layout_sequence: unsafe extern "C" fn(*mut Layout, u32) -> *mut Sequence,
-    pub(crate) sequence_storage: unsafe extern "C" fn(*mut Sequence) -> SequenceStorage,
-    is_parent: unsafe extern "C" fn(*const Sequence) -> bool,
-    has_registers: unsafe extern "C" fn(*const Layout) -> bool,
-    allocate_registers: unsafe extern "C" fn(*mut Layout),
-    registers: unsafe extern "C" fn(*mut Layout, u32) -> *mut LayoutRegisters,
+    group_layout: unsafe extern "C" fn(Handle) -> *mut NewGRFSpriteLayout,
+    layout_allocate: unsafe extern "C" fn(*mut NewGRFSpriteLayout, u32),
+    pub(crate) layout_storage: unsafe extern "C" fn(*mut NewGRFSpriteLayout) -> LayoutStorage,
+    layout_sequence: unsafe extern "C" fn(*mut NewGRFSpriteLayout, u32) -> *mut DrawTileSeqStruct,
+    pub(crate) sequence_storage: unsafe extern "C" fn(*mut DrawTileSeqStruct) -> SequenceStorage,
+    is_parent: unsafe extern "C" fn(*const DrawTileSeqStruct) -> bool,
+    has_registers: unsafe extern "C" fn(*const NewGRFSpriteLayout) -> bool,
+    allocate_registers: unsafe extern "C" fn(*mut NewGRFSpriteLayout),
+    registers: unsafe extern "C" fn(*mut NewGRFSpriteLayout, u32) -> *mut LayoutRegisters,
     assert_offsets: unsafe extern "C" fn(bool, bool, u32),
     error_data: unsafe extern "C" fn(*mut c_void, *const u8, usize),
 }
@@ -656,7 +656,7 @@ unsafe fn production<R: Read>(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_action2_recolour(s: &Services, image: *mut PalSprite) {
+pub unsafe extern "C" fn openttd_rust_action2_recolour(s: &Services, image: *mut PalSpriteID) {
     unsafe {
         recolour(&(s.pal_sprite_storage)(image));
     }
@@ -685,7 +685,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
     invert: bool,
     use_sets: bool,
     feature: u8,
-    image: *mut PalSprite,
+    image: *mut PalSpriteID,
     max_sprite: *mut u16,
     max_palette: *mut u16,
 ) -> Result<u8, ReadError> {
@@ -782,7 +782,7 @@ unsafe fn layout_registers<R: Read>(
     b: &mut R,
     flags: u8,
     parent: bool,
-    layout: *mut Layout,
+    layout: *mut NewGRFSpriteLayout,
     index: u32,
 ) -> Result<(), ReadError> {
     unsafe {
@@ -822,7 +822,7 @@ unsafe fn layout_registers<R: Read>(
         if flags & TLF_SPRITE_VAR10 != 0 {
             let value = b.byte()?;
             (*regs).sprite_var10 = value;
-            if value > TLR_MAX_VAR10 {
+            if u32::from(value) > TLR_MAX_VAR10 {
                 grf_msg!(
                     1,
                     "ReadSpriteLayoutRegisters: Spritelayout specifies var10 ({}) exceeding the maximal allowed value {}",
@@ -836,7 +836,7 @@ unsafe fn layout_registers<R: Read>(
         if flags & TLF_PALETTE_VAR10 != 0 {
             let value = b.byte()?;
             (*regs).palette_var10 = value;
-            if value > TLR_MAX_VAR10 {
+            if u32::from(value) > TLR_MAX_VAR10 {
                 grf_msg!(
                     1,
                     "ReadSpriteLayoutRegisters: Spritelayout specifies var10 ({}) exceeding the maximal allowed value {}",
@@ -861,7 +861,7 @@ pub(crate) unsafe fn read_layout<R: Read>(
     feature: u8,
     allow_var10: bool,
     no_z: bool,
-    layout: *mut Layout,
+    layout: *mut NewGRFSpriteLayout,
 ) -> Result<bool, ReadError> {
     unsafe {
         let has_flags = has_bit(count, 6);

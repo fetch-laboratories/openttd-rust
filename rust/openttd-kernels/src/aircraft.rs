@@ -31,7 +31,7 @@ use crate::effectvehicle_func::EffectVehicleType;
 use crate::engine_type::{AIR_CTOL, AIR_FAST};
 use crate::map_func::Map;
 use crate::newgrf_properties::PropertyID;
-use crate::newgrf_sound::{VSE_START, VSE_TOUCHDOWN};
+use crate::newgrf_sound::VehicleSoundEvent;
 use crate::news_func::{
     add_tile_news_item, add_vehicle_advice_news_item, add_vehicle_news_item, delete_vehicle_news,
 };
@@ -1128,7 +1128,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     /// Original `PlayAircraftSound`.
     fn play_aircraft_sound(&self, v: Vehicle) {
-        if !self.vehicle_sound(v, VSE_START) {
+        if !self.vehicle_sound(v, VehicleSoundEvent::VSE_START) {
             self.snd_play_vehicle_fx(self.engine_sfx(v), v);
         }
     }
@@ -1544,7 +1544,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if u.cur_speed() > 32 {
                 b.set_cur_speed(0);
                 u.set_cur_speed(u.cur_speed() - 1);
-                if u.cur_speed() == 32 && !self.vehicle_sound(v, VSE_START) {
+                if u.cur_speed() == 32 && !self.vehicle_sound(v, VehicleSoundEvent::VSE_START) {
                     let mut sfx = self.engine_sfx(v);
                     /* For compatibility with old NewGRF we ignore the sfx property, unless a NewGRF-defined sound is used.
                      * The baseset has only one helicopter sound, so this only limits using plane or cow sounds. */
@@ -2238,7 +2238,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             AirportAnimationTrigger::AirplaneTouchdown,
         );
 
-        if !self.vehicle_sound(v, VSE_TOUCHDOWN) {
+        if !self.vehicle_sound(v, VehicleSoundEvent::VSE_TOUCHDOWN) {
             self.snd_play_vehicle_fx(SoundID::from(SoundFx::SND_17_SKID_PLANE), v);
         }
     }

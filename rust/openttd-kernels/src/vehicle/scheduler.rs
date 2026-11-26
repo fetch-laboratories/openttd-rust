@@ -22,8 +22,8 @@
 use super::{VehicleRef, VehicleServices};
 use crate::bitmath_func::{gb, gb_u8, has_bit};
 use crate::framerate_type::{PerformanceAccumulator, PerformanceElement, PerformanceMeasurer};
-use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_32DAY_CALLBACK};
-use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16};
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
+use crate::newgrf_sound::VehicleSoundEvent as SoundEvent;
 use crate::openttd::GameMode;
 use crate::pool::{PoolDescriptor, PoolId};
 use crate::services_assert::assert_with;
@@ -247,7 +247,7 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
                 }
                 let callback = newgrf_vehicle::get_vehicle_callback(
                     resolver::<COUNTED>(vs),
-                    CBID_VEHICLE_32DAY_CALLBACK,
+                    CallbackID::CBID_VEHICLE_32DAY_CALLBACK,
                     0,
                     0,
                     v.engine_type(),
@@ -272,7 +272,11 @@ fn run_economy_vehicle_day_proc<const COUNTED: bool>(s: &SchedulerServices) {
 
                     if callback & !3 != 0 {
                         let engine = svc!(COUNTED, vs.engine, v);
-                        vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
+                        vs.unknown_callback_result(
+                            engine,
+                            CallbackID::CBID_VEHICLE_32DAY_CALLBACK,
+                            callback,
+                        );
                     }
                 }
             }
@@ -446,7 +450,7 @@ fn after_tick<const COUNTED: bool>(
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_RUNNING_SOUND);
         }
-        svc!(COUNTED, vs.play_vehicle_sound, v, VSE_RUNNING);
+        svc!(COUNTED, vs.play_vehicle_sound, v, SoundEvent::VSE_RUNNING);
     }
 
     // Play an alternating running sound every 16 ticks
@@ -465,9 +469,9 @@ fn after_tick<const COUNTED: bool>(
             vs.play_vehicle_sound,
             v,
             if running {
-                VSE_RUNNING_16
+                SoundEvent::VSE_RUNNING_16
             } else {
-                VSE_STOPPED_16
+                SoundEvent::VSE_STOPPED_16
             }
         );
     }
@@ -769,10 +773,12 @@ mod tests {
         extern "C" fn sound(v: VehicleRef, event: VehicleSoundEvent) -> bool {
             observed(|o| {
                 assert_eq!(v.0.as_ptr(), o.part);
-                if event != VSE_RUNNING {
-                    assert!(event == VSE_RUNNING_16 || event == VSE_STOPPED_16);
+                if event != SoundEvent::VSE_RUNNING {
+                    assert!(
+                        event == SoundEvent::VSE_RUNNING_16 || event == SoundEvent::VSE_STOPPED_16
+                    );
                     o.events.push("periodic-sound");
-                    o.running = Some(event == VSE_RUNNING_16);
+                    o.running = Some(event == SoundEvent::VSE_RUNNING_16);
                     return;
                 }
                 o.events.push("running-sound");
@@ -1569,7 +1575,7 @@ mod tests {
         ) -> u16 {
             assert_eq!(
                 (callback, param1, param2),
-                (CBID_VEHICLE_32DAY_CALLBACK.0, 0, 0)
+                (CallbackID::CBID_VEHICLE_32DAY_CALLBACK.0, 0, 0)
             );
             day(Day::Callback(EngineID(id)));
             ANSWER.get()
@@ -1787,7 +1793,7 @@ mod tests {
                         Day::Callback(EngineID(7)),
                         Day::Dirty(front),
                         Day::Engine,
-                        Day::Unknown(CBID_VEHICLE_32DAY_CALLBACK.0, 4),
+                        Day::Unknown(CallbackID::CBID_VEHICLE_32DAY_CALLBACK.0, 4),
                     ],
                 ),
                 (0, vec![Day::Callback(EngineID(7))]),

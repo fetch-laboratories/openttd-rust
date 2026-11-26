@@ -187,25 +187,19 @@ impl Fixture {
     }
     fn load_all(&mut self) {
         unsafe {
-            clean_up();
+            clean_up_grf_town_names();
             crate::newgrf_text::clean_up_strings();
         }
         assert!(self.load(b"TNA5", &actions_a()));
         assert!(self.load(b"TNX5", &actions_bad()));
         assert!(self.load(b"TNB5", &actions_b()));
         assert!(!self.load(b"TNS5", &actions_short()));
-        unsafe { init_generator_names() };
+        unsafe { init_grf_town_generator_names() };
     }
-    fn name(&self, id: u32, gen_: u16, seed: u32) -> Vec<u8> {
+    fn name(id: u32, gen_: u16, seed: u32) -> Vec<u8> {
         let mut out = Vec::new();
         unsafe {
-            generate(
-                &self.shared,
-                &mut |part| out.extend_from_slice(part),
-                id,
-                gen_,
-                seed,
-            );
+            grf_town_name_generate(&mut |part| out.extend_from_slice(part), id, gen_, seed);
         };
         out
     }
@@ -213,7 +207,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         unsafe {
-            clean_up();
+            clean_up_grf_town_names();
             crate::newgrf_text::clean_up_strings();
             let state = newgrf_loading::openttd_rust_grf_execution();
             (*state).grffile = null_mut();
@@ -222,10 +216,8 @@ impl Drop for Fixture {
     }
 }
 
-fn names() -> Vec<u32> {
-    let mut size = 0;
-    let data = unsafe { openttd_rust_grf_townname_list(&raw mut size) };
-    unsafe { std::slice::from_raw_parts(data, size) }.to_vec()
+fn names() -> Vec<StringID> {
+    unsafe { get_grf_town_name_list() }.to_vec()
 }
 
 #[test]
@@ -240,12 +232,15 @@ fn action_0f_parsing_and_generation_match_the_original() {
     // Style order, then the fallback past the last style.
     assert_eq!(first.len(), 4);
     let ids = [*b"TNA5", *b"TNA5", *b"TNB5", *b"TNS5"].map(grfid);
-    for (gen_, id) in ids.into_iter().enumerate() {
-        assert_eq!(unsafe { get_id(gen_ as u16) }, id);
+    for (gen_, id) in (0_u16..).zip(ids) {
+        assert_eq!(unsafe { get_grf_town_name_id(gen_) }, id);
     }
-    assert_eq!(unsafe { get_type(1) }, 1);
-    assert_eq!(unsafe { get_id(4) }, 0);
-    assert_eq!(unsafe { get_type(4) }, SPECSTR_TOWNNAME_START.0 as u16);
+    assert_eq!(unsafe { get_grf_town_name_type(1) }, 1);
+    assert_eq!(unsafe { get_grf_town_name_id(4) }, 0);
+    assert_eq!(
+        u32::from(unsafe { get_grf_town_name_type(4) }),
+        SPECSTR_TOWNNAME_START.0
+    );
 
     let (tna, tnb, tns, tnx) = (
         grfid(*b"TNA5"),
@@ -254,29 +249,29 @@ fn action_0f_parsing_and_generation_match_the_original() {
         grfid(*b"TNX5"),
     );
     // A repeated definition, the recursive final definition and the second file.
-    assert_eq!(f.name(tna, 0, 0), b"Y Hill");
-    assert_eq!(f.name(tna, 0, u32::MAX), b"Alton Hill");
-    assert_eq!(f.name(tna, 0, 0x0003_0000), b"Beton Hill");
-    assert_eq!(f.name(tna, 1, 0), b"Q");
-    assert_eq!(f.name(tna, 1, 0xFFFF), b"Y Hill");
-    assert_eq!(f.name(tnb, 0, 0), "Gam\u{20ac}".as_bytes());
+    assert_eq!(Fixture::name(tna, 0, 0), b"Y Hill");
+    assert_eq!(Fixture::name(tna, 0, u32::MAX), b"Alton Hill");
+    assert_eq!(Fixture::name(tna, 0, 0x0003_0000), b"Beton Hill");
+    assert_eq!(Fixture::name(tna, 1, 0), b"Q");
+    assert_eq!(Fixture::name(tna, 1, 0xFFFF), b"Y Hill");
+    assert_eq!(Fixture::name(tnb, 0, 0), "Gam\u{20ac}".as_bytes());
     // The invalid reference deleted its entry and disabled its file.
-    assert!(!unsafe { exists(tnx) });
-    assert_eq!(f.name(tnx, 0, 0), b"");
+    assert!(unsafe { get_grf_town_name(tnx) }.is_null());
+    assert_eq!(Fixture::name(tnx, 0, 0), b"");
     assert_eq!(*STATUSES.lock().unwrap(), [GCS_DISABLED]);
     assert_eq!(*ERRORS.lock().unwrap(), [STR_NEWGRF_ERROR_INVALID_ID.0]);
     // The read failure of the truncated file keeps the parts read before it.
-    assert_eq!(f.name(tns, 0, 0), b"Shortort");
+    assert_eq!(Fixture::name(tns, 0, 0), b"Shortort");
 
-    check_oracle(&f, &first);
+    check_oracle(&first);
 
     // The second load of `ReloadNewGRFData` behaves as the first.
     f.load_all();
     assert_eq!(names().len(), first.len());
-    check_oracle(&f, &names());
+    check_oracle(&names());
 }
 
-fn check_oracle(f: &Fixture, list: &[u32]) {
+fn check_oracle(list: &[StringID]) {
     let builtin = crate::services::fixture(null_mut(), random);
     let mut styles = 0;
     let mut samples = 0;
@@ -292,14 +287,14 @@ fn check_oracle(f: &Fixture, list: &[u32]) {
         if field[0] == "style" {
             styles += 1;
             let id = u32::from_str_radix(field[2], 16).unwrap();
-            assert_eq!(unsafe { get_id(gen_) }, id, "{row}");
+            assert_eq!(unsafe { get_grf_town_name_id(gen_) }, id, "{row}");
             assert_eq!(
-                u32::from(unsafe { get_type(gen_) }),
+                u32::from(unsafe { get_grf_town_name_type(gen_) }),
                 field[3].parse::<u32>().unwrap()
             );
             if field[4] == "true" {
                 // The console's default language selects the US name of the first style.
-                let name = list[usize::from(gen_)];
+                let name = list[usize::from(gen_)].0;
                 let language = if gen_ == 0 { 1 } else { 0x7F };
                 let matched: Vec<_> = rows
                     .iter()
@@ -313,9 +308,9 @@ fn check_oracle(f: &Fixture, list: &[u32]) {
             let seed = u32::from_str_radix(field[2], 16).unwrap();
             let expected = field.get(3).copied().unwrap_or("");
             let actual = if usize::from(gen_) < list.len() {
-                let id = unsafe { get_id(gen_) };
-                let kind = unsafe { get_type(gen_) };
-                hex(&f.name(id, kind, seed))
+                let id = unsafe { get_grf_town_name_id(gen_) };
+                let kind = unsafe { get_grf_town_name_type(gen_) };
+                hex(&Fixture::name(id, kind, seed))
             } else {
                 // The built-in English generator, which the fallback selects.
                 let owner = unsafe {

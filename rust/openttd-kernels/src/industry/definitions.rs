@@ -9,7 +9,7 @@ use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::industry_type::{
     INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
 };
-use crate::newgrf::CargoLabel;
+use crate::newgrf::{CargoLabelChoice, GRFFile};
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
 use crate::table::strings::STR_NEWGRF_INVALID_INDUSTRYTYPE;
@@ -170,14 +170,11 @@ pub unsafe fn publish_tile(manager: *mut override_manager::Manager, its: *mut In
     }
 }
 /// `GetCargoTypeByLabel(GetActiveCargoLabel(label))`.
-fn translate(label: CargoLabel) -> CargoType {
-    use crate::cargo_registry::openttd_rust_cargo_by_label;
-    CargoType(openttd_rust_cargo_by_label(
-        crate::newgrf::get_active_cargo_label(label, |label| openttd_rust_cargo_by_label(label)),
-    ))
+fn translate(label: CargoLabelChoice) -> CargoType {
+    crate::cargo_registry::get_cargo_type_by_label(crate::newgrf::get_active_cargo_label(label))
 }
 /// Apply default cargo translation map for unset cargo slots
-fn translate_cargo(cargo: &mut [u8], labels: &[CargoLabel]) {
+fn translate_cargo(cargo: &mut [u8], labels: &[CargoLabelChoice]) {
     for (cargo, label) in cargo.iter_mut().zip(labels) {
         if !is_valid_cargo_type(*cargo) {
             *cargo = translate(*label).0;
@@ -189,7 +186,7 @@ fn translate_cargo(cargo: &mut [u8], labels: &[CargoLabel]) {
 pub unsafe fn finalise(s: &Services) {
     let mut file_index = 0;
     loop {
-        let file = (s.shared().grf_file_at_or_null)(file_index);
+        let file: *const GRFFile = (s.shared().grf_file_at_or_null)(file_index).cast();
         if file.is_null() {
             break;
         }

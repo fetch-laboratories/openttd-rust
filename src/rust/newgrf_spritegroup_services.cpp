@@ -176,12 +176,11 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 {
 	static const OpenTTDGlobalVariableServices services{
-		.misc_bits = RustGRFMiscBits,
-		.newgrf_version = RustNewGRFVersion,
-		.palette = RustGRFPalette,
-		.pitch = RustGRFTrainPitch,
+		.get_grf_config = [](uint32_t grfid, uint32_t mask) noexcept { return GetGRFConfig(grfid, mask); },
+		.misc_grf_features = RustGRFMiscBits,
+		.openttd_newgrf_version = RustNewGRFVersion,
+		.palette = [](const GRFConfig *config) noexcept { return config->palette; },
 		.shared = &GetRustSharedServices(),
-		.width = RustGRFTrainWidth,
 	};
 	return services;
 }

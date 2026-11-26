@@ -16,10 +16,9 @@
 #include "water_map.h"
 
 #include "rust/generic_resolver.h"
+#include "rust/newgrf_global_ffi.h"
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
-#include "rust/services_landscape.h"
-#include "rust/services_water.h"
 
 #include "safeguards.h"
 
@@ -36,13 +35,12 @@ static uint16_t EvaluateGeneric(const OpenTTDGenericInvocation *invocation, int3
 const OpenTTDGenericServices &GetRustGenericServices() noexcept
 {
 	static const OpenTTDGenericServices services{
-		.shared = &GetRustSharedServices(),
+		.callback_frame = EvaluateGeneric,
 		.cargo_bitnum = RustCargoBitnum,
-		.evaluate = EvaluateGeneric,
 		.common = &GetRustSpriteGroupServices(),
-		.enabled = RustAmbientSoundEnabled,
-		.water_class = RustWaterClass,
-		.sound = RustGRFPlayTileSound,
+		.global = &GetRustGlobalVariableServices(),
+		.play_tile_sound = RustGRFPlayTileSound,
+		.shared = &GetRustSharedServices(),
 	};
 	return services;
 }

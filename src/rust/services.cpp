@@ -685,6 +685,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
 	.grf_file_name = RustGRFFileName,
+	.grf_file_traininfo_vehicle_pitch = RustGRFTrainPitch,
+	.grf_file_traininfo_vehicle_width = RustGRFTrainWidth,
 	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,
