@@ -775,9 +775,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             } else {
                 last_dest = self.get_target_airport_if_valid(v);
                 let mut next_station = None;
-                crate::orders::get_next_stopping_station(b, self.vs.orders(), &mut |station| {
-                    next_station = Some(station);
-                });
+                crate::orders::get_next_stopping_station(
+                    b,
+                    &mut |station| {
+                        next_station = Some(station);
+                    },
+                    self.vs.orders(),
+                );
                 if let Some(station) = next_station {
                     next_dest = self.station_get_if_valid(station);
                 }
@@ -883,8 +887,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             Self::call(|| unsafe { (self.leaves.service_order)(v, destination.0) });
             self.start_stop_dirty(v);
         } else if Self::current_order_is_type(v, OrderType::OT_GOTO_DEPOT) {
-            // SAFETY: The live vehicle's current order.
-            unsafe { crate::orders::make_dummy(v.base().current_order_pointer()) };
+            crate::orders::make_dummy(v.base());
             self.start_stop_dirty(v);
         }
     }
@@ -2217,7 +2220,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
 
         self.service_in_depot(v);
-        crate::orders::VisitOrders::new(self.vs.orders()).leave_unbunching_depot(b);
+        crate::orders::leave_unbunching_depot(b, self.vs.orders());
         self.set_aircraft_position(v, b.x_pos(), b.y_pos(), b.z_pos());
         Self::call(|| {
             invalidate_window_data(
@@ -3063,8 +3066,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 && Self::order_destination(v) == index
                 && (!Self::airport_has_hangar(st) || !Self::can_vehicle_use_station(v, st))
             {
-                // SAFETY: The live vehicle's current order.
-                unsafe { crate::orders::make_dummy(v.base().current_order_pointer()) };
+                crate::orders::make_dummy(v.base());
                 self.start_stop_dirty(v);
             }
             let pos = self.aircraft_get_entry_point(v, ap, rotation);
@@ -3076,10 +3078,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         /* Heliports don't have a hangar. Invalidate all go to hangar orders from all aircraft. */
         if !Self::airport_has_hangar(st) {
             crate::orders::remove_order_from_all_vehicles(
-                self.vs.orders(),
                 OrderType::OT_GOTO_DEPOT,
-                index,
+                crate::order_type::DestinationID(index.0),
                 true,
+                self.vs.orders(),
             );
         }
     }
@@ -3341,7 +3343,13 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
 /// See the shared export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_missing_orders(leaves: *const Leaves, id: Vehicle) {
+    // SAFETY: As this function's contract.
+    handle_missing_aircraft_orders(unsafe { &*leaves }, id);
+}
+/// `HandleMissingAircraftOrders`, for the Rust callers.
+pub(crate) fn handle_missing_aircraft_orders(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
+    let leaves: *const Leaves = leaves;
     with_world!(leaves, |w| {
         w.handle_missing_aircraft_orders(id);
     });
@@ -3363,7 +3371,13 @@ pub unsafe extern "C" fn openttd_rust_aircraft_crash(
 /// See the shared export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_next_airport(leaves: *const Leaves, id: Vehicle) {
+    // SAFETY: As this function's contract.
+    aircraft_next_airport_pos_and_order(unsafe { &*leaves }, id);
+}
+/// `AircraftNextAirportPos_and_Order`, for the Rust callers.
+pub(crate) fn aircraft_next_airport_pos_and_order(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
+    let leaves: *const Leaves = leaves;
     with_world!(leaves, |w| {
         w.aircraft_next_airport_pos_and_order(id);
     });
@@ -3400,8 +3414,14 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
     leaves: *const Leaves,
     id: Vehicle,
 ) -> u16 {
+    // SAFETY: As this function's contract.
+    find_closest_depot(unsafe { &*leaves }, id).0
+}
+/// `Aircraft::FindClosestDepot`'s station, for the Rust dispatch of the virtual.
+pub(crate) fn find_closest_depot(leaves: &Leaves, id: Vehicle) -> StationID {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| { w.find_closest_depot(id).0 })
+    let leaves: *const Leaves = leaves;
+    with_world!(leaves, |w| { w.find_closest_depot(id) })
 }
 /// `Vehicle::PreDestructor`'s aircraft block release.
 /// # Safety

@@ -336,13 +336,10 @@ pub(crate) unsafe fn cmd_build_vehicle(
             if unsafe { (b.groups.primary)(v) } {
                 unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(b.groups, v, 1) };
                 if !subflags.test(DoCommandFlag::AutoReplace) {
-                    unsafe {
-                        crate::orders::openttd_rust_backup_restore(
-                            v.cast(),
-                            cmd.client_id.0,
-                            c.orders,
-                        );
-                    };
+                    // SAFETY: `v` is the live new vehicle's shell.
+                    let record =
+                        unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), c.orders.base) };
+                    crate::orders::order_backup_restore(record, cmd.client_id.0, c.orders);
                 }
             }
             (s.use_unit)(v);

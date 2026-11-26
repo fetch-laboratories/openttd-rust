@@ -84,10 +84,7 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	/* Matching current/list station orders take the ordinary unchanged-order
 	 * path. This preserves the range reference's deliberate no-op orders; the
 	 * current order equals the reference's (OT_GOTO_STATION to station 1). */
-	range_orders->vehicle->current = openttd_rust_order_vector_data(range_orders->vector.get())[0];
-	range_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
-	range_orders->services.vehicle = [](void *v) noexcept { if (v != fixture) std::abort(); return range_orders->vehicle.get(); };
-	range_orders->services.consist = [](void *) noexcept { return &range_orders->consist; };
+	range_orders->vehicle->current_order = openttd_rust_order_vector_data(range_orders->vector.get())[0];
 	vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &range_orders->services; };
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };

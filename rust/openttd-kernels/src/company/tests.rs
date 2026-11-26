@@ -3073,7 +3073,8 @@ mod evidence_tests {
             // SAFETY: Plain integer records.
             let mut consist: Box<crate::orders::Consist> = Box::new(unsafe { std::mem::zeroed() });
             if custom {
-                consist.flags = 1 << crate::base_consist::VehicleFlag::SERVICE_INTERVAL_IS_CUSTOM.0;
+                consist.vehicle_flags =
+                    1 << crate::base_consist::VehicleFlag::SERVICE_INTERVAL_IS_CUSTOM.0;
             }
             write_field!(v, consist, &raw mut *consist);
             write_field!(v, owner, owner);

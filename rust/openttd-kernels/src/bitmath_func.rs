@@ -52,6 +52,31 @@ pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
     *value |= data.wrapping_shl(u32::from(start));
 }
 
+/// `SB<uint8_t>`: set `length` bits of a byte field at `start` to `data`, in its own width;
+/// the original stores its promoted result back into the byte. Preconditions as [`sb`].
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SB<uint8_t> stores the promoted result back into the uint8_t field"
+)]
+pub fn sb_u8(value: &mut u8, start: u8, length: u8, data: u8) {
+    let mut promoted = u32::from(*value);
+    sb(&mut promoted, start, length, u32::from(data));
+    *value = promoted as u8;
+}
+
+/// `SB<uint16_t>`: set `length` bits of a 16-bit field at `start` to `data`, in its own
+/// width; the original stores its promoted result back into the field. Preconditions as
+/// [`sb`].
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SB<uint16_t> stores the promoted result back into the uint16_t field"
+)]
+pub fn sb_u16(value: &mut u16, start: u8, length: u8, data: u16) {
+    let mut promoted = u32::from(*value);
+    sb(&mut promoted, start, length, u32::from(data));
+    *value = promoted as u16;
+}
+
 /// `AB`: add `i` to the `n`-bit window of `x` starting at bit `s`. An overflow does not
 /// affect the following bits of the window and is simply ignored. For uint32 fields.
 /// Preconditions: `n < 32` and `s + n <= 32`.
@@ -65,6 +90,19 @@ pub fn ab(x: &mut u32, s: u8, n: u8, i: u32) -> u32 {
 /// also returned. For promoted integer fields.
 pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
     sb(value, bit, 1, u32::from(enabled));
+    *value
+}
+
+/// `AssignBit<uint8_t>`: [`assign_bit`] on a byte field. `SB<T>` computes in the promoted
+/// width and stores back into `T`, so the narrowing keeps every source-valid bit.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "AssignBit<uint8_t> stores SB's promoted result back into the uint8_t field"
+)]
+pub fn assign_bit8(value: &mut u8, bit: u8, enabled: bool) -> u8 {
+    let mut promoted = u32::from(*value);
+    assign_bit(&mut promoted, bit, enabled);
+    *value = promoted as u8;
     *value
 }
 
@@ -93,6 +131,12 @@ pub fn assign_bit16(value: &mut u16, bit: u8, enabled: bool) -> u16 {
 /// wrapping shifts avoid introducing a panic for the native out-of-width domain.
 pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
     value.wrapping_shr(start as u32) & (1_u32.wrapping_shl(count as u32).wrapping_sub(1))
+}
+
+/// `GB<uint16_t>`: fetch `count` bits at `start` of a 16-bit field, in its own width.
+/// Preconditions: `1 <= count <= 16` and `start + count <= 16`.
+pub const fn gb_u16(value: u16, start: u8, count: u8) -> u16 {
+    value.wrapping_shr(start as u32) & (1_u16.wrapping_shl(count as u32).wrapping_sub(1))
 }
 
 /// `GB<uint8_t>`: fetch `count` bits at `start` of a byte field, in its own width.

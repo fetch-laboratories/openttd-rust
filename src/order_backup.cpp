@@ -36,7 +36,7 @@ OrderBackup::~OrderBackup() = default;
  */
 OrderBackup::OrderBackup(const Vehicle *v, uint32_t user)
 {
-	openttd_rust_capture_backup(this, v, user, &GetRustOrdersLeaves());
+	openttd_rust_capture_backup(this, RustVehicle(v), user, &GetRustOrdersLeaves());
 }
 
 
@@ -48,7 +48,7 @@ OrderBackup::OrderBackup(const Vehicle *v, uint32_t user)
  */
 /* static */ void OrderBackup::Backup(const Vehicle *v, uint32_t user)
 {
-	openttd_rust_backup_create(const_cast<Vehicle *>(v), user, &GetRustOrdersLeaves());
+	openttd_rust_backup_create(RustVehicle(v), user, &GetRustOrdersLeaves());
 }
 
 /**
@@ -59,7 +59,7 @@ OrderBackup::OrderBackup(const Vehicle *v, uint32_t user)
  */
 /* static */ void OrderBackup::Restore(Vehicle *v, uint32_t user)
 {
-	openttd_rust_backup_restore(v, user, &GetRustOrdersLeaves());
+	openttd_rust_backup_restore(RustVehicle(v), user, &GetRustOrdersLeaves());
 }
 
 /**
@@ -82,7 +82,7 @@ OrderBackup::OrderBackup(const Vehicle *v, uint32_t user)
  */
 CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID user_id)
 {
-	openttd_rust_command_clear_backup(tile.base(), user_id, flags.Test(DoCommandFlag::Execute), &GetRustOrdersLeaves()); return CommandCost();
+	CommandCost result; openttd_rust_command_clear_backup(flags.base(), tile.base(), user_id, &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -93,7 +93,7 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::ResetUser(uint32_t user)
 {
-	assert(_network_server); openttd_rust_backup_reset(user, &GetRustOrdersLeaves());
+	openttd_rust_backup_reset(user, &GetRustOrdersLeaves());
 }
 
 /**
@@ -125,5 +125,5 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::ClearVehicle(const Vehicle *v)
 {
-	assert(v != nullptr); openttd_rust_backup_vehicle_clear(const_cast<Vehicle *>(v), &GetRustOrdersLeaves());
+	assert(v != nullptr); openttd_rust_backup_vehicle_clear(RustVehicle(v), &GetRustOrdersLeaves());
 }

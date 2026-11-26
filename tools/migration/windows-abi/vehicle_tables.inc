@@ -1,4 +1,6 @@
 #pragma once
+#include "rust/window_ffi.h"
+#include "window_type.h"
 /* Complete typed tables exercise road cdecl calls without importing game globals.
  * These are boundary/lifetime checks, not a second simulation oracle. */
 template <typename Function> struct VehicleUnused;
@@ -12,6 +14,19 @@ struct VehicleUnused<Result (OPENTTD_RUST_CALL *)(Args...) noexcept> {
 };
 #define VEHICLE_UNUSED(table, field) table.field = VehicleUnused<decltype(table.field)>::Call
 static OpenTTDVehicleMaintenanceServices _vehicle_maintenance_probe;
+/* The window services every vehicle probe calls through; the first binding stays for the
+ * process, so each probe binds this one table: details dirties are counted, and the vehicle
+ * list classes ProcessOrders dirties for ships and aircraft are ignored. */
+static size_t _vehicle_maintenance_details_dirty;
+static void BindVehicleWindows()
+{
+	static OpenTTDWindowServices windows{};
+	windows.set_window_dirty = [](uint16_t cls, int32_t) noexcept {
+		if (cls == WC_VEHICLE_DETAILS) ++_vehicle_maintenance_details_dirty;
+	};
+	windows.set_window_classes_dirty = [](uint16_t) noexcept {};
+	openttd_rust_window_bind(&windows);
+}
 struct RoadTestTables {
 	OpenTTDVehicleServices vehicle;
 	OpenTTDGroundServices ground;

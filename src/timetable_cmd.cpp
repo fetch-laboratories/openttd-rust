@@ -54,7 +54,7 @@ TimerGameEconomy::Date GetDateFromStartTick(TimerGameTick::TickCounter start_tic
  */
 CommandCost CmdChangeTimetable(DoCommandFlags flags, VehicleID veh, VehicleOrderID order_number, ModifyTimetableFlags mtf, uint16_t data)
 {
-	CommandCost result; openttd_rust_timetable_change(Vehicle::GetIfValid(veh), flags.Test(DoCommandFlag::Execute), order_number, mtf, data, &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_timetable_change(flags.base(), veh.base(), order_number, mtf, data, &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -68,7 +68,7 @@ CommandCost CmdChangeTimetable(DoCommandFlags flags, VehicleID veh, VehicleOrder
  */
 CommandCost CmdBulkChangeTimetable(DoCommandFlags flags, VehicleID veh, ModifyTimetableFlags mtf, uint16_t data)
 {
-	CommandCost result; openttd_rust_timetable_bulk(Vehicle::GetIfValid(veh), mtf, data, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_timetable_bulk(flags.base(), veh.base(), mtf, data, &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -80,7 +80,7 @@ CommandCost CmdBulkChangeTimetable(DoCommandFlags flags, VehicleID veh, ModifyTi
  */
 CommandCost CmdSetVehicleOnTime(DoCommandFlags flags, VehicleID veh, bool apply_to_group)
 {
-	CommandCost result; openttd_rust_timetable_on_time(Vehicle::GetIfValid(veh), flags.Test(DoCommandFlag::Execute), apply_to_group, &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_timetable_on_time(flags.base(), veh.base(), apply_to_group, &result, &GetRustOrdersLeaves()); return result;
 }
 
 
@@ -94,7 +94,7 @@ CommandCost CmdSetVehicleOnTime(DoCommandFlags flags, VehicleID veh, bool apply_
  */
 CommandCost CmdSetTimetableStart(DoCommandFlags flags, VehicleID veh_id, bool timetable_all, TimerGameTick::TickCounter start_tick)
 {
-	CommandCost result; openttd_rust_timetable_start(Vehicle::GetIfValid(veh_id), flags.Test(DoCommandFlag::Execute), timetable_all, start_tick, &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_timetable_start(flags.base(), veh_id.base(), timetable_all, start_tick, &result, &GetRustOrdersLeaves()); return result;
 }
 
 
@@ -110,5 +110,5 @@ CommandCost CmdSetTimetableStart(DoCommandFlags flags, VehicleID veh_id, bool ti
  */
 CommandCost CmdAutofillTimetable(DoCommandFlags flags, VehicleID veh, bool autofill, bool preserve_wait_time)
 {
-	CommandCost result; openttd_rust_timetable_autofill(Vehicle::GetIfValid(veh), flags.Test(DoCommandFlag::Execute), autofill, preserve_wait_time, &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_timetable_autofill(flags.base(), veh.base(), autofill, preserve_wait_time, &result, &GetRustOrdersLeaves()); return result;
 }

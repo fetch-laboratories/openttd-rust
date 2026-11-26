@@ -109,17 +109,14 @@ impl<'a> Game<'a> {
     fn process_orders(&self, v: Handle) -> bool {
         crate::orders::process_orders(v.vehicle(), self.vs.orders())
     }
-    /// The orders owner's route view.
-    fn orders(&self) -> crate::orders::VisitOrders {
-        crate::orders::VisitOrders::new(self.vs.orders())
-    }
     /// `v->GetNumOrders()`.
     fn get_num_orders(&self, v: Handle) -> VehicleOrderID {
-        self.orders().get_num_orders(v.vehicle())
+        crate::orders::get_num_orders(v.vehicle(), self.vs.orders())
     }
     /// `v->GetOrder(index)`.
-    fn get_order(&self, v: Handle, index: VehicleOrderID) -> *const Order {
-        self.orders().get_order(v.vehicle(), index)
+    fn get_order(&self, v: Handle, index: VehicleOrderID) -> Option<OrderView<'static>> {
+        crate::orders::get_order(v.vehicle(), index, self.vs.orders())
+            .map(crate::orders::OrderRef::view)
     }
     /// `UpdateOrderDest(v, order, conditional_depth, pbs_look_ahead)`.
     fn update_order_dest(
@@ -906,12 +903,11 @@ impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
             }
 
             let order = g.get_order(v, self.index);
-            assert_with(|| !order.is_null());
+            assert_with(|| order.is_some());
 
-            // SAFETY: The list has orders and the index is below their count, so `order`
-            // names one of them, live until the list changes; each read below ends before
-            // the call that follows it.
-            let view = unsafe { OrderView::of(order) };
+            // The list has orders and the index is below their count, so `order` names one
+            // of them, read in place until the list changes.
+            let view = order.unwrap();
             let goto = match view.kind() {
                 /* Skip service in depot orders when the train doesn't need service. */
                 OrderType::OT_GOTO_DEPOT
@@ -1255,13 +1251,8 @@ pub(crate) fn choose_train_track(
         && final_dest != TileIndex::INVALID
         && g.is_rail_depot_tile(final_dest)
     {
-        // SAFETY: The vehicle's live current order.
-        unsafe {
-            crate::orders::set_destination(
-                v.vehicle().current_order_pointer(),
-                DestinationID(g.get_depot_index(final_dest).0),
-            );
-        };
+        crate::orders::current_order(v.vehicle())
+            .set_destination(DestinationID(g.get_depot_index(final_dest).0));
         v.vehicle().set_dest_tile(final_dest);
         g.set_start_stop_dirty(v);
     }
@@ -1547,42 +1538,42 @@ mod tests {
                     ..Default::default()
                 },
                 consist: crate::orders::Consist {
-                    time: 0,
-                    lateness: 0,
-                    start: 0,
-                    last_departure: 0,
-                    next_departure: 0,
-                    round_trip: 0,
-                    real: 254,
-                    implicit: 0,
-                    flags: 0,
+                    current_order_time: 0,
+                    lateness_counter: 0,
+                    timetable_start: 0,
+                    depot_unbunching_last_departure: 0,
+                    depot_unbunching_next_departure: 0,
+                    round_trip_time: 0,
+                    cur_real_order_index: 254,
+                    cur_implicit_order_index: 0,
+                    vehicle_flags: 0,
                 },
                 orders: crate::orders::VehicleOrders {
-                    current: std::mem::MaybeUninit::new(crate::orders::Order {
-                        kind: 0x12,
+                    current_order: std::mem::MaybeUninit::new(crate::orders::Order {
+                        r#type: 0x12,
                         flags: 0x34,
-                        destination: 1,
-                        refit: 0x56,
-                        wait: 0,
-                        travel: 0x789a,
-                        speed: 0xbcde,
+                        dest: 1,
+                        refit_cargo: 0x56,
+                        wait_time: 0,
+                        travel_time: 0x789a,
+                        max_speed: 0xbcde,
                     }),
                     orders: std::ptr::null_mut(),
-                    next: std::ptr::null_mut(),
-                    previous: std::ptr::null_mut(),
+                    next_shared: std::ptr::null_mut(),
+                    previous_shared: std::ptr::null_mut(),
                 },
             }
         }
         fn set_order_token(&mut self, token: u32) {
             // SAFETY: The fixture initializes this Order before every access.
-            let order = unsafe { self.orders.current.assume_init_mut() };
-            order.destination = u16::try_from(token & 0xffff).unwrap();
-            order.wait = u16::try_from(token >> 16).unwrap();
+            let order = unsafe { self.orders.current_order.assume_init_mut() };
+            order.dest = u16::try_from(token & 0xffff).unwrap();
+            order.wait_time = u16::try_from(token >> 16).unwrap();
         }
         fn order_token(&self) -> u32 {
             // SAFETY: The fixture initializes this Order before every access.
-            let order = unsafe { self.orders.current.assume_init_ref() };
-            u32::from(order.destination) | (u32::from(order.wait) << 16)
+            let order = unsafe { self.orders.current_order.assume_init_ref() };
+            u32::from(order.dest) | (u32::from(order.wait_time) << 16)
         }
         /// The handle of the train part, standing on the line's first tile and facing
         /// north-east on `TRACK_X`.
@@ -2066,30 +2057,20 @@ mod tests {
         check_reverse_train(&Game::new(&TRAIN_LEAVES, &shared), h);
     }
 
-    unsafe extern "C" fn vehicle_orders(shell: *mut c_void) -> *mut crate::orders::VehicleOrders {
+    unsafe extern "C" fn invalidate_vehicle_order(shell: *mut c_void, data: i32) {
         // SAFETY: Test handles retain their exclusive stack Mock for each query.
-        unsafe { &raw mut (*shell.cast::<Mock>()).orders }
-    }
-    unsafe extern "C" fn consist(shell: *mut c_void) -> *mut crate::orders::Consist {
-        // SAFETY: As above.
-        unsafe { &raw mut (*shell.cast::<Mock>()).consist }
-    }
-    unsafe extern "C" fn invalidate_order(shell: *mut c_void, data: i32) {
-        // SAFETY: As above.
         unsafe {
             (*shell.cast::<Mock>())
                 .log
                 .push(("invalidate", 0, u8::try_from(data).unwrap()));
         }
     }
-    /// The orders table of a train without an order list: the vehicle's orders owner and
-    /// consist, and a recording order invalidation; every list access aborts.
+    /// The orders table of a train without an order list, whose record links its orders
+    /// owner and consist: a recording order invalidation; every list access aborts.
     extern "C" fn orders_table() -> *const crate::orders::Leaves {
         thread_local! {
             static TABLE: &'static crate::orders::Leaves = Box::leak(Box::new(crate::orders::Leaves {
-                vehicle: vehicle_orders,
-                consist,
-                invalidate_order,
+                invalidate_vehicle_order,
                 ..ORDERS
             }));
         }
@@ -2165,7 +2146,7 @@ mod tests {
             let mut m = Mock::new(0);
             let h = m.handle();
             m.record.last_station_visited = STATION;
-            m.consist.implicit = 3;
+            m.consist.cur_implicit_order_index = 3;
             let mut line = Line::new();
             line.shared.station_catchment = station_catchment;
             line.vehicle.orders = orders_table;
@@ -2181,7 +2162,7 @@ mod tests {
             );
             assert_eq!(STATION_LOOKUPS.get(), 1);
             assert_eq!(m.record.last_station_visited, StationID::INVALID);
-            assert_eq!((m.consist.real, m.log.clone()), (real, log));
+            assert_eq!((m.consist.cur_real_order_index, m.log.clone()), (real, log));
         }
     }
 }

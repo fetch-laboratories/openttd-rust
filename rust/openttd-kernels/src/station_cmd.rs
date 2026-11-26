@@ -4625,9 +4625,9 @@ impl Ctx<'_> {
             for i in 0..(self.s.hangar_count)(st, spec()) {
                 let tile_cur = TileIndex((self.s.hangar_tile)(st, i, spec()));
                 crate::orders::order_backup_reset(
-                    unsafe { &*self.s.vehicle }.orders(),
                     tile_cur,
                     false,
+                    unsafe { &*self.s.vehicle }.orders(),
                 );
                 close_window_by_id(
                     WindowClass::WC_VEHICLE_DEPOT,

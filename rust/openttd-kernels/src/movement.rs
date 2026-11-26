@@ -1812,11 +1812,8 @@ pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
 /// `v->current_order.ShouldStopAtStation(v, station)`: whether `v` should stop at
 /// `station` under its current order, read in place through the record's order link.
 pub(crate) fn should_stop_at_station(v: VehicleRef, station: StationID) -> bool {
-    crate::orders::should_stop_at_station(
-        v.current_order_pointer(),
-        v.last_station_visited(),
-        station,
-    )
+    v.current_order()
+        .should_stop_at_station(v.last_station_visited(), station)
 }
 
 /// Lazy handler for header preconditions. Valid inline helpers never resolve the

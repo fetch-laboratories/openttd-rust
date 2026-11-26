@@ -640,16 +640,11 @@ impl<'a> CYapfRoad<'a> {
             /* add min/max speed penalties */
             let min_speed: i32 = 0;
             let (display_max_speed, order_max_speed) = *self.speeds.get_or_init(|| {
-                let movement = crate::movement::table(self.s);
-                // SAFETY: The movement table's orders leaves have process lifetime.
-                let orders = unsafe { &*movement.orders };
                 (
                     <crate::ground_vehicle::RoadVehicle as crate::ground_vehicle::GroundVehicleType>::get_display_max_speed(
                         self.vehicle,
                     ),
-                    crate::orders::VisitOrders::new(orders)
-                        .current(self.vehicle)
-                        .max_speed(),
+                    self.vehicle.current_order().max_speed(),
                 )
             });
             let max_veh_speed = display_max_speed.min(i32::from(order_max_speed) * 2);
@@ -1410,18 +1405,18 @@ mod tests {
             ..shared()
         };
         let mut orders = crate::orders::VehicleOrders {
-            current: std::mem::MaybeUninit::new(crate::orders::Order {
-                kind: OrderType::OT_GOTO_WAYPOINT.0 | 0x40,
+            current_order: std::mem::MaybeUninit::new(crate::orders::Order {
+                r#type: OrderType::OT_GOTO_WAYPOINT.0 | 0x40,
                 flags: 0,
-                destination: 4321,
-                refit: 0,
-                wait: 0,
-                travel: 0,
-                speed: 0,
+                dest: 4321,
+                refit_cargo: 0,
+                wait_time: 0,
+                travel_time: 0,
+                max_speed: 0,
             }),
             orders: ptr::null_mut(),
-            next: ptr::null_mut(),
-            previous: ptr::null_mut(),
+            next_shared: ptr::null_mut(),
+            previous_shared: ptr::null_mut(),
         };
         let front = crate::vehicle_base::VehicleRecord::new(
             ptr::null_mut(),

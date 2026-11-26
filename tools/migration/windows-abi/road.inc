@@ -63,6 +63,7 @@ static const OpenTTDRoadStopServices road_abi_stops{
 };
 static void RoadBoundary()
 {
+	BindVehicleWindows();
 	RoadAbiProbe probe;
 	const OpenTTDEngineDefaults defaults{};
 	road_abi_engine = openttd_rust_engine_new();
@@ -76,7 +77,7 @@ static void RoadBoundary()
 	road_abi_vehicle.road = probe.state; road_abi_vehicle.ground = probe.ground.state;
 	road_abi_vehicle.orders = &probe.orders; road_abi_vehicle.consist = &probe.consist;
 	road_abi_vehicle.first = &road_abi_vehicle;
-	probe.orders.current.max_speed = UINT16_MAX;
+	probe.orders.current_order.max_speed = UINT16_MAX;
 	probe.ground.state->cache.cached_max_track_speed = 80;
 	probe.ground.state->cache.cached_veh_length = 8;
 	road_abi_second.road = probe.state; road_abi_second.ground = probe.tail_ground.state; road_abi_second.orders = &probe.orders; road_abi_second.first = &road_abi_vehicle;
@@ -279,17 +280,8 @@ static void RoadBoundary()
 	static std::unique_ptr<ControllerOrders> road_orders;
 	road_orders = std::make_unique<ControllerOrders>(&t.vehicle);
 	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &road_orders->services; };
-	road_orders->services.vehicle = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()); return road_orders->vehicle.get(); };
-	road_orders->services.consist = [](void *) noexcept { return &road_orders->consist; };
-	road_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{1}; };
-	road_orders->services.primary_vehicle = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()); return uint64_t{1}; };
-	road_orders->services.station_location = [](void *, uint16_t) noexcept { return uint64_t{100}; };
-	road_orders->services.set_destination = [](void *shell, uint32_t destination) noexcept {
-		CHECK(destination == 100);
-		auto *u = static_cast<OpenTTDVehicle *>(shell);
-		auto &p = *road_abi_probe;
-		openttd_rust_road_set_dest(u, p.state, destination);
-	};
+	RoadAbiHandle()->orders = road_orders->vehicle.get();
+	road_orders->commands.order_station_location = [](OpenTTDVehicle *u, uint16_t) noexcept { CHECK(u == RoadAbiHandle()); return uint32_t{100}; };
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	const OpenTTDVehicleServices emission_effects = EffectTestVehicles();
 	auto *emission_owner = openttd_rust_effect_new();
@@ -526,7 +518,7 @@ static void RoadServiceBoundary()
 	t.shared.depot_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == road_service_probe->tile); return 55; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *v) noexcept {
 		CHECK((v->ground->flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS)) != 0);
-		CHECK((v->orders->current.type & 15) == OT_GOTO_DEPOT && v->orders->current.destination == 55 && v->orders->current.refit_cargo == CARGO_NO_REFIT);
+		CHECK((v->orders->current_order.type & 15) == OT_GOTO_DEPOT && v->orders->current_order.dest == 55 && v->orders->current_order.refit_cargo == CARGO_NO_REFIT);
 		++road_service_probe->depot_orders;
 	};
 	/* CheckOrders runs through the production orders owner; the default review
@@ -539,7 +531,7 @@ static void RoadServiceBoundary()
 	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &check_orders->services; };
 	auto day = [&]() {
 		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->consist = &road_service_consist[i]; record->type = i == 0 ? VEH_ROAD : VEH_EFFECT; record->breakdown_ctr = i == 0 ? 1 : 0; record->subtype = i == 0 ? 1 << GVSF_FRONT : 0; record->first = RoadServiceHandle(0); record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
-		road_service_orders[0].current = {};
+		road_service_orders[0].current_order = {};
 		openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, &t.leaves); };
 	for (bool moving : {true, false}) {
 		probe.speed = moving ? 5 : 0;

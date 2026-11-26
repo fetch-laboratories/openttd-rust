@@ -19,6 +19,12 @@ pub const DAYS_IN_YEAR: i32 = 365;
 /// `TimerGameConst::DAYS_IN_LEAP_YEAR`.
 pub const DAYS_IN_LEAP_YEAR: i32 = 366;
 
+/// `TimerGame::DateToYear`: calculate the year of a given date, with the number of days in a
+/// year hardcoded as the original does.
+pub(crate) const fn date_to_year(date: i32) -> i32 {
+    date / DAYS_IN_LEAP_YEAR
+}
+
 /// `EconomyTime::SECONDS_PER_DAY`.
 pub const SECONDS_PER_DAY: i32 = 2;
 /// `TimerGameConst::INVALID_DATE`, inherited by `EconomyTime`/`CalendarTime`.

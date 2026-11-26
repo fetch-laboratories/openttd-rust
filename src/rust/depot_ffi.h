@@ -25,4 +25,5 @@ struct OpenTTDDepotServices {
 extern "C" {
 void openttd_rust_depot_rename(const OpenTTDDepotServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 }
+const OpenTTDDepotServices &GetRustDepotServices() noexcept;
 #endif /* RUST_DEPOT_FFI_H */

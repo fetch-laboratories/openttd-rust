@@ -376,7 +376,9 @@ pub unsafe extern "C" fn openttd_rust_goal_question_abi(
     }
     if execute(flags) {
         if is_client {
-            if target != unsafe { ((*s.orders).network_client)() as u32 } {
+            // SAFETY: The command post table's session table names the network frame table.
+            let network = unsafe { &*((s.company().shared.command_post)().session)().network };
+            if target != crate::network_client::own_client_id(network.client).0 {
                 return u8::from(true);
             }
         } else {

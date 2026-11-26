@@ -195,18 +195,18 @@ mod bodies {
                 VehicleType::VEH_TRAIN,
             );
             let orders = Box::leak(Box::new(crate::orders::VehicleOrders {
-                current: std::mem::MaybeUninit::new(crate::orders::Order {
-                    kind: OrderType::OT_NOTHING.0,
+                current_order: std::mem::MaybeUninit::new(crate::orders::Order {
+                    r#type: OrderType::OT_NOTHING.0,
                     flags: 0,
-                    destination: 0,
-                    refit: crate::cargo_type::CARGO_NO_REFIT,
-                    wait: 0,
-                    travel: 0,
-                    speed: u16::MAX,
+                    dest: 0,
+                    refit_cargo: crate::cargo_type::CARGO_NO_REFIT,
+                    wait_time: 0,
+                    travel_time: 0,
+                    max_speed: u16::MAX,
                 }),
                 orders: std::ptr::null_mut(),
-                next: std::ptr::null_mut(),
-                previous: std::ptr::null_mut(),
+                next_shared: std::ptr::null_mut(),
+                previous_shared: std::ptr::null_mut(),
             }));
             // SAFETY: A fresh record; the test owns it and the owners it links.
             unsafe {
@@ -311,9 +311,9 @@ mod bodies {
         );
         // SAFETY: The fixture's live record and order.
         unsafe {
-            let order = (*(*f.record).orders).current.as_mut_ptr();
-            (*order).kind = OrderType::OT_GOTO_STATION.0 | (OrderStopLocation::End.0 << 4);
-            (*order).destination = STATION.0;
+            let order = (*(*f.record).orders).current_order.as_mut_ptr();
+            (*order).r#type = OrderType::OT_GOTO_STATION.0 | (OrderStopLocation::End.0 << 4);
+            (*order).dest = STATION.0;
             crate::services_assert::bind_test_policy(no_assertion, f.shared);
         }
         f.game().get_train_stop_location(STATION, TILE, f.train());
@@ -967,15 +967,15 @@ mod bodies {
                 // SAFETY: The fixture's record; `ResetDepotUnbunching` writes its consist.
                 unsafe {
                     (*f.record).consist = Box::leak(Box::new(crate::orders::Consist {
-                        time: 0,
-                        lateness: 0,
-                        start: 0,
-                        last_departure: 1,
-                        next_departure: 2,
-                        round_trip: 3,
-                        real: 0,
-                        implicit: 0,
-                        flags: 0,
+                        current_order_time: 0,
+                        lateness_counter: 0,
+                        timetable_start: 0,
+                        depot_unbunching_last_departure: 1,
+                        depot_unbunching_next_departure: 2,
+                        round_trip_time: 3,
+                        cur_real_order_index: 0,
+                        cur_implicit_order_index: 0,
+                        vehicle_flags: 0,
                     }));
                 }
                 let costs = Box::leak(Box::new(crate::services::CommandCostServices {
@@ -1090,7 +1090,11 @@ mod bodies {
                 // SAFETY: The consist this fixture set.
                 unsafe {
                     let c = &*(*self.f.record).consist;
-                    (c.last_departure, c.next_departure, c.round_trip)
+                    (
+                        c.depot_unbunching_last_departure,
+                        c.depot_unbunching_next_departure,
+                        c.round_trip_time,
+                    )
                 }
             }
         }

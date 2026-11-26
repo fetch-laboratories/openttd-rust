@@ -42,7 +42,7 @@ static void RustDepotRenamed(Depot *d) noexcept
 	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, CompanyID(GetRustSharedServices().tile_owner(d->xy.base())), d->index).ToWindowNumber());
 }
 
-static const OpenTTDDepotServices &GetRustDepotServices() noexcept
+const OpenTTDDepotServices &GetRustDepotServices() noexcept
 {
 	static const OpenTTDDepotServices services{
 		.shared = &GetRustSharedServices(),

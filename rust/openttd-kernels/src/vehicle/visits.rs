@@ -32,7 +32,6 @@ use crate::order_type::{
     OrderDepotActionFlag, OrderDepotTypeFlag, OrderLoadType, OrderType, OrderUnloadType,
     VehicleOrderID,
 };
-use crate::orders::VisitOrders;
 use crate::script_event_types::ScriptEvent;
 use crate::services::Services as SharedServices;
 use crate::services_assert::{assert_with, not_reached};
@@ -100,8 +99,8 @@ impl Services {
         // SAFETY: The vehicle table's maintenance pointer names the process-wide table.
         unsafe { &*self.vehicles().maintenance }
     }
-    fn orders(&self) -> VisitOrders {
-        VisitOrders::new(self.refit.common.orders)
+    fn orders(&self) -> &'static crate::orders::Leaves {
+        self.refit.common.orders
     }
     /// `Station::GetIfValid`.
     fn station_if_valid(&self, id: StationID) -> *mut BaseStation {
@@ -485,25 +484,36 @@ impl Refresher {
         let o = s.orders();
         assert_with(|| !orders(self.vehicle).is_null());
         let orderlist = orders(self.vehicle);
-        let span = o.span(orderlist);
+        let span = crate::orders::OrderListRef::of(orderlist, o);
 
         /* next is good if it's either nullptr (then the caller will stop the
          * evaluation) or if it's not conditional and the caller allows it to be
          * chosen (by setting RefreshFlag::UseNext). */
-        while next < span.count()
+        while next < span.get_num_orders()
             && (!flags.test(RefreshFlag::UseNext)
-                || span.order(next).is_type(OrderType::OT_CONDITIONAL))
+                || span
+                    .order(usize::from(next.0))
+                    .view()
+                    .is_type(OrderType::OT_CONDITIONAL))
         {
             /* After the first step any further non-conditional order is good,
              * regardless of previous RefreshFlag::UseNext settings. The case of cur and next or
              * their respective stations being equal is handled elsewhere. */
             flags = flags.set(RefreshFlag::UseNext);
 
-            if span.order(next).is_type(OrderType::OT_CONDITIONAL) {
-                let skip_to =
-                    span.next_decision_node(span.order(next).condition_skip_to_order(), num_hops);
+            if span
+                .order(usize::from(next.0))
+                .view()
+                .is_type(OrderType::OT_CONDITIONAL)
+            {
+                let skip_to = span.get_next_decision_node(
+                    span.order(usize::from(next.0))
+                        .view()
+                        .condition_skip_to_order(),
+                    num_hops,
+                );
                 if skip_to != VehicleOrderID::INVALID_VEH_ORDER_ID
-                    && num_hops < u32::from(span.count().0)
+                    && num_hops < u32::from(span.get_num_orders().0)
                 {
                     /* Make copies of capacity tracking lists. There is potential
                      * for optimization here: If the vehicle never refits we don't
@@ -524,7 +534,7 @@ impl Refresher {
 
             /* Reassign next with the following stop. This can be a station or a
              * depot.*/
-            next = span.next_decision_node(span.next(next), num_hops);
+            next = span.get_next_decision_node(span.get_next(next), num_hops);
             num_hops = num_hops.wrapping_add(1);
         }
         next
@@ -536,10 +546,19 @@ impl Refresher {
         let v = self.vehicle;
         assert_with(|| !orders(v).is_null());
         let orderlist = orders(v);
-        let span = o.span(orderlist);
+        let span = crate::orders::OrderListRef::of(orderlist, o);
 
-        let next_station = span.order(next).destination().to_station_id();
-        let st = s.station_if_valid(span.order(cur).destination().to_station_id());
+        let next_station = span
+            .order(usize::from(next.0))
+            .view()
+            .destination()
+            .to_station_id();
+        let st = s.station_if_valid(
+            span.order(usize::from(cur.0))
+                .view()
+                .destination()
+                .to_station_id(),
+        );
         if st.is_null()
             || next_station == StationID::INVALID
             || next_station == StationID((s.links.graphs.station_id)(st))
@@ -569,11 +588,12 @@ impl Refresher {
             }
 
             /* A link is at least partly restricted if a vehicle can't load at its source. */
-            let restricted_mode = if span.order(cur).load_type() == OrderLoadType::NoLoad {
-                EdgeUpdateModes::RESTRICTED
-            } else {
-                EdgeUpdateModes::UNRESTRICTED
-            };
+            let restricted_mode =
+                if span.order(usize::from(cur.0)).view().load_type() == OrderLoadType::NoLoad {
+                    EdgeUpdateModes::RESTRICTED
+                } else {
+                    EdgeUpdateModes::UNRESTRICTED
+                };
             /* This estimates the travel time of the link as the time needed
              * to travel between the stations at half the max speed of the consist.
              * The result is in tiles/tick (= 2048 km-ish/h). */
@@ -601,22 +621,38 @@ impl Refresher {
             if self.is_full_loading
                 && !orders(v).is_null()
                 && StationID((s.links.graphs.station_id)(st)) == v.last_station_visited()
-                && o.total(orders(v)) > v.current_order_time()
+                && crate::orders::order_list(v, o)
+                    .unwrap()
+                    .get_total_duration()
+                    > v.current_order_time()
             {
                 let effective_capacity =
                     cargo_quantity.wrapping_mul(u32::from((s.loading.load_unload_ticks)(v)));
-                if effective_capacity > o.total(orders(v)).cast_unsigned() {
+                if effective_capacity
+                    > crate::orders::order_list(v, o)
+                        .unwrap()
+                        .get_total_duration()
+                        .cast_unsigned()
+                {
                     witness::hit(witness::VISITS_FULL_LOAD_INCREASE);
                     increase_stats(
                         s,
                         stats(
-                            effective_capacity / o.total(orders(v)).cast_unsigned(),
+                            effective_capacity
+                                / crate::orders::order_list(v, o)
+                                    .unwrap()
+                                    .get_total_duration()
+                                    .cast_unsigned(),
                             0,
                             EdgeUpdateModes::INCREASE,
                         ),
                     );
-                } else if s.shared.random_range(o.total(orders(v)).cast_unsigned())
-                    < effective_capacity
+                } else if s.shared.random_range(
+                    crate::orders::order_list(v, o)
+                        .unwrap()
+                        .get_total_duration()
+                        .cast_unsigned(),
+                ) < effective_capacity
                 {
                     witness::hit(witness::VISITS_FULL_LOAD_RANDOM);
                     increase_stats(s, stats(1, 0, EdgeUpdateModes::INCREASE));
@@ -653,9 +689,9 @@ impl Refresher {
         let o = s.orders();
         assert_with(|| !orders(self.vehicle).is_null());
         let orderlist = orders(self.vehicle);
-        let span = o.span(orderlist);
-        while next < span.count() {
-            let next_order = span.order(next);
+        let span = crate::orders::OrderListRef::of(orderlist, o);
+        while next < span.get_num_orders() {
+            let next_order = span.order(usize::from(next.0)).view();
 
             if (next_order.is_type(OrderType::OT_GOTO_DEPOT)
                 || next_order.is_type(OrderType::OT_GOTO_STATION))
@@ -704,7 +740,7 @@ impl Refresher {
                 break;
             }
 
-            let next_order = span.order(next);
+            let next_order = span.order(usize::from(next.0)).view();
 
             /* Don't use the same order again, but choose a new one in the next round. */
             flags = flags.reset(RefreshFlag::UseNext);
@@ -722,7 +758,7 @@ impl Refresher {
                     .reset(RefreshFlags::from(RefreshFlag::ResetRefit).set(RefreshFlag::WasRefit));
             }
 
-            let cur_order = span.order(cur);
+            let cur_order = span.order(usize::from(cur.0)).view();
 
             if cur_order.is_type(OrderType::OT_GOTO_STATION)
                 || cur_order.is_type(OrderType::OT_IMPLICIT)
@@ -752,9 +788,8 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
     }
 
     /* Make sure the first order is a useful order. */
-    let first = o
-        .span(orders(v))
-        .next_decision_node(v.cur_implicit_order_index(), 0);
+    let first = crate::orders::OrderListRef::of(orders(v), o)
+        .get_next_decision_node(v.cur_implicit_order_index(), 0);
     if first == VehicleOrderID::INVALID_VEH_ORDER_ID {
         return;
     }
@@ -925,7 +960,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
 
     let travel_time = (s.shared.tick_counter)().wrapping_sub(v.last_loading_tick(s));
     let o = s.orders();
-    o.begin_loading(v);
+    crate::orders::begin_loading(v, o);
 
     if v.last_loading_station(s) != StationID::INVALID
         && v.last_loading_station(s) != v.last_station_visited()
@@ -981,7 +1016,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     let o = s.orders();
     /* Only update the timetable if the vehicle was supposed to stop here. */
     if v.current_order().non_stop().any() {
-        o.update_timetable(v, false);
+        crate::orders::update_vehicle_timetable(v, false, o);
     }
 
     if v.current_order().load_type() != OrderLoadType::NoLoad
@@ -1078,7 +1113,8 @@ pub(crate) fn handle_loading(v: VehicleRef, mode: bool, s: &Services) {
             leave_station(v, s);
 
             /* Only advance to next order if we just loaded at the current one */
-            let order = o.get(v, v.cur_implicit_order_index());
+            let order = crate::orders::get_order(v, v.cur_implicit_order_index(), o)
+                .map(crate::orders::OrderRef::view);
             if order.is_none_or(|order| {
                 (!order.is_type(OrderType::OT_IMPLICIT)
                     && !order.is_type(OrderType::OT_GOTO_STATION))
@@ -1093,7 +1129,7 @@ pub(crate) fn handle_loading(v: VehicleRef, mode: bool, s: &Services) {
         _ => return,
     }
 
-    o.increment_implicit(v);
+    crate::orders::increment_implicit_order_index(v, o);
 }
 
 /// `_vehicles_to_autoreplace[index] = value`.
@@ -1204,7 +1240,8 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         set_window_dirty(WindowClass::WC_VEHICLE_VIEW, view);
 
         let o = s.orders();
-        let real_order = o.get(v, v.cur_real_order_index());
+        let real_order = crate::orders::get_order(v, v.cur_real_order_index(), o)
+            .map(crate::orders::OrderRef::view);
 
         /* Test whether we are heading for this depot. If not, do nothing.
          * Note: The target depot for nearest-/manual-depot-orders is only updated on junctions, but we want to accept every depot. */
@@ -1237,9 +1274,9 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
             .test(OrderDepotTypeFlag::PartOfOrders)
         {
             /* Part of orders */
-            o.delete_implicit(v);
-            o.update_timetable(v, true);
-            o.increment_implicit(v);
+            crate::orders::delete_unreached_implicit_orders(v, o);
+            crate::orders::update_vehicle_timetable(v, true, o);
+            crate::orders::increment_implicit_order_index(v, o);
         }
         if v.current_order()
             .depot_action_flags()
@@ -1249,10 +1286,9 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         }
 
         /* If we've entered our unbunching depot, record the round trip duration. */
-        o.measure_unbunching(v);
+        crate::orders::measure_unbunching(v, o);
 
-        // SAFETY: The live vehicle's current order.
-        unsafe { crate::orders::make_dummy(v.current_order_pointer()) };
+        crate::orders::make_dummy(v);
     }
 }
 
@@ -1267,7 +1303,7 @@ fn depot_halt(v: VehicleRef, index: VehicleID, s: &Services) {
     v.set_last_loading_station(s, StationID::INVALID);
 
     /* Clear unbunching data. */
-    crate::orders::reset_unbunching(v);
+    crate::orders::reset_depot_unbunching(v);
 
     /* Announce that the vehicle is waiting to players and AIs. */
     if is_local_company(v, s) {

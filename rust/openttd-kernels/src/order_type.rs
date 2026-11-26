@@ -325,6 +325,186 @@ impl OrderDepotActionFlags {
     }
 }
 
+impl OrderDepotTypeFlags {
+    /// Native `BaseBitSet::Any`: whether any element is set.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.0 != 0
+    }
+    /// Native `BaseBitSet::Set` of one element, as a new set.
+    #[must_use]
+    pub const fn set(self, element: OrderDepotTypeFlag) -> Self {
+        Self(self.0 | (1 << element.0))
+    }
+    /// Native `BaseBitSet::Reset` of one element, as a new set.
+    #[must_use]
+    pub const fn reset(self, element: OrderDepotTypeFlag) -> Self {
+        Self(self.0 & !(1 << element.0))
+    }
+}
+
+impl OrderDepotActionFlags {
+    /// Native `BaseBitSet::Any`: whether any element is set.
+    #[must_use]
+    pub const fn any(self) -> bool {
+        self.0 != 0
+    }
+    /// Native `BaseBitSet::Any(other)`: whether any element of `other` is set.
+    #[must_use]
+    pub const fn any_of(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+    /// Native `BaseBitSet::Set` of one element, as a new set.
+    #[must_use]
+    pub const fn set(self, element: OrderDepotActionFlag) -> Self {
+        Self(self.0 | (1 << element.0))
+    }
+    /// Native `BaseBitSet::Reset` of one element, as a new set.
+    #[must_use]
+    pub const fn reset(self, element: OrderDepotActionFlag) -> Self {
+        Self(self.0 & !(1 << element.0))
+    }
+    /// Native `BaseBitSet::Reset` of a set, as a new set.
+    #[must_use]
+    pub const fn reset_all(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+}
+
+/// `MAX_VEH_ORDER_ID`: the maximum number of orders a vehicle can have.
+pub const MAX_VEH_ORDER_ID: VehicleOrderID =
+    VehicleOrderID(VehicleOrderID::INVALID_VEH_ORDER_ID.0 - 1);
+
+/// `IMPLICIT_ORDER_ONLY_CAP`: maximum number of orders in implicit-only lists before
+/// implicit orders are no longer added to them.
+pub const IMPLICIT_ORDER_ONLY_CAP: u32 = 32;
+
+/// `OrderConditionVariable`: variables (of a vehicle) to 'cause' skipping on.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OrderConditionVariable(pub u8);
+
+#[allow(
+    non_upper_case_globals,
+    reason = "the original's `enum class` member names"
+)]
+impl OrderConditionVariable {
+    /// Skip based on the amount of load.
+    pub const LoadPercentage: Self = Self(0);
+    /// Skip based on the reliability.
+    pub const Reliability: Self = Self(1);
+    /// Skip based on the maximum speed.
+    pub const MaxSpeed: Self = Self(2);
+    /// Skip based on the age.
+    pub const Age: Self = Self(3);
+    /// Skip when the vehicle requires service.
+    pub const RequiresService: Self = Self(4);
+    /// Always skip.
+    pub const Unconditionally: Self = Self(5);
+    /// Skip based on the remaining lifetime.
+    pub const RemainingLifetime: Self = Self(6);
+    /// Skip based on the maximum reliability.
+    pub const MaxReliability: Self = Self(7);
+    /// `End`.
+    pub const End: Self = Self(8);
+}
+
+/// `OrderConditionComparator`: comparator for the skip reasoning.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OrderConditionComparator(pub u8);
+
+#[allow(
+    non_upper_case_globals,
+    reason = "the original's `enum class` member names"
+)]
+impl OrderConditionComparator {
+    /// Skip if both values are equal.
+    pub const Equal: Self = Self(0);
+    /// Skip if both values are not equal.
+    pub const NotEqual: Self = Self(1);
+    /// Skip if the value is less than the limit.
+    pub const LessThan: Self = Self(2);
+    /// Skip if the value is less or equal to the limit.
+    pub const LessThanOrEqual: Self = Self(3);
+    /// Skip if the value is more than the limit.
+    pub const MoreThan: Self = Self(4);
+    /// Skip if the value is more or equal to the limit.
+    pub const MoreThanOrEqual: Self = Self(5);
+    /// Skip if the variable is true.
+    pub const IsTrue: Self = Self(6);
+    /// Skip if the variable is false.
+    pub const IsFalse: Self = Self(7);
+    /// `End`.
+    pub const End: Self = Self(8);
+}
+
+/// `ModifyOrderFlags`: enumeration for the data to set in `CmdModifyOrder`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ModifyOrderFlags(pub u8);
+
+impl ModifyOrderFlags {
+    /// Passes an `OrderNonStopFlags`.
+    pub const MOF_NON_STOP: Self = Self(0);
+    /// Passes an `OrderStopLocation`.
+    pub const MOF_STOP_LOCATION: Self = Self(1);
+    /// Passes an `OrderUnloadType`.
+    pub const MOF_UNLOAD: Self = Self(2);
+    /// Passes an `OrderLoadType`.
+    pub const MOF_LOAD: Self = Self(3);
+    /// Selects the `OrderDepotAction`.
+    pub const MOF_DEPOT_ACTION: Self = Self(4);
+    /// A conditional variable changes.
+    pub const MOF_COND_VARIABLE: Self = Self(5);
+    /// A comparator changes.
+    pub const MOF_COND_COMPARATOR: Self = Self(6);
+    /// The value to set the condition to.
+    pub const MOF_COND_VALUE: Self = Self(7);
+    /// Change the destination of a conditional order.
+    pub const MOF_COND_DESTINATION: Self = Self(8);
+    /// `MOF_END`.
+    pub const MOF_END: Self = Self(9);
+}
+
+/// `OrderDepotAction`: depot action to switch to when doing a `MOF_DEPOT_ACTION`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OrderDepotAction(pub u8);
+
+#[allow(
+    non_upper_case_globals,
+    reason = "the original's `enum class` member names"
+)]
+impl OrderDepotAction {
+    /// Always go to the depot.
+    pub const AlwaysGo: Self = Self(0);
+    /// Service only if needed.
+    pub const Service: Self = Self(1);
+    /// Go to the depot and stop there.
+    pub const Stop: Self = Self(2);
+    /// Go to the depot and unbunch.
+    pub const Unbunch: Self = Self(3);
+    /// `End`.
+    pub const End: Self = Self(4);
+}
+
+/// `ModifyTimetableFlags`: enumeration for the data to set in `CmdChangeTimetable`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ModifyTimetableFlags(pub u8);
+
+impl ModifyTimetableFlags {
+    /// Set wait time.
+    pub const MTF_WAIT_TIME: Self = Self(0);
+    /// Set travel time.
+    pub const MTF_TRAVEL_TIME: Self = Self(1);
+    /// Set max travel speed.
+    pub const MTF_TRAVEL_SPEED: Self = Self(2);
+    /// `MTF_END`.
+    pub const MTF_END: Self = Self(3);
+}
+
 crate::base_bitset_type::impl_bitset_ops!(OrderNonStopFlags);
 crate::base_bitset_type::impl_bitset_ops!(OrderDepotTypeFlags);
 crate::base_bitset_type::impl_bitset_ops!(OrderDepotActionFlags);

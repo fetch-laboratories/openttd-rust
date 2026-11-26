@@ -694,9 +694,10 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     );
     if flags.test(DoCommandFlag::Execute) {
         if unsafe { (b.groups.primary)(front) } && backup_order {
-            unsafe {
-                crate::orders::openttd_rust_backup_create(front.cast(), client_id.0, s.orders);
-            };
+            // SAFETY: `front` is the live sold vehicle's shell.
+            let record =
+                unsafe { crate::vehicle::VehicleRef::from_shell(front.cast(), s.orders.base) };
+            crate::orders::order_backup_backup(record, client_id.0, s.orders);
         }
         // No owner access or retained reference crosses the deleting callback.
         (s.vehicles.destroy)(unsafe { vehicle_ref(front, s.vehicles) });
@@ -857,7 +858,7 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
             (handle).set_cur_speed(0); // trains can stop 'slowly'
         }
         /* Unbunching data is no longer valid. */
-        crate::orders::reset_unbunching(handle);
+        crate::orders::reset_depot_unbunching(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.
         (unsafe { &*s.vehicles.maintenance }.mark_dirty)(handle);
         set_window_widget_dirty(

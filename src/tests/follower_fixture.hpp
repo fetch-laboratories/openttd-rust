@@ -56,8 +56,7 @@ struct FollowerFixture {
 		movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 		movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
 		movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
-		order_state.current.max_speed = 40;
-		orders.vehicle = [](void *) noexcept { return &active->order_state; };
+		order_state.current_order.max_speed = 40;
 		movement.orders = &orders;
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m5 & 63); };
 		rail.rail_reservation = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m2 & 63); };

@@ -6,23 +6,12 @@
 #include "rust/window_ffi.h"
 #include "window_type.h"
 
-/* The window services every vehicle probe dirties through; the first binding stays for the
- * process. */
-static size_t _vehicle_maintenance_details_dirty;
-static void BindVehicleMaintenanceWindows()
-{
-	static OpenTTDWindowServices windows{};
-	windows.set_window_dirty = [](uint16_t cls, int32_t) noexcept {
-		if (cls == WC_VEHICLE_DETAILS) ++_vehicle_maintenance_details_dirty;
-	};
-	openttd_rust_window_bind(&windows);
-}
 
 /* The member slots' calls: one value store and one details dirty, and the renew setting's
  * two results for the owner the company slot returns. */
 static void VehicleMaintenanceBoundary()
 {
-	BindVehicleMaintenanceWindows();
+	BindVehicleWindows();
 	static size_t values;
 	values = _vehicle_maintenance_details_dirty = 0;
 	static int company_shell;

@@ -325,7 +325,7 @@ public:
 
 	/* Order construction also starts DestinationID's lifetime and all original
 	 * defaults, before controllers or loaders can obtain the facade reference. */
-	Order &current_order = *new (std::addressof(this->rust_order_state->current)) Order{};
+	Order &current_order = *new (std::addressof(this->rust_order_state->current_order)) Order{};
 	OrderList *&orders = *new (std::addressof(this->rust_order_state->orders)) OrderList *{nullptr};
 	uint32_t old_orders = 0; ///< Legacy load staging, committed by AfterLoadVehicles.
 	OpenTTDVehicleOrderState *GetRustOrderState() const { return this->rust_order_state.get(); }
@@ -801,17 +801,6 @@ public:
 	inline void SetServiceIntervalIsPercent(bool on) { this->vehicle_flags.Set(VehicleFlag::ServiceIntervalIsPercent, on); }
 
 	bool IsWaitingForUnbunching() const;
-
-private:
-	/**
-	 * Advance cur_real_order_index to the next real order.
-	 * cur_implicit_order_index is not touched.
-	 */
-	void SkipToNextRealOrderIndex()
-	{
-	openttd_rust_skip_real(this, &GetRustOrdersLeaves());
-}
-
 public:
 	/**
 	 * Increments cur_implicit_order_index, keeps care of the wrap-around and invalidates the GUI.
@@ -820,7 +809,7 @@ public:
 	 */
 	void IncrementImplicitOrderIndex()
 	{
-	openttd_rust_increment_implicit(this, &GetRustOrdersLeaves());
+	openttd_rust_increment_implicit(this->record, &GetRustOrdersLeaves());
 }
 
 	/**
@@ -831,7 +820,7 @@ public:
 	 */
 	void IncrementRealOrderIndex()
 	{
-	openttd_rust_increment_real(this, &GetRustOrdersLeaves());
+	openttd_rust_increment_real(this->record, &GetRustOrdersLeaves());
 }
 
 	/**
@@ -839,7 +828,7 @@ public:
 	 */
 	void UpdateRealOrderIndex()
 	{
-	openttd_rust_update_real(this, &GetRustOrdersLeaves());
+	openttd_rust_update_real(this->record, &GetRustOrdersLeaves());
 }
 
 	/**

@@ -215,6 +215,10 @@ const OpenTTDCommandPostServices &GetRustCommandPostServices() noexcept
 		.desync_logging = []() noexcept { return CommandHelperBase::DesyncLogging(); },
 		.log = [](uint8_t cmd, OpenTTDByteSpan args, bool failed) noexcept { CommandHelperBase::LogCommandExecution(static_cast<Commands>(cmd), 0, std::span(args.data, args.size), failed); },
 		.network = GetRustNetworkCommandServices,
+		.pack_clear_order_backup = [](uint32_t tile, uint32_t user_id) noexcept {
+			CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args args{TileIndex{tile}, static_cast<ClientID>(user_id)};
+			return TakeCommandArguments(EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args));
+		},
 		.pack_colour = [](bool primary, uint8_t colour) noexcept {
 			CommandTraits<CMD_SET_COMPANY_COLOUR>::Args args{LS_DEFAULT, primary, static_cast<Colours>(colour)};
 			return TakeCommandArguments(EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args));

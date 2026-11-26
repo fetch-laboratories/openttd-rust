@@ -48,6 +48,8 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 #include "rust/services_station.h"
 #include "rust/station_command_ffi.h"
 #include "rust/engine_services.h"
+#include "rust/depot_ffi.h"
+#include "rust/vehicle_ffi.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 static_assert(sizeof(VehicleFlags) == sizeof(uint16_t) && alignof(VehicleFlags) == alignof(uint16_t));
@@ -69,466 +71,54 @@ extern "C" void openttd_orders_destroy(void *data, size_t length) noexcept
 	for (size_t i = 0; i < length; ++i) std::destroy_at(orders + i);
 }
 
-extern "C" uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t if_valid) noexcept
+/* The original pool iterator advances its physical slot independently of
+ * the object's index, including during partially restored save loading. */
+static void *RustOrderBackupNext(uint32_t *cursor) noexcept
 {
-	{
-			BaseStation *bs = if_valid != 0 ? BaseStation::GetIfValid(StationID(station)) : BaseStation::Get(StationID(station));
-			return bs != nullptr && bs->owner == OWNER_NONE;
-		}
-}
-
-extern "C" uint64_t openttd_orders_vehicle_type(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetType();
-}
-
-
-extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
-{
-	return Ticks::TICKS_PER_SECOND;
-}
-
-extern "C" uint64_t openttd_orders_maximum_date() noexcept
-{
-	return EconomyTime::MAX_DATE.base();
-}
-
-extern "C" void *openttd_orders_allocate_list() noexcept
-{
-	return new OrderList();
-}
-
-extern "C" uint64_t openttd_orders_shared_window(void *ctx, void *first) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return VehicleListIdentifier(VL_SHARED_ORDERS, v->GetType(), v->GetOwner(), static_cast<Vehicle *>(first)->index).ToWindowNumber();
-}
-
-extern "C" uint64_t openttd_orders_vehicle_id(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->index.base();
-}
-
-
-extern "C" uint64_t openttd_orders_display_speed(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetDisplayMaxSpeed();
-}
-
-extern "C" uint64_t openttd_orders_needs_service(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->NeedsServicing();
-}
-
-extern "C" uint64_t openttd_orders_airport_tile(uint16_t destination) noexcept
-{
-	return RustStationAirportTile(Station::Get(StationID(destination)));
-}
-
-extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
-{
-	return Depot::Get(DepotID(destination))->xy.base();
-}
-
-extern "C" uint64_t openttd_orders_destination_tile(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetDestTile().base();
-}
-
-extern "C" uint64_t openttd_orders_aircraft_flying(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return Aircraft::From(v)->state == FLYING;
-}
-
-extern "C" uint64_t openttd_orders_target_airport(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return Aircraft::From(v)->targetairport.base();
-}
-
-extern "C" uint64_t openttd_orders_waypoint_tile(uint16_t destination) noexcept
-{
-	return Waypoint::Get(StationID(destination))->xy.base();
-}
-
-extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return IsTileType(v->GetTile(), MP_STATION);
-}
-
-extern "C" uint64_t openttd_orders_valid_station(uint16_t destination) noexcept
-{
-	return RustStationIfValid<Station *>(destination) != nullptr;
-}
-
-extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
-{
-	return Station::Get(StationID(destination))->owner.base();
-}
-
-
-extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return GetVehicleCannotUseStationReason(v, Station::Get(StationID(destination)));
-}
-
-
-extern "C" uint64_t openttd_orders_valid_depot(uint16_t destination) noexcept
-{
-	return Depot::GetIfValid(DepotID(destination)) != nullptr;
-}
-
-extern "C" uint64_t openttd_orders_depot_owner(uint16_t destination) noexcept
-{
-	return GetTileOwner(Depot::Get(DepotID(destination))->xy).base();
-}
-
-extern "C" uint64_t openttd_orders_rail_depot(uint16_t destination) noexcept
-{
-	return IsRailDepotTile(Depot::Get(DepotID(destination))->xy);
-}
-
-extern "C" uint64_t openttd_orders_road_depot(uint16_t destination) noexcept
-{
-	return Shared_is_road_depot(Depot::Get(DepotID(destination))->xy.base());
-}
-
-extern "C" uint64_t openttd_orders_ship_depot(uint16_t destination) noexcept
-{
-	return IsShipDepotTile(Depot::Get(DepotID(destination))->xy);
-}
-
-extern "C" uint64_t openttd_orders_valid_waypoint(uint16_t destination) noexcept
-{
-	return Waypoint::GetIfValid(StationID(destination)) != nullptr;
-}
-
-extern "C" uint64_t openttd_orders_waypoint_facilities(uint16_t destination) noexcept
-{
-	return Waypoint::Get(StationID(destination))->facilities.base();
-}
-
-extern "C" uint64_t openttd_orders_waypoint_owner(uint16_t destination) noexcept
-{
-	return Waypoint::Get(StationID(destination))->owner.base();
-}
-
-extern "C" uint64_t openttd_orders_list_capacity() noexcept
-{
-	return OrderList::CanAllocateItem();
-}
-
-extern "C" void *openttd_orders_next_backup(uint32_t *cursor) noexcept
-{
-	/* The original pool iterator advances its physical slot independently of
-	 * the object's index, including during partially restored save loading. */
 	while (*cursor < OrderBackup::GetPoolSize() && !OrderBackup::IsValidID(*cursor)) ++*cursor;
 	if (*cursor >= OrderBackup::GetPoolSize()) return nullptr;
 	return OrderBackup::Get((*cursor)++);
 }
 
-extern "C" void *openttd_orders_next_vehicle(uint32_t first) noexcept
-{
-	for (Vehicle *vehicle : Vehicle::Iterate(first)) return vehicle;
-	return nullptr;
-}
-
-extern "C" uint64_t openttd_orders_aircraft_range(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return Aircraft::From(v)->acache.cached_max_range;
-}
-
-extern "C" uint64_t openttd_orders_aircraft_range_square(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return Aircraft::From(v)->acache.cached_max_range_sqr;
-}
-
-extern "C" uint64_t openttd_orders_backup_capacity() noexcept
-{
-	return OrderBackup::CanAllocateItem();
-}
-
-extern "C" void *openttd_orders_create_backup(void *ctx, uint32_t user) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return OrderBackup::CreateForRust(v, user);
-}
-
-
-extern "C" uint64_t openttd_orders_network_client() noexcept
-{
-	return _network_own_client_id;
-}
-
-extern "C" uint64_t openttd_orders_server_client() noexcept
-{
-	return CLIENT_ID_SERVER;
-}
-
-extern "C" uint64_t openttd_orders_default_group() noexcept
-{
-	return DEFAULT_GROUP.base();
-}
-
-extern "C" uint64_t openttd_orders_vehicle_group(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->group_id.base();
-}
-
-extern "C" uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept
-{
-	return IsUniqueVehicleName(static_cast<OrderBackup *>(ctx)->name);
-}
-
-
-extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetOwner() == _local_company;
-}
-
-
-
-extern "C" uint64_t openttd_orders_no_jet_crash() noexcept
-{
-	return _cheats.no_jetcrash.value;
-}
-
-extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexcept
-{
-	static_cast<std::vector<StationID> *>(ctx)->push_back(StationID(station));
-}
-
-extern "C" void openttd_orders_timetable_dirty(void *ctx) noexcept
-{
-	SetWindowDirty(WC_VEHICLE_TIMETABLE, static_cast<Vehicle *>(ctx)->index);
-}
-
-extern "C" void openttd_orders_invalidate_order(void *ctx, int32_t data) noexcept
-{
-	InvalidateVehicleOrder(static_cast<Vehicle *>(ctx), static_cast<int>(data));
-}
-
-extern "C" void openttd_orders_delete_order_news(void *ctx) noexcept
-{
-	DeleteVehicleNews(static_cast<Vehicle *>(ctx)->index, AdviceType::Order);
-}
-
-extern "C" void openttd_orders_invalidate_vehicle_list(void *ctx) noexcept
-{
-	InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), 0);
-}
-
-extern "C" void openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept
-{
-	CloseWindowById(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), window);
-}
-
-extern "C" void openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept
-{
-	InvalidateWindowData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), window, static_cast<int>(data));
-}
-
-extern "C" void openttd_orders_dirty_vehicle_windows(void *ctx) noexcept
-{
-	SetWindowClassesDirty(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()));
-}
-
-extern "C" void openttd_orders_capture_backup_metadata(void *ctx, void *source_context) noexcept
-{
-	{ OrderBackup *backup = static_cast<OrderBackup *>(ctx); const Vehicle *source = static_cast<const Vehicle *>(source_context); backup->name = source->name; backup->service_interval = source->service_interval;  }
-}
-
-extern "C" void openttd_orders_clear_backup_name(void *ctx) noexcept
-{
-	static_cast<OrderBackup *>(ctx)->name.clear();
-}
-
-extern "C" void openttd_orders_restore_backup_metadata(void *ctx, void *backup_context) noexcept
-{
-	{ Vehicle *vehicle = static_cast<Vehicle *>(ctx); const OrderBackup *backup = static_cast<const OrderBackup *>(backup_context); vehicle->name = backup->name; vehicle->service_interval = backup->service_interval;  }
-}
-
-extern "C" void openttd_orders_order_news(void *ctx, uint32_t message) noexcept
-{
-	{ static const StringID messages[] = {INVALID_STRING_ID, STR_NEWS_VEHICLE_HAS_VOID_ORDER, STR_NEWS_VEHICLE_HAS_INVALID_ENTRY, STR_NEWS_PLANE_USES_TOO_SHORT_RUNWAY, STR_NEWS_VEHICLE_HAS_DUPLICATE_ENTRY, STR_NEWS_VEHICLE_HAS_TOO_FEW_ORDERS}; const Vehicle *vehicle = static_cast<const Vehicle *>(ctx); AddVehicleAdviceNewsItem(AdviceType::Order, GetEncodedString(messages[message], vehicle->index), vehicle->index);  }
-}
-
-extern "C" void openttd_orders_debug_list([[maybe_unused]] void *ctx) noexcept
+static void RustOrderListDebugCheckSanity([[maybe_unused]] void *list) noexcept
 {
 #ifdef WITH_ASSERT
-			if (static_cast<Vehicle *>(ctx)->orders != nullptr) static_cast<Vehicle *>(ctx)->orders->DebugCheckSanity();
+	static_cast<OrderList *>(list)->DebugCheckSanity();
 #endif
-
 }
 
-extern "C" void openttd_orders_assert_departure_range([[maybe_unused]] int32_t lower, [[maybe_unused]] int32_t upper) noexcept
-{
-	assert(static_cast<int32_t>(lower) <= static_cast<int32_t>(upper));
-}
-
-extern "C" void openttd_orders_delete_list(void *ctx) noexcept
-{
-	delete static_cast<OrderList *>(ctx);
-}
-
-
-extern "C" void openttd_orders_reverse_train(void *ctx) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(DoCommandFlag::Execute, v->index, false);
-}
-
-extern "C" void openttd_orders_next_airport(void *ctx) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	AircraftNextAirportPos_and_Order(Aircraft::From(v));
-}
-
-extern "C" void openttd_orders_closest_depot(void *ctx, OpenTTDOrdersClosest *result) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	{ ClosestDepot closest = v->FindClosestDepot(); *static_cast<OpenTTDOrdersClosest *>(result) = {closest.location.base(), closest.destination.base(), closest.reverse, closest.found};  }
-}
-
-extern "C" void openttd_orders_share_command(void *ctx, const void *source) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_SHARE, v->index, static_cast<const Vehicle *>(source)->index);
-}
-
-extern "C" void openttd_orders_group_command(void *ctx, uint16_t group) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	Command<CMD_ADD_VEHICLE_GROUP>::Do(DoCommandFlag::Execute, GroupID(group), v->index, false, VehicleListIdentifier{});
-}
-
-extern "C" void openttd_orders_delete_backup(void *ctx) noexcept
-{
-	delete static_cast<OrderBackup *>(ctx);
-}
-
-extern "C" void openttd_orders_clear_backup_gui(uint32_t tile, uint32_t user) noexcept
-{
-	Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(STR_NULL, nullptr, true, false, TileIndex(tile), CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args{TileIndex(tile), static_cast<ClientID>(user)});
-}
-
-extern "C" void openttd_orders_clear_backup_post(uint32_t user) noexcept
-{
-	Command<CMD_CLEAR_ORDER_BACKUP>::Post(TileIndex{}, static_cast<ClientID>(user));
-}
-
-extern "C" void openttd_orders_missing_aircraft_orders(void *ctx) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	HandleMissingAircraftOrders(Aircraft::From(v));
-}
-
-extern "C" void openttd_orders_change_timetable_command(void *ctx, uint8_t index, uint8_t field, uint16_t value) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	Command<CMD_CHANGE_TIMETABLE>::Do(DoCommandFlag::Execute, v->index, static_cast<VehicleOrderID>(index), static_cast<ModifyTimetableFlags>(field), static_cast<uint16_t>(value));
-}
 static const OpenTTDOrdersLeaves _rust_orders_leaves{
-	.vehicle = [](void *v) noexcept { return static_cast<Vehicle *>(v)->GetRustOrderState(); },
-	.consist = [](void *v) noexcept { return static_cast<Vehicle *>(v)->rust_orders.get(); },
-	.list = [](void *list) noexcept { return static_cast<OrderList *>(list)->GetRustState(); },
-	.vector = [](void *list) noexcept { return static_cast<OrderList *>(list)->GetRustOrders(); },
+	.allocate_list = []() noexcept -> void * { return new OrderList(); },
 	.backup = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustState(); },
-	.backup_vector = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustOrders(); },
+	.backup_can_allocate_item = []() noexcept -> uint8_t { return OrderBackup::CanAllocateItem(); },
 	.backup_consist = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->rust_orders.get(); },
-	.ownerless_station = openttd_orders_ownerless_station,
-	.vehicle_type = openttd_orders_vehicle_type,
-	.tick_counter = openttd_orders_tick_counter,
-	.primary_vehicle = openttd_orders_primary_vehicle,
-	.ticks_per_second = openttd_orders_ticks_per_second,
-	.unit_number = RustOpaqueVehicleRead<uint64_t, RustVehicleUnitNumber>,
-	.maximum_date = openttd_orders_maximum_date,
-	.allocate_list = openttd_orders_allocate_list,
-	.shared_window = openttd_orders_shared_window,
-	.vehicle_id = openttd_orders_vehicle_id,
-	.reliability = RustOpaqueVehicleRead<uint64_t, RustVehicleReliability>,
-	.display_speed = openttd_orders_display_speed,
-	.age_years = openttd_orders_age_years,
-	.needs_service = openttd_orders_needs_service,
-	.remaining_years = openttd_orders_remaining_years,
-	.airport_tile = openttd_orders_airport_tile,
-	.depot_tile = openttd_orders_depot_tile,
-	.distance = OpenTTDLegacyOrderDistance,
-	.station_location = RustVehicleLegacyOrderStationLocation,
-	.destination_tile = openttd_orders_destination_tile,
-	.aircraft_flying = openttd_orders_aircraft_flying,
-	.target_airport = openttd_orders_target_airport,
-	.waypoint_tile = openttd_orders_waypoint_tile,
-	.at_station = openttd_orders_at_station,
-	.tile_station = RustOpaqueVehicleTileRead<uint64_t, MapSvcStationIndex>,
-	.ship_station_tile = openttd_orders_ship_station_tile,
-	.valid_station = openttd_orders_valid_station,
-	.station_owner = openttd_orders_station_owner,
-	.station_error = openttd_orders_station_error,
-	.valid_depot = openttd_orders_valid_depot,
-	.depot_owner = openttd_orders_depot_owner,
-	.rail_depot = openttd_orders_rail_depot,
-	.road_depot = openttd_orders_road_depot,
-	.ship_depot = openttd_orders_ship_depot,
-	.valid_waypoint = openttd_orders_valid_waypoint,
-	.waypoint_facilities = openttd_orders_waypoint_facilities,
-	.waypoint_owner = openttd_orders_waypoint_owner,
-	.list_capacity = openttd_orders_list_capacity,
-	.next_backup = openttd_orders_next_backup,
-	.next_vehicle = openttd_orders_next_vehicle,
-	.aircraft_range = openttd_orders_aircraft_range,
-	.aircraft_range_square = openttd_orders_aircraft_range_square,
-	.backup_capacity = openttd_orders_backup_capacity,
-	.create_backup = openttd_orders_create_backup,
-	.networking = RustSettingRead<uint64_t, RustNetworking>,
-	.network_server = RustNetworkServer,
-	.network_client = openttd_orders_network_client,
-	.server_client = openttd_orders_server_client,
-	.default_group = openttd_orders_default_group,
-	.vehicle_group = openttd_orders_vehicle_group,
-	.unique_backup_name = openttd_orders_unique_backup_name,
-	.local_owner = openttd_orders_local_owner,
-	.no_jet_crash = openttd_orders_no_jet_crash,
-	.append_station = openttd_orders_append_station,
-	.station_commands = &GetRustStationCommandServices(),
-	.timetable_dirty = openttd_orders_timetable_dirty,
-	.invalidate_order = openttd_orders_invalidate_order,
-	.delete_order_news = openttd_orders_delete_order_news,
-	.invalidate_vehicle_list = openttd_orders_invalidate_vehicle_list,
-	.close_shared_window = openttd_orders_close_shared_window,
-	.invalidate_shared_window = openttd_orders_invalidate_shared_window,
-	.dirty_vehicle_windows = openttd_orders_dirty_vehicle_windows,
-	.capture_backup_metadata = openttd_orders_capture_backup_metadata,
-	.clear_backup_name = openttd_orders_clear_backup_name,
-	.restore_backup_metadata = openttd_orders_restore_backup_metadata,
-	.order_news = openttd_orders_order_news,
-	.debug_list = openttd_orders_debug_list,
-	.assert_departure_range = openttd_orders_assert_departure_range,
-	.delete_list = openttd_orders_delete_list,
-	.reverse_train = openttd_orders_reverse_train,
-	.next_airport = openttd_orders_next_airport,
-	.set_destination = openttd_orders_set_destination,
-	.closest_depot = openttd_orders_closest_depot,
-	.share_command = openttd_orders_share_command,
-	.group_command = openttd_orders_group_command,
-	.delete_backup = openttd_orders_delete_backup,
-	.clear_backup_gui = openttd_orders_clear_backup_gui,
-	.clear_backup_post = openttd_orders_clear_backup_post,
-	.missing_aircraft_orders = openttd_orders_missing_aircraft_orders,
-	.change_timetable_command = openttd_orders_change_timetable_command,
+	.backup_vector = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustOrders(); },
+	.create_backup = [](void *v, uint32_t user) noexcept -> void * { return OrderBackup::CreateForRust(static_cast<const Vehicle *>(v), user); },
+	.delete_backup = [](void *backup) noexcept { delete static_cast<OrderBackup *>(backup); },
+	.delete_list = [](void *list) noexcept { delete static_cast<OrderList *>(list); },
+	.list = [](void *list) noexcept { return static_cast<OrderList *>(list)->GetRustState(); },
+	.list_can_allocate_item = []() noexcept -> uint8_t { return OrderList::CanAllocateItem(); },
+	.next_backup = RustOrderBackupNext,
+	.vector = [](void *list) noexcept { return static_cast<OrderList *>(list)->GetRustOrders(); },
+	.backup_clear_name = [](void *backup) noexcept { static_cast<OrderBackup *>(backup)->name.clear(); },
+	.backup_service_interval = [](const void *backup) noexcept { return static_cast<const OrderBackup *>(backup)->service_interval; },
+	.backup_set_name = [](void *backup, const void *v) noexcept { static_cast<OrderBackup *>(backup)->name = static_cast<const Vehicle *>(v)->name; },
+	.backup_set_service_interval = [](void *backup, uint16_t interval) noexcept { static_cast<OrderBackup *>(backup)->service_interval = interval; },
+	.vehicle_set_name = [](void *v, const void *backup) noexcept { static_cast<Vehicle *>(v)->name = static_cast<const OrderBackup *>(backup)->name; },
+	.vehicle_set_service_interval = [](void *v, uint16_t interval) noexcept { static_cast<Vehicle *>(v)->service_interval = interval; },
+	.base_station_get_if_valid = [](uint16_t index) noexcept { return BaseStation::GetIfValid(StationID(index)); },
+	.depot_get = [](uint16_t index) noexcept { return Depot::Get(DepotID(index))->xy.base(); },
+	.waypoint_get_if_valid = [](uint16_t index) noexcept -> BaseStation * { return Waypoint::GetIfValid(StationID(index)); },
+	.debug_check_sanity = RustOrderListDebugCheckSanity,
+	.get_vehicle_cannot_use_station_reason = [](void *v, uint16_t st) noexcept -> uint32_t { return GetVehicleCannotUseStationReason(static_cast<const Vehicle *>(v), Station::Get(StationID(st))); },
+	.invalidate_vehicle_order = [](void *v, int32_t data) noexcept { InvalidateVehicleOrder(static_cast<const Vehicle *>(v), data); },
+	.is_unique_vehicle_name = [](const void *backup) noexcept -> uint8_t { return IsUniqueVehicleName(static_cast<const OrderBackup *>(backup)->name); },
+	.append_station = [](void *next_station, uint16_t station) noexcept { static_cast<std::vector<StationID> *>(next_station)->push_back(StationID(station)); },
+	.clear_order_backup_unsafe = [](uint32_t tile, uint32_t user) noexcept { Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(STR_NULL, nullptr, true, false, TileIndex(tile), CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args{TileIndex(tile), static_cast<ClientID>(user)}); },
 	.base = &GetRustVehicleServices(),
+	.depots = []() noexcept { return &GetRustDepotServices(); },
+	.scheduler = []() noexcept { return &GetRustVehicleSchedulerServices(); },
+	.station_commands = &GetRustStationCommandServices(),
 };
 const OpenTTDOrdersLeaves &GetRustOrdersLeaves() { return _rust_orders_leaves; }
 
@@ -680,7 +270,7 @@ void Order::AssignOrder(const Order &other)
  */
 void OrderList::Initialize(Vehicle *v)
 {
-	openttd_rust_list_init(this, v, &_rust_orders_leaves);
+	openttd_rust_list_init(this, RustVehicle(v), &_rust_orders_leaves);
 }
 
 /**
@@ -699,7 +289,7 @@ void OrderList::RecalculateTimetableDuration()
  */
 void OrderList::FreeChain(bool keep_orderlist)
 {
-	if (openttd_rust_list_free(this, keep_orderlist, &_rust_orders_leaves)) delete this;
+	openttd_rust_list_free(this, keep_orderlist, &_rust_orders_leaves);
 }
 
 /**
@@ -713,7 +303,7 @@ void OrderList::FreeChain(bool keep_orderlist)
  */
 void OrderList::GetNextStoppingStation(std::vector<StationID> &next_station, const Vehicle *v, VehicleOrderID first, uint hops) const
 {
-	openttd_rust_list_stopping(const_cast<OrderList *>(this), const_cast<Vehicle *>(v), first, hops, &next_station, &_rust_orders_leaves);
+	openttd_rust_list_stopping(const_cast<OrderList *>(this), &next_station, RustVehicle(v), first, hops, &_rust_orders_leaves);
 }
 
 /**
@@ -723,7 +313,7 @@ void OrderList::GetNextStoppingStation(std::vector<StationID> &next_station, con
  */
 void OrderList::InsertOrderAt(Order &&order, VehicleOrderID index)
 {
-	openttd_rust_list_insert(this, index, &order, &_rust_orders_leaves);
+	openttd_rust_list_insert(this, &order, index, &_rust_orders_leaves);
 }
 
 
@@ -781,7 +371,7 @@ void OrderList::DebugCheckSanity() const
  */
 TileIndex Order::GetLocation(const Vehicle *v, bool airport) const
 {
-	return TileIndex(openttd_rust_order_location(const_cast<Vehicle *>(v), airport, this, &GetRustOrdersLeaves()));
+	return TileIndex(openttd_rust_order_location(this, RustVehicle(v), airport, &GetRustOrdersLeaves()));
 }
 
 /**
@@ -795,7 +385,7 @@ TileIndex Order::GetLocation(const Vehicle *v, bool airport) const
  */
 uint GetOrderDistance(VehicleOrderID prev, VehicleOrderID cur, const Vehicle *v, int conditional_depth)
 {
-	return openttd_rust_order_distance(const_cast<Vehicle *>(v), prev, cur, conditional_depth, &GetRustOrdersLeaves());
+	return openttd_rust_order_distance(prev, cur, RustVehicle(v), conditional_depth, &GetRustOrdersLeaves());
 }
 
 /**
@@ -810,7 +400,7 @@ uint GetOrderDistance(VehicleOrderID prev, VehicleOrderID cur, const Vehicle *v,
  */
 CommandCost CmdInsertOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID sel_ord, const Order &new_order)
 {
-	CommandCost result; openttd_rust_command_insert(Vehicle::GetIfValid(veh), sel_ord, flags.Test(DoCommandFlag::Execute), &new_order, &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_insert(flags.base(), veh.base(), sel_ord, &new_order, &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -821,7 +411,7 @@ CommandCost CmdInsertOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID s
  */
 void InsertOrder(Vehicle *v, Order &&new_o, VehicleOrderID sel_ord)
 {
-	openttd_rust_insert_order(v, sel_ord, &new_o, &GetRustOrdersLeaves());
+	openttd_rust_insert_order(RustVehicle(v), &new_o, sel_ord, &GetRustOrdersLeaves());
 }
 
 
@@ -834,7 +424,7 @@ void InsertOrder(Vehicle *v, Order &&new_o, VehicleOrderID sel_ord)
  */
 CommandCost CmdDeleteOrder(DoCommandFlags flags, VehicleID veh_id, VehicleOrderID sel_ord)
 {
-	CommandCost result; openttd_rust_command_delete(Vehicle::GetIfValid(veh_id), sel_ord, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_delete(flags.base(), veh_id.base(), sel_ord, &result, &GetRustOrdersLeaves()); return result;
 }
 
 
@@ -847,7 +437,7 @@ CommandCost CmdDeleteOrder(DoCommandFlags flags, VehicleID veh_id, VehicleOrderI
  */
 CommandCost CmdSkipToOrder(DoCommandFlags flags, VehicleID veh_id, VehicleOrderID sel_ord)
 {
-	CommandCost result; openttd_rust_command_skip(Vehicle::GetIfValid(veh_id), sel_ord, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_skip(flags.base(), veh_id.base(), sel_ord, &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -862,7 +452,7 @@ CommandCost CmdSkipToOrder(DoCommandFlags flags, VehicleID veh_id, VehicleOrderI
  */
 CommandCost CmdMoveOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID moving_order, VehicleOrderID target_order)
 {
-	CommandCost result; openttd_rust_command_move(Vehicle::GetIfValid(veh), moving_order, target_order, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_move(flags.base(), veh.base(), moving_order, target_order, &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -878,7 +468,7 @@ CommandCost CmdMoveOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID mov
  */
 CommandCost CmdModifyOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID sel_ord, ModifyOrderFlags mof, uint16_t data)
 {
-	CommandCost result; openttd_rust_command_modify(Vehicle::GetIfValid(veh), sel_ord, mof, data, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_modify(flags.base(), veh.base(), sel_ord, mof, data, &result, &GetRustOrdersLeaves()); return result;
 }
 
 
@@ -892,7 +482,7 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID s
  */
 CommandCost CmdCloneOrder(DoCommandFlags flags, CloneOptions action, VehicleID veh_dst, VehicleID veh_src)
 {
-	CommandCost result; openttd_rust_command_clone(Vehicle::GetIfValid(veh_dst), Vehicle::GetIfValid(veh_src), action, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_clone(flags.base(), action, veh_dst.base(), veh_src.base(), &result, &GetRustOrdersLeaves()); return result;
 }
 
 /**
@@ -905,7 +495,7 @@ CommandCost CmdCloneOrder(DoCommandFlags flags, CloneOptions action, VehicleID v
  */
 CommandCost CmdOrderRefit(DoCommandFlags flags, VehicleID veh, VehicleOrderID order_number, CargoType cargo)
 {
-	CommandCost result; openttd_rust_command_refit(Vehicle::GetIfValid(veh), order_number, cargo, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
+	CommandCost result; openttd_rust_command_refit(flags.base(), veh.base(), order_number, cargo, &result, &GetRustOrdersLeaves()); return result;
 }
 
 
@@ -934,7 +524,7 @@ void RemoveOrderFromAllVehicles(OrderType type, DestinationID destination, bool 
  */
 void DeleteVehicleOrders(Vehicle *v, bool keep_orderlist, bool reset_order_indices)
 {
-	openttd_rust_delete_vehicle_orders(v, keep_orderlist, reset_order_indices, &GetRustOrdersLeaves());
+	openttd_rust_delete_vehicle_orders(RustVehicle(v), keep_orderlist, reset_order_indices, &GetRustOrdersLeaves());
 }
 
 /**
@@ -966,7 +556,7 @@ uint16_t GetServiceIntervalClamped(int interval, bool ispercent)
  */
 bool ProcessOrders(Vehicle *v)
 {
-	return openttd_rust_process_orders(v, &GetRustOrdersLeaves()) != 0;
+	return openttd_rust_process_orders(RustVehicle(v), &GetRustOrdersLeaves()) != 0;
 }
 
 #include "rust/service_table_check.hpp"

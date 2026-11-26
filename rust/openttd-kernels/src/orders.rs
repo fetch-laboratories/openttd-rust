@@ -5,37 +5,42 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Orders own their contiguous storage, lifecycle and timetable state; C++
-//! placement-constructs typed objects before exposing facade aliases. Record pointers
-//! come from the entry and stay live and serialized for the call. Each access to an
-//! aliased field is a field-sized raw copy, and no Rust reference to a C++ Order, List or
-//! Consist survives a service call, mutation or reentry. Panics abort.
-// Native-width casts and branch structure reproduce the original order commands.
-#![warn(clippy::undocumented_unsafe_blocks)]
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    clippy::similar_names,
-    clippy::many_single_char_names,
-    clippy::items_after_statements,
-    clippy::if_not_else,
-    clippy::collapsible_match
-)]
-use crate::bitmath_func::{assign_bit16, gb_u8, has_bit};
-use crate::cargo_type::{CARGO_AUTO_REFIT, CargoType};
-use crate::company_type::OWNER_NONE;
-use crate::depot_type::DepotID;
+//! Orders, order lists, order backups and timetables.
+//!
+//! The file holds the bodies of `order_cmd.cpp` and the members of `order_base.h` (orders,
+//! order lists, the seven order commands, `ProcessOrders` and `UpdateOrderDest`),
+//! `order_backup.cpp`, `timetable_cmd.cpp`, the order and unbunching members of
+//! `vehicle.cpp` and `vehicle_base.h`, and `base_consist.cpp`. It also owns the Rust records
+//! the C++ shells alias: `Order`, `BaseConsist`'s members (`Consist`), the vehicle's order
+//! members (`VehicleOrders`), an `OrderList`'s members (`List`) and its orders (`Vector`),
+//! and an `OrderBackup`'s members (`Backup`).
+//!
+//! Lifetime contract: every record, owner and shell a body reaches is live and serialized
+//! by the game-state mutex for the synchronous entry. Each access to an aliased field is a
+//! field-sized raw load or store at the original's observation point, and no Rust reference
+//! to a native order, list, consist or backup survives a service call, mutation or reentry.
+//! A handle that addresses a list's orders is resolved again after any call that can
+//! replace the vehicle's list or grow its orders.
+
+use crate::base_consist::{VehicleFlag, VehicleFlags};
+use crate::bitmath_func::{assign_bit16, gb_u8, gb_u16, has_bit, sb_u8, sb_u16};
+use crate::cargo_type::{CARGO_AUTO_REFIT, CARGO_NO_REFIT, CargoType, NUM_CARGO};
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::{CompanyID, Owner};
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
+use crate::group_type::GroupID;
+use crate::network_type::{CLIENT_ID_SERVER, ClientID};
+use crate::news_type::AdviceType;
 use crate::order_type::{
-    CloneOptions, DestinationID, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION,
-    OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING, OrderType,
-    VehicleOrderID,
+    CloneOptions, DestinationID, IMPLICIT_ORDER_ONLY_CAP, MAX_VEH_ORDER_ID, ModifyOrderFlags,
+    ModifyTimetableFlags, OrderConditionComparator, OrderConditionVariable, OrderDepotAction,
+    OrderDepotActionFlag, OrderDepotActionFlags, OrderDepotTypeFlag, OrderDepotTypeFlags,
+    OrderLoadType, OrderNonStopFlag, OrderNonStopFlags, OrderStopLocation, OrderType,
+    OrderUnloadType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
+use crate::services::{CommandCost, Cost};
+use crate::services_assert::{assert_with, not_reached};
 use crate::station_type::StationID;
 use crate::strings_type::StringID;
 use crate::table::strings::{
@@ -47,170 +52,121 @@ use crate::table::strings::{
     STR_ERROR_TOO_MANY_ORDERS, STR_ERROR_UNBUNCHING_NO_CONDITIONAL,
     STR_ERROR_UNBUNCHING_NO_FULL_LOAD, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
     STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED,
+    STR_NEWS_PLANE_USES_TOO_SHORT_RUNWAY, STR_NEWS_VEHICLE_HAS_DUPLICATE_ENTRY,
+    STR_NEWS_VEHICLE_HAS_INVALID_ENTRY, STR_NEWS_VEHICLE_HAS_TOO_FEW_ORDERS,
+    STR_NEWS_VEHICLE_HAS_VOID_ORDER,
 };
 use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
-use crate::timer_game_tick::DAY_TICKS;
-use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
-use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
-use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN, VehicleType};
+use crate::timer_game_tick::{DAY_TICKS, INVALID_TICKS, TICKS_PER_SECOND};
+use crate::vehicle::{VehicleRef, VehicleServices};
+use crate::vehicle_base::VehState;
+use crate::vehicle_gui::{VehicleInvalidateWindowData, get_window_class_for_vehicle_type};
+use crate::vehicle_type::{VehicleID, VehicleType};
+use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
+use crate::window_func::{
+    close_window_by_id, invalidate_window_classes_data, invalidate_window_data,
+    set_window_classes_dirty, set_window_dirty,
+};
+use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
+use std::mem::MaybeUninit;
+use std::ptr;
 
-/// Opaque live native `OrderList`; never dereferenced by Rust.
+/// Opaque live native `OrderList` shell; never dereferenced by Rust.
 #[repr(C)]
 pub struct NativeOrderList {
     _private: [u8; 0],
 }
-use std::mem::MaybeUninit;
-use std::ptr;
 
+/// `Order`: the members of one order, in `order_base.h`'s layout.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Order {
-    pub kind: u8,
+    /// The type of order + non-stop flags.
+    pub r#type: u8,
+    /// Load/unload types, depot order/action types.
     pub flags: u8,
-    pub destination: u16,
-    pub refit: u8,
-    pub wait: u16,
-    pub travel: u16,
-    pub speed: u16,
+    /// The destination of the order.
+    pub dest: u16,
+    /// Refit `CargoType`.
+    pub refit_cargo: u8,
+    /// How long in ticks to wait at the destination.
+    pub wait_time: u16,
+    /// How long in ticks the journey to this destination should take.
+    pub travel_time: u16,
+    /// How fast the vehicle may go on the way to the destination.
+    pub max_speed: u16,
 }
+
+/// `BaseConsist`'s members that Rust reads and writes: the various front vehicle properties
+/// that are preserved when autoreplacing, using order-backup or switching front engines
+/// within a consist.
 #[repr(C)]
 pub struct Consist {
-    pub time: i32,
-    pub lateness: i32,
-    pub start: u64,
-    pub last_departure: u64,
-    pub next_departure: u64,
-    pub round_trip: i32,
-    pub real: u8,
-    pub implicit: u8,
-    pub flags: u16,
+    /// How many ticks have passed since this order started.
+    pub current_order_time: i32,
+    /// How many ticks late (or early if negative) this vehicle is.
+    pub lateness_counter: i32,
+    /// At what tick of `TimerGameTick::counter` the vehicle should start its timetable.
+    pub timetable_start: u64,
+    /// When the vehicle last left its unbunching depot.
+    pub depot_unbunching_last_departure: u64,
+    /// When the vehicle will next try to leave its unbunching depot.
+    pub depot_unbunching_next_departure: u64,
+    /// How many ticks for a single circumnavigation of the orders.
+    pub round_trip_time: i32,
+    /// The index to the current real (non-implicit) order.
+    pub cur_real_order_index: u8,
+    /// The index to the current implicit order.
+    pub cur_implicit_order_index: u8,
+    /// Used for gradual loading and other miscellaneous things (`VehicleFlags`).
+    pub vehicle_flags: u16,
 }
+
+/// `Vehicle`'s order members.
 #[repr(C)]
 pub struct VehicleOrders {
-    pub current: MaybeUninit<Order>,
+    /// The current order (+ status, like: loading).
+    pub current_order: MaybeUninit<Order>,
+    /// Pointer to the order list for this vehicle: a native `OrderList` shell or null.
     pub orders: *mut c_void,
-    pub next: *mut c_void,
-    pub previous: *mut c_void,
+    /// Pointer to the next vehicle that shares the order: a native `Vehicle` shell or null.
+    pub next_shared: *mut c_void,
+    /// Pointer to the previous vehicle that shares the order: a native `Vehicle` shell or null.
+    pub previous_shared: *mut c_void,
 }
+
+/// `OrderList`'s members, besides its orders.
 #[repr(C)]
 pub struct List {
-    pub manual: u8,
-    pub vehicles: u32,
-    pub first: *mut c_void,
-    pub timetable: i32,
-    pub total: i32,
+    /// NOSAVE: How many manually added orders are there in the list.
+    pub num_manual_orders: u8,
+    /// NOSAVE: Number of vehicles that share this order list.
+    pub num_vehicles: u32,
+    /// NOSAVE: Pointer to the first vehicle in the shared order chain, a native shell.
+    pub first_shared: *mut c_void,
+    /// NOSAVE: Total timetabled duration of the order list.
+    pub timetable_duration: i32,
+    /// NOSAVE: Total (timetabled or not) duration of the order list.
+    pub total_duration: i32,
 }
+
+/// `OrderBackup`'s members, besides its orders and its `BaseConsist`.
 #[repr(C)]
 pub struct Backup {
+    /// The user that requested the backup.
     pub user: u32,
+    /// Tile of the depot where the order was changed.
     pub tile: u32,
+    /// The group the vehicle was part of.
     pub group: u16,
+    /// Vehicle this vehicle was a clone of: a native `Vehicle` shell or null.
     pub clone: *const c_void,
 }
 
-/// Copy the whole Order at `order`.
-fn load(order: *const Order) -> Order {
-    // SAFETY: The module contract keeps the Order live; the copy creates no reference.
-    unsafe { order.read() }
-}
-/// Store a whole Order at `order`.
-fn store(order: *mut Order, value: Order) {
-    // SAFETY: The module contract keeps the Order live and writable; no reference is created.
-    unsafe { order.write(value) }
-}
-/// The Vehicle's `current_order`.
-fn current_order(vehicle: *mut VehicleOrders) -> *mut Order {
-    // SAFETY: The module contract keeps the shell live; this takes the field address only.
-    unsafe { (&raw mut (*vehicle).current).cast() }
-}
-/// The storage of a live order vector, null while it has no capacity.
-fn data(vector: *const Vector) -> *mut Order {
-    // SAFETY: The module contract keeps the vector live; `data` reads its storage pointer.
-    unsafe { (*vector).data() }
-}
-/// The order slot `index` of `orders`, which the caller keeps within its capacity.
-fn at(orders: *mut Order, index: usize) -> *mut Order {
-    // SAFETY: Callers index within the allocation, as the original's span indexing does.
-    unsafe { orders.add(index) }
-}
-/// The order slot `index` of a live vector.
-fn slot(vector: *const Vector, index: usize) -> *mut Order {
-    at(data(vector), index)
-}
-/// `OrderList::GetOrderAt(index)` over the list's vector: the order's address, or `None`
-/// without a vector or beyond its orders. The address must not survive list mutation.
-fn order_at(vector: *mut Vector, index: VehicleOrderID) -> Option<*const Order> {
-    if vector.is_null() || index >= VehicleOrderID(read_field!(vector, length) as u8) {
-        None
-    } else {
-        Some(slot(vector, usize::from(index.0)).cast_const())
-    }
-}
-/// Call an export of this module from inside an entry with that entry's live shells,
-/// outputs and static table.
-macro_rules! reenter {
-    ($export:ident($($arg:expr),* $(,)?)) => {
-        // SAFETY: The export's pointer contract is the calling entry's own.
-        unsafe { $export($($arg),*) }
-    };
-}
-
-// Entry-local raw handles. No owner reference or cached vector data survives a
-// callback that can mutate/reenter orders; callers reacquire after such calls.
-struct OrderAccess {
-    list: *mut List,
-    vector: *mut Vector,
-}
-impl OrderAccess {
-    fn count(&self) -> u8 {
-        if self.vector.is_null() {
-            0
-        } else {
-            read_field!(self.vector, length) as u8
-        }
-    }
-    fn manual(&self) -> u8 {
-        if self.list.is_null() {
-            0
-        } else {
-            read_field!(self.list, manual)
-        }
-    }
-    fn order_ptr(&self, index: u8) -> Option<*const Order> {
-        order_at(self.vector, VehicleOrderID(index))
-    }
-    fn kind(&self, index: usize) -> u8 {
-        read_field!(slot(self.vector, index), kind) & 15
-    }
-    fn update_real(&self, state: *mut Consist) {
-        let count = self.count();
-        if read_field!(state, real) >= count {
-            write_field!(state, real, 0);
-        }
-        if self.manual() > 0 {
-            while self.kind(usize::from(read_field!(state, real))) == OT_IMPLICIT {
-                write_field!(state, real, read_field!(state, real).wrapping_add(1));
-                if read_field!(state, real) >= count {
-                    write_field!(state, real, 0);
-                }
-            }
-        } else {
-            write_field!(state, real, 0);
-        }
-    }
-    fn valid(&self) -> bool {
-        !self.vector.is_null()
-            && (0..read_field!(self.vector, length)).any(|index| {
-                matches!(
-                    self.kind(index),
-                    OT_GOTO_STATION | OT_GOTO_DEPOT | OT_GOTO_WAYPOINT
-                )
-            })
-    }
-}
-
+/// `std::vector<Order>`: an order list's or backup's orders, in storage C++ constructs and
+/// destroys through the two hooks.
 pub struct Vector {
     storage: Box<[MaybeUninit<Order>]>,
     length: usize,
@@ -236,6 +192,7 @@ impl Vector {
             self.storage.as_ptr().cast_mut().cast()
         }
     }
+    #[allow(unsafe_code)]
     unsafe fn reserve(&mut self, required: usize) {
         if required <= self.storage.len() {
             return;
@@ -261,6 +218,7 @@ impl Vector {
         }
         self.storage = storage;
     }
+    #[allow(unsafe_code)]
     unsafe fn resize(&mut self, size: usize) {
         // SAFETY: This vector is live and exclusively borrowed for the resize.
         unsafe {
@@ -283,8 +241,81 @@ impl Vector {
         }
         self.length = size;
     }
+    /// `std::vector::emplace(begin + index, order)`, with `index` clamped to the end as
+    /// `std::ranges::next` clamps it.
+    #[allow(unsafe_code)]
+    unsafe fn insert(&mut self, index: usize, order: Order) {
+        let index = index.min(self.length);
+        // SAFETY: After `reserve`, the shifted range and the inserted slot fit in capacity.
+        unsafe {
+            self.reserve(self.length + 1);
+            ptr::copy(
+                self.data().add(index),
+                self.data().add(index + 1),
+                self.length - index,
+            );
+            self.data().add(index).write(order);
+        }
+        self.length += 1;
+    }
+    /// `std::vector::erase(begin + index)` for an index below the length.
+    #[allow(unsafe_code)]
+    unsafe fn erase(&mut self, index: usize) {
+        if index >= self.length {
+            return;
+        }
+        // SAFETY: `index` is below the length, so the shifted tail lies within live Orders.
+        unsafe {
+            ptr::copy(
+                self.data().add(index + 1),
+                self.data().add(index),
+                self.length - index - 1,
+            );
+            self.resize(self.length - 1);
+        }
+    }
+    /// `std::rotate` of the order at `from` to `to`, both below the length.
+    #[allow(unsafe_code)]
+    unsafe fn rotate(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.length || to >= self.length {
+            return;
+        }
+        // SAFETY: `from` and `to` are below the length, so both ranges lie within live Orders.
+        unsafe {
+            let order = self.data().add(from).read();
+            if from < to {
+                ptr::copy(self.data().add(from + 1), self.data().add(from), to - from);
+            } else {
+                ptr::copy(self.data().add(to), self.data().add(to + 1), from - to);
+            }
+            self.data().add(to).write(order);
+        }
+    }
+    /// `assign(first, first + length)` from `length` live orders outside this vector.
+    #[allow(unsafe_code)]
+    unsafe fn assign(&mut self, src: *const Order, length: usize) {
+        // SAFETY: The caller supplies `length` live source Orders outside this storage.
+        unsafe {
+            self.resize(length);
+            if length != 0 {
+                ptr::copy_nonoverlapping(src, self.data(), length);
+            }
+        }
+    }
+    /// `std::move` of another vector's storage into this empty one.
+    #[allow(unsafe_code)]
+    unsafe fn take(&mut self, other: *mut Self) {
+        // Both owners are live and distinct, and no typed order address is used during the
+        // move. Existing C++ Order lifetimes move with the allocation.
+        // SAFETY: `other` is a distinct live vector; the swaps exchange its owned storage.
+        unsafe {
+            std::mem::swap(&mut self.storage, &mut (*other).storage);
+            std::mem::swap(&mut self.length, &mut (*other).length);
+        }
+    }
 }
 impl Drop for Vector {
+    #[allow(unsafe_code)]
     fn drop(&mut self) {
         // SAFETY: No access remains when the shell destroys its unique owner.
         unsafe {
@@ -293,23 +324,27 @@ impl Drop for Vector {
     }
 }
 
-/// All owner handles below are live, uniquely owned shell allocations. C++ does
-/// not free Rust allocations; deletion happens once after typed access has ended.
-/// Exports never unwind. Scalars have the original defaults and widths.
+// The owner exports. Each owner is a live, uniquely owned shell allocation: C++ deletes
+// each exactly once, after its last access, and frees no Rust allocation itself.
+
+/// The `BaseConsist` owner, with the members' defaults.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_consist_new() -> *mut Consist {
     Box::into_raw(Box::new(Consist {
-        time: 0,
-        lateness: 0,
-        start: 0,
-        last_departure: 0,
-        next_departure: 0,
-        round_trip: 0,
-        real: 0,
-        implicit: 0,
-        flags: 0,
+        current_order_time: 0,
+        lateness_counter: 0,
+        timetable_start: 0,
+        depot_unbunching_last_departure: 0,
+        depot_unbunching_next_departure: 0,
+        round_trip_time: 0,
+        cur_real_order_index: 0,
+        cur_implicit_order_index: 0,
+        vehicle_flags: 0,
     }))
 }
+/// Delete a `BaseConsist` owner.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_consist_delete(p: *mut Consist) {
     // SAFETY: C++ deletes each Rust-allocated owner exactly once, after its last access.
@@ -317,51 +352,32 @@ pub unsafe extern "C" fn openttd_rust_consist_delete(p: *mut Consist) {
         drop(Box::from_raw(p));
     }
 }
-/// `BaseConsist::ResetDepotUnbunching`: reset all depot unbunching times.
-///
-/// # Safety
-/// `p` is a live consist owner of the serialized game state.
-unsafe fn reset_depot_unbunching(p: *mut Consist) {
-    write_field!(p, last_departure, 0);
-    write_field!(p, next_departure, 0);
-    write_field!(p, round_trip, 0);
-}
+/// `BaseConsist::ResetDepotUnbunching` for the C++ callers.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_consist_reset(p: *mut Consist) {
-    // SAFETY: As `reset_depot_unbunching`.
-    unsafe { reset_depot_unbunching(p) };
+    ConsistRef(p).reset_depot_unbunching();
 }
+/// The consist part of `BaseConsist::CopyConsistPropertiesFrom` for the C++ callers, which
+/// copy `name` before it and `service_interval` after it.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_consist_copy(p: *mut Consist, src: *const Consist) {
-    if ptr::eq(p, src) {
-        return;
-    }
-    write_field!(p, time, read_field!(src, time));
-    write_field!(p, lateness, read_field!(src, lateness));
-    write_field!(p, start, read_field!(src, start));
-    write_field!(p, real, read_field!(src, real));
-    write_field!(p, implicit, read_field!(src, implicit));
-    write_field!(
-        p,
-        flags,
-        read_field!(p, flags)
-            | read_field!(src, flags) & ((1 << 3) | (1 << 4) | (1 << 5) | (1 << 8))
-    );
-    write_field!(
-        p,
-        flags,
-        (read_field!(p, flags) & !(1 << 9)) | (read_field!(src, flags) & (1 << 9))
-    );
+    ConsistRef(p).copy_consist_properties_from(ConsistRef(src.cast_mut()));
 }
+/// The vehicle's order members, with the current order uninitialised until C++ constructs it.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_vehicle_orders_new() -> *mut VehicleOrders {
     Box::into_raw(Box::new(VehicleOrders {
-        current: MaybeUninit::uninit(),
+        current_order: MaybeUninit::uninit(),
         orders: ptr::null_mut(),
-        next: ptr::null_mut(),
-        previous: ptr::null_mut(),
+        next_shared: ptr::null_mut(),
+        previous_shared: ptr::null_mut(),
     }))
 }
+/// Delete a vehicle's order members.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_orders_delete(p: *mut VehicleOrders) {
     // SAFETY: C++ deletes each Rust-allocated owner exactly once, after its last access.
@@ -369,16 +385,20 @@ pub unsafe extern "C" fn openttd_rust_vehicle_orders_delete(p: *mut VehicleOrder
         drop(Box::from_raw(p));
     }
 }
+/// An `OrderList`'s members, with their defaults.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_orderlist_new() -> *mut List {
     Box::into_raw(Box::new(List {
-        manual: 0,
-        vehicles: 0,
-        first: ptr::null_mut(),
-        timetable: 0,
-        total: 0,
+        num_manual_orders: 0,
+        num_vehicles: 0,
+        first_shared: ptr::null_mut(),
+        timetable_duration: 0,
+        total_duration: 0,
     }))
 }
+/// Delete an `OrderList`'s members.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_orderlist_delete(p: *mut List) {
     // SAFETY: C++ deletes each Rust-allocated owner exactly once, after its last access.
@@ -386,15 +406,19 @@ pub unsafe extern "C" fn openttd_rust_orderlist_delete(p: *mut List) {
         drop(Box::from_raw(p));
     }
 }
+/// An `OrderBackup`'s members, with their defaults.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_orderbackup_new() -> *mut Backup {
     Box::into_raw(Box::new(Backup {
         user: 0,
-        tile: u32::MAX,
-        group: u16::MAX,
+        tile: TileIndex::INVALID.0,
+        group: GroupID::INVALID.0,
         clone: ptr::null(),
     }))
 }
+/// Delete an `OrderBackup`'s members.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_orderbackup_delete(p: *mut Backup) {
     // SAFETY: C++ deletes each Rust-allocated owner exactly once, after its last access.
@@ -402,6 +426,8 @@ pub unsafe extern "C" fn openttd_rust_orderbackup_delete(p: *mut Backup) {
         drop(Box::from_raw(p));
     }
 }
+/// An empty `std::vector<Order>` over C++'s construction and destruction hooks.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_order_vector_new(
     construct: unsafe extern "C" fn(*mut c_void, usize),
@@ -409,6 +435,8 @@ pub extern "C" fn openttd_rust_order_vector_new(
 ) -> *mut Vector {
     Box::into_raw(Box::new(Vector::new(construct, destroy)))
 }
+/// Delete a `std::vector<Order>`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_delete(p: *mut Vector) {
     // SAFETY: C++ deletes each Rust-allocated owner exactly once, after its last access.
@@ -416,14 +444,21 @@ pub unsafe extern "C" fn openttd_rust_order_vector_delete(p: *mut Vector) {
         drop(Box::from_raw(p));
     }
 }
+/// `std::vector::size`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_size(p: *const Vector) -> usize {
     read_field!(p, length)
 }
+/// `std::vector::data`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_data(p: *const Vector) -> *mut Order {
-    data(p)
+    // SAFETY: C++ passes a live owner; `data` reads its storage pointer.
+    unsafe { (*p).data() }
 }
+/// `std::vector::resize`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_resize(p: *mut Vector, size: usize) {
     // SAFETY: C++ passes the live unique owner for this call; no other reference exists.
@@ -431,578 +466,513 @@ pub unsafe extern "C" fn openttd_rust_order_vector_resize(p: *mut Vector, size: 
         (*p).resize(size);
     }
 }
+/// `std::vector::emplace` of a copy of `src`, which may alias one of its orders.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_insert(
     p: *mut Vector,
     index: usize,
     src: *const Order,
 ) {
-    // Copy before reserve: original emplace permits its input to alias a live order.
-    let order = load(src);
+    // Copy before reserve: the original's emplace permits its input to alias a live order.
+    // SAFETY: C++ passes a live order.
+    let order = unsafe { src.read() };
     // SAFETY: C++ passes the live unique owner for this call; no other reference exists.
-    let v = unsafe { &mut *p };
-    let index = index.min(v.length);
-    // SAFETY: After `reserve`, the shifted range and the inserted slot fit in capacity.
-    unsafe {
-        v.reserve(v.length + 1);
-        ptr::copy(
-            v.data().add(index),
-            v.data().add(index + 1),
-            v.length - index,
-        );
-        v.data().add(index).write(order);
-    }
-    v.length += 1;
+    unsafe { (*p).insert(index, order) };
 }
+/// `std::vector::erase`.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_erase(p: *mut Vector, index: usize) {
     // SAFETY: C++ passes the live unique owner for this call; no other reference exists.
-    let v = unsafe { &mut *p };
-    if index >= v.length {
-        return;
-    }
-    // SAFETY: `index` is below the length, so the shifted tail lies within live Orders.
-    unsafe {
-        ptr::copy(
-            v.data().add(index + 1),
-            v.data().add(index),
-            v.length - index - 1,
-        );
-        v.resize(v.length - 1);
-    }
+    unsafe { (*p).erase(index) };
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_vector_move(p: *mut Vector, from: usize, to: usize) {
-    // SAFETY: C++ passes the live unique owner for this call; no other reference exists.
-    let v = unsafe { &mut *p };
-    if from == to || from >= v.length || to >= v.length {
-        return;
-    }
-    // SAFETY: `from` and `to` are below the length, so both ranges lie within live Orders.
-    unsafe {
-        let order = v.data().add(from).read();
-        if from < to {
-            ptr::copy(v.data().add(from + 1), v.data().add(from), to - from);
-        } else {
-            ptr::copy(v.data().add(to), v.data().add(to + 1), from - to);
-        }
-        v.data().add(to).write(order);
-    }
-}
+/// `std::vector::assign` from `length` live orders outside the vector.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_vector_assign(
     p: *mut Vector,
     src: *const Order,
     length: usize,
 ) {
-    // SAFETY: C++ passes the live unique owner for this call; no other reference exists.
-    let v = unsafe { &mut *p };
-    // SAFETY: C++ supplies `length` live source Orders outside this vector's storage.
-    unsafe {
-        v.resize(length);
-        if length != 0 {
-            ptr::copy_nonoverlapping(src, v.data(), length);
-        }
-    }
+    // SAFETY: C++ passes the live unique owner and `length` live source Orders outside it.
+    unsafe { (*p).assign(src, length) };
 }
 
-/// Shared accessors expose typed world shells; all pointed-to fields are accessed
-/// only as raw scalars. The immutable C++ table outlives each synchronous entry;
-/// callbacks keep no Rust owner reference across reentry.
-/// Services are typed noexcept calls; commands and destruction may reenter Rust.
-///
-/// Pointer-taking callbacks require the live native pointee type used by their
-/// C++ body, with writable output storage where applicable. Deletion consumes
-/// the detached shell; no access to its owner may remain. Destination lookups
-/// also require a live station/depot/waypoint of the source branch's type even
-/// though their arguments are scalar IDs. Distance inputs must be live map tiles
-/// so the native signed square cannot overflow. No Rust owner borrow spans a callback.
-/// Scalar-only settings, checked lookups and pool iteration need no such input
-/// precondition.
+/// The orders table: the C++ bindings the bodies call, typed `noexcept` functions over IDs
+/// and shells. Owner slots return the Rust owner a live shell holds; pool slots allocate,
+/// delete or iterate a pool still stored in C++. No Rust owner borrow spans a call, and a
+/// call that deletes a shell consumes it.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub vehicle: unsafe extern "C" fn(*mut c_void) -> *mut VehicleOrders,
-    pub consist: unsafe extern "C" fn(*mut c_void) -> *mut Consist,
-    pub list: unsafe extern "C" fn(*mut c_void) -> *mut List,
-    pub vector: unsafe extern "C" fn(*mut c_void) -> *mut Vector,
-    pub backup: unsafe extern "C" fn(*mut c_void) -> *mut Backup,
-    pub backup_vector: unsafe extern "C" fn(*mut c_void) -> *mut Vector,
-    pub backup_consist: unsafe extern "C" fn(*mut c_void) -> *mut Consist,
-    pub ownerless_station: unsafe extern "C" fn(station: u16, if_valid: u8) -> u64,
-    pub vehicle_type: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub tick_counter: extern "C" fn() -> u64,
-    pub primary_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub ticks_per_second: extern "C" fn() -> u64,
-    pub unit_number: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub maximum_date: extern "C" fn() -> u64,
+    // Pool operations and the owners of C++ shells, until the order pools move (#906).
+    /// `new OrderList()`.
     pub allocate_list: extern "C" fn() -> *mut c_void,
-    pub shared_window: unsafe extern "C" fn(ctx: *mut c_void, first: *mut c_void) -> u64,
-    pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub reliability: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub display_speed: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub age_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub needs_service: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub remaining_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub airport_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub depot_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub distance: unsafe extern "C" fn(first: u32, second: u32, square: u8) -> u64,
-    pub station_location: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
-    pub destination_tile: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub aircraft_flying: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub target_airport: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub waypoint_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub at_station: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub tile_station: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub ship_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub valid_station: extern "C" fn(destination: u16) -> u64,
-    pub station_owner: unsafe extern "C" fn(destination: u16) -> u64,
-    pub station_error: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
-    pub valid_depot: extern "C" fn(destination: u16) -> u64,
-    pub depot_owner: unsafe extern "C" fn(destination: u16) -> u64,
-    pub rail_depot: unsafe extern "C" fn(destination: u16) -> u64,
-    pub road_depot: unsafe extern "C" fn(destination: u16) -> u64,
-    pub ship_depot: unsafe extern "C" fn(destination: u16) -> u64,
-    pub valid_waypoint: extern "C" fn(destination: u16) -> u64,
-    pub waypoint_facilities: unsafe extern "C" fn(destination: u16) -> u64,
-    pub waypoint_owner: unsafe extern "C" fn(destination: u16) -> u64,
-    pub list_capacity: extern "C" fn() -> u64,
+    /// The `Backup` owner of a live `OrderBackup` shell.
+    pub backup: unsafe extern "C" fn(*mut c_void) -> *mut Backup,
+    /// `OrderBackup::CanAllocateItem()`.
+    pub backup_can_allocate_item: extern "C" fn() -> u8,
+    /// The `Consist` owner of a live `OrderBackup` shell.
+    pub backup_consist: unsafe extern "C" fn(*mut c_void) -> *mut Consist,
+    /// The `Vector` owner of a live `OrderBackup` shell.
+    pub backup_vector: unsafe extern "C" fn(*mut c_void) -> *mut Vector,
+    /// `new OrderBackup(v, user)`, whose constructor runs this file's body.
+    pub create_backup: unsafe extern "C" fn(v: *mut c_void, user: u32) -> *mut c_void,
+    /// `delete ob`.
+    pub delete_backup: unsafe extern "C" fn(*mut c_void),
+    /// `delete list`.
+    pub delete_list: unsafe extern "C" fn(*mut c_void),
+    /// The `List` owner of a live `OrderList` shell.
+    pub list: unsafe extern "C" fn(*mut c_void) -> *mut List,
+    /// `OrderList::CanAllocateItem()`.
+    pub list_can_allocate_item: extern "C" fn() -> u8,
+    /// `OrderBackup::Iterate()`'s next backup at or after `*cursor`, advancing it, or null.
     pub next_backup: unsafe extern "C" fn(cursor: *mut u32) -> *mut c_void,
-    pub next_vehicle: extern "C" fn(first: u32) -> *mut c_void,
-    pub aircraft_range: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub aircraft_range_square: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub backup_capacity: extern "C" fn() -> u64,
-    pub create_backup: unsafe extern "C" fn(ctx: *mut c_void, user: u32) -> *mut c_void,
-    pub networking: extern "C" fn() -> u64,
-    pub network_server: extern "C" fn() -> bool,
-    pub network_client: extern "C" fn() -> u64,
-    pub server_client: extern "C" fn() -> u64,
-    pub default_group: extern "C" fn() -> u64,
-    pub vehicle_group: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub unique_backup_name: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub local_owner: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub no_jet_crash: extern "C" fn() -> u64,
-    pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
-    pub station_commands: *const crate::station_cmd::CommandServicesTable,
-    pub timetable_dirty: unsafe extern "C" fn(ctx: *mut c_void),
-    pub invalidate_order: unsafe extern "C" fn(ctx: *mut c_void, data: i32),
-    pub delete_order_news: unsafe extern "C" fn(ctx: *mut c_void),
-    pub invalidate_vehicle_list: unsafe extern "C" fn(ctx: *mut c_void),
-    pub close_shared_window: unsafe extern "C" fn(ctx: *mut c_void, window: u32),
-    pub invalidate_shared_window: unsafe extern "C" fn(ctx: *mut c_void, window: u32, data: i32),
-    pub dirty_vehicle_windows: unsafe extern "C" fn(ctx: *mut c_void),
-    pub capture_backup_metadata: unsafe extern "C" fn(ctx: *mut c_void, source: *mut c_void),
-    pub clear_backup_name: unsafe extern "C" fn(ctx: *mut c_void),
-    pub restore_backup_metadata: unsafe extern "C" fn(ctx: *mut c_void, backup: *mut c_void),
-    pub order_news: unsafe extern "C" fn(ctx: *mut c_void, message: u32),
-    pub debug_list: unsafe extern "C" fn(ctx: *mut c_void),
-    pub assert_departure_range: extern "C" fn(lower: i32, upper: i32),
-    pub delete_list: unsafe extern "C" fn(ctx: *mut c_void),
-    pub reverse_train: unsafe extern "C" fn(ctx: *mut c_void),
-    pub next_airport: unsafe extern "C" fn(ctx: *mut c_void),
-    pub set_destination: unsafe extern "C" fn(ctx: *mut c_void, tile: u32),
-    pub closest_depot: unsafe extern "C" fn(ctx: *mut c_void, result: *mut Closest),
-    pub share_command: unsafe extern "C" fn(ctx: *mut c_void, source: *const c_void),
-    pub group_command: unsafe extern "C" fn(ctx: *mut c_void, group: u16),
-    pub delete_backup: unsafe extern "C" fn(ctx: *mut c_void),
-    pub clear_backup_gui: extern "C" fn(tile: u32, user: u32),
-    pub clear_backup_post: extern "C" fn(user: u32),
-    pub missing_aircraft_orders: unsafe extern "C" fn(ctx: *mut c_void),
-    pub change_timetable_command:
-        unsafe extern "C" fn(ctx: *mut c_void, index: u8, field: u8, value: u16),
+    /// The `Vector` owner of a live `OrderList` shell.
+    pub vector: unsafe extern "C" fn(*mut c_void) -> *mut Vector,
+
+    // Members still stored in C++ shells: one reader or writer each.
+    /// `ob->name.clear()`.
+    pub backup_clear_name: unsafe extern "C" fn(backup: *mut c_void),
+    /// `ob->service_interval`.
+    pub backup_service_interval: unsafe extern "C" fn(backup: *const c_void) -> u16,
+    /// `ob->name = v->name`.
+    pub backup_set_name: unsafe extern "C" fn(backup: *mut c_void, v: *const c_void),
+    /// `ob->service_interval = interval`.
+    pub backup_set_service_interval: unsafe extern "C" fn(backup: *mut c_void, interval: u16),
+    /// `v->name = ob->name`.
+    pub vehicle_set_name: unsafe extern "C" fn(v: *mut c_void, backup: *const c_void),
+    /// `v->service_interval = interval`.
+    pub vehicle_set_service_interval: unsafe extern "C" fn(v: *mut c_void, interval: u16),
+
+    // Lookups still stored in C++ pools (#634, #638).
+    /// `BaseStation::GetIfValid(index)`, null where invalid.
+    pub base_station_get_if_valid: extern "C" fn(index: u16) -> *mut crate::station::BaseStation,
+    /// `Depot::Get(index)`'s `xy`.
+    pub depot_get: extern "C" fn(index: u16) -> u32,
+    /// `Waypoint::GetIfValid(index)`, null where invalid.
+    pub waypoint_get_if_valid: extern "C" fn(index: u16) -> *mut crate::station::BaseStation,
+
+    // Unported bodies.
+    /// `OrderList::DebugCheckSanity()`, under `WITH_ASSERT`.
+    pub debug_check_sanity: unsafe extern "C" fn(list: *mut c_void),
+    /// `GetVehicleCannotUseStationReason(v, st)`.
+    pub get_vehicle_cannot_use_station_reason: unsafe extern "C" fn(v: *mut c_void, st: u16) -> u32,
+    /// `InvalidateVehicleOrder(v, data)`.
+    pub invalidate_vehicle_order: unsafe extern "C" fn(v: *mut c_void, data: i32),
+    /// `IsUniqueVehicleName(ob->name)`.
+    pub is_unique_vehicle_name: unsafe extern "C" fn(backup: *const c_void) -> u8,
+
+    // Commands and the C++ vector the export of `GetNextStoppingStation` fills.
+    /// `next_station.push_back(station)` on the export's output vector.
+    pub append_station: unsafe extern "C" fn(next_station: *mut c_void, station: u16),
+    /// `Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(..)` from the GUI.
+    pub clear_order_backup_unsafe: extern "C" fn(tile: u32, user: u32),
+
+    // Tables.
+    /// The base vehicle table.
     pub base: &'static VehicleServices,
+    /// The depot table, for `Depot::GetIfValid`.
+    pub depots: extern "C" fn() -> *const crate::depot_cmd::Services,
+    /// The vehicle scheduler's table: the controllers' tables and the vehicle pool.
+    pub scheduler: extern "C" fn() -> *const crate::vehicle::scheduler::SchedulerServices,
+    /// The station command table, for its station members and command services.
+    pub station_commands: *const crate::station_cmd::CommandServicesTable,
 }
-// Private helpers inherit the native entry's live-shell/output contracts and
-// the source branches' vehicle/destination types; they never expose safe calls
-// accepting arbitrary native pointers outside this module.
+
+/// The process-wide tables a body reads through `Leaves`.
+#[allow(unsafe_code)]
+impl Leaves {
+    /// The shared table.
+    pub(crate) fn shared(&self) -> &'static crate::services::Services {
+        // SAFETY: The base table names its process-lifetime maintenance and shared tables.
+        unsafe { &*(*self.base.maintenance).shared }
+    }
+    /// The vehicle maintenance table.
+    fn maintenance(&self) -> &'static crate::vehicle::maintenance::Services {
+        // SAFETY: As `shared`.
+        unsafe { &*self.base.maintenance }
+    }
+    /// The vehicle resolver table, which reads the members still stored in C++.
+    fn newgrf(&self) -> &'static crate::newgrf_vehicle::Services {
+        self.base.newgrf()
+    }
+    /// The vehicle scheduler table.
+    fn scheduler(&self) -> &'static crate::vehicle::scheduler::SchedulerServices {
+        // SAFETY: The getter returns the process-lifetime scheduler table.
+        unsafe { &*(self.scheduler)() }
+    }
+    /// The station command table.
+    fn station_commands(&self) -> &'static crate::station_cmd::CommandServicesTable {
+        // SAFETY: The process-lifetime station command table.
+        unsafe { &*self.station_commands }
+    }
+    /// The command services.
+    fn commands(&self) -> &'static crate::services::CommandServices {
+        // SAFETY: The station command table names the process-lifetime command table.
+        unsafe { &*self.station_commands().command }
+    }
+    /// The company services, for `CheckOwnership`.
+    fn company(&self) -> &'static crate::company::Services {
+        // SAFETY: The command table returns the process-lifetime company table.
+        unsafe { &*(self.commands().company)() }
+    }
+    /// The native `CommandCost` at `out`, written through the shared cost services.
+    fn cost(&self, out: *mut CommandCost) -> Cost<'static> {
+        // SAFETY: The station command table names the process-lifetime cost table.
+        Cost(out, unsafe { &*self.station_commands().cost })
+    }
+    /// The depot table.
+    fn depots(&self) -> &'static crate::depot_cmd::Services {
+        // SAFETY: The getter returns the process-lifetime depot table.
+        unsafe { &*(self.depots)() }
+    }
+    /// The station catchment table, for `Station::GetIfValid`.
+    fn catchment(&self) -> &'static crate::station::CatchmentServices {
+        // SAFETY: The shared getter returns the process-lifetime catchment table.
+        unsafe { &*(self.shared().station_catchment)() }
+    }
+    /// The vehicle visit table.
+    fn visits(&self) -> &'static crate::vehicle::visits::Services {
+        self.base.visits()
+    }
+}
+
+/// `Vehicle::GetIfValid(index)`.
+fn vehicle_get_if_valid(index: VehicleID, s: &Leaves) -> Option<VehicleRef> {
+    crate::vehicle_base::get_if_valid(&s.scheduler().pool(), index)
+}
+
+/// The record of a live non-null vehicle shell.
+#[allow(unsafe_code)]
+fn record(shell: *mut c_void, s: &Leaves) -> VehicleRef {
+    // SAFETY: Each caller passes a live non-null `Vehicle` shell of the serialized game.
+    unsafe { VehicleRef::from_shell(shell, s.base) }
+}
+
+/// The record of a vehicle shell, `None` for null.
+fn record_if(shell: *mut c_void, s: &Leaves) -> Option<VehicleRef> {
+    (!shell.is_null()).then(|| record(shell, s))
+}
+
+/// The consist owner of a live vehicle record.
+#[allow(unsafe_code)]
+fn consist(v: VehicleRef) -> ConsistRef {
+    ConsistRef(read_field!(v.0.as_ptr(), consist))
+}
+
+/// The order members of a live vehicle record.
+#[allow(unsafe_code)]
+fn vehicle_orders(v: VehicleRef) -> *mut VehicleOrders {
+    read_field!(v.0.as_ptr(), orders)
+}
+
+/// `BaseConsist`'s members in a live `Consist` owner, read and written in place.
 #[derive(Clone, Copy)]
-struct Game(&'static Leaves);
+pub(crate) struct ConsistRef(*mut Consist);
 
-/// Convert the live, non-null native Vehicle shell supplied by each entry.
-fn native_vehicle(v: *mut c_void, base: &VehicleServices) -> VehicleRef {
-    // SAFETY: Callers inherit their entry's live, non-null Vehicle contract.
-    unsafe { VehicleRef::from_shell(v, base) }
-}
+#[allow(unsafe_code)]
+impl ConsistRef {
+    /// `current_order_time`.
+    fn current_order_time(self) -> i32 {
+        read_field!(self.0, current_order_time)
+    }
+    fn set_current_order_time(self, value: i32) {
+        write_field!(self.0, current_order_time, value);
+    }
+    /// `lateness_counter`.
+    fn lateness_counter(self) -> i32 {
+        read_field!(self.0, lateness_counter)
+    }
+    fn set_lateness_counter(self, value: i32) {
+        write_field!(self.0, lateness_counter, value);
+    }
+    /// `timetable_start`.
+    fn timetable_start(self) -> u64 {
+        read_field!(self.0, timetable_start)
+    }
+    fn set_timetable_start(self, value: u64) {
+        write_field!(self.0, timetable_start, value);
+    }
+    /// `depot_unbunching_last_departure`.
+    fn depot_unbunching_last_departure(self) -> u64 {
+        read_field!(self.0, depot_unbunching_last_departure)
+    }
+    fn set_depot_unbunching_last_departure(self, value: u64) {
+        write_field!(self.0, depot_unbunching_last_departure, value);
+    }
+    /// `depot_unbunching_next_departure`.
+    fn depot_unbunching_next_departure(self) -> u64 {
+        read_field!(self.0, depot_unbunching_next_departure)
+    }
+    fn set_depot_unbunching_next_departure(self, value: u64) {
+        write_field!(self.0, depot_unbunching_next_departure, value);
+    }
+    /// `round_trip_time`.
+    fn round_trip_time(self) -> i32 {
+        read_field!(self.0, round_trip_time)
+    }
+    fn set_round_trip_time(self, value: i32) {
+        write_field!(self.0, round_trip_time, value);
+    }
+    /// `cur_real_order_index`.
+    fn cur_real_order_index(self) -> VehicleOrderID {
+        VehicleOrderID(read_field!(self.0, cur_real_order_index))
+    }
+    fn set_cur_real_order_index(self, value: VehicleOrderID) {
+        write_field!(self.0, cur_real_order_index, value.0);
+    }
+    /// `cur_implicit_order_index`.
+    fn cur_implicit_order_index(self) -> VehicleOrderID {
+        VehicleOrderID(read_field!(self.0, cur_implicit_order_index))
+    }
+    fn set_cur_implicit_order_index(self, value: VehicleOrderID) {
+        write_field!(self.0, cur_implicit_order_index, value.0);
+    }
+    /// `vehicle_flags`.
+    fn vehicle_flags(self) -> VehicleFlags {
+        VehicleFlags(read_field!(self.0, vehicle_flags))
+    }
+    fn set_vehicle_flags(self, value: VehicleFlags) {
+        write_field!(self.0, vehicle_flags, value.0);
+    }
 
-/// Typed calls into the `Leaves` table. Callers pass the live native pointees and
-/// destination types the table contract requires.
-macro_rules! leaves {
-    ($(fn $name:ident($($arg:ident: $ty:ty),*) $(-> $ret:ty)?;)*) => {
-        impl Game {
-            $(fn $name(self, $($arg: $ty),*) $(-> $ret)? {
-                // SAFETY: The caller meets the `Leaves` contract for this callback; no Rust
-                // owner borrow crosses the call.
-                unsafe { (self.0.$name)($($arg),*) }
-            })*
-        }
-    };
-}
-leaves! {
-    fn ownerless_station(station: u16, if_valid: u8) -> u64;
-    fn vehicle_type(ctx: *mut c_void) -> u64;
-    fn primary_vehicle(ctx: *mut c_void) -> u64;
-    fn unit_number(ctx: *mut c_void) -> u64;
-    fn shared_window(ctx: *mut c_void, first: *mut c_void) -> u64;
-    fn vehicle_id(ctx: *mut c_void) -> u64;
-    fn reliability(ctx: *mut c_void) -> u64;
-    fn display_speed(ctx: *mut c_void) -> u64;
-    fn age_years(ctx: *mut c_void) -> u64;
-    fn needs_service(ctx: *mut c_void) -> u64;
-    fn remaining_years(ctx: *mut c_void) -> u64;
-    fn airport_tile(destination: u16) -> u64;
-    fn depot_tile(destination: u16) -> u64;
-    fn station_location(ctx: *mut c_void, destination: u16) -> u64;
-    fn destination_tile(ctx: *mut c_void) -> u64;
-    fn aircraft_flying(ctx: *mut c_void) -> u64;
-    fn target_airport(ctx: *mut c_void) -> u64;
-    fn waypoint_tile(destination: u16) -> u64;
-    fn at_station(ctx: *mut c_void) -> u64;
-    fn tile_station(ctx: *mut c_void) -> u64;
-    fn ship_station_tile(destination: u16) -> u64;
-    fn station_owner(destination: u16) -> u64;
-    fn station_error(ctx: *mut c_void, destination: u16) -> u64;
-    fn depot_owner(destination: u16) -> u64;
-    fn rail_depot(destination: u16) -> u64;
-    fn road_depot(destination: u16) -> u64;
-    fn ship_depot(destination: u16) -> u64;
-    fn waypoint_facilities(destination: u16) -> u64;
-    fn waypoint_owner(destination: u16) -> u64;
-    fn aircraft_range_square(ctx: *mut c_void) -> u64;
-    fn create_backup(ctx: *mut c_void, user: u32) -> *mut c_void;
-    fn vehicle_group(ctx: *mut c_void) -> u64;
-    fn unique_backup_name(ctx: *mut c_void) -> u64;
-    fn local_owner(ctx: *mut c_void) -> u64;
-    fn append_station(ctx: *mut c_void, station: u16);
-    fn timetable_dirty(ctx: *mut c_void);
-    fn invalidate_order(ctx: *mut c_void, data: i32);
-    fn delete_order_news(ctx: *mut c_void);
-    fn invalidate_vehicle_list(ctx: *mut c_void);
-    fn close_shared_window(ctx: *mut c_void, window: u32);
-    fn invalidate_shared_window(ctx: *mut c_void, window: u32, data: i32);
-    fn dirty_vehicle_windows(ctx: *mut c_void);
-    fn capture_backup_metadata(ctx: *mut c_void, source: *mut c_void);
-    fn clear_backup_name(ctx: *mut c_void);
-    fn restore_backup_metadata(ctx: *mut c_void, backup: *mut c_void);
-    fn order_news(ctx: *mut c_void, message: u32);
-    fn debug_list(ctx: *mut c_void);
-    fn delete_list(ctx: *mut c_void);
-    fn reverse_train(ctx: *mut c_void);
-    fn next_airport(ctx: *mut c_void);
-    fn set_destination(ctx: *mut c_void, tile: u32);
-    fn closest_depot(ctx: *mut c_void, result: *mut Closest);
-    fn share_command(ctx: *mut c_void, source: *const c_void);
-    fn group_command(ctx: *mut c_void, group: u16);
-    fn delete_backup(ctx: *mut c_void);
-    fn missing_aircraft_orders(ctx: *mut c_void);
-    fn change_timetable_command(ctx: *mut c_void, index: u8, field: u8, value: u16);
-}
+    /// `BaseConsist::ResetDepotUnbunching`: resets all the data used for depot unbunching.
+    fn reset_depot_unbunching(self) {
+        self.set_depot_unbunching_last_departure(0);
+        self.set_depot_unbunching_next_departure(0);
+        self.set_round_trip_time(0);
+    }
 
-/// `HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS)`.
-fn suppress_implicit(v: VehicleRef) -> bool {
-    has_bit(v.ground_vehicle_flags(), GVF_SUPPRESS_IMPLICIT_ORDERS)
-}
-/// `AssignBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS, suppress)`.
-fn assign_suppress_implicit(v: VehicleRef, suppress: bool) {
-    let mut flags = v.ground_vehicle_flags();
-    assign_bit16(&mut flags, GVF_SUPPRESS_IMPLICIT_ORDERS, suppress);
-    v.set_ground_vehicle_flags(flags);
-}
-/// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
-fn stopped_or_crashed(v: VehicleRef) -> bool {
-    v.vehstatus_raw() & (VS_STOPPED | VS_CRASHED) != 0
-}
-
-impl Game {
-    fn bus(self, vehicle: *mut c_void) -> bool {
-        // SAFETY: The immutable maintenance table supplies the shared world services.
-        let shared = unsafe { &*self.maintenance().shared };
-        crate::road_stop::is_bus(shared, native_vehicle(vehicle, self.0.base))
-    }
-    fn shared(self) -> &'static crate::services::Services {
-        // SAFETY: The immutable maintenance table names the process-wide shared table.
-        unsafe { &*self.maintenance().shared }
-    }
-    fn maintenance(self) -> &'static maintenance::Services {
-        // SAFETY: The immutable base table supplies its process-wide maintenance table.
-        unsafe { &*self.0.base.maintenance }
-    }
-    fn invalidate_station_list(self) {
-        // SAFETY: The immutable leaves table supplies the process-wide station command table.
-        (unsafe { &*self.0.station_commands }.station_list_classes_invalidate)();
-    }
-    fn vehicle(self, v: *mut c_void) -> *mut VehicleOrders {
-        // SAFETY: The entry supplies a live Vehicle shell whose orders owner remains allocated.
-        unsafe { (self.0.vehicle)(v) }
-    }
-    fn consist(self, v: *mut c_void) -> *mut Consist {
-        // SAFETY: The entry supplies a live Vehicle shell whose consist owner remains allocated.
-        unsafe { (self.0.consist)(v) }
-    }
-    fn list(self, list: *mut c_void) -> *mut List {
-        // SAFETY: The shell is a live OrderList; the callback only returns its owner pointer.
-        unsafe { (self.0.list)(list) }
-    }
-    fn vector(self, list: *mut c_void) -> *mut Vector {
-        // SAFETY: The shell is a live OrderList; the callback only returns its storage owner.
-        unsafe { (self.0.vector)(list) }
-    }
-    fn order_access(self, vehicle: *mut VehicleOrders) -> OrderAccess {
-        let shell = read_field!(vehicle, orders);
-        if shell.is_null() {
-            OrderAccess {
-                list: ptr::null_mut(),
-                vector: ptr::null_mut(),
-            }
-        } else {
-            OrderAccess {
-                list: self.list(shell),
-                vector: self.vector(shell),
-            }
-        }
-    }
-    fn orders(self, v: *mut c_void) -> *mut c_void {
-        read_field!(self.vehicle(v), orders)
-    }
-    fn next(self, v: *mut c_void) -> *mut c_void {
-        read_field!(self.vehicle(v), next)
-    }
-    fn previous(self, v: *mut c_void) -> *mut c_void {
-        read_field!(self.vehicle(v), previous)
-    }
-    fn first(self, v: *mut c_void) -> *mut c_void {
-        let list = self.orders(v);
-        if list.is_null() {
-            native_vehicle(v, self.0.base).first().shell()
-        } else {
-            read_field!(self.list(list), first)
-        }
-    }
-    fn size(self, list: *mut c_void) -> u8 {
-        read_field!(self.vector(list), length) as u8
-    }
-    fn count(self, v: *mut c_void) -> u8 {
-        let list = self.orders(v);
-        if list.is_null() { 0 } else { self.size(list) }
-    }
-    fn stored_count(self, list: *mut c_void) -> usize {
-        read_field!(self.vector(list), length)
-    }
-    fn stored_order(self, list: *mut c_void, index: usize) -> Order {
-        load(slot(self.vector(list), index))
-    }
-    fn put_stored(self, list: *mut c_void, index: usize, order: Order) {
-        store(slot(self.vector(list), index), order);
-    }
-    fn order(self, list: *mut c_void, index: u8) -> Option<Order> {
-        if index >= self.size(list) {
-            None
-        } else {
-            Some(load(slot(self.vector(list), usize::from(index))))
-        }
-    }
-    /// A copy of `v->GetOrder(index)`, or `None` where it is null.
-    fn vehicle_order(self, v: *mut c_void, index: u8) -> Option<Order> {
-        let list = self.orders(v);
-        if list.is_null() {
-            None
-        } else {
-            order_at(self.vector(list), VehicleOrderID(index)).map(load)
-        }
-    }
-    fn put_order(self, list: *mut c_void, index: u8, order: Order) {
-        store(slot(self.vector(list), usize::from(index)), order);
-    }
-    fn next_index(self, list: *mut c_void, index: u8) -> u8 {
-        OrderSpan(self.vector(list)).next(VehicleOrderID(index)).0
-    }
-    fn decision(self, list: *mut c_void, next: u8, hops: u32) -> u8 {
-        OrderSpan(self.vector(list))
-            .next_decision_node(VehicleOrderID(next), hops)
-            .0
-    }
-    /// `OrderList::GetNextStoppingStation`, appending each station to `output`.
-    fn stopping(
-        self,
-        list: *mut c_void,
-        v: *mut c_void,
-        first: u8,
-        mut hops: u32,
-        output: &mut impl FnMut(u16),
-    ) {
-        let mut next = first;
-        if first == u8::MAX {
-            next = read_field!(self.consist(v), implicit);
-            if next >= self.size(list) {
-                next = if self.size(list) == 0 { u8::MAX } else { 0 };
-                if next == u8::MAX {
-                    return;
-                }
-            } else {
-                next = self.next_index(list, next);
-            }
-        }
-        loop {
-            hops = hops.wrapping_add(1);
-            next = self.decision(list, next, hops);
-            while next != u8::MAX && self.order(list, next).unwrap().kind() == OT_CONDITIONAL {
-                let skip = self.decision(list, self.order(list, next).unwrap().flags, hops);
-                let advance = self.decision(list, self.next_index(list, next), hops);
-                if advance == u8::MAX || advance == first || skip == advance {
-                    next = if skip == first { u8::MAX } else { skip };
-                } else if skip == u8::MAX || skip == first {
-                    next = if advance == first { u8::MAX } else { advance };
-                } else {
-                    self.stopping(list, v, skip, hops, output);
-                    self.stopping(list, v, advance, hops, output);
-                    return;
-                }
-                hops = hops.wrapping_add(1);
-            }
-            if next == u8::MAX {
-                return;
-            }
-            let order = self.order(list, next).unwrap();
-            let last = native_vehicle(v, self.0.base).last_station_visited_raw();
-            if (order.kind() == OT_GOTO_STATION || order.kind() == OT_IMPLICIT)
-                && order.destination == last
-                && matches!(order.unload(), 1 | 2)
-            {
-                return;
-            }
-            if order.kind() == OT_GOTO_DEPOT || order.destination == last {
-                continue;
-            }
-            output(order.destination);
+    /// `BaseConsist::CopyConsistPropertiesFrom`, for the members this owner holds: copy
+    /// properties of other `BaseConsist`. The caller copies `name` before and
+    /// `service_interval` between the timetable members and the order indices, which no
+    /// member here reads.
+    fn copy_consist_properties_from(self, src: Self) {
+        if ptr::eq(self.0, src.0) {
             return;
         }
+
+        self.set_current_order_time(src.current_order_time());
+        self.set_lateness_counter(src.lateness_counter());
+        self.set_timetable_start(src.timetable_start());
+
+        self.set_cur_real_order_index(src.cur_real_order_index());
+        self.set_cur_implicit_order_index(src.cur_implicit_order_index());
+
+        if src.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED) {
+            self.set_vehicle_flags(self.vehicle_flags().set(VehicleFlag::TIMETABLE_STARTED));
+        }
+        if src.vehicle_flags().test(VehicleFlag::AUTOFILL_TIMETABLE) {
+            self.set_vehicle_flags(self.vehicle_flags().set(VehicleFlag::AUTOFILL_TIMETABLE));
+        }
+        if src
+            .vehicle_flags()
+            .test(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME)
+        {
+            self.set_vehicle_flags(
+                self.vehicle_flags()
+                    .set(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME),
+            );
+        }
+        if src
+            .vehicle_flags()
+            .test(VehicleFlag::SERVICE_INTERVAL_IS_PERCENT)
+            != self
+                .vehicle_flags()
+                .test(VehicleFlag::SERVICE_INTERVAL_IS_PERCENT)
+        {
+            self.set_vehicle_flags(
+                self.vehicle_flags()
+                    .flip(VehicleFlag::SERVICE_INTERVAL_IS_PERCENT),
+            );
+        }
+        if src
+            .vehicle_flags()
+            .test(VehicleFlag::SERVICE_INTERVAL_IS_CUSTOM)
+        {
+            self.set_vehicle_flags(
+                self.vehicle_flags()
+                    .set(VehicleFlag::SERVICE_INTERVAL_IS_CUSTOM),
+            );
+        }
     }
 }
-/// A live `Order` read in place, such as `Vehicle::current_order`: each getter
-/// loads only the fields its `order_base.h` getter reads, when it is called.
-/// A view of a borrowed order lives no longer than the borrow.
+
+/// `BaseConsist::ResetDepotUnbunching` on a vehicle: resets all the data used for depot
+/// unbunching.
+pub(crate) fn reset_depot_unbunching(v: VehicleRef) {
+    consist(v).reset_depot_unbunching();
+}
+
+impl Default for Order {
+    /// `Order()`: the members' defaults.
+    fn default() -> Self {
+        Self {
+            r#type: 0,
+            flags: 0,
+            dest: 0,
+            refit_cargo: CARGO_NO_REFIT,
+            wait_time: 0,
+            travel_time: 0,
+            max_speed: u16::MAX,
+        }
+    }
+}
+
+impl Order {
+    /// This order, written in place for as long as it is borrowed.
+    pub(crate) fn edit(&mut self) -> OrderRef {
+        OrderRef(ptr::from_mut(self))
+    }
+}
+
+/// A live `Order` read in place, such as `Vehicle::current_order`: each getter loads only
+/// the members its `order_base.h` getter reads, when it is called. A view of a borrowed
+/// order lives no longer than the borrow.
 #[derive(Clone, Copy)]
 pub(crate) struct OrderView<'a>(*const Order, std::marker::PhantomData<&'a Order>);
 
-// An `OrderView` names a live order of the serialized game state at every read.
+#[allow(unsafe_code)]
 impl OrderView<'_> {
     /// View the order at `order`.
     ///
     /// # Safety
-    /// `order` is a live, initialized `Order` of the serialized game state for
-    /// every read made through the view.
+    /// `order` is a live, initialized `Order` of the serialized game state for every read
+    /// made through the view.
     pub(crate) unsafe fn of(order: *const Order) -> Self {
         Self(order, std::marker::PhantomData)
     }
-    /// `Order::GetType`: get the type of order of this order.
-    #[inline]
-    pub(crate) fn kind(self) -> crate::order_type::OrderType {
-        crate::order_type::OrderType(gb_u8(read_field!(self.0, kind), 0, 4))
-    }
-    #[inline]
-    pub(crate) fn kind_raw(self) -> u8 {
-        self.kind().0
+    /// The order's address, for its in-place writers.
+    pub(crate) fn as_ptr(self) -> *const Order {
+        self.0
     }
     /// `Order::IsType`: check whether this order is of the given type.
     #[inline]
-    pub(crate) fn is_type(self, kind: crate::order_type::OrderType) -> bool {
-        self.kind() == kind
+    pub(crate) fn is_type(self, r#type: OrderType) -> bool {
+        self.kind() == r#type
     }
-    /// `Order::GetNonStopType`: at which stations must we stop?
+    /// `Order::GetType`: get the type of order of this order.
     #[inline]
-    pub(crate) fn non_stop(self) -> crate::order_type::OrderNonStopFlags {
-        crate::order_type::OrderNonStopFlags(gb_u8(read_field!(self.0, kind), 6, 2))
+    pub(crate) fn kind(self) -> OrderType {
+        OrderType(gb_u8(read_field!(self.0, r#type), 0, 4))
     }
+    /// `Order::IsGotoOrder`: is this a 'goto' order with a real destination? True if the type
+    /// is either `OT_GOTO_WAYPOINT`, `OT_GOTO_DEPOT` or `OT_GOTO_STATION`.
     #[inline]
-    pub(crate) fn non_stop_raw(self) -> u8 {
-        self.non_stop().0
-    }
-    /// `Order::GetLoadType`: how must the consist be loaded?
-    #[inline]
-    pub(crate) fn load_type(self) -> crate::order_type::OrderLoadType {
-        crate::order_type::OrderLoadType(gb_u8(read_field!(self.0, flags), 4, 3))
-    }
-    /// `Order::GetDepotOrderType`: what caused us going to the depot?
-    #[inline]
-    pub(crate) fn depot_type(self) -> crate::order_type::OrderDepotTypeFlags {
-        crate::order_type::OrderDepotTypeFlags(gb_u8(read_field!(self.0, flags), 0, 3))
-    }
-    #[inline]
-    pub(crate) fn depot_type_raw(self) -> u8 {
-        self.depot_type().0
-    }
-    /// `Order::GetDepotActionType`: what are we going to do when in the depot.
-    #[inline]
-    pub(crate) fn depot_action_flags(self) -> crate::order_type::OrderDepotActionFlags {
-        crate::order_type::OrderDepotActionFlags(gb_u8(read_field!(self.0, flags), 3, 4))
-    }
-    #[inline]
-    pub(crate) fn depot_action_flags_raw(self) -> u8 {
-        self.depot_action_flags().0
-    }
-    /// `Order::GetStopLocation`: where must we stop at the platform?
-    #[inline]
-    pub(crate) fn stop_location(self) -> crate::order_type::OrderStopLocation {
-        crate::order_type::OrderStopLocation(gb_u8(read_field!(self.0, kind), 4, 2))
+    pub(crate) fn is_goto_order(self) -> bool {
+        self.is_type(OrderType::OT_GOTO_WAYPOINT)
+            || self.is_type(OrderType::OT_GOTO_DEPOT)
+            || self.is_type(OrderType::OT_GOTO_STATION)
     }
     /// `Order::GetDestination`: gets the destination of this order.
     ///
     /// Precondition: `IsType(OT_GOTO_WAYPOINT) || IsType(OT_GOTO_DEPOT) ||
     /// IsType(OT_GOTO_STATION)`.
     #[inline]
-    pub(crate) fn destination(self) -> crate::order_type::DestinationID {
-        crate::order_type::DestinationID(read_field!(self.0, destination))
+    pub(crate) fn destination(self) -> DestinationID {
+        DestinationID(read_field!(self.0, dest))
     }
+    /// The raw `dest`, for the NewGRF variable that returns it as an integer.
     #[inline]
     pub(crate) fn destination_raw(self) -> u16 {
         self.destination().0
     }
-    /// `Order::GetMaxSpeed`: get the maxmimum speed in km-ish/h a vehicle is
-    /// allowed to reach on the way to the destination.
+    /// `Order::IsRefit`: is this order a refit order.
     #[inline]
-    pub(crate) fn max_speed(self) -> u16 {
-        read_field!(self.0, speed)
+    pub(crate) fn is_refit(self) -> bool {
+        let refit_cargo = read_field!(self.0, refit_cargo);
+        refit_cargo < NUM_CARGO || refit_cargo == CARGO_AUTO_REFIT
+    }
+    /// `Order::IsAutoRefit`: is this order a auto-refit order.
+    #[inline]
+    pub(crate) fn is_auto_refit(self) -> bool {
+        read_field!(self.0, refit_cargo) == CARGO_AUTO_REFIT
+    }
+    /// `Order::GetRefitCargo`: get the cargo to to refit to.
+    #[inline]
+    pub(crate) fn refit_cargo(self) -> CargoType {
+        CargoType(read_field!(self.0, refit_cargo))
     }
     /// `Order::IsFullLoadOrder`: is this order a `OrderLoadType::FullLoad` or
     /// `OrderLoadType::FullLoadAny`?
     #[inline]
     pub(crate) fn is_full_load(self) -> bool {
-        let kind = self.load_type();
-        kind == crate::order_type::OrderLoadType::FullLoad
-            || kind == crate::order_type::OrderLoadType::FullLoadAny
+        let r#type = self.load_type();
+        r#type == OrderLoadType::FullLoad || r#type == OrderLoadType::FullLoadAny
+    }
+    /// `Order::GetLoadType`: how must the consist be loaded?
+    #[inline]
+    pub(crate) fn load_type(self) -> OrderLoadType {
+        OrderLoadType(gb_u8(read_field!(self.0, flags), 4, 3))
     }
     /// `Order::GetUnloadType`: how must the consist be unloaded?
     #[inline]
-    pub(crate) fn unload_type(self) -> crate::order_type::OrderUnloadType {
-        crate::order_type::OrderUnloadType(gb_u8(read_field!(self.0, flags), 0, 3))
+    pub(crate) fn unload_type(self) -> OrderUnloadType {
+        OrderUnloadType(gb_u8(read_field!(self.0, flags), 0, 3))
     }
-    /// `Order::IsRefit`: is this order a refit order.
+    /// `Order::GetNonStopType`: at which stations must we stop?
     #[inline]
-    pub(crate) fn is_refit(self) -> bool {
-        let refit_cargo = read_field!(self.0, refit);
-        refit_cargo < crate::cargo_type::NUM_CARGO || refit_cargo == CARGO_AUTO_REFIT
+    pub(crate) fn non_stop(self) -> OrderNonStopFlags {
+        OrderNonStopFlags(gb_u8(read_field!(self.0, r#type), 6, 2))
     }
-    /// `Order::IsAutoRefit`: is this order an auto-refit order.
+    /// `Order::GetStopLocation`: where must we stop at the platform?
     #[inline]
-    pub(crate) fn is_auto_refit(self) -> bool {
-        read_field!(self.0, refit) == CARGO_AUTO_REFIT
+    pub(crate) fn stop_location(self) -> OrderStopLocation {
+        OrderStopLocation(gb_u8(read_field!(self.0, r#type), 4, 2))
     }
-    /// `Order::GetRefitCargo`: get the cargo to refit to.
+    /// `Order::GetDepotOrderType`: what caused us going to the depot?
     #[inline]
-    pub(crate) fn refit_cargo(self) -> CargoType {
-        CargoType(read_field!(self.0, refit))
+    pub(crate) fn depot_type(self) -> OrderDepotTypeFlags {
+        OrderDepotTypeFlags(gb_u8(read_field!(self.0, flags), 0, 3))
+    }
+    /// `Order::GetDepotActionType`: what are we going to do when in the depot.
+    #[inline]
+    pub(crate) fn depot_action_flags(self) -> OrderDepotActionFlags {
+        OrderDepotActionFlags(gb_u8(read_field!(self.0, flags), 3, 4))
+    }
+    /// `Order::GetConditionVariable`: what variable do we have to compare?
+    #[inline]
+    pub(crate) fn condition_variable(self) -> OrderConditionVariable {
+        // `GB` of the 16-bit destination's top five bits always fits the `uint8_t` enum.
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the five bits of `GB(dest, 11, 5)`"
+        )]
+        OrderConditionVariable(gb_u16(read_field!(self.0, dest), 11, 5) as u8)
+    }
+    /// `Order::GetConditionComparator`: what is the comparator to use?
+    #[inline]
+    pub(crate) fn condition_comparator(self) -> OrderConditionComparator {
+        OrderConditionComparator(gb_u8(read_field!(self.0, r#type), 5, 3))
     }
     /// `Order::GetConditionSkipToOrder`: get the order to skip to.
     #[inline]
     pub(crate) fn condition_skip_to_order(self) -> VehicleOrderID {
         VehicleOrderID(read_field!(self.0, flags))
     }
+    /// `Order::GetConditionValue`: get the value to base the skip on.
+    #[inline]
+    pub(crate) fn condition_value(self) -> u16 {
+        gb_u16(read_field!(self.0, dest), 0, 11)
+    }
     /// `Order::IsWaitTimetabled`: does this order have an explicit wait time set?
     #[inline]
     pub(crate) fn is_wait_timetabled(self) -> bool {
         if self.is_type(OrderType::OT_CONDITIONAL) {
-            read_field!(self.0, wait) > 0
+            read_field!(self.0, wait_time) > 0
         } else {
             has_bit(read_field!(self.0, flags), 3)
+        }
+    }
+    /// `Order::IsTravelTimetabled`: does this order have an explicit travel time set?
+    #[inline]
+    pub(crate) fn is_travel_timetabled(self) -> bool {
+        if self.is_type(OrderType::OT_CONDITIONAL) {
+            read_field!(self.0, travel_time) > 0
+        } else {
+            has_bit(read_field!(self.0, flags), 7)
         }
     }
     /// `Order::GetTimetabledWait`: get the time in ticks a vehicle should wait at the
@@ -1010,15 +980,155 @@ impl OrderView<'_> {
     #[inline]
     pub(crate) fn timetabled_wait(self) -> u16 {
         if self.is_wait_timetabled() {
-            read_field!(self.0, wait)
+            read_field!(self.0, wait_time)
         } else {
             0
         }
     }
-    /// `Order::CanLeaveWithCargo`: a vehicle can leave the current station with cargo if it
-    /// can load cargo here, or if it could have loaded it before and does not unload all of it.
+    /// `Order::GetTimetabledTravel`: get the time in ticks a vehicle should take to reach the
+    /// destination or 0 if it's not timetabled.
+    #[inline]
+    pub(crate) fn timetabled_travel(self) -> u16 {
+        if self.is_travel_timetabled() {
+            read_field!(self.0, travel_time)
+        } else {
+            0
+        }
+    }
+    /// `Order::GetWaitTime`: get the time in ticks a vehicle will probably wait at the
+    /// destination (timetabled or not).
+    #[inline]
+    pub(crate) fn wait_time(self) -> u16 {
+        read_field!(self.0, wait_time)
+    }
+    /// `Order::GetTravelTime`: get the time in ticks a vehicle will probably take to reach the
+    /// destination (timetabled or not).
+    #[inline]
+    pub(crate) fn travel_time(self) -> u16 {
+        read_field!(self.0, travel_time)
+    }
+    /// `Order::GetMaxSpeed`: get the maxmimum speed in km-ish/h a vehicle is allowed to reach
+    /// on the way to the destination.
+    #[inline]
+    pub(crate) fn max_speed(self) -> u16 {
+        read_field!(self.0, max_speed)
+    }
+    /// `Order::IsCompletelyTimetabled`: checks if `travel_time` and `wait_time` apply to this
+    /// order and if they are timetabled.
+    pub(crate) fn is_completely_timetabled(self) -> bool {
+        if !self.is_travel_timetabled() && !self.is_type(OrderType::OT_CONDITIONAL) {
+            return false;
+        }
+        if !self.is_wait_timetabled()
+            && self.is_type(OrderType::OT_GOTO_STATION)
+            && !self.non_stop().test(OrderNonStopFlag::NoDestination)
+        {
+            return false;
+        }
+        true
+    }
+    /// `Order::Equals`: does this order have the same type, flags and destination?
+    pub(crate) fn equals(self, other: OrderView<'_>) -> bool {
+        /* In case of go to nearest depot orders we need "only" compare the flags
+         * with the other and not the nearest depot order bit or the actual
+         * destination because those get clear/filled in during the order
+         * evaluation. If we do not do this the order will continuously be seen as
+         * a different order and it will try to find a "nearest depot" every tick. */
+        if (self.is_type(OrderType::OT_GOTO_DEPOT)
+            && read_field!(self.0, r#type) == read_field!(other.0, r#type))
+            && (self
+                .depot_action_flags()
+                .test(OrderDepotActionFlag::NearestDepot)
+                || other
+                    .depot_action_flags()
+                    .test(OrderDepotActionFlag::NearestDepot))
+        {
+            return self.depot_type() == other.depot_type()
+                && self
+                    .depot_action_flags()
+                    .reset(OrderDepotActionFlag::NearestDepot)
+                    == other
+                        .depot_action_flags()
+                        .reset(OrderDepotActionFlag::NearestDepot);
+        }
+
+        read_field!(self.0, r#type) == read_field!(other.0, r#type)
+            && read_field!(self.0, flags) == read_field!(other.0, flags)
+            && read_field!(self.0, dest) == read_field!(other.0, dest)
+    }
+    /// `Order::MapOldOrder`: pack this order into a 16 bits integer as close to the TTD
+    /// representation as possible.
+    pub(crate) fn map_old_order(self) -> u16 {
+        let mut order = u16::from(self.kind().0);
+        match self.kind() {
+            OrderType::OT_GOTO_STATION => {
+                if self.unload_type() == OrderUnloadType::Unload {
+                    order |= 1 << 5;
+                }
+                if self.is_full_load() {
+                    order |= 1 << 6;
+                }
+                if self.non_stop().test(OrderNonStopFlag::NoIntermediate) {
+                    order |= 1 << 7;
+                }
+                order |= gb_u16(self.destination().0, 0, 8) << 8;
+            }
+            OrderType::OT_GOTO_DEPOT => {
+                if !self.depot_type().test(OrderDepotTypeFlag::PartOfOrders) {
+                    order |= 1 << 6;
+                }
+                order |= 1 << 7;
+                order |= gb_u16(self.destination().0, 0, 8) << 8;
+            }
+            OrderType::OT_LOADING => {
+                if self.is_full_load() {
+                    order |= 1 << 6;
+                }
+                /* If both "no load" and "no unload" are set, return nothing order instead */
+                if self.load_type() == OrderLoadType::NoLoad
+                    && self.unload_type() == OrderUnloadType::NoUnload
+                {
+                    order = u16::from(OrderType::OT_NOTHING.0);
+                }
+            }
+            _ => {}
+        }
+        order
+    }
+    /// `Order::ShouldStopAtStation`: check whether the given vehicle should stop at the given
+    /// station based on this order and the non-stop settings. `last_station_visited` is the
+    /// vehicle's `last_station_visited`.
+    pub(crate) fn should_stop_at_station(
+        self,
+        last_station_visited: StationID,
+        station: StationID,
+    ) -> bool {
+        let is_dest_station =
+            self.is_type(OrderType::OT_GOTO_STATION) && read_field!(self.0, dest) == station.0;
+
+        (!self.is_type(OrderType::OT_GOTO_DEPOT)
+            || self.depot_type().test(OrderDepotTypeFlag::PartOfOrders))
+            // Do stop only when we've not just been there
+            && last_station_visited != station
+            /* Finally do stop when there is no non-stop flag set for this type of station. */
+            && !self.non_stop().test(if is_dest_station {
+                OrderNonStopFlag::NoDestination
+            } else {
+                OrderNonStopFlag::NoIntermediate
+            })
+    }
+    /// `Order::CanLoadOrUnload`.
+    pub(crate) fn can_load_or_unload(self) -> bool {
+        (self.is_type(OrderType::OT_GOTO_STATION) || self.is_type(OrderType::OT_IMPLICIT))
+            && !self.non_stop().test(OrderNonStopFlag::NoDestination)
+            && (self.load_type() != OrderLoadType::NoLoad
+                || self.unload_type() != OrderUnloadType::NoUnload)
+    }
+    /// `Order::CanLeaveWithCargo`: a vehicle can leave the current station with cargo if:
+    /// 1. it can load cargo here OR
+    /// 2a. it could leave the last station with cargo AND
+    /// 2b. it doesn't have to unload all cargo here.
     pub(crate) fn can_leave_with_cargo(self, has_cargo: bool) -> bool {
-        use crate::order_type::{OrderLoadType, OrderUnloadType};
         self.load_type() != OrderLoadType::NoLoad
             || (has_cargo
                 && self.unload_type() != OrderUnloadType::Unload
@@ -1031,1768 +1141,2210 @@ impl OrderView<'_> {
     }
 }
 
-impl Order {
-    /// This order, read through `OrderView` for as long as it is borrowed.
-    fn view(&self) -> OrderView<'_> {
-        // SAFETY: A reference names a live, initialized order.
-        unsafe { OrderView::of(ptr::from_ref(self)) }
+/// A live `Order` written in place: a list's order or a vehicle's `current_order`. Each
+/// setter writes only the members its `order_base.h` or `order_cmd.cpp` setter writes.
+#[derive(Clone, Copy)]
+pub(crate) struct OrderRef(*mut Order);
+
+#[allow(unsafe_code)]
+impl OrderRef {
+    /// Write the order at `order` in place.
+    ///
+    /// # Safety
+    /// As [`OrderView::of`], and `order` is writable.
+    pub(crate) unsafe fn of(order: *mut Order) -> Self {
+        Self(order)
     }
-    /// `Order::GetType`.
-    pub(crate) fn kind(&self) -> u8 {
-        self.view().kind_raw()
+    /// This order, read in place.
+    pub(crate) fn view(self) -> OrderView<'static> {
+        // SAFETY: The handle names a live order.
+        unsafe { OrderView::of(self.0) }
     }
-    /// `Order::GetNonStopType`.
-    pub(crate) fn non_stop(self) -> u8 {
-        self.view().non_stop_raw()
+    /// `Order::Free`: 'Free' the order. Only use on `current_order` vehicle orders!
+    pub(crate) fn free(self) {
+        write_field!(self.0, r#type, OrderType::OT_NOTHING.0);
+        write_field!(self.0, flags, 0);
+        write_field!(self.0, dest, 0);
     }
-    /// `Order::GetLoadType`.
-    pub(crate) fn load(self) -> u8 {
-        self.view().load_type().0
+    /// `Order::MakeGoToStation`: makes this order a Go To Station order.
+    pub(crate) fn make_go_to_station(self, destination: StationID) {
+        write_field!(self.0, r#type, OrderType::OT_GOTO_STATION.0);
+        write_field!(self.0, flags, 0);
+        write_field!(self.0, dest, destination.0);
     }
-    /// `Order::GetUnloadType`.
-    pub(crate) fn unload(self) -> u8 {
-        self.view().unload_type().0
+    /// `Order::MakeGoToDepot`: makes this order a Go To Depot order. `order` says whether it
+    /// is a 'default' order or an overridden vehicle order, `non_stop_type` how to get to the
+    /// depot, `action` what to do in the depot and `cargo` the cargo type to change to.
+    pub(crate) fn make_go_to_depot(
+        self,
+        destination: DestinationID,
+        order: OrderDepotTypeFlags,
+        non_stop_type: OrderNonStopFlags,
+        action: OrderDepotActionFlags,
+        cargo: CargoType,
+    ) {
+        write_field!(self.0, r#type, OrderType::OT_GOTO_DEPOT.0);
+        self.set_depot_order_type(order);
+        self.set_depot_action_type(action);
+        self.set_non_stop_type(non_stop_type);
+        write_field!(self.0, dest, destination.0);
+        self.set_refit(cargo);
     }
-    /// `Order::GetDepotActionType`.
-    pub(crate) fn action(&self) -> u8 {
-        self.view().depot_action_flags_raw()
+    /// `Order::MakeGoToWaypoint`: makes this order a Go To Waypoint order.
+    pub(crate) fn make_go_to_waypoint(self, destination: StationID) {
+        write_field!(self.0, r#type, OrderType::OT_GOTO_WAYPOINT.0);
+        write_field!(self.0, flags, 0);
+        write_field!(self.0, dest, destination.0);
     }
-    /// `Order::GetDepotOrderType`.
-    pub(crate) fn depot_type(&self) -> u8 {
-        self.view().depot_type_raw()
-    }
-    fn variable(self) -> u8 {
-        (self.destination >> 11) as u8
-    }
-    fn comparator(self) -> u8 {
-        self.kind >> 5
-    }
-    fn value(self) -> u16 {
-        self.destination & 2047
-    }
-    /// `Order::IsRefit`.
-    pub(crate) fn is_refit(self) -> bool {
-        self.view().is_refit()
-    }
-    /// `Order::GetMaxSpeed`.
-    pub(crate) fn max_speed(self) -> u16 {
-        self.view().max_speed()
-    }
-    fn wait_timetabled(self) -> bool {
-        self.view().is_wait_timetabled()
-    }
-    fn travel_timetabled(self) -> bool {
-        if self.kind() == OT_CONDITIONAL {
-            self.travel > 0
-        } else {
-            self.flags & 128 != 0
+    /// `Order::MakeLoading`: makes this order a Loading order. `ordered` says whether this is
+    /// an ordered stop.
+    pub(crate) fn make_loading(self, ordered: bool) {
+        write_field!(self.0, r#type, OrderType::OT_LOADING.0);
+        if !ordered {
+            write_field!(self.0, flags, 0);
         }
     }
-    pub(crate) fn timetabled_wait(self) -> u16 {
-        self.view().timetabled_wait()
+    /// `Order::MakeLeaveStation`: makes this order a Leave Station order.
+    pub(crate) fn make_leave_station(self) {
+        write_field!(self.0, r#type, OrderType::OT_LEAVESTATION.0);
+        write_field!(self.0, flags, 0);
     }
-    fn timetabled_travel(self) -> u16 {
-        if self.travel_timetabled() {
-            self.travel
-        } else {
-            0
+    /// `Order::MakeDummy`: makes this order a Dummy order.
+    pub(crate) fn make_dummy(self) {
+        write_field!(self.0, r#type, OrderType::OT_DUMMY.0);
+        write_field!(self.0, flags, 0);
+    }
+    /// `Order::MakeConditional`: makes this order an conditional order. `order` is the order
+    /// to jump to.
+    pub(crate) fn make_conditional(self, order: VehicleOrderID) {
+        write_field!(self.0, r#type, OrderType::OT_CONDITIONAL.0);
+        write_field!(self.0, flags, order.0);
+        write_field!(self.0, dest, 0);
+    }
+    /// `Order::MakeImplicit`: makes this order an implicit order.
+    pub(crate) fn make_implicit(self, destination: StationID) {
+        write_field!(self.0, r#type, OrderType::OT_IMPLICIT.0);
+        write_field!(self.0, dest, destination.0);
+    }
+    /// `Order::SetDestination`: sets the destination of this order.
+    pub(crate) fn set_destination(self, destination: DestinationID) {
+        write_field!(self.0, dest, destination.0);
+    }
+    /// `Order::SetRefit`: make this depot/station order also a refit order.
+    pub(crate) fn set_refit(self, cargo: CargoType) {
+        write_field!(self.0, refit_cargo, cargo.0);
+    }
+    /// `Order::SetLoadType`: set how the consist must be loaded.
+    pub(crate) fn set_load_type(self, load_type: OrderLoadType) {
+        let mut flags = read_field!(self.0, flags);
+        sb_u8(&mut flags, 4, 3, load_type.0);
+        write_field!(self.0, flags, flags);
+    }
+    /// `Order::SetUnloadType`: set how the consist must be unloaded.
+    pub(crate) fn set_unload_type(self, unload_type: OrderUnloadType) {
+        let mut flags = read_field!(self.0, flags);
+        sb_u8(&mut flags, 0, 3, unload_type.0);
+        write_field!(self.0, flags, flags);
+    }
+    /// `Order::SetNonStopType`: set whether we must stop at stations or not.
+    pub(crate) fn set_non_stop_type(self, non_stop_type: OrderNonStopFlags) {
+        let mut r#type = read_field!(self.0, r#type);
+        sb_u8(&mut r#type, 6, 2, non_stop_type.0);
+        write_field!(self.0, r#type, r#type);
+    }
+    /// `Order::SetStopLocation`: set where we must stop at the platform.
+    pub(crate) fn set_stop_location(self, stop_location: OrderStopLocation) {
+        let mut r#type = read_field!(self.0, r#type);
+        sb_u8(&mut r#type, 4, 2, stop_location.0);
+        write_field!(self.0, r#type, r#type);
+    }
+    /// `Order::SetDepotOrderType`: set the cause to go to the depot.
+    pub(crate) fn set_depot_order_type(self, depot_order_type: OrderDepotTypeFlags) {
+        let mut flags = read_field!(self.0, flags);
+        sb_u8(&mut flags, 0, 3, depot_order_type.0);
+        write_field!(self.0, flags, flags);
+    }
+    /// `Order::SetDepotActionType`: set what we are going to do in the depot.
+    pub(crate) fn set_depot_action_type(self, depot_service_type: OrderDepotActionFlags) {
+        let mut flags = read_field!(self.0, flags);
+        sb_u8(&mut flags, 3, 4, depot_service_type.0);
+        write_field!(self.0, flags, flags);
+    }
+    /// `Order::SetConditionVariable`: set variable we have to compare.
+    pub(crate) fn set_condition_variable(self, condition_variable: OrderConditionVariable) {
+        let mut dest = read_field!(self.0, dest);
+        sb_u16(&mut dest, 11, 5, u16::from(condition_variable.0));
+        write_field!(self.0, dest, dest);
+    }
+    /// `Order::SetConditionComparator`: set the comparator to use.
+    pub(crate) fn set_condition_comparator(self, condition_comparator: OrderConditionComparator) {
+        let mut r#type = read_field!(self.0, r#type);
+        sb_u8(&mut r#type, 5, 3, condition_comparator.0);
+        write_field!(self.0, r#type, r#type);
+    }
+    /// `Order::SetConditionSkipToOrder`: get the order to skip to.
+    pub(crate) fn set_condition_skip_to_order(self, order_id: VehicleOrderID) {
+        write_field!(self.0, flags, order_id.0);
+    }
+    /// `Order::SetConditionValue`: set the value to base the skip on.
+    pub(crate) fn set_condition_value(self, value: u16) {
+        let mut dest = read_field!(self.0, dest);
+        sb_u16(&mut dest, 0, 11, value);
+        write_field!(self.0, dest, dest);
+    }
+    /// `Order::SetWaitTimetabled`: set if the wait time is explicitly timetabled (unless the
+    /// order is conditional).
+    pub(crate) fn set_wait_timetabled(self, timetabled: bool) {
+        if !self.view().is_type(OrderType::OT_CONDITIONAL) {
+            let mut flags = read_field!(self.0, flags);
+            crate::bitmath_func::assign_bit8(&mut flags, 3, timetabled);
+            write_field!(self.0, flags, flags);
         }
     }
-    fn can_load_unload(self) -> bool {
-        if (self.kind() != OT_GOTO_STATION && self.kind() != OT_IMPLICIT)
-            || self.non_stop() & 2 != 0
-        {
-            return false;
-        }
-        !(self.load() == 4 && self.unload() == 4)
-    }
-    fn complete(self) -> bool {
-        if !self.travel_timetabled() && self.kind() != OT_CONDITIONAL {
-            return false;
-        }
-        !(!self.wait_timetabled() && self.kind() == OT_GOTO_STATION && self.non_stop() & 2 == 0)
-    }
-    fn equals(&self, other: &Self) -> bool {
-        if self.kind() == OT_GOTO_DEPOT
-            && self.kind == other.kind
-            && (self.action() | other.action()) & 2 != 0
-        {
-            return self.depot_type() == other.depot_type()
-                && self.action() & !2 == other.action() & !2;
-        }
-        self.kind == other.kind
-            && self.flags == other.flags
-            && self.destination == other.destination
-    }
-    fn set_wait_timetabled(&mut self, b: bool) {
-        if self.kind() != OT_CONDITIONAL {
-            self.flags = (self.flags & !8) | if b { 8 } else { 0 };
+    /// `Order::SetTravelTimetabled`: set if the travel time is explicitly timetabled (unless
+    /// the order is conditional).
+    pub(crate) fn set_travel_timetabled(self, timetabled: bool) {
+        if !self.view().is_type(OrderType::OT_CONDITIONAL) {
+            let mut flags = read_field!(self.0, flags);
+            crate::bitmath_func::assign_bit8(&mut flags, 7, timetabled);
+            write_field!(self.0, flags, flags);
         }
     }
-    fn set_travel_timetabled(&mut self, b: bool) {
-        if self.kind() != OT_CONDITIONAL {
-            self.flags = (self.flags & !128) | if b { 128 } else { 0 };
-        }
+    /// `Order::SetWaitTime`: set the time in ticks to wait at the destination.
+    pub(crate) fn set_wait_time(self, time: u16) {
+        write_field!(self.0, wait_time, time);
+    }
+    /// `Order::SetTravelTime`: set the time in ticks to take for travelling to the destination.
+    pub(crate) fn set_travel_time(self, time: u16) {
+        write_field!(self.0, travel_time, time);
+    }
+    /// `Order::SetMaxSpeed`: set the maxmimum speed in km-ish/h a vehicle is allowed to reach
+    /// on the way to the destination.
+    pub(crate) fn set_max_speed(self, speed: u16) {
+        write_field!(self.0, max_speed, speed);
+    }
+    /// `Order::AssignOrder`, and the defaulted copy assignment `*this = other`, which copy the
+    /// same members: assign data to an order (from another order).
+    pub(crate) fn assign_order(self, other: Order) {
+        // SAFETY: The handle names a live, writable order; the store creates no reference.
+        unsafe { self.0.write(other) };
     }
 }
 
-/// List initialization owns traversal and bookkeeping of canonical storage.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_init(
-    list: *mut c_void,
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    let state = g.list(list);
-    {
-        write_field!(state, first, v);
-        write_field!(state, manual, 0);
-        write_field!(state, vehicles, 1);
-        write_field!(state, timetable, 0);
-        for index in 0..g.stored_count(list) {
-            let order = g.stored_order(list, index);
-            if order.kind() != OT_IMPLICIT {
-                write_field!(state, manual, read_field!(state, manual).wrapping_add(1));
-            }
-            write_field!(
-                state,
-                total,
-                read_field!(state, total)
-                    .wrapping_add(i32::from(order.wait) + i32::from(order.travel))
-            );
-        }
-        recalculate(g, list);
-        let mut u = g.previous(v);
-        while !u.is_null() {
-            write_field!(
-                state,
-                vehicles,
-                read_field!(state, vehicles).wrapping_add(1)
-            );
-            write_field!(state, first, u);
-            u = g.previous(u);
-        }
-        u = g.next(v);
-        while !u.is_null() {
-            write_field!(
-                state,
-                vehicles,
-                read_field!(state, vehicles).wrapping_add(1)
-            );
-            u = g.next(u);
-        }
-    };
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_recalculate(
-    list: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    recalculate(g, list);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_free(
-    list: *mut c_void,
-    keep: u8,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    let state = g.list(list);
-    {
-        for index in 0..g.stored_count(list) {
-            let order = g.stored_order(list, index);
-            if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
-                && g.ownerless_station(order.destination, 1) != 0
-            {
-                g.invalidate_station_list();
-                break;
-            }
-        }
-        if keep == 0 {
-            return 1;
-        }
-        reenter!(openttd_rust_order_vector_resize(g.vector(list), 0));
-        write_field!(state, manual, 0);
-        write_field!(state, timetable, 0);
-    };
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_stopping(
-    list: *mut c_void,
-    v: *mut c_void,
-    first: u8,
-    hops: u32,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    g.stopping(list, v, first, hops, &mut |station| {
-        g.append_station(output, station);
-    });
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_insert(
-    list: *mut c_void,
-    index: u32,
-    input: *const Order,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    let state = g.list(list);
-    {
-        let order = load(input);
-        reenter!(openttd_rust_order_vector_insert(
-            g.vector(list),
-            index as usize,
-            input
-        ));
-        if order.kind() != OT_IMPLICIT {
-            write_field!(state, manual, read_field!(state, manual).wrapping_add(1));
-        }
-        write_field!(
-            state,
-            timetable,
-            read_field!(state, timetable).wrapping_add(
-                i32::from(order.timetabled_wait()) + i32::from(order.timetabled_travel()),
-            )
-        );
-        write_field!(
-            state,
-            total,
-            read_field!(state, total).wrapping_add(i32::from(order.wait) + i32::from(order.travel))
-        );
-        if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
-            && g.ownerless_station(order.destination, 0) != 0
-        {
-            g.invalidate_station_list();
-        }
-    };
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_complete(
-    list: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    {
-        u32::from((0..g.stored_count(list)).all(|i| {
-            let order = g.stored_order(list, i);
-            order.kind() == OT_IMPLICIT || order.complete()
-        }))
-    }
-}
-
-fn recalculate(g: Game, list: *mut c_void) {
-    let state = g.list(list);
-    write_field!(state, timetable, 0);
-    for i in 0..g.stored_count(list) {
-        let order = g.stored_order(list, i);
-        write_field!(
-            state,
-            timetable,
-            read_field!(state, timetable).wrapping_add(
-                i32::from(order.timetabled_wait()) + i32::from(order.timetabled_travel()),
-            )
-        );
-    }
-}
-
-impl Game {
-    /// `OrderList::DeleteOrderAt`: remove an order from the order list and delete it.
-    /// `index` is the position of the order which is to be deleted.
-    fn delete_order_at(self, list: *mut c_void, index: VehicleOrderID) {
-        let index = usize::from(index.0);
-        if index >= self.stored_count(list) {
-            return;
-        }
-        let state = self.list(list);
-        let order = self.stored_order(list, index);
-        if order.kind() != OT_IMPLICIT {
-            write_field!(state, manual, read_field!(state, manual).wrapping_sub(1));
-        }
-        write_field!(
-            state,
-            timetable,
-            read_field!(state, timetable).wrapping_sub(
-                i32::from(order.timetabled_wait()) + i32::from(order.timetabled_travel()),
-            )
-        );
-        write_field!(
-            state,
-            total,
-            read_field!(state, total).wrapping_sub(i32::from(order.wait) + i32::from(order.travel))
-        );
-        reenter!(openttd_rust_order_vector_erase(self.vector(list), index));
-    }
-    fn current(self, v: *mut c_void) -> Order {
-        load(current_order(self.vehicle(v)))
-    }
-    fn put_current(self, v: *mut c_void, o: Order) {
-        store(current_order(self.vehicle(v)), o);
-    }
-    fn complete(self, list: *mut c_void) -> bool {
-        (0..self.stored_count(list)).all(|i| {
-            let o = self.stored_order(list, i);
-            o.kind() == OT_IMPLICIT || o.complete()
-        })
-    }
-    fn duration(self, list: *mut c_void) -> i32 {
-        if self.complete(list) {
-            read_field!(self.list(list), timetable)
-        } else {
-            -1
-        }
-    }
-    fn reset(self, v: *mut c_void) {
-        reenter!(openttd_rust_consist_reset(self.consist(v)));
-    }
-    fn dirty(self, v: *mut c_void) {
-        self.timetable_dirty(v);
-    }
-    fn change_timetable(self, v: *mut c_void, index: u8, val: u16, field: u8, timetabled: bool) {
-        let list = self.orders(v);
-        let mut order = self.order(list, index).unwrap();
-        let (total_delta, timetable_delta) = match field {
-            0 => {
-                let deltas = (
-                    i32::from(val) - i32::from(order.wait),
-                    if timetabled { i32::from(val) } else { 0 }
-                        - i32::from(order.timetabled_wait()),
-                );
-                order.wait = val;
-                order.set_wait_timetabled(timetabled);
-                deltas
-            }
-            1 => {
-                let deltas = (
-                    i32::from(val) - i32::from(order.travel),
-                    if timetabled { i32::from(val) } else { 0 }
-                        - i32::from(order.timetabled_travel()),
-                );
-                order.travel = val;
-                order.set_travel_timetabled(timetabled);
-                deltas
-            }
-            2 => {
-                order.speed = val;
-                (0, 0)
-            }
-            _ => unreachable!(),
-        };
-        self.put_order(list, index, order);
-        let owner = self.list(list);
-        write_field!(
-            owner,
-            total,
-            read_field!(owner, total).wrapping_add(total_delta)
-        );
-        write_field!(
-            owner,
-            timetable,
-            read_field!(owner, timetable).wrapping_add(timetable_delta)
-        );
-        let mut u = self.first(v);
-        while !u.is_null() {
-            let state = self.consist(u);
-            let mut current = self.current(u);
-            if read_field!(state, real) == index && current.equals(&order) {
-                match field {
-                    0 => {
-                        current.wait = val;
-                        current.set_wait_timetabled(timetabled);
-                    }
-                    1 => {
-                        current.travel = val;
-                        current.set_travel_timetabled(timetabled);
-                    }
-                    2 => current.speed = val,
-                    _ => unreachable!(),
-                }
-                self.put_current(u, current);
-            }
-            self.dirty(u);
-            u = self.next(u);
-        }
-    }
-    fn update_timetable(self, v: *mut c_void, travelling: bool) {
-        let state = self.consist(v);
-        let time = read_field!(state, time);
-        write_field!(state, time, 0);
-        if self.current(v).kind() == OT_IMPLICIT {
-            return;
-        }
-        let real = read_field!(state, real);
-        if real >= self.count(v) {
-            return;
-        }
-        let mut order = self.vehicle_order(v, real).unwrap();
-        let mut first = 0u8;
-        let list = self.orders(v);
-        for i in 0..self.stored_count(list) {
-            if self.stored_order(list, i).kind() != OT_IMPLICIT {
-                break;
-            }
-            first = first.wrapping_add(1);
-        }
-        let mut just_started = false;
-        if real == first && travelling {
-            just_started = read_field!(state, flags) & (1 << 3) == 0;
-            if read_field!(state, start) != 0 {
-                write_field!(
-                    state,
-                    lateness,
-                    (self.0.tick_counter)().wrapping_sub(read_field!(state, start)) as i32
-                );
-                write_field!(state, start, 0);
-            }
-            write_field!(state, flags, read_field!(state, flags) | 1 << 3);
-            self.dirty(v);
-        }
-        if read_field!(state, flags) & (1 << 3) == 0 {
-            return;
-        }
-        let autofill = read_field!(state, flags) & (1 << 4) != 0;
-        let remeasure =
-            !order.wait_timetabled() || (autofill && read_field!(state, flags) & (1 << 5) == 0);
-        if travelling && remeasure {
-            let mut current = self.current(v);
-            current.wait = 0;
-            self.put_current(v, current);
-        }
-        if just_started {
-            return;
-        }
-        if order.kind() != OT_CONDITIONAL
-            && (travelling || time > i32::from(order.wait) || remeasure)
-        {
-            let seconds = (self.0.ticks_per_second)() as i32;
-            let value =
-                (time.max(1).wrapping_add(seconds - 1) / seconds).wrapping_mul(seconds) as u16;
-            if travelling && (autofill || !order.travel_timetabled()) {
-                self.change_timetable(v, real, value, 1, autofill);
-            } else if !travelling && (autofill || !order.wait_timetabled()) {
-                self.change_timetable(v, real, value, 0, autofill);
-            }
-            order = self.vehicle_order(v, real).unwrap();
-        }
-        if real == first && travelling {
-            write_field!(
-                state,
-                flags,
-                read_field!(state, flags) & !((1 << 4) | (1 << 5))
-            );
-        }
-        if autofill {
-            return;
-        }
-        let timetable = i32::from(if travelling {
-            order.timetabled_travel()
-        } else {
-            order.timetabled_wait()
-        });
-        if timetable == 0 && (travelling || read_field!(state, lateness) >= 0) {
-            return;
-        }
-        write_field!(
-            state,
-            lateness,
-            read_field!(state, lateness).wrapping_sub(timetable.wrapping_sub(time))
-        );
-        if read_field!(state, lateness) > timetable {
-            let cycle = self.duration(self.orders(v));
-            if cycle != -1 && read_field!(state, lateness) > cycle {
-                write_field!(state, lateness, read_field!(state, lateness) % cycle);
-            }
-        }
-        let mut u = self.first(v);
-        while !u.is_null() {
-            self.dirty(u);
-            u = self.next(u);
-        }
-    }
-    fn owner_check(self, v: *mut c_void, output: *mut c_void) -> bool {
-        let owner = (native_vehicle(v, self.0.base)).owner_raw();
-        self.check_owner(u64::from(owner), output)
-    }
-    /// The entry's native `CommandCost`, written through the shared cost services.
-    fn cost(self, output: *mut c_void) -> crate::services::Cost<'static> {
-        // SAFETY: The entry supplies immutable owning tables that outlive it, and its live,
-        // writable native cost slot.
-        let costs = unsafe { &*(*self.0.station_commands).cost };
-        crate::services::Cost(output.cast(), costs)
-    }
-    /// `return CMD_ERROR;`
-    fn cmd_error(self, output: *mut c_void) -> u32 {
-        crate::command_func::cmd_error(self.cost(output));
-        0
-    }
-    /// `return CommandCost(msg);`
-    fn command_cost(self, output: *mut c_void, msg: StringID) -> u32 {
-        self.cost(output).error(msg.0);
-        0
-    }
-    /// `return CommandCost(msg, extra_msg);`
-    fn command_cost_extra(self, output: *mut c_void, msg: StringID, extra_msg: StringID) -> u32 {
-        self.cost(output).error_extra(msg, extra_msg);
-        0
-    }
-    fn primary(self, v: *mut c_void) -> bool {
-        !v.is_null() && self.primary_vehicle(v) != 0
-    }
-    fn timetable_sort(self, a: *mut c_void, b: *mut c_void) -> std::cmp::Ordering {
-        let sa = self.consist(a);
-        let sb = self.consist(b);
-        let mut ai = read_field!(sa, real);
-        let mut bi = read_field!(sb, real);
-        let raw = i32::from(bi) - i32::from(ai);
-        let ao = self.current(a);
-        let bo = self.current(b);
-        if ao.kind() != OT_LOADING || ao.non_stop() == 0 {
-            ai = ai.wrapping_sub(1);
-        }
-        if bo.kind() != OT_LOADING || bo.non_stop() == 0 {
-            bi = bi.wrapping_sub(1);
-        }
-        let index = i32::from(bi) - i32::from(ai);
-        if index != 0 {
-            return index.cmp(&0);
-        }
-        if raw != 0 {
-            return raw.cmp(&0);
-        }
-        let time = read_field!(sb, time).wrapping_sub(read_field!(sa, time));
-        if time != 0 {
-            return time.cmp(&0);
-        }
-        self.unit_number(b).cmp(&self.unit_number(a))
-    }
-}
-
-/// Timetable command validation and execution. Ownership is a shared company
-/// service. Each error return writes the `CommandCost` the original returns there.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_change(
-    v: *mut c_void,
-    execute: u8,
-    index: u8,
-    field: u8,
-    value: u16,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    if !g.primary(v) {
-        return g.cmd_error(output);
-    }
-    if !g.owner_check(v, output) {
-        return 0;
-    }
-    {
-        let Some(order) = g.vehicle_order(v, index) else {
-            return g.cmd_error(output);
-        };
-        if order.kind() == OT_IMPLICIT || field >= 3 {
-            return g.cmd_error(output);
-        }
-        let mut wait = order.wait;
-        let mut travel = order.travel;
-        let mut speed = order.speed;
-        match field {
-            0 => wait = value,
-            1 => travel = value,
-            2 => speed = if value == 0 { u16::MAX } else { value },
-            _ => unreachable!(),
-        }
-        if wait != order.wait {
-            match order.kind() {
-                OT_GOTO_STATION => {
-                    if order.non_stop() & 2 != 0 {
-                        return g.command_cost(output, STR_ERROR_TIMETABLE_NOT_STOPPING_HERE);
-                    }
-                }
-                OT_CONDITIONAL => {}
-                _ => return g.command_cost(output, STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS),
-            }
-        }
-        if travel != order.travel && order.kind() == OT_CONDITIONAL {
-            return g.cmd_error(output);
-        }
-        if speed != order.speed
-            && (order.kind() == OT_CONDITIONAL || g.vehicle_type(v) == u64::from(VEH_AIRCRAFT))
-        {
-            return g.cmd_error(output);
-        }
-        if execute != 0 {
-            match field {
-                0 => {
-                    if wait != order.wait || (wait > 0 && !order.wait_timetabled()) {
-                        g.change_timetable(v, index, wait, 0, wait > 0);
-                    }
-                }
-                1 => {
-                    if travel != order.travel || (travel > 0 && !order.travel_timetabled()) {
-                        g.change_timetable(v, index, travel, 1, travel > 0);
-                    }
-                }
-                2 => {
-                    if speed != order.speed {
-                        g.change_timetable(v, index, speed, 2, speed != u16::MAX);
-                    }
-                }
-                _ => unreachable!(),
-            }
-            let mut u = g.first(v);
-            while !u.is_null() {
-                g.reset(u);
-                u = g.next(u);
-            }
-        }
-    };
-    1
-}
-
-pub unsafe extern "C" fn openttd_rust_timetable_validate_bulk(
-    v: *mut c_void,
-    field: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    if !g.primary(v) {
-        return g.cmd_error(output);
-    }
-    if !g.owner_check(v, output) {
-        return 0;
-    }
-    if field >= 3 || g.count(v) == 0 {
-        return g.cmd_error(output);
-    }
-    1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_on_time(
-    v: *mut c_void,
-    execute: u8,
-    apply_group: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    if !g.primary(v) {
-        return g.cmd_error(output);
-    }
-    if g.orders(v).is_null() {
-        return g.cmd_error(output);
-    }
-    let state = g.consist(v);
-    if apply_group == 0 && read_field!(state, flags) & (1 << 3) == 0 {
-        return g.command_cost(output, STR_ERROR_TIMETABLE_NOT_STARTED);
-    }
-    if !g.owner_check(v, output) {
-        return 0;
-    }
-    if execute != 0 {
-        if apply_group != 0 {
-            let mut late = 0;
-            let mut u = g.first(v);
-            while !u.is_null() {
-                if read_field!(state, flags) & (1 << 3) != 0 {
-                    let us = g.consist(u);
-                    late = late.max(read_field!(us, lateness));
-                    g.reset(u);
-                }
-                u = g.next(u);
-            }
-            if late > 0 {
-                u = g.first(v);
-                while !u.is_null() {
-                    if read_field!(state, flags) & (1 << 3) != 0 {
-                        let us = g.consist(u);
-                        write_field!(us, lateness, read_field!(us, lateness).wrapping_sub(late));
-                        g.dirty(u);
-                    }
-                    u = g.next(u);
-                }
-            }
-        } else {
-            write_field!(state, lateness, 0);
-            g.reset(v);
-            g.dirty(v);
-        }
-    }
-    1
-}
-
-/// A command call's context: `DoCommandFlag::Execute` and the `CommandCost` output.
-struct CommandCall {
-    execute: bool,
-    output: *mut c_void,
-}
-
-/// `CmdSetTimetableStart`'s arguments, in the original's order.
-struct TimetableStart {
-    veh: *mut c_void,
-    timetable_all: bool,
-    start_tick: u64,
-}
-
-/// `CmdSetTimetableStart`: set the start date of the timetable.
-fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u32 {
-    if !g.primary(args.veh) {
-        return g.cmd_error(call.output);
-    }
-    if g.orders(args.veh).is_null() {
-        return g.cmd_error(call.output);
-    }
-    if !g.owner_check(args.veh, call.output) {
-        return 0;
-    }
-    {
-        let list = g.orders(args.veh);
-        let total = g.duration(list);
-        let date = crate::timer_game_common::economy_date().0;
-        let start_date = date.wrapping_add(
-            (args.start_tick.wrapping_sub((g.0.tick_counter)()) as i32)
-                .wrapping_add(i32::from(crate::timer_game_common::economy_fraction()))
-                / DAY_TICKS,
-        );
-        let max_date = (g.0.maximum_date)() as i32;
-        // Don't let a timetable start at an invalid date.
-        if start_date < 0 || start_date > max_date {
-            return g.cmd_error(call.output);
-        }
-        // Don't let a timetable start more than 15 years into the future...
-        if start_date.wrapping_sub(date)
-            > crate::timer_game_common::date_at_start_of_year(
-                crate::timetable::MAX_TIMETABLE_START_YEARS,
-            )
-        {
-            return g.cmd_error(call.output);
-        }
-        // ...or 1 year in the past.
-        if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
-            return g.cmd_error(call.output);
-        }
-        // If trying to distribute start dates over a shared order group, we need to know the total duration.
-        if args.timetable_all && !g.complete(list) {
-            return g.command_cost(call.output, STR_ERROR_TIMETABLE_INCOMPLETE);
-        }
-        // Don't allow invalid start dates for other vehicles in the shared order group.
-        if args.timetable_all && start_date.wrapping_add(total / DAY_TICKS) > max_date {
-            return g.cmd_error(call.output);
-        }
-        if call.execute {
-            let mut vehicles = Vec::new();
-            if args.timetable_all {
-                let mut u = read_field!(g.list(list), first);
-                while !u.is_null() {
-                    vehicles.push(u);
-                    u = g.next(u);
-                }
-            } else {
-                vehicles.push(args.veh);
-            }
-            if vehicles.len() >= 2 {
-                vehicles.sort_unstable_by(|all, start| g.timetable_sort(*all, *start));
-            }
-            let count = vehicles.len() as i32;
-            for (index, u) in vehicles.into_iter().enumerate() {
-                let us = g.consist(u);
-                write_field!(us, lateness, 0);
-                write_field!(
-                    us,
-                    flags,
-                    read_field!(us, flags) & !crate::base_consist::VF_TIMETABLE_STARTED
-                );
-                // Do multiplication, then division to reduce rounding errors.
-                write_field!(
-                    us,
-                    start,
-                    args.start_tick
-                        .wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
-                );
-                // Unbunching data is no longer valid.
-                // The original resets v, not w; the quirk is preserved.
-                g.reset(args.veh);
-                g.dirty(u);
-            }
-        }
-    };
-    1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_start(
-    v: *mut c_void,
-    execute: u8,
-    all: u8,
-    start: u64,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let call = CommandCall {
-        execute: execute != 0,
-        output,
-    };
-    let args = TimetableStart {
-        veh: v,
-        timetable_all: all != 0,
-        start_tick: start,
-    };
-    set_timetable_start(Game(leaves), &call, &args)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_autofill(
-    v: *mut c_void,
-    execute: u8,
-    autofill: u8,
-    preserve_wait: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    if !g.primary(v) {
-        return g.cmd_error(output);
-    }
-    if g.orders(v).is_null() {
-        return g.cmd_error(output);
-    }
-    let state = g.consist(v);
-    if !g.owner_check(v, output) {
-        return 0;
-    }
-    if execute != 0 {
-        if autofill != 0 {
-            write_field!(state, flags, read_field!(state, flags) | 1 << 4);
-            write_field!(state, flags, read_field!(state, flags) & !(1 << 3));
-            if preserve_wait != 0 {
-                write_field!(state, flags, read_field!(state, flags) | 1 << 5);
-            }
-            write_field!(state, start, 0);
-            write_field!(state, lateness, 0);
-        } else {
-            write_field!(
-                state,
-                flags,
-                read_field!(state, flags) & !((1 << 4) | (1 << 5))
-            );
-        }
-        let mut u = g.first(v);
-        while !u.is_null() {
-            if u != v {
-                let us = g.consist(u);
-                write_field!(us, flags, read_field!(us, flags) & !((1 << 4) | (1 << 5)));
-            }
-            g.dirty(u);
-            u = g.next(u);
-        }
-    }
-    1
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_orders_start_tick(
-    date: i32,
-    current_date: i32,
-    fract: u16,
-    counter: u64,
-) -> u64 {
-    counter.wrapping_add(
-        date.wrapping_sub(current_date)
-            .wrapping_mul(DAY_TICKS)
-            .wrapping_sub(i32::from(fract)) as u64,
-    )
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_orders_start_date(
-    start: u64,
-    date: i32,
-    fract: u16,
-    counter: u64,
-) -> i32 {
-    date.wrapping_add(
-        (start.wrapping_sub(counter) as i32).wrapping_add(i32::from(fract)) / DAY_TICKS,
-    )
-}
-
-impl Game {
-    fn manual(self, v: *mut c_void) -> u8 {
-        let list = self.orders(v);
-        if list.is_null() {
-            0
-        } else {
-            read_field!(self.list(list), manual)
-        }
-    }
-    fn update_real(self, v: *mut c_void) {
-        let vehicle = self.vehicle(v);
-        let state = self.consist(v);
-        self.order_access(vehicle).update_real(state);
-    }
-    fn skip_real(self, v: *mut c_void) {
-        let state = self.consist(v);
-        if self.manual(v) > 0 {
-            loop {
-                write_field!(state, real, read_field!(state, real).wrapping_add(1));
-                if read_field!(state, real) >= self.count(v) {
-                    write_field!(state, real, 0);
-                }
-                if self
-                    .vehicle_order(v, read_field!(state, real))
-                    .unwrap()
-                    .kind()
-                    != 8
-                {
-                    break;
-                }
-            }
-        } else {
-            write_field!(state, real, 0);
-        }
-    }
-    fn increment_implicit(self, v: *mut c_void) {
-        let state = self.consist(v);
-        if read_field!(state, implicit) == read_field!(state, real) {
-            self.skip_real(v);
-        }
-        loop {
-            write_field!(
-                state,
-                implicit,
-                read_field!(state, implicit).wrapping_add(1)
-            );
-            if read_field!(state, implicit) >= self.count(v) {
-                write_field!(state, implicit, 0);
-            }
-            if read_field!(state, implicit) == read_field!(state, real)
-                || self
-                    .vehicle_order(v, read_field!(state, implicit))
-                    .unwrap()
-                    .kind()
-                    == 8
-            {
-                break;
-            }
-        }
-        self.invalidate_order(v, 0);
-    }
-    fn increment_real(self, v: *mut c_void) {
-        let state = self.consist(v);
-        if read_field!(state, implicit) == read_field!(state, real) {
-            self.increment_implicit(v);
-        } else {
-            self.skip_real(v);
-            self.invalidate_order(v, 0);
-        }
-    }
-    fn any_order(self, v: *mut c_void, predicate: impl Fn(Order) -> bool) -> bool {
-        let list = self.orders(v);
-        !list.is_null()
-            && (0..self.stored_count(list)).any(|i| predicate(self.stored_order(list, i)))
-    }
-    fn previous_unbunching(self, v: *mut c_void) -> bool {
-        self.previous_unbunching_of(self.orders(v), self.consist(v))
-    }
-    /// `PreviousOrderIsUnbunching` over a vehicle's order list shell (or null) and consist.
-    fn previous_unbunching_of(self, list: *mut c_void, consist: *mut Consist) -> bool {
-        !list.is_null()
-            && previous_order_is_unbunching(
-                &OrderAccess {
-                    list: self.list(list),
-                    vector: self.vector(list),
-                },
-                consist,
-            )
-    }
-    fn leave_unbunching(self, v: *mut c_void) {
-        if !self.previous_unbunching(v) {
-            return;
-        }
-        let state = self.consist(v);
-        let tick = (self.0.tick_counter)();
-        write_field!(state, last_departure, tick);
-        write_field!(state, lateness, 0);
-        self.dirty(v);
-        let mut count = 0i32;
-        let mut time = 0i32;
-        let mut u = self.first(v);
-        while !u.is_null() {
-            if !stopped_or_crashed(native_vehicle(u, self.0.base)) {
-                count = count.wrapping_add(1);
-                time = time.wrapping_add(read_field!(self.consist(u), round_trip));
-            }
-            u = self.next(u);
-        }
-        count = count.max(1);
-        let separation = (time / count / count).max(1);
-        let departure = tick.wrapping_add(separation as u64);
-        u = self.first(v);
-        while !u.is_null() {
-            let record = native_vehicle(u, self.0.base);
-            if !stopped_or_crashed(record) {
-                write_field!(self.consist(u), next_departure, departure);
-                crate::window_func::set_window_dirty(
-                    crate::window_type::WindowClass::WC_VEHICLE_VIEW,
-                    crate::window_type::WindowNumber::from(record.index(self.0.base.newgrf())),
-                );
-            }
-            u = self.next(u);
-        }
-    }
-    fn measure_unbunching(self, v: *mut c_void) {
-        let state = self.consist(v);
-        if self.current(v).action() & 4 == 0 || read_field!(state, last_departure) == 0 {
-            return;
-        }
-        let measured =
-            (self.0.tick_counter)().wrapping_sub(read_field!(state, last_departure)) as i32;
-        let previous = read_field!(state, round_trip);
-        // Original int32 product occurs before ClampTo<int32>; preserve native wrap.
-        let result = if previous == 0 {
-            measured
-        } else {
-            {
-                let lower = previous / 2;
-                let upper = previous.wrapping_mul(2);
-                (self.0.assert_departure_range)((lower as u64) as i32, (upper as u64) as i32);
-                if measured <= lower {
-                    lower
-                } else if measured >= upper {
-                    upper
-                } else {
-                    measured
-                }
-            }
-        };
-        write_field!(state, round_trip, result);
-    }
-}
-/// Scalar vehicle policy, without any persistent state reference or world borrow.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_update_real(v: *mut c_void, leaves: &'static Leaves) -> u32 {
-    let g = Game(leaves);
-    g.update_real(v);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_skip_real(v: *mut c_void, leaves: &'static Leaves) -> u32 {
-    let g = Game(leaves);
-    g.skip_real(v);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_increment_implicit(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    g.increment_implicit(v);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_increment_real(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    g.increment_real(v);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_wait_unbunching(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    u32::from(VisitOrders::new(leaves).is_waiting_for_unbunching(native_vehicle(v, leaves.base)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_leave_unbunching(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    g.leave_unbunching(v);
-    0
-}
-
-/// `Order::Free`: 'Free' the order.
-/// @note ONLY use on "`current_order`" vehicle orders!
+/// `Order::Free` on `v->current_order`: 'Free' the order.
 pub(crate) fn free(v: VehicleRef) {
-    // SAFETY: The live vehicle's current order.
-    unsafe { free_order(v.current_order_pointer()) };
+    current_order(v).free();
+}
+/// `Order::MakeDummy` on `v->current_order`: makes this order a Dummy order.
+pub(crate) fn make_dummy(v: VehicleRef) {
+    current_order(v).make_dummy();
 }
 /// `Order::MakeLeaveStation` on `v->current_order`: makes this order a Leave Station order.
 pub(crate) fn make_leave_station(v: VehicleRef) {
-    let p = v.current_order_pointer();
-    write_field!(p, kind, OT_LEAVESTATION);
-    write_field!(p, flags, 0);
-}
-/// `Order::Free` on `p`.
-///
-/// # Safety
-/// `p` is a live, properly constructed vehicle's `current_order` of the serialized game state.
-unsafe fn free_order(p: *mut Order) {
-    write_field!(p, kind, OT_NOTHING);
-    write_field!(p, flags, 0);
-    write_field!(p, destination, 0);
-}
-/// All fields belong to a live, properly constructed C++ Order, accessed raw.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
-    // SAFETY: As `free_order`; the native caller keeps the current-order note.
-    unsafe { free_order(p) };
-    0
+    current_order(v).make_leave_station();
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_station(p: *mut Order, destination: u16) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_GOTO_STATION;
-        order.flags = 0;
-        order.destination = destination;
-    };
-    store(p, order);
-    0
+/// `v->current_order`, written in place.
+#[allow(unsafe_code)]
+pub(crate) fn current_order(v: VehicleRef) -> OrderRef {
+    // SAFETY: Vehicle construction starts the order's lifetime before publication.
+    unsafe { OrderRef::of(v.current_order_pointer()) }
 }
 
-/// `Order::MakeGoToDepot`: makes this order a Go To Depot order.
-///
-/// # Safety
-/// `p` is a live, properly constructed order of the serialized game state.
-pub(crate) unsafe fn make_go_to_depot(
-    p: *mut Order,
-    destination: crate::order_type::DestinationID,
-    order: crate::order_type::OrderDepotTypeFlags,
-    non_stop_type: crate::order_type::OrderNonStopFlags,
-    action: crate::order_type::OrderDepotActionFlags,
-    cargo: crate::cargo_type::CargoType,
-) {
-    write_field!(p, kind, OT_GOTO_DEPOT);
-    set_depot_order_type(p, order);
-    set_depot_action_type(p, action);
-    set_non_stop_type(p, non_stop_type);
-    write_field!(p, destination, destination.0);
-    set_refit(p, cargo);
+/// An `OrderList` shell with its two Rust owners, resolved once by an entry and again only
+/// after a call that can replace the vehicle's list.
+#[derive(Clone, Copy)]
+pub(crate) struct OrderListRef {
+    shell: *mut c_void,
+    list: *mut List,
+    vector: *mut Vector,
 }
-/// `Order::SetDepotOrderType`: set the cause to go to the depot.
-fn set_depot_order_type(p: *mut Order, depot_order_type: crate::order_type::OrderDepotTypeFlags) {
-    let mut flags = u32::from(read_field!(p, flags));
-    crate::bitmath_func::sb(&mut flags, 0, 3, u32::from(depot_order_type.0));
-    write_field!(p, flags, flags as u8);
-}
-/// `Order::SetDepotActionType`: set what we are going to do in the depot.
-fn set_depot_action_type(
-    p: *mut Order,
-    depot_service_type: crate::order_type::OrderDepotActionFlags,
-) {
-    let mut flags = u32::from(read_field!(p, flags));
-    crate::bitmath_func::sb(&mut flags, 3, 4, u32::from(depot_service_type.0));
-    write_field!(p, flags, flags as u8);
-}
-/// `Order::SetNonStopType`: set whether we must stop at stations or not.
-fn set_non_stop_type(p: *mut Order, non_stop_type: crate::order_type::OrderNonStopFlags) {
-    let mut kind = u32::from(read_field!(p, kind));
-    crate::bitmath_func::sb(&mut kind, 6, 2, u32::from(non_stop_type.0));
-    write_field!(p, kind, kind as u8);
-}
-/// `Order::SetRefit`: make this depot/station order also a refit order.
-fn set_refit(p: *mut Order, cargo: crate::cargo_type::CargoType) {
-    write_field!(p, refit, cargo.0);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_depot(
-    p: *mut Order,
-    destination: u16,
-    depot_type: u8,
-    nonstop: u8,
-    action: u8,
-    cargo: u8,
-) -> u32 {
-    // SAFETY: As `make_go_to_depot`.
-    unsafe {
-        make_go_to_depot(
-            p,
-            crate::order_type::DestinationID(destination),
-            crate::order_type::OrderDepotTypeFlags(depot_type),
-            crate::order_type::OrderNonStopFlags(nonstop),
-            crate::order_type::OrderDepotActionFlags(action),
-            crate::cargo_type::CargoType(cargo),
+
+#[allow(unsafe_code)]
+impl OrderListRef {
+    /// The live `OrderList` shell `shell` and its owners.
+    pub(crate) fn of(shell: *mut c_void, s: &Leaves) -> Self {
+        // SAFETY: Each caller passes a live non-null `OrderList` shell.
+        let (list, vector) = unsafe { ((s.list)(shell), (s.vector)(shell)) };
+        Self {
+            shell,
+            list,
+            vector,
+        }
+    }
+    /// The native shell.
+    pub(crate) fn shell(self) -> *mut c_void {
+        self.shell
+    }
+    /// The number of stored orders: `GetOrders().size()`, without the `VehicleOrderID`
+    /// narrowing of `GetNumOrders`.
+    pub(crate) fn len(self) -> usize {
+        read_field!(self.vector, length)
+    }
+    /// `orders[index]` for an index below [`Self::len`], read and written in place.
+    pub(crate) fn order(self, index: usize) -> OrderRef {
+        // SAFETY: An index below the length names a live stored order of the span.
+        unsafe { OrderRef::of((*self.vector).data().add(index)) }
+    }
+    /// The address of the stored orders, null while the vector has no capacity.
+    fn data(self) -> *mut Order {
+        // SAFETY: The live vector; `data` reads its storage pointer.
+        unsafe { (*self.vector).data() }
+    }
+    /// `OrderList::GetFirstOrder`: get the first order of the order chain.
+    pub(crate) fn get_first_order(self) -> VehicleOrderID {
+        if self.len() == 0 {
+            VehicleOrderID::INVALID_VEH_ORDER_ID
+        } else {
+            VehicleOrderID(0)
+        }
+    }
+    /// `OrderList::GetOrderAt`: get a certain order of the order chain, `None` beyond its
+    /// orders.
+    pub(crate) fn get_order_at(self, index: VehicleOrderID) -> Option<OrderRef> {
+        if index >= self.get_num_orders() {
+            return None;
+        }
+        Some(self.order(usize::from(index.0)))
+    }
+    /// `OrderList::GetLastOrder`: get the last order of the order chain.
+    pub(crate) fn get_last_order(self) -> VehicleOrderID {
+        if self.len() == 0 {
+            VehicleOrderID::INVALID_VEH_ORDER_ID
+        } else {
+            VehicleOrderID(self.get_num_orders().0.wrapping_sub(1))
+        }
+    }
+    /// `OrderList::GetNext`: get the order after the given one or the first one, if the given
+    /// one is the last one.
+    pub(crate) fn get_next(self, cur: VehicleOrderID) -> VehicleOrderID {
+        if self.len() == 0 {
+            return VehicleOrderID::INVALID_VEH_ORDER_ID;
+        }
+        // `(cur + 1) % GetNumOrders()` in `int`, narrowed to `VehicleOrderID`.
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the original's static_cast"
+        )]
+        VehicleOrderID(((i32::from(cur.0) + 1) % i32::from(self.get_num_orders().0)) as u8)
+    }
+    /// `OrderList::GetNumOrders`: get number of orders in the order list.
+    pub(crate) fn get_num_orders(self) -> VehicleOrderID {
+        // The original's static_cast of `std::size(orders)` to `VehicleOrderID`.
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the original's static_cast"
+        )]
+        VehicleOrderID(self.len() as u8)
+    }
+    /// `OrderList::GetNumManualOrders`: get number of manually added orders in the order list.
+    pub(crate) fn get_num_manual_orders(self) -> VehicleOrderID {
+        VehicleOrderID(read_field!(self.list, num_manual_orders))
+    }
+    fn set_num_manual_orders(self, value: VehicleOrderID) {
+        write_field!(self.list, num_manual_orders, value.0);
+    }
+    /// `OrderList::IsShared`: is this a shared order list?
+    pub(crate) fn is_shared(self) -> bool {
+        read_field!(self.list, num_vehicles) > 1
+    }
+    /// `OrderList::GetFirstSharedVehicle`: get the first vehicle of this vehicle chain.
+    pub(crate) fn get_first_shared_vehicle(self, s: &Leaves) -> Option<VehicleRef> {
+        record_if(read_field!(self.list, first_shared), s)
+    }
+    fn first_shared_shell(self) -> *mut c_void {
+        read_field!(self.list, first_shared)
+    }
+    fn set_first_shared(self, v: *mut c_void) {
+        write_field!(self.list, first_shared, v);
+    }
+    /// `OrderList::GetNumVehicles`: return the number of vehicles that share this orders list.
+    pub(crate) fn get_num_vehicles(self) -> u32 {
+        read_field!(self.list, num_vehicles)
+    }
+    fn set_num_vehicles(self, value: u32) {
+        write_field!(self.list, num_vehicles, value);
+    }
+    /// `OrderList::AddVehicle`: adds the given vehicle to this shared order list. This is
+    /// supposed to be called after the vehicle has been inserted into the shared vehicle chain.
+    fn add_vehicle(self) {
+        self.set_num_vehicles(self.get_num_vehicles().wrapping_add(1));
+    }
+    /// `OrderList::RemoveVehicle`: removes the vehicle from the shared order list. This is
+    /// supposed to be called when the vehicle is still in the chain.
+    fn remove_vehicle(self, v: VehicleRef) {
+        self.set_num_vehicles(self.get_num_vehicles().wrapping_sub(1));
+        if v.shell() == self.first_shared_shell() {
+            self.set_first_shared(read_field!(vehicle_orders(v), next_shared));
+        }
+    }
+    /// `OrderList::GetTimetableTotalDuration`: gets the total duration of the vehicles
+    /// timetable or `Ticks::INVALID_TICKS` is the timetable is not complete.
+    pub(crate) fn get_timetable_total_duration(self) -> i32 {
+        if self.is_complete_timetable() {
+            read_field!(self.list, timetable_duration)
+        } else {
+            INVALID_TICKS
+        }
+    }
+    /// `OrderList::GetTotalDuration`: gets the known duration of the vehicles orders,
+    /// timetabled or not.
+    pub(crate) fn get_total_duration(self) -> i32 {
+        read_field!(self.list, total_duration)
+    }
+    /// `OrderList::UpdateTimetableDuration`: must be called if an order's timetable is changed
+    /// to update internal book keeping.
+    fn update_timetable_duration(self, delta: i32) {
+        write_field!(
+            self.list,
+            timetable_duration,
+            read_field!(self.list, timetable_duration).wrapping_add(delta)
         );
     }
-    0
+    /// `OrderList::UpdateTotalDuration`: must be called if an order's timetable is changed to
+    /// update internal book keeping.
+    fn update_total_duration(self, delta: i32) {
+        write_field!(
+            self.list,
+            total_duration,
+            read_field!(self.list, total_duration).wrapping_add(delta)
+        );
+    }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_waypoint(p: *mut Order, destination: u16) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_GOTO_WAYPOINT;
-        order.flags = 0;
-        order.destination = destination;
-    };
-    store(p, order);
-    0
+/// An `OrderBackup` shell with its three Rust owners, resolved once per backup visited.
+#[derive(Clone, Copy)]
+struct OrderBackupRef {
+    shell: *mut c_void,
+    backup: *mut Backup,
+    vector: *mut Vector,
+    consist: ConsistRef,
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_loading(p: *mut Order, ordered: u8) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_LOADING;
-        if ordered == 0 {
-            order.flags = 0;
+#[allow(unsafe_code)]
+impl OrderBackupRef {
+    /// The live `OrderBackup` shell `shell` and its owners.
+    fn of(shell: *mut c_void, s: &Leaves) -> Self {
+        // SAFETY: Each caller passes a live non-null `OrderBackup` shell.
+        let (backup, vector, consist) = unsafe {
+            (
+                (s.backup)(shell),
+                (s.backup_vector)(shell),
+                (s.backup_consist)(shell),
+            )
+        };
+        Self {
+            shell,
+            backup,
+            vector,
+            consist: ConsistRef(consist),
         }
-    };
-    store(p, order);
-    0
+    }
+    /// `user`.
+    fn user(self) -> u32 {
+        read_field!(self.backup, user)
+    }
+    fn set_user(self, value: u32) {
+        write_field!(self.backup, user, value);
+    }
+    /// `tile`.
+    fn tile(self) -> TileIndex {
+        TileIndex(read_field!(self.backup, tile))
+    }
+    fn set_tile(self, value: TileIndex) {
+        write_field!(self.backup, tile, value.0);
+    }
+    /// `group`.
+    fn group(self) -> GroupID {
+        GroupID(read_field!(self.backup, group))
+    }
+    fn set_group(self, value: GroupID) {
+        write_field!(self.backup, group, value.0);
+    }
+    /// `clone`, a native `Vehicle` shell or null.
+    fn clone_shell(self) -> *mut c_void {
+        read_field!(self.backup, clone).cast_mut()
+    }
+    fn set_clone(self, value: *mut c_void) {
+        write_field!(self.backup, clone, value.cast_const());
+    }
+    /// `orders.size()`.
+    fn len(self) -> usize {
+        read_field!(self.vector, length)
+    }
+    /// `orders[index]` for an index below [`Self::len`].
+    fn order(self, index: usize) -> OrderView<'static> {
+        // SAFETY: An index below the length names a live stored order.
+        unsafe { OrderView::of((*self.vector).data().add(index)) }
+    }
+    /// `delete this`: the shell and its owners are dead afterwards.
+    fn delete(self, s: &Leaves) {
+        // SAFETY: The live backup shell, whose owners no handle uses after this call.
+        unsafe { (s.delete_backup)(self.shell) };
+    }
 }
 
-/// `Order::MakeDummy`: makes this order a Dummy order.
-///
-/// # Safety
-/// `p` is a live, properly constructed order of the serialized game state.
-pub(crate) unsafe fn make_dummy(p: *mut Order) {
-    write_field!(p, kind, OT_DUMMY);
-    write_field!(p, flags, 0);
-}
-/// `Order::SetDestination`: sets the destination of this order.
-///
-/// # Safety
-/// As [`make_dummy`].
-pub(crate) unsafe fn set_destination(p: *mut Order, destination: DestinationID) {
-    write_field!(p, destination, destination.0);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_dummy(p: *mut Order) -> u32 {
-    // SAFETY: As `make_dummy`.
-    unsafe { make_dummy(p) };
-    0
+/// The next live backup of `OrderBackup::Iterate()` at or after `cursor`, advancing it.
+#[allow(unsafe_code)]
+fn next_backup(s: &Leaves, cursor: &mut u32) -> Option<OrderBackupRef> {
+    // SAFETY: The callback only advances this exclusive live cursor.
+    let ob = unsafe { (s.next_backup)(cursor) };
+    (!ob.is_null()).then(|| OrderBackupRef::of(ob, s))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_conditional(p: *mut Order, skip: u8) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_CONDITIONAL;
-        order.flags = skip;
-        order.destination = 0;
-    };
-    store(p, order);
-    0
+/// `OrderBackup::Iterate()`: each live backup in pool order, the next one fetched after the
+/// body has run on the current one, which it may delete.
+fn for_each_backup(s: &Leaves, mut body: impl FnMut(OrderBackupRef)) {
+    let mut cursor = 0;
+    while let Some(ob) = next_backup(s, &mut cursor) {
+        body(ob);
+    }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_implicit(p: *mut Order, destination: u16) -> u32 {
-    let mut order = load(p);
-    {
-        order.kind = OT_IMPLICIT;
-        order.destination = destination;
-    };
-    store(p, order);
-    0
+/// `BaseStation::owner` of a station a lookup returned.
+fn base_station_owner(st: *mut crate::station::BaseStation, s: &Leaves) -> Owner {
+    // SAFETY: The station command table names the process-lifetime station table.
+    #[allow(unsafe_code)]
+    let station = unsafe { &*s.station_commands().station };
+    CompanyID((station.station_owner)(st))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_refit(p: *mut Order, cargo: u8) -> u32 {
-    let mut order = load(p);
-    order.refit = cargo;
-    store(p, order);
-    0
+/// `new OrderList()` followed by the constructor's body: `orders` in place and
+/// `Initialize(v)`.
+fn new_order_list(v: VehicleRef, orders: impl FnOnce(OrderListRef), s: &Leaves) -> OrderListRef {
+    let list = OrderListRef::of((s.allocate_list)(), s);
+    orders(list);
+    list.initialize(v, s);
+    list
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_equals(p: *mut Order, q: *const Order) -> u32 {
-    // SAFETY: Both orders are live and equality calls no external service or
-    // mutation; these shared borrows end before returning to native code.
-    u32::from(unsafe { (&*p).equals(&*q) })
-}
+#[allow(unsafe_code)]
+impl OrderListRef {
+    /// `OrderList::Initialize`: recomputes everything. `v` is one of vehicle that is using
+    /// this orderlist.
+    pub(crate) fn initialize(self, v: VehicleRef, s: &Leaves) {
+        self.set_first_shared(v.shell());
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_assign(p: *mut Order, q: *const Order) -> u32 {
-    let order = load(q);
-    store(p, order);
-    0
-}
+        self.set_num_manual_orders(VehicleOrderID(0));
+        self.set_num_vehicles(1);
+        write_field!(self.list, timetable_duration, 0);
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_convert(p: *mut Order) -> u32 {
-    let order = load(p);
-    {
-        let mut packed = u16::from(order.kind());
-        match order.kind() {
-            OT_GOTO_STATION => {
-                if order.unload() == 1 {
-                    packed |= 1 << 5;
-                }
-                if matches!(order.load(), 2 | 3) {
-                    packed |= 1 << 6;
-                }
-                if order.non_stop() & 1 != 0 {
-                    packed |= 1 << 7;
-                }
-                packed |= (order.destination & 255) << 8;
+        for index in 0..self.len() {
+            let o = self.order(index).view();
+            if !o.is_type(OrderType::OT_IMPLICIT) {
+                self.set_num_manual_orders(VehicleOrderID(
+                    self.get_num_manual_orders().0.wrapping_add(1),
+                ));
             }
-            OT_GOTO_DEPOT => {
-                if order.depot_type() & 2 == 0 {
-                    packed |= 1 << 6;
+            self.update_total_duration(i32::from(o.wait_time()) + i32::from(o.travel_time()));
+        }
+
+        self.recalculate_timetable_duration();
+
+        let mut u = previous_shared(record(self.first_shared_shell(), s), s);
+        while let Some(shared) = u {
+            self.set_num_vehicles(self.get_num_vehicles().wrapping_add(1));
+            self.set_first_shared(shared.shell());
+            u = previous_shared(shared, s);
+        }
+
+        let mut u = next_shared(v, s);
+        while let Some(shared) = u {
+            self.set_num_vehicles(self.get_num_vehicles().wrapping_add(1));
+            u = next_shared(shared, s);
+        }
+    }
+
+    /// `OrderList::RecalculateTimetableDuration`: recomputes timetable duration. Split out
+    /// into a separate function so it can be used by afterload.
+    pub(crate) fn recalculate_timetable_duration(self) {
+        write_field!(self.list, timetable_duration, 0);
+        for index in 0..self.len() {
+            let o = self.order(index).view();
+            self.update_timetable_duration(
+                i32::from(o.timetabled_wait()) + i32::from(o.timetabled_travel()),
+            );
+        }
+    }
+
+    /// `OrderList::FreeChain`: free a complete order chain. If `keep_orderlist` is true only
+    /// delete the orders, otherwise also delete the `OrderList`. Do not use on
+    /// `current_order` vehicle orders!
+    pub(crate) fn free_chain(self, keep_orderlist: bool, s: &Leaves) {
+        /* We can visit oil rigs and buoys that are not our own. They will be shown in
+         * the list of stations. So, we need to invalidate that window if needed. */
+        for index in 0..self.len() {
+            let order = self.order(index).view();
+            if order.is_type(OrderType::OT_GOTO_STATION)
+                || order.is_type(OrderType::OT_GOTO_WAYPOINT)
+            {
+                let bs = (s.base_station_get_if_valid)(order.destination().to_station_id().0);
+                if !bs.is_null() && base_station_owner(bs, s) == Owner::NONE {
+                    invalidate_window_classes_data(WindowClass::WC_STATION_LIST, 0, false);
+                    break;
                 }
-                packed |= 1 << 7;
-                packed |= (order.destination & 255) << 8;
             }
-            OT_LOADING => {
-                if matches!(order.load(), 2 | 3) {
-                    packed |= 1 << 6;
+        }
+
+        if keep_orderlist {
+            // SAFETY: The live vector; no order handle is used across the clear.
+            unsafe { (*self.vector).resize(0) };
+            self.set_num_manual_orders(VehicleOrderID(0));
+            write_field!(self.list, timetable_duration, 0);
+        } else {
+            // SAFETY: The live shell, whose owners no handle uses after this call.
+            unsafe { (s.delete_list)(self.shell) };
+        }
+    }
+
+    /// `OrderList::GetNextDecisionNode`: get the next order which will make the given vehicle
+    /// stop at a station or refit at a depot or evaluate a non-trivial condition. `next` is
+    /// the order to start looking at, `hops` the number of orders we have already looked at.
+    /// Returns either of a station order, a refitting depot order, a non-trivial conditional
+    /// order or `INVALID_VEH_ORDER_ID` if the vehicle won't stop anymore.
+    pub(crate) fn get_next_decision_node(self, next: VehicleOrderID, hops: u32) -> VehicleOrderID {
+        if hops > u32::from(self.get_num_orders().0) || next >= self.get_num_orders() {
+            return VehicleOrderID::INVALID_VEH_ORDER_ID;
+        }
+
+        let order_next = self.order(usize::from(next.0)).view();
+        if order_next.is_type(OrderType::OT_CONDITIONAL) {
+            if order_next.condition_variable() != OrderConditionVariable::Unconditionally {
+                return next;
+            }
+
+            /* We can evaluate trivial conditions right away. They're conceptually
+             * the same as regular order progression. */
+            return self.get_next_decision_node(
+                order_next.condition_skip_to_order(),
+                hops.wrapping_add(1),
+            );
+        }
+
+        if order_next.is_type(OrderType::OT_GOTO_DEPOT) {
+            if order_next
+                .depot_action_flags()
+                .test(OrderDepotActionFlag::Halt)
+            {
+                return VehicleOrderID::INVALID_VEH_ORDER_ID;
+            }
+            if order_next.is_refit() {
+                return next;
+            }
+        }
+
+        if !order_next.can_load_or_unload() {
+            return self.get_next_decision_node(self.get_next(next), hops.wrapping_add(1));
+        }
+
+        next
+    }
+
+    /// `OrderList::GetNextStoppingStation`: recursively determine the next deterministic
+    /// station to stop at, passing each to `next_station` in the order the original appends
+    /// them. `first` is the order to start searching at or `INVALID_VEH_ORDER_ID` to start at
+    /// `cur_implicit_order_index + 1`; `hops` the number of orders we have already looked at.
+    /// The vehicle is currently loading and `v->last_station_visited` is meaningful.
+    pub(crate) fn get_next_stopping_station(
+        self,
+        next_station: &mut impl FnMut(StationID),
+        v: VehicleRef,
+        first: VehicleOrderID,
+        mut hops: u32,
+    ) {
+        let mut next = first;
+        if first == VehicleOrderID::INVALID_VEH_ORDER_ID {
+            next = consist(v).cur_implicit_order_index();
+            if next >= self.get_num_orders() {
+                next = self.get_first_order();
+                if next == VehicleOrderID::INVALID_VEH_ORDER_ID {
+                    return;
                 }
-                if order.load() == 4 && order.unload() == 4 {
-                    packed = 0;
+            } else {
+                /* GetNext never returns INVALID_VEH_ORDER_ID if there is a valid station in the list.
+                 * As the given "next" is already valid and a station in the list, we
+                 * don't have to check for INVALID_VEH_ORDER_ID here. */
+                next = self.get_next(next);
+                assert_with(|| next != VehicleOrderID::INVALID_VEH_ORDER_ID);
+            }
+        }
+
+        let orders = |index: VehicleOrderID| self.order(usize::from(index.0)).view();
+        loop {
+            hops = hops.wrapping_add(1);
+            next = self.get_next_decision_node(next, hops);
+
+            /* Resolve possibly nested conditionals by estimation. */
+            while next != VehicleOrderID::INVALID_VEH_ORDER_ID
+                && orders(next).is_type(OrderType::OT_CONDITIONAL)
+            {
+                /* We return both options of conditional orders. */
+                let skip_to =
+                    self.get_next_decision_node(orders(next).condition_skip_to_order(), hops);
+                let advance = self.get_next_decision_node(self.get_next(next), hops);
+                if advance == VehicleOrderID::INVALID_VEH_ORDER_ID
+                    || advance == first
+                    || skip_to == advance
+                {
+                    next = if skip_to == first {
+                        VehicleOrderID::INVALID_VEH_ORDER_ID
+                    } else {
+                        skip_to
+                    };
+                } else if skip_to == VehicleOrderID::INVALID_VEH_ORDER_ID || skip_to == first {
+                    next = if advance == first {
+                        VehicleOrderID::INVALID_VEH_ORDER_ID
+                    } else {
+                        advance
+                    };
+                } else {
+                    self.get_next_stopping_station(next_station, v, skip_to, hops);
+                    self.get_next_stopping_station(next_station, v, advance, hops);
+                    return;
+                }
+                hops = hops.wrapping_add(1);
+            }
+
+            /* Don't return a next stop if the vehicle has to unload everything. */
+            if next == VehicleOrderID::INVALID_VEH_ORDER_ID
+                || ((orders(next).is_type(OrderType::OT_GOTO_STATION)
+                    || orders(next).is_type(OrderType::OT_IMPLICIT))
+                    && orders(next).destination().to_station_id() == v.last_station_visited()
+                    && (orders(next).unload_type() == OrderUnloadType::Transfer
+                        || orders(next).unload_type() == OrderUnloadType::Unload))
+            {
+                return;
+            }
+            if !(orders(next).is_type(OrderType::OT_GOTO_DEPOT)
+                || orders(next).destination().to_station_id() == v.last_station_visited())
+            {
+                break;
+            }
+        }
+
+        next_station(orders(next).destination().to_station_id());
+    }
+
+    /// `OrderList::InsertOrderAt`: insert a new order into the order chain. `index` is the
+    /// position where the order is supposed to be inserted.
+    pub(crate) fn insert_order_at(self, order: Order, index: VehicleOrderID, s: &Leaves) {
+        let index = usize::from(index.0).min(self.len());
+        // SAFETY: The live vector; no order handle is used across the insertion.
+        unsafe { (*self.vector).insert(index, order) };
+        let new_order = self.order(index).view();
+
+        if !new_order.is_type(OrderType::OT_IMPLICIT) {
+            self.set_num_manual_orders(VehicleOrderID(
+                self.get_num_manual_orders().0.wrapping_add(1),
+            ));
+        }
+        self.update_timetable_duration(
+            i32::from(new_order.timetabled_wait()) + i32::from(new_order.timetabled_travel()),
+        );
+        self.update_total_duration(
+            i32::from(new_order.wait_time()) + i32::from(new_order.travel_time()),
+        );
+
+        /* We can visit oil rigs and buoys that are not our own. They will be shown in
+         * the list of stations. So, we need to invalidate that window if needed. */
+        if new_order.is_type(OrderType::OT_GOTO_STATION)
+            || new_order.is_type(OrderType::OT_GOTO_WAYPOINT)
+        {
+            let bs = (s.shared().base_station)(new_order.destination().to_station_id().0);
+            if base_station_owner(bs, s) == Owner::NONE {
+                invalidate_window_classes_data(WindowClass::WC_STATION_LIST, 0, false);
+            }
+        }
+    }
+
+    /// `OrderList::DeleteOrderAt`: remove an order from the order list and delete it. `index`
+    /// is the position of the order which is to be deleted.
+    pub(crate) fn delete_order_at(self, index: VehicleOrderID) {
+        let index = usize::from(index.0);
+        if index >= self.len() {
+            return;
+        }
+        let to_remove = self.order(index).view();
+
+        if !to_remove.is_type(OrderType::OT_IMPLICIT) {
+            self.set_num_manual_orders(VehicleOrderID(
+                self.get_num_manual_orders().0.wrapping_sub(1),
+            ));
+        }
+
+        self.update_timetable_duration(
+            -(i32::from(to_remove.timetabled_wait()) + i32::from(to_remove.timetabled_travel())),
+        );
+        self.update_total_duration(
+            -(i32::from(to_remove.wait_time()) + i32::from(to_remove.travel_time())),
+        );
+
+        // SAFETY: The live vector; `to_remove` is not used after the erasure.
+        unsafe { (*self.vector).erase(index) };
+    }
+
+    /// `OrderList::MoveOrder`: move an order to another position within the order list.
+    /// `from` is the zero-based position of the order to move, `to` the zero-based position
+    /// where the order is moved to.
+    pub(crate) fn move_order(self, from: VehicleOrderID, to: VehicleOrderID) {
+        if from == to {
+            return;
+        }
+        if from >= self.get_num_orders() {
+            return;
+        }
+        if to >= self.get_num_orders() {
+            return;
+        }
+
+        // SAFETY: The live vector; both positions are below its length.
+        unsafe { (*self.vector).rotate(usize::from(from.0), usize::from(to.0)) };
+    }
+
+    /// `OrderList::IsCompleteTimetable`: checks whether all orders of the list have a filled
+    /// timetable.
+    pub(crate) fn is_complete_timetable(self) -> bool {
+        for index in 0..self.len() {
+            let o = self.order(index).view();
+            /* Implicit orders are, by definition, not timetabled. */
+            if o.is_type(OrderType::OT_IMPLICIT) {
+                continue;
+            }
+            if !o.is_completely_timetabled() {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// `Vehicle::orders`: the vehicle's order list, `None` where it has none.
+pub(crate) fn order_list(v: VehicleRef, s: &Leaves) -> Option<OrderListRef> {
+    let shell = crate::vehicle_base::order_list(v.0.as_ptr());
+    (!shell.is_null()).then(|| OrderListRef::of(shell, s))
+}
+
+/// `v->orders = list`.
+#[allow(unsafe_code)]
+fn set_order_list(v: VehicleRef, list: Option<OrderListRef>) {
+    write_field!(
+        vehicle_orders(v),
+        orders,
+        list.map_or(ptr::null_mut(), OrderListRef::shell)
+    );
+}
+
+/// `Vehicle::NextShared`: get the next vehicle of the shared vehicle chain.
+#[allow(unsafe_code)]
+pub(crate) fn next_shared(v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
+    record_if(read_field!(vehicle_orders(v), next_shared), s)
+}
+
+/// `Vehicle::PreviousShared`: get the previous vehicle of the shared vehicle chain.
+#[allow(unsafe_code)]
+pub(crate) fn previous_shared(v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
+    record_if(read_field!(vehicle_orders(v), previous_shared), s)
+}
+
+/// `Vehicle::FirstShared`: get the first vehicle of this vehicle chain.
+pub(crate) fn first_shared(v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
+    match order_list(v, s) {
+        None => Some(v.first()),
+        Some(list) => list.get_first_shared_vehicle(s),
+    }
+}
+
+/// `Vehicle::IsOrderListShared`: check if we share our orders with another vehicle.
+pub(crate) fn is_order_list_shared(v: VehicleRef, s: &Leaves) -> bool {
+    order_list(v, s).is_some_and(OrderListRef::is_shared)
+}
+
+/// `Vehicle::GetNumOrders`: get the number of orders this vehicle has.
+pub(crate) fn get_num_orders(v: VehicleRef, s: &Leaves) -> VehicleOrderID {
+    order_list(v, s).map_or(VehicleOrderID(0), OrderListRef::get_num_orders)
+}
+
+/// `Vehicle::GetNumManualOrders`: get the number of manually added orders this vehicle has.
+pub(crate) fn get_num_manual_orders(v: VehicleRef, s: &Leaves) -> VehicleOrderID {
+    order_list(v, s).map_or(VehicleOrderID(0), OrderListRef::get_num_manual_orders)
+}
+
+/// `Vehicle::GetOrder`: returns order `index` of a vehicle or `None` when it doesn't exists.
+pub(crate) fn get_order(v: VehicleRef, index: VehicleOrderID, s: &Leaves) -> Option<OrderRef> {
+    order_list(v, s)?.get_order_at(index)
+}
+
+/// `Vehicle::GetFirstOrder`: get the first order of the vehicles order list.
+pub(crate) fn get_first_order(v: VehicleRef, s: &Leaves) -> Option<OrderRef> {
+    let list = order_list(v, s)?;
+    get_order(v, list.get_first_order(), s)
+}
+
+/// `Vehicle::GetLastOrder`: returns the last order of a vehicle, or `None` if it doesn't
+/// exists.
+pub(crate) fn get_last_order(v: VehicleRef, s: &Leaves) -> Option<OrderRef> {
+    let list = order_list(v, s)?;
+    list.get_order_at(list.get_last_order())
+}
+
+/// `Vehicle::Orders`: the vehicle's orders, `None` for an empty span.
+pub(crate) fn orders(v: VehicleRef, s: &Leaves) -> Option<OrderListRef> {
+    order_list(v, s)
+}
+
+/// `std::ranges::any_of(v->Orders(), predicate)`.
+fn any_order(v: VehicleRef, s: &Leaves, predicate: impl Fn(OrderView<'_>) -> bool) -> bool {
+    orders(v, s)
+        .is_some_and(|list| (0..list.len()).any(|index| predicate(list.order(index).view())))
+}
+
+/// `Vehicle::GetNextStoppingStation`: get the next station the vehicle will stop at, passing
+/// each to `next_station`.
+pub(crate) fn get_next_stopping_station(
+    v: VehicleRef,
+    next_station: &mut impl FnMut(StationID),
+    s: &Leaves,
+) {
+    let Some(list) = order_list(v, s) else {
+        return;
+    };
+    list.get_next_stopping_station(next_station, v, VehicleOrderID::INVALID_VEH_ORDER_ID, 0);
+}
+
+/// `Vehicle::IsGroundVehicle`: check if the vehicle is a ground vehicle.
+fn is_ground_vehicle(v: VehicleRef) -> bool {
+    crate::vehicle_base::is_ground_vehicle(v.vehicle_type())
+}
+
+/// `SetBit` or `ClrBit` of `GVF_SUPPRESS_IMPLICIT_ORDERS` in `v->GetGroundVehicleFlags()`.
+fn assign_suppress_implicit_orders(v: VehicleRef, suppress: bool) {
+    let mut gv_flags = v.ground_vehicle_flags();
+    assign_bit16(&mut gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS, suppress);
+    v.set_ground_vehicle_flags(gv_flags);
+}
+
+/// `Vehicle::SkipToNextRealOrderIndex`: advance `cur_real_order_index` to the next real
+/// order. `cur_implicit_order_index` is not touched.
+fn skip_to_next_real_order_index(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    if get_num_manual_orders(v, s).0 > 0 {
+        /* Advance to next real order */
+        loop {
+            c.set_cur_real_order_index(VehicleOrderID(c.cur_real_order_index().0.wrapping_add(1)));
+            if c.cur_real_order_index() >= get_num_orders(v, s) {
+                c.set_cur_real_order_index(VehicleOrderID(0));
+            }
+            if !get_order(v, c.cur_real_order_index(), s)
+                .unwrap()
+                .view()
+                .is_type(OrderType::OT_IMPLICIT)
+            {
+                break;
+            }
+        }
+    } else {
+        c.set_cur_real_order_index(VehicleOrderID(0));
+    }
+}
+
+/// `Vehicle::IncrementImplicitOrderIndex`: increments `cur_implicit_order_index`, keeps care
+/// of the wrap-around and invalidates the GUI. `cur_real_order_index` is incremented as well,
+/// if needed. Note: `current_order` is not invalidated.
+pub(crate) fn increment_implicit_order_index(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    if c.cur_implicit_order_index() == c.cur_real_order_index() {
+        /* Increment real order index as well */
+        skip_to_next_real_order_index(v, s);
+    }
+
+    assert_with(|| {
+        c.cur_real_order_index().0 == 0 || c.cur_real_order_index() < get_num_orders(v, s)
+    });
+
+    /* Advance to next implicit order */
+    loop {
+        c.set_cur_implicit_order_index(VehicleOrderID(
+            c.cur_implicit_order_index().0.wrapping_add(1),
+        ));
+        if c.cur_implicit_order_index() >= get_num_orders(v, s) {
+            c.set_cur_implicit_order_index(VehicleOrderID(0));
+        }
+        if c.cur_implicit_order_index() == c.cur_real_order_index()
+            || get_order(v, c.cur_implicit_order_index(), s)
+                .unwrap()
+                .view()
+                .is_type(OrderType::OT_IMPLICIT)
+        {
+            break;
+        }
+    }
+
+    invalidate_vehicle_order(v, 0, s);
+}
+
+/// `Vehicle::IncrementRealOrderIndex`: advanced `cur_real_order_index` to the next real order,
+/// keeps care of the wrap-around and invalidates the GUI. `cur_implicit_order_index` is
+/// incremented as well, if it was equal to `cur_real_order_index`, i.e.
+/// `cur_real_order_index` is skipped but not any implicit orders. Note: `current_order` is not
+/// invalidated.
+pub(crate) fn increment_real_order_index(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    if c.cur_implicit_order_index() == c.cur_real_order_index() {
+        /* Increment both real and implicit order */
+        increment_implicit_order_index(v, s);
+    } else {
+        /* Increment real order only */
+        skip_to_next_real_order_index(v, s);
+        invalidate_vehicle_order(v, 0, s);
+    }
+}
+
+/// `Vehicle::UpdateRealOrderIndex`: skip implicit orders until `cur_real_order_index` is a
+/// non-implicit order.
+pub(crate) fn update_real_order_index(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    /* Make sure the index is valid */
+    if c.cur_real_order_index() >= get_num_orders(v, s) {
+        c.set_cur_real_order_index(VehicleOrderID(0));
+    }
+
+    if get_num_manual_orders(v, s).0 > 0 {
+        /* Advance to next real order */
+        while get_order(v, c.cur_real_order_index(), s)
+            .unwrap()
+            .view()
+            .is_type(OrderType::OT_IMPLICIT)
+        {
+            c.set_cur_real_order_index(VehicleOrderID(c.cur_real_order_index().0.wrapping_add(1)));
+            if c.cur_real_order_index() >= get_num_orders(v, s) {
+                c.set_cur_real_order_index(VehicleOrderID(0));
+            }
+        }
+    } else {
+        c.set_cur_real_order_index(VehicleOrderID(0));
+    }
+}
+
+/// `InvalidateVehicleOrder(v, data)`: updates the widgets of a vehicle which contains the
+/// order-data.
+#[allow(unsafe_code)]
+fn invalidate_vehicle_order(v: VehicleRef, data: i32, s: &Leaves) {
+    // SAFETY: The live vehicle shell; the C++ body reads only its index.
+    unsafe { (s.invalidate_vehicle_order)(v.shell(), data) };
+}
+
+/// `Vehicle::HasDepotOrder`: checks if a vehicle has a depot in its order list. True iff at
+/// least one order is a depot order.
+pub(crate) fn has_depot_order(v: VehicleRef, s: &Leaves) -> bool {
+    any_order(v, s, |order| order.is_type(OrderType::OT_GOTO_DEPOT))
+}
+
+/// `Vehicle::HasFullLoadOrder`: check if the current vehicle has a full load order.
+pub(crate) fn has_full_load_order(v: VehicleRef, s: &Leaves) -> bool {
+    any_order(v, s, |o| {
+        o.is_type(OrderType::OT_GOTO_STATION) && o.is_full_load()
+    })
+}
+
+/// `Vehicle::HasConditionalOrder`: check if the current vehicle has a conditional order.
+pub(crate) fn has_conditional_order(v: VehicleRef, s: &Leaves) -> bool {
+    any_order(v, s, |o| o.is_type(OrderType::OT_CONDITIONAL))
+}
+
+/// `Vehicle::HasUnbunchingOrder`: check if the current vehicle has an unbunching order.
+pub(crate) fn has_unbunching_order(v: VehicleRef, s: &Leaves) -> bool {
+    any_order(v, s, |o| {
+        o.is_type(OrderType::OT_GOTO_DEPOT)
+            && o.depot_action_flags().test(OrderDepotActionFlag::Unbunch)
+    })
+}
+
+/// `PreviousOrderIsUnbunching`: check if the previous order is a depot unbunching order.
+fn previous_order_is_unbunching(v: VehicleRef, s: &Leaves) -> bool {
+    let c = consist(v);
+    /* If we are headed for the first order, we must wrap around back to the last order. */
+    let is_first_order = get_order(v, c.cur_implicit_order_index(), s).map(|o| o.view().as_ptr())
+        == get_first_order(v, s).map(|o| o.view().as_ptr());
+    let previous_order = if is_first_order {
+        get_last_order(v, s)
+    } else {
+        get_order(
+            v,
+            VehicleOrderID(c.cur_implicit_order_index().0.wrapping_sub(1)),
+            s,
+        )
+    };
+
+    let Some(previous_order) = previous_order.map(OrderRef::view) else {
+        return false;
+    };
+    if !previous_order.is_type(OrderType::OT_GOTO_DEPOT) {
+        return false;
+    }
+    previous_order
+        .depot_action_flags()
+        .test(OrderDepotActionFlag::Unbunch)
+}
+
+/// `Vehicle::LeaveUnbunchingDepot`: leave an unbunching depot and calculate the next departure
+/// time for shared order vehicles.
+pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
+    /* Don't do anything if this is not our unbunching order. */
+    if !previous_order_is_unbunching(v, s) {
+        return;
+    }
+
+    let c = consist(v);
+    let counter = (s.shared().tick_counter)();
+    /* Set the start point for this round trip time. */
+    c.set_depot_unbunching_last_departure(counter);
+
+    /* Tell the timetable we are now "on time." */
+    c.set_lateness_counter(0);
+    set_window_dirty(
+        WindowClass::WC_VEHICLE_TIMETABLE,
+        WindowNumber::from(v.index(s.newgrf())),
+    );
+
+    /* Find the average travel time of vehicles that we share orders with. */
+    let mut num_vehicles = 0i32;
+    let mut total_travel_time = 0i32;
+
+    let mut u = first_shared(v, s);
+    while let Some(shared) = u {
+        u = next_shared(shared, s);
+        /* Ignore vehicles that are manually stopped or crashed. */
+        if shared.vehstatus().test(VehState::Stopped) || shared.vehstatus().test(VehState::Crashed)
+        {
+            continue;
+        }
+
+        num_vehicles = num_vehicles.wrapping_add(1);
+        total_travel_time = total_travel_time.wrapping_add(consist(shared).round_trip_time());
+    }
+
+    /* Make sure we cannot divide by 0. */
+    num_vehicles = num_vehicles.max(1);
+
+    /* Calculate the separation by finding the average travel time, then calculating equal separation (minimum 1 tick) between vehicles. */
+    let separation = (total_travel_time / num_vehicles / num_vehicles).max(1);
+    // `TickCounter + Ticks`: the `int32_t` separation converts to `uint64_t`.
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "the original's conversion to `TickCounter`"
+    )]
+    let next_departure = (s.shared().tick_counter)().wrapping_add(separation as u64);
+
+    /* Set the departure time of all vehicles that we share orders with. */
+    let mut u = first_shared(v, s);
+    while let Some(shared) = u {
+        u = next_shared(shared, s);
+        /* Ignore vehicles that are manually stopped or crashed. */
+        if shared.vehstatus().test(VehState::Stopped) || shared.vehstatus().test(VehState::Crashed)
+        {
+            continue;
+        }
+
+        consist(shared).set_depot_unbunching_next_departure(next_departure);
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_VIEW,
+            WindowNumber::from(shared.index(s.newgrf())),
+        );
+    }
+}
+
+/// `Vehicle::IsWaitingForUnbunching` after its `assert(this->IsInDepot())`, which
+/// `vehicle::is_waiting_for_unbunching` makes: check whether a vehicle inside a depot is
+/// waiting for unbunching. True if the vehicle must continue waiting, or false if it may try
+/// to leave the depot.
+pub(crate) fn is_waiting_for_unbunching(v: VehicleRef, s: &Leaves) -> bool {
+    /* Don't bother if there are no vehicles sharing orders. */
+    if !is_order_list_shared(v, s) {
+        return false;
+    }
+
+    /* Don't do anything if there aren't enough orders. */
+    if get_num_orders(v, s).0 <= 1 {
+        return false;
+    }
+
+    /* Don't do anything if this is not our unbunching order. */
+    if !previous_order_is_unbunching(v, s) {
+        return false;
+    }
+
+    consist(v).depot_unbunching_next_departure() > (s.shared().tick_counter)()
+}
+
+/// The unbunching round-trip measurement of `VehicleEnterDepot`.
+pub(crate) fn measure_unbunching(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    if v.current_order()
+        .depot_action_flags()
+        .test(OrderDepotActionFlag::Unbunch)
+        && c.depot_unbunching_last_departure() > 0
+    {
+        // `TickCounter - TickCounter` narrowed to `Ticks`.
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the original's `Ticks` result"
+        )]
+        let measured_round_trip =
+            (s.shared().tick_counter)().wrapping_sub(c.depot_unbunching_last_departure()) as i32;
+        if c.round_trip_time() == 0 {
+            /* This might be our first round trip. */
+            c.set_round_trip_time(measured_round_trip);
+        } else {
+            /* If we have a previous trip, smooth the effects of outlier trip calculations caused by breakdowns, getting lost, etc. */
+            let min = c.round_trip_time() / 2;
+            // `round_trip_time * 2` is an `int` product before `ClampTo<Ticks>`.
+            let max = c.round_trip_time().wrapping_mul(2);
+            /* `Clamp(a, min, max)`. */
+            assert_with(|| min <= max);
+            c.set_round_trip_time(if measured_round_trip <= min {
+                min
+            } else if measured_round_trip >= max {
+                max
+            } else {
+                measured_round_trip
+            });
+        }
+    }
+}
+
+/// `Vehicle::AddToShared`: adds this vehicle to a shared vehicle chain. `shared_chain` is a
+/// vehicle of the chain with shared vehicles; `!v->IsOrderListShared()`.
+#[allow(unsafe_code)]
+pub(crate) fn add_to_shared(v: VehicleRef, shared_chain: VehicleRef, s: &Leaves) {
+    let orders = vehicle_orders(v);
+    let chain = vehicle_orders(shared_chain);
+    assert_with(|| {
+        read_field!(orders, previous_shared).is_null() && read_field!(orders, next_shared).is_null()
+    });
+
+    if order_list(shared_chain, s).is_none() {
+        assert_with(|| read_field!(chain, previous_shared).is_null());
+        assert_with(|| read_field!(chain, next_shared).is_null());
+        let list = new_order_list(shared_chain, |_| {}, s);
+        set_order_list(v, Some(list));
+        set_order_list(shared_chain, Some(list));
+    }
+
+    write_field!(orders, next_shared, read_field!(chain, next_shared));
+    write_field!(orders, previous_shared, shared_chain.shell());
+
+    write_field!(chain, next_shared, v.shell());
+
+    if let Some(next) = next_shared(v, s) {
+        write_field!(vehicle_orders(next), previous_shared, v.shell());
+    }
+
+    order_list(shared_chain, s).unwrap().add_vehicle();
+}
+
+/// `Vehicle::RemoveFromShared`: removes the vehicle from the shared order list.
+#[allow(unsafe_code)]
+pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
+    let orders = vehicle_orders(v);
+    /* Remember if we were first and the old window number before RemoveVehicle()
+     * as this changes first if needed. */
+    let were_first = first_shared(v, s) == Some(v);
+    let vli = VehicleListIdentifier {
+        list_type: VehicleListType::VL_SHARED_ORDERS,
+        vtype: v.vehicle_type(),
+        company: v.owner(),
+        index: first_shared(v, s).unwrap().index(s.newgrf()).0,
+    };
+
+    let list = order_list(v, s).unwrap();
+    list.remove_vehicle(v);
+
+    if !were_first {
+        /* We are not the first shared one, so only relink our previous one. */
+        write_field!(
+            vehicle_orders(previous_shared(v, s).unwrap()),
+            next_shared,
+            read_field!(orders, next_shared)
+        );
+    }
+
+    if let Some(next) = next_shared(v, s) {
+        write_field!(
+            vehicle_orders(next),
+            previous_shared,
+            read_field!(orders, previous_shared)
+        );
+    }
+
+    if list.get_num_vehicles() == 1 {
+        /* When there is only one vehicle, remove the shared order list window. */
+        close_window_by_id(
+            get_window_class_for_vehicle_type(v.vehicle_type()),
+            vli.to_window_number(),
+            true,
+            0,
+        );
+        invalidate_vehicle_order(
+            first_shared(v, s).unwrap(),
+            VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0,
+            s,
+        );
+    } else if were_first {
+        /* If we were the first one, update to the new first one.
+         * Note: FirstShared() is already the new first */
+        // `index.base() | (1U << 31)` passed as the `int` data.
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "the original's conversion to `int`"
+        )]
+        invalidate_window_data(
+            get_window_class_for_vehicle_type(v.vehicle_type()),
+            vli.to_window_number(),
+            (first_shared(v, s).unwrap().index(s.newgrf()).0 | (1u32 << 31)) as i32,
+            false,
+        );
+    }
+
+    write_field!(orders, next_shared, ptr::null_mut());
+    write_field!(orders, previous_shared, ptr::null_mut());
+}
+
+/// `Vehicle::DeleteUnreachedImplicitOrders`: delete all implicit orders which were not
+/// reached.
+pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    if is_ground_vehicle(v) {
+        let gv_flags = v.ground_vehicle_flags();
+        if has_bit(gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS) {
+            /* Do not delete orders, only skip them */
+            assign_suppress_implicit_orders(v, false);
+            c.set_cur_implicit_order_index(c.cur_real_order_index());
+            invalidate_vehicle_order(v, 0, s);
+            return;
+        }
+    }
+
+    // `this->Orders()`: the span holds the list's storage, which DeleteOrder's erasure keeps
+    // in place, so its slots stay live, including the retained former last order.
+    let span = orders(v, s);
+    let order = |cur: VehicleOrderID| span.unwrap().order(usize::from(cur.0)).view();
+    let mut cur = c.cur_implicit_order_index();
+    while cur != VehicleOrderID::INVALID_VEH_ORDER_ID {
+        if c.cur_implicit_order_index() == c.cur_real_order_index() {
+            break;
+        }
+
+        if order(cur).is_type(OrderType::OT_IMPLICIT) {
+            delete_order(v, c.cur_implicit_order_index(), s);
+            /* DeleteOrder does various magic with order_indices, so resync 'order' with 'cur_implicit_order_index' */
+        } else {
+            let list = order_list(v, s).unwrap();
+            /* Skip non-implicit orders, e.g. service-orders */
+            if cur < list.get_next(cur) {
+                c.set_cur_implicit_order_index(VehicleOrderID(
+                    c.cur_implicit_order_index().0.wrapping_add(1),
+                ));
+            } else {
+                /* Wrapped around. */
+                c.set_cur_implicit_order_index(VehicleOrderID(0));
+            }
+            cur = list.get_next(cur);
+        }
+    }
+}
+
+/// The order part of `Vehicle::BeginLoading`: prepare everything to begin the loading when
+/// arriving at a station.
+pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
+    let c = consist(v);
+    if v.current_order().is_type(OrderType::OT_GOTO_STATION)
+        && v.current_order().destination().to_station_id() == v.last_station_visited()
+    {
+        delete_unreached_implicit_orders(v, s);
+
+        /* Now both order indices point to the destination station, and we can start loading */
+        current_order(v).make_loading(true);
+        update_vehicle_timetable(v, true, s);
+
+        /* Furthermore add the Non Stop flag to mark that this station
+         * is the actual destination of the vehicle, which is (for example)
+         * necessary to be known for HandleTrainLoading to determine
+         * whether the train is lost or not; not marking a train lost
+         * that arrives at random stations is bad. */
+        current_order(v).set_non_stop_type(
+            OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate).with(
+                OrderNonStopFlags::from_element(OrderNonStopFlag::NoDestination),
+            ),
+        );
+    } else {
+        /* We weren't scheduled to stop here. Insert an implicit order
+         * to show that we are stopping here.
+         * While only groundvehicles have implicit orders, e.g. aircraft might still enter
+         * the 'wrong' terminal when skipping orders etc. */
+        let in_list = get_order(v, c.cur_implicit_order_index(), s).map(OrderRef::view);
+        if is_ground_vehicle(v)
+            && (in_list.is_none_or(|in_list| {
+                !in_list.is_type(OrderType::OT_IMPLICIT)
+                    || in_list.destination().to_station_id() != v.last_station_visited()
+            }))
+        {
+            let suppress_implicit_orders =
+                has_bit(v.ground_vehicle_flags(), GVF_SUPPRESS_IMPLICIT_ORDERS);
+            /* Do not create consecutive duplicates of implicit orders */
+            let prev_order = if c.cur_implicit_order_index().0 > 0 {
+                get_order(v, VehicleOrderID(c.cur_implicit_order_index().0 - 1), s)
+            } else if get_num_orders(v, s).0 > 1 {
+                get_last_order(v, s)
+            } else {
+                None
+            }
+            .map(OrderRef::view);
+            if prev_order.is_none_or(|prev_order| {
+                (!prev_order.is_type(OrderType::OT_IMPLICIT)
+                    && !prev_order.is_type(OrderType::OT_GOTO_STATION))
+                    || prev_order.destination().to_station_id() != v.last_station_visited()
+            }) {
+                /* Prefer deleting implicit orders instead of inserting new ones,
+                 * so test whether the right order follows later. In case of only
+                 * implicit orders treat the last order in the list like an
+                 * explicit one, except if the overall number of orders surpasses
+                 * IMPLICIT_ORDER_ONLY_CAP. */
+                let mut target_index = i32::from(c.cur_implicit_order_index().0);
+                let mut found = false;
+                while target_index != i32::from(c.cur_real_order_index().0)
+                    || get_num_manual_orders(v, s).0 == 0
+                {
+                    // `GetOrder(int)` narrows the index to `VehicleOrderID`.
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let Some(order) =
+                        get_order(v, VehicleOrderID(target_index as u8), s).map(OrderRef::view)
+                    else {
+                        break; // No orders.
+                    };
+                    if order.is_type(OrderType::OT_IMPLICIT)
+                        && order.destination().to_station_id() == v.last_station_visited()
+                    {
+                        found = true;
+                        break;
+                    }
+                    target_index = target_index.wrapping_add(1);
+                    if target_index >= i32::from(order_list(v, s).unwrap().get_num_orders().0) {
+                        if get_num_manual_orders(v, s).0 == 0
+                            && u32::from(get_num_orders(v, s).0) < IMPLICIT_ORDER_ONLY_CAP
+                        {
+                            break;
+                        }
+                        target_index = 0;
+                    }
+                    if target_index == i32::from(c.cur_implicit_order_index().0) {
+                        break; // Avoid infinite loop.
+                    }
+                }
+
+                if found {
+                    if suppress_implicit_orders {
+                        /* Skip to the found order */
+                        // `int` stored in `VehicleOrderID`.
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        c.set_cur_implicit_order_index(VehicleOrderID(target_index as u8));
+                        invalidate_vehicle_order(v, 0, s);
+                    } else {
+                        /* Delete all implicit orders up to the station we just reached */
+                        let mut order = get_order(v, c.cur_implicit_order_index(), s)
+                            .unwrap()
+                            .view();
+                        while !order.is_type(OrderType::OT_IMPLICIT)
+                            || order.destination().to_station_id() != v.last_station_visited()
+                        {
+                            if order.is_type(OrderType::OT_IMPLICIT) {
+                                delete_order(v, c.cur_implicit_order_index(), s);
+                            } else {
+                                /* Skip non-implicit orders, e.g. service-orders */
+                                c.set_cur_implicit_order_index(VehicleOrderID(
+                                    c.cur_implicit_order_index().0.wrapping_add(1),
+                                ));
+                            }
+                            let next = get_order(v, c.cur_implicit_order_index(), s);
+
+                            /* Wrapped around. */
+                            order = match next {
+                                Some(next) => next.view(),
+                                None => {
+                                    c.set_cur_implicit_order_index(VehicleOrderID(0));
+                                    let first = get_order(v, c.cur_implicit_order_index(), s);
+                                    assert_with(|| first.is_some());
+                                    first.unwrap().view()
+                                }
+                            };
+                        }
+                    }
+                } else if !suppress_implicit_orders
+                    && (match order_list(v, s) {
+                        None => (s.list_can_allocate_item)() != 0,
+                        Some(list) => list.get_num_orders() < MAX_VEH_ORDER_ID,
+                    })
+                {
+                    /* Insert new implicit order */
+                    let mut implicit_order = Order::default();
+                    implicit_order
+                        .edit()
+                        .make_implicit(v.last_station_visited());
+                    insert_order(v, implicit_order, c.cur_implicit_order_index(), s);
+                    if c.cur_implicit_order_index().0 > 0 {
+                        c.set_cur_implicit_order_index(VehicleOrderID(
+                            c.cur_implicit_order_index().0 - 1,
+                        ));
+                    }
+
+                    /* InsertOrder disabled creation of implicit orders for all vehicles with the same implicit order.
+                     * Reenable it for this vehicle */
+                    assign_suppress_implicit_orders(v, false);
+                }
+            }
+        }
+        current_order(v).make_loading(false);
+    }
+}
+
+/// `Station::Get(st)`, as the shared table's base-station lookup returns it.
+fn station_get(st: StationID, s: &Leaves) -> *mut crate::station::BaseStation {
+    (s.shared().base_station)(st.0)
+}
+
+/// `CanVehicleUseStation(v, Station::Get(st))`.
+fn can_vehicle_use_station(v: VehicleRef, st: StationID) -> bool {
+    let airports = crate::newgrf_airport::runtime();
+    crate::vehicle_func::can_vehicle_use_station(
+        v,
+        crate::newgrf_airport::station_by_id(st.0, airports),
+        airports,
+    )
+}
+
+/// `GetVehicleCannotUseStationReason(v, Station::Get(st))`.
+#[allow(unsafe_code)]
+fn get_vehicle_cannot_use_station_reason(v: VehicleRef, st: StationID, s: &Leaves) -> StringID {
+    // SAFETY: The live vehicle shell and a station ID the caller's lookup validated.
+    StringID(unsafe { (s.get_vehicle_cannot_use_station_reason)(v.shell(), st.0) })
+}
+
+/// `OrderGoesToStation`: checks whether the order goes to a station or not, i.e. whether the
+/// destination is a station.
+fn order_goes_to_station(v: VehicleRef, o: OrderView<'_>) -> bool {
+    o.is_type(OrderType::OT_GOTO_STATION)
+        || (v.vehicle_type() == VehicleType::VEH_AIRCRAFT
+            && o.is_type(OrderType::OT_GOTO_DEPOT)
+            && o.destination().to_station_id() != StationID::INVALID)
+}
+
+/// `DeleteOrderWarnings`: delete all news items regarding defective orders about a vehicle.
+/// This could kill still valid warnings (for example about void order when just another
+/// order gets added), but assume the company will notice the problems, when they're changing
+/// the orders.
+fn delete_order_warnings(v: VehicleRef, s: &Leaves) {
+    crate::news_func::delete_vehicle_news(v.index(s.newgrf()), AdviceType::Order);
+}
+
+/// `Order::GetLocation`: returns a tile somewhat representing the order destination (not
+/// suitable for pathfinding). `airport` gets the airport tile and not the station location
+/// for aircraft. Returns the destination of the order, or `INVALID_TILE` if none.
+pub(crate) fn get_location(
+    order: OrderView<'_>,
+    v: VehicleRef,
+    airport: bool,
+    s: &Leaves,
+) -> TileIndex {
+    match order.kind() {
+        OrderType::OT_GOTO_WAYPOINT | OrderType::OT_GOTO_STATION | OrderType::OT_IMPLICIT => {
+            if airport && v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+                return TileIndex((s.station_commands().airport_tile)(station_get(
+                    order.destination().to_station_id(),
+                    s,
+                )));
+            }
+            TileIndex((s.shared().base_station_xy)(order.destination().0))
+        }
+        OrderType::OT_GOTO_DEPOT => {
+            if order.destination() == DestinationID(crate::depot_type::DepotID::INVALID.0) {
+                return TileIndex::INVALID;
+            }
+            if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+                TileIndex((s.shared().station_xy)(order.destination().0))
+            } else {
+                TileIndex((s.depot_get)(order.destination().0))
+            }
+        }
+        _ => TileIndex::INVALID,
+    }
+}
+
+/// `GetOrderDistance`: get the distance between two orders of a vehicle. Conditional orders
+/// are resolved and the bigger distance of the two order branches is returned. `prev` is the
+/// origin order, `cur` the destination order and `conditional_depth` an internal parameter
+/// for resolving conditional orders.
+pub(crate) fn get_order_distance(
+    prev: VehicleOrderID,
+    cur: VehicleOrderID,
+    v: VehicleRef,
+    mut conditional_depth: i32,
+    s: &Leaves,
+) -> u32 {
+    assert_with(|| order_list(v, s).is_some());
+    let orderlist = order_list(v, s).unwrap();
+    // `orderlist.GetOrders()` indexes the full stored span, not `GetOrderAt`'s narrowed count.
+    let orders = |index: VehicleOrderID| orderlist.order(usize::from(index.0)).view();
+
+    if orders(cur).is_type(OrderType::OT_CONDITIONAL) {
+        if conditional_depth > i32::from(get_num_orders(v, s).0) {
+            return 0;
+        }
+
+        conditional_depth = conditional_depth.wrapping_add(1);
+
+        // The `uint` results are taken as `int`, compared, and returned as `uint`.
+        #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        {
+            let dist1 = get_order_distance(
+                prev,
+                orders(cur).condition_skip_to_order(),
+                v,
+                conditional_depth,
+                s,
+            ) as i32;
+            let dist2 =
+                get_order_distance(prev, orderlist.get_next(cur), v, conditional_depth, s) as i32;
+            return dist1.max(dist2) as u32;
+        }
+    }
+
+    let prev_tile = get_location(orders(prev), v, true, s);
+    let cur_tile = get_location(orders(cur), v, true, s);
+    if prev_tile == TileIndex::INVALID || cur_tile == TileIndex::INVALID {
+        return 0;
+    }
+    let map = s.shared().map();
+    if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+        map.distance_square(prev_tile, cur_tile)
+    } else {
+        map.distance_manhattan(prev_tile, cur_tile)
+    }
+}
+
+/// `InsertOrder`: insert a new order but skip the validation. `new_o` is the new order and
+/// `sel_ord` the position the order should be inserted at.
+pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID, s: &Leaves) {
+    /* Create new order and link in list */
+    match order_list(v, s) {
+        None => {
+            let list = new_order_list(
+                v,
+                // SAFETY: The new list's live vector; no handle addresses its orders yet.
+                #[allow(unsafe_code)]
+                |list| unsafe { (*list.vector).insert(0, new_o) },
+                s,
+            );
+            set_order_list(v, Some(list));
+        }
+        Some(list) => list.insert_order_at(new_o, sel_ord, s),
+    }
+
+    let mut u = first_shared(v, s);
+    delete_order_warnings(u.unwrap(), s);
+    while let Some(shared) = u {
+        assert_with(|| {
+            crate::vehicle_base::order_list(v.0.as_ptr())
+                == crate::vehicle_base::order_list(shared.0.as_ptr())
+        });
+        let c = consist(shared);
+
+        /* If there is added an order before the current one, we need
+         * to update the selected order. We do not change implicit/real order indices though.
+         * If the new order is between the current implicit order and real order, the implicit order will
+         * later skip the inserted order. */
+        if sel_ord <= c.cur_real_order_index() {
+            let cur = u32::from(c.cur_real_order_index().0) + 1;
+            /* Check if we don't go out of bound */
+            if cur < u32::from(get_num_orders(shared, s).0) {
+                // `uint` stored in `VehicleOrderID`; it is below the order count.
+                #[allow(clippy::cast_possible_truncation)]
+                c.set_cur_real_order_index(VehicleOrderID(cur as u8));
+            }
+        }
+        if sel_ord == c.cur_implicit_order_index() && is_ground_vehicle(shared) {
+            /* We are inserting an order just before the current implicit order.
+             * We do not know whether we will reach current implicit or the newly inserted order first.
+             * So, disable creation of implicit orders until we are on track again. */
+            assign_suppress_implicit_orders(shared, true);
+        }
+        if sel_ord <= c.cur_implicit_order_index() {
+            let cur = u32::from(c.cur_implicit_order_index().0) + 1;
+            /* Check if we don't go out of bound */
+            if cur < u32::from(get_num_orders(shared, s).0) {
+                // `uint` stored in `VehicleOrderID`; it is below the order count.
+                #[allow(clippy::cast_possible_truncation)]
+                c.set_cur_implicit_order_index(VehicleOrderID(cur as u8));
+            }
+        }
+        /* Unbunching data is no longer valid. */
+        c.reset_depot_unbunching();
+
+        /* Update any possible open window of the vehicle */
+        invalidate_vehicle_order(
+            shared,
+            i32::from(VehicleOrderID::INVALID_VEH_ORDER_ID.0) | (i32::from(sel_ord.0) << 8),
+            s,
+        );
+        u = next_shared(shared, s);
+    }
+
+    /* As we insert an order, the order to skip to will be 'wrong'. */
+    let mut cur_order_id = VehicleOrderID(0);
+    if let Some(list) = orders(v, s) {
+        for index in 0..list.len() {
+            let order = list.order(index);
+            if order.view().is_type(OrderType::OT_CONDITIONAL) {
+                let order_id = order.view().condition_skip_to_order();
+                if order_id >= sel_ord {
+                    order.set_condition_skip_to_order(VehicleOrderID(order_id.0.wrapping_add(1)));
+                }
+                if order_id == cur_order_id {
+                    // `(order_id + 1) % GetNumOrders()` in `int`, narrowed.
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    order.set_condition_skip_to_order(VehicleOrderID(
+                        ((i32::from(order_id.0) + 1) % i32::from(get_num_orders(v, s).0)) as u8,
+                    ));
+                }
+            }
+            cur_order_id = VehicleOrderID(cur_order_id.0.wrapping_add(1));
+        }
+    }
+
+    /* Make sure to rebuild the whole list */
+    invalidate_window_classes_data(
+        get_window_class_for_vehicle_type(v.vehicle_type()),
+        0,
+        false,
+    );
+}
+
+/// `DecloneOrder`: declone an order-list. `dst` is the vehicle whose orders are deleted.
+fn declone_order(dst: VehicleRef, flags: DoCommandFlags, s: &Leaves) {
+    if flags.test(DoCommandFlag::Execute) {
+        delete_vehicle_orders(dst, false, true, s);
+        invalidate_vehicle_order(
+            dst,
+            VehicleInvalidateWindowData::VIWD_REMOVE_ALL_ORDERS.0,
+            s,
+        );
+        invalidate_window_classes_data(
+            get_window_class_for_vehicle_type(dst.vehicle_type()),
+            0,
+            false,
+        );
+    }
+}
+
+/// `CancelLoadingDueToDeletedOrder`: cancel the current loading order of the vehicle as the
+/// order was deleted.
+fn cancel_loading_due_to_deleted_order(v: VehicleRef) {
+    assert_with(|| v.current_order().is_type(OrderType::OT_LOADING));
+    /* NON-stop flag is misused to see if a train is in a station that is
+     * on its order list or not */
+    current_order(v).set_non_stop_type(OrderNonStopFlags::EMPTY);
+    /* When full loading, "cancel" that order so the vehicle doesn't
+     * stay indefinitely at this station anymore. */
+    if v.current_order().is_full_load() {
+        current_order(v).set_load_type(OrderLoadType::LoadIfPossible);
+    }
+}
+
+/// `DeleteOrder`: delete an order but skip the parameter validation. `sel_ord` is the id of
+/// the order to be deleted.
+pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
+    order_list(v, s).unwrap().delete_order_at(sel_ord);
+
+    let mut u = first_shared(v, s);
+    delete_order_warnings(u.unwrap(), s);
+    while let Some(shared) = u {
+        assert_with(|| {
+            crate::vehicle_base::order_list(v.0.as_ptr())
+                == crate::vehicle_base::order_list(shared.0.as_ptr())
+        });
+        let c = consist(shared);
+
+        if sel_ord == c.cur_real_order_index()
+            && shared.current_order().is_type(OrderType::OT_LOADING)
+        {
+            cancel_loading_due_to_deleted_order(shared);
+        }
+
+        if sel_ord < c.cur_real_order_index() {
+            c.set_cur_real_order_index(VehicleOrderID(c.cur_real_order_index().0.wrapping_sub(1)));
+        } else if sel_ord == c.cur_real_order_index() {
+            update_real_order_index(shared, s);
+        }
+
+        if sel_ord < c.cur_implicit_order_index() {
+            c.set_cur_implicit_order_index(VehicleOrderID(
+                c.cur_implicit_order_index().0.wrapping_sub(1),
+            ));
+        } else if sel_ord == c.cur_implicit_order_index() {
+            /* Make sure the index is valid */
+            if c.cur_implicit_order_index() >= get_num_orders(shared, s) {
+                c.set_cur_implicit_order_index(VehicleOrderID(0));
+            }
+
+            /* Skip non-implicit orders for the implicit-order-index (e.g. if the current implicit order was deleted */
+            while c.cur_implicit_order_index() != c.cur_real_order_index()
+                && !get_order(shared, c.cur_implicit_order_index(), s)
+                    .unwrap()
+                    .view()
+                    .is_type(OrderType::OT_IMPLICIT)
+            {
+                c.set_cur_implicit_order_index(VehicleOrderID(
+                    c.cur_implicit_order_index().0.wrapping_add(1),
+                ));
+                if c.cur_implicit_order_index() >= get_num_orders(shared, s) {
+                    c.set_cur_implicit_order_index(VehicleOrderID(0));
+                }
+            }
+        }
+        /* Unbunching data is no longer valid. */
+        c.reset_depot_unbunching();
+
+        /* Update any possible open window of the vehicle */
+        invalidate_vehicle_order(
+            shared,
+            i32::from(sel_ord.0) | (i32::from(VehicleOrderID::INVALID_VEH_ORDER_ID.0) << 8),
+            s,
+        );
+        u = next_shared(shared, s);
+    }
+
+    /* As we delete an order, the order to skip to will be 'wrong'. */
+    let mut cur_order_id = VehicleOrderID(0);
+    if let Some(list) = orders(v, s) {
+        for index in 0..list.len() {
+            let order = list.order(index);
+            if order.view().is_type(OrderType::OT_CONDITIONAL) {
+                let mut order_id = i32::from(order.view().condition_skip_to_order().0);
+                if order_id >= i32::from(sel_ord.0) {
+                    order_id = (order_id - 1).max(0);
+                }
+                if order_id == i32::from(cur_order_id.0) {
+                    order_id = (order_id + 1) % i32::from(get_num_orders(v, s).0);
+                }
+                // The `int` result stored in `VehicleOrderID`.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                order.set_condition_skip_to_order(VehicleOrderID(order_id as u8));
+            }
+            cur_order_id = VehicleOrderID(cur_order_id.0.wrapping_add(1));
+        }
+    }
+
+    invalidate_window_classes_data(
+        get_window_class_for_vehicle_type(v.vehicle_type()),
+        0,
+        false,
+    );
+}
+
+/// `DeleteVehicleOrders`: delete all orders from a vehicle. With `keep_orderlist` the order
+/// list is not freed, only emptied. With `reset_order_indices`, `cur_implicit_order_index`
+/// and `cur_real_order_index` are reset and the current full load order is cancelled (if the
+/// vehicle is loading); without it, the caller makes sure the order indices are valid after
+/// messing with them.
+pub(crate) fn delete_vehicle_orders(
+    v: VehicleRef,
+    keep_orderlist: bool,
+    reset_order_indices: bool,
+    s: &Leaves,
+) {
+    delete_order_warnings(v, s);
+
+    if is_order_list_shared(v, s) {
+        /* Remove ourself from the shared order list. */
+        remove_from_shared(v, s);
+        set_order_list(v, None);
+    } else if let Some(list) = order_list(v, s) {
+        /* Remove the orders */
+        list.free_chain(keep_orderlist, s);
+        if !keep_orderlist {
+            set_order_list(v, None);
+        }
+    }
+
+    let c = consist(v);
+    /* Unbunching data is no longer valid. */
+    c.reset_depot_unbunching();
+
+    if reset_order_indices {
+        c.set_cur_real_order_index(VehicleOrderID(0));
+        c.set_cur_implicit_order_index(VehicleOrderID(0));
+        if v.current_order().is_type(OrderType::OT_LOADING) {
+            cancel_loading_due_to_deleted_order(v);
+        }
+    }
+}
+
+/// `CheckAircraftOrderDistance`: check if an aircraft has enough range for an order list.
+/// `v_new` is the aircraft to check and `v_order` the vehicle currently holding the order
+/// list. True if the aircraft has enough range for the orders.
+#[allow(unsafe_code)]
+fn check_aircraft_order_distance(v_new: VehicleRef, v_order: VehicleRef, s: &Leaves) -> bool {
+    let aircraft = v_new.aircraft_state();
+    if read_field!(aircraft, cached_max_range) == 0 {
+        return true;
+    }
+    if get_num_orders(v_order, s).0 == 0 {
+        return true;
+    }
+
+    let orderlist = order_list(v_order, s).unwrap();
+
+    /* Iterate over all orders to check the distance between all
+     * 'goto' orders and their respective next order (of any type). */
+    let mut cur = VehicleOrderID(0);
+    while cur < orderlist.get_num_orders() {
+        match orderlist.order(usize::from(cur.0)).view().kind() {
+            OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_DEPOT | OrderType::OT_GOTO_WAYPOINT => {
+                /* If we don't have a next order, we've reached the end and must check the first order instead. */
+                if get_order_distance(cur, orderlist.get_next(cur), v_order, 0, s)
+                    > read_field!(aircraft, cached_max_range_sqr)
+                {
+                    return false;
                 }
             }
             _ => {}
         }
-        u32::from(packed)
+        cur = VehicleOrderID(cur.0.wrapping_add(1));
     }
+
+    true
 }
 
-/// `Order::ShouldStopAtStation`: check whether the given vehicle should stop at
-/// the given station based on this order and the non-stop settings.
-/// `last_station_visited` is the vehicle's `last_station_visited`.
-pub(crate) fn should_stop_at_station(
-    p: *const Order,
-    last_station_visited: StationID,
-    station: StationID,
-) -> bool {
-    use crate::order_type::{
-        OrderDepotTypeFlag, OrderDepotTypeFlags, OrderNonStopFlag, OrderNonStopFlags,
-    };
-    let order = load(p);
-    let is_dest_station = order.kind() == OT_GOTO_STATION && order.destination == station.0;
+/// `CheckOrders`: check the orders of a vehicle, to see if there are invalid orders and
+/// stuff.
+#[allow(unsafe_code)]
+pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
+    // SAFETY: The settings catalogue addresses the process-wide setting; one field-sized load.
+    let order_review_system = || unsafe { s.shared().settings().order_review_system.read() };
+    /* Does the user wants us to check things? */
+    if order_review_system() == 0 {
+        return;
+    }
 
-    (order.kind() != OT_GOTO_DEPOT
-        || OrderDepotTypeFlags(order.depot_type()).test(OrderDepotTypeFlag::PartOfOrders))
-        // Do stop only when we've not just been there
-        && last_station_visited != station
-        /* Finally do stop when there is no non-stop flag set for this type of station. */
-        && !OrderNonStopFlags(order.non_stop()).test(if is_dest_station {
-            OrderNonStopFlag::NoDestination
-        } else {
-            OrderNonStopFlag::NoIntermediate
-        })
-}
+    /* Do nothing for crashed vehicles */
+    if v.vehstatus().test(VehState::Crashed) {
+        return;
+    }
 
-struct Control {
-    g: Game,
-}
-impl Control {
-    fn initialize_list(&self, list: *mut c_void, v: *mut c_void) {
-        reenter!(openttd_rust_list_init(list, v, self.g.0));
+    /* Do nothing for stopped vehicles if setting is '1' */
+    if order_review_system() == 1 && v.vehstatus().test(VehState::Stopped) {
+        return;
     }
-    fn new_list(&self, v: *mut c_void, input: Option<Order>, source: *mut c_void) -> *mut c_void {
-        let g = self.g;
-        let list = (g.0.allocate_list)();
-        if let Some(order) = input {
-            reenter!(openttd_rust_order_vector_insert(
-                g.vector(list),
-                0,
-                &raw const order
-            ));
-        }
-        if !source.is_null() {
-            let vector = g.vector(source);
-            let data = data(vector);
-            let count = read_field!(vector, length);
-            reenter!(openttd_rust_order_vector_assign(
-                g.vector(list),
-                data,
-                count
-            ));
-        }
-        self.initialize_list(list, v);
-        list
+
+    /* do nothing we we're not the first vehicle in a share-chain */
+    if first_shared(v, s) != Some(v) {
+        return;
     }
-    fn insert(&self, v: *mut c_void, order: Order, index: u8) {
-        let g = self.g;
-        let list = g.orders(v);
-        if list.is_null() {
-            let list = self.new_list(v, Some(order), ptr::null_mut());
-            write_field!(g.vehicle(v), orders, list);
-        } else {
-            reenter!(openttd_rust_list_insert(
-                list,
-                u32::from(index),
-                &raw const order,
-                g.0
-            ));
-        }
-        let mut u = g.first(v);
-        g.delete_order_news(u);
-        while !u.is_null() {
-            let state = g.consist(u);
-            if index <= read_field!(state, real) {
-                let next = u16::from(read_field!(state, real)) + 1;
-                if next < u16::from(g.count(u)) {
-                    write_field!(state, real, next as u8);
+
+    /* Only check every 20 days, so that we don't flood the message log */
+    if v.owner() == CompanyID((s.shared().local_company)()) && v.day_counter() % 20 == 0 {
+        let mut message = StringID::INVALID_STRING_ID;
+
+        /* Check the order list */
+        let mut n_st = 0i32;
+
+        if let Some(list) = orders(v, s) {
+            for index in 0..list.len() {
+                let order = list.order(index).view();
+                /* Dummy order? */
+                if order.is_type(OrderType::OT_DUMMY) {
+                    message = STR_NEWS_VEHICLE_HAS_VOID_ORDER;
+                    break;
                 }
-            }
-            if index == read_field!(state, implicit) && g.vehicle_type(u) < u64::from(VEH_SHIP) {
-                assign_suppress_implicit(native_vehicle(u, g.0.base), true);
-            }
-            if index <= read_field!(state, implicit) {
-                let next = u16::from(read_field!(state, implicit)) + 1;
-                if next < u16::from(g.count(u)) {
-                    write_field!(state, implicit, next as u8);
-                }
-            }
-            g.reset(u);
-            g.invalidate_order(u, i32::from(u16::from(u8::MAX) | (u16::from(index) << 8)));
-            u = g.next(u);
-        }
-        let list = g.orders(v);
-        for i in 0..g.stored_count(list) {
-            let mut o = g.stored_order(list, i);
-            if o.kind() == OT_CONDITIONAL {
-                let target = o.flags;
-                if target >= index {
-                    o.flags = target.wrapping_add(1);
-                }
-                if target == i as u8 {
-                    o.flags = ((u16::from(target) + 1) % u16::from(g.count(v))) as u8;
-                }
-                g.put_stored(list, i, o);
-            }
-        }
-        g.invalidate_vehicle_list(v);
-    }
-    fn cancel_loading(&self, v: *mut c_void) {
-        let mut order = self.g.current(v);
-        order.kind &= !0xc0;
-        if matches!(order.load(), 2 | 3) {
-            order.flags &= !0x70;
-        }
-        self.g.put_current(v, order);
-    }
-    fn delete(&self, v: *mut c_void, index: u8) {
-        let g = self.g;
-        g.delete_order_at(g.orders(v), VehicleOrderID(index));
-        let mut u = g.first(v);
-        g.delete_order_news(u);
-        while !u.is_null() {
-            let state = g.consist(u);
-            if index == read_field!(state, real) && g.current(u).kind() == OT_LOADING {
-                self.cancel_loading(u);
-            }
-            if index < read_field!(state, real) {
-                write_field!(state, real, read_field!(state, real).wrapping_sub(1));
-            } else if index == read_field!(state, real) {
-                g.update_real(u);
-            }
-            if index < read_field!(state, implicit) {
-                write_field!(
-                    state,
-                    implicit,
-                    read_field!(state, implicit).wrapping_sub(1)
-                );
-            } else if index == read_field!(state, implicit) {
-                if read_field!(state, implicit) >= g.count(u) {
-                    write_field!(state, implicit, 0);
-                }
-                while read_field!(state, implicit) != read_field!(state, real)
-                    && g.vehicle_order(u, read_field!(state, implicit))
-                        .unwrap()
-                        .kind()
-                        != 8
-                {
-                    write_field!(
-                        state,
-                        implicit,
-                        read_field!(state, implicit).wrapping_add(1)
-                    );
-                    if read_field!(state, implicit) >= g.count(u) {
-                        write_field!(state, implicit, 0);
+                /* Does station have a load-bay for this vehicle? */
+                if order.is_type(OrderType::OT_GOTO_STATION) {
+                    let st = order.destination().to_station_id();
+
+                    n_st = n_st.wrapping_add(1);
+                    if !can_vehicle_use_station(v, st) {
+                        message = STR_NEWS_VEHICLE_HAS_INVALID_ENTRY;
+                    } else if v.vehicle_type() == VehicleType::VEH_AIRCRAFT
+                        && ((s.base.engine)(v).aircraft_subtype() & crate::engine_type::AIR_FAST)
+                            != 0
+                        && {
+                            let airports = crate::newgrf_airport::runtime();
+                            (airports.fta_flags)(crate::newgrf_airport::station_fta(
+                                crate::newgrf_airport::station_by_id(st.0, airports),
+                                airports,
+                            )) & crate::airport::FTA_SHORT_STRIP
+                                != 0
+                        }
+                        && !(s.shared().no_jetcrash)()
+                        && message == StringID::INVALID_STRING_ID
+                    {
+                        message = STR_NEWS_PLANE_USES_TOO_SHORT_RUNWAY;
                     }
                 }
             }
-            g.reset(u);
-            g.invalidate_order(u, i32::from(u16::from(index) | (u16::from(u8::MAX) << 8)));
-            u = g.next(u);
         }
-        let list = g.orders(v);
-        for i in 0..g.stored_count(list) {
-            let mut o = g.stored_order(list, i);
-            if o.kind() == OT_CONDITIONAL {
-                let mut target = o.flags;
-                if target >= index {
-                    target = target.saturating_sub(1);
-                }
-                if target == i as u8 {
-                    target = ((u16::from(target) + 1) % u16::from(g.count(v))) as u8;
-                }
-                o.flags = target;
-                g.put_stored(list, i, o);
+
+        /* Check if the last and the first order are the same */
+        if get_num_orders(v, s).0 > 1 {
+            let list = orders(v, s).unwrap();
+
+            if list
+                .order(0)
+                .view()
+                .equals(list.order(list.len() - 1).view())
+            {
+                message = STR_NEWS_VEHICLE_HAS_DUPLICATE_ENTRY;
             }
         }
-        g.invalidate_vehicle_list(v);
-    }
-    fn delete_implicit(&self, v: *mut c_void) {
-        let g = self.g;
-        let state = g.consist(v);
-        let record = native_vehicle(v, g.0.base);
-        if g.vehicle_type(v) < u64::from(VEH_SHIP) && suppress_implicit(record) {
-            assign_suppress_implicit(record, false);
-            write_field!(state, implicit, read_field!(state, real));
-            g.invalidate_order(v, 0);
+
+        /* Do we only have 1 station in our order list? */
+        if n_st < 2 && message == StringID::INVALID_STRING_ID {
+            message = STR_NEWS_VEHICLE_HAS_TOO_FEW_ORDERS;
+        }
+
+        if let Some(list) = order_list(v, s) {
+            // SAFETY: The live list shell; the C++ body checks it under `WITH_ASSERT`.
+            unsafe { (s.debug_check_sanity)(list.shell()) };
+        }
+
+        /* We don't have a problem */
+        if message == StringID::INVALID_STRING_ID {
             return;
         }
-        let list = g.orders(v);
-        let orders = if list.is_null() {
-            ptr::null_mut()
+
+        let index = v.index(s.newgrf());
+        crate::news_func::add_vehicle_advice_news_item(
+            AdviceType::Order,
+            &crate::strings_func::get_encoded_string(
+                message,
+                &[crate::strings_type::StringParameterData::Integer(
+                    u64::from(index.0),
+                )],
+            ),
+            index,
+        );
+    }
+}
+
+/// `RemoveOrderFromAllVehicles`: removes an order from all vehicles. Triggers when, say, a
+/// station is removed. `type` is the type of the order (`OT_GOTO_[STATION|DEPOT|WAYPOINT]`)
+/// and `destination` a `StationID`, `DepotID` or `WaypointID`. `hangar` is only used for
+/// airports in the destination: when false, remove airport and hangar orders; when true,
+/// remove either airport or hangar order.
+pub(crate) fn remove_order_from_all_vehicles(
+    r#type: OrderType,
+    destination: DestinationID,
+    hangar: bool,
+    s: &Leaves,
+) {
+    /* Aircraft have StationIDs for depot orders and never use DepotIDs
+     * This fact is handled specially below
+     */
+
+    /* Go through all vehicles */
+    let mut from = 0;
+    while let Some(v) = (s.shared().vehicle_next)(from) {
+        from = v.index(s.newgrf()).0.wrapping_add(1);
+        let is_aircraft = v.vehicle_type() == VehicleType::VEH_AIRCRAFT;
+        if (if is_aircraft && v.current_order().is_type(OrderType::OT_GOTO_DEPOT) && !hangar {
+            OrderType::OT_GOTO_STATION
         } else {
-            data(g.vector(list))
+            v.current_order().kind()
+        }) == r#type
+            && (!hangar || is_aircraft)
+            && v.current_order().destination() == destination
+        {
+            current_order(v).make_dummy();
+            set_window_dirty(
+                WindowClass::WC_VEHICLE_VIEW,
+                WindowNumber::from(v.index(s.newgrf())),
+            );
+        }
+
+        let Some(list) = order_list(v, s) else {
+            continue;
         };
-        let mut current = read_field!(state, implicit);
-        while current != u8::MAX {
-            if read_field!(state, implicit) == read_field!(state, real) {
-                break;
+
+        /* Clear the order from the order-list */
+        let mut id = VehicleOrderID(0);
+        while id < get_num_orders(v, s) {
+            let mut next_id = VehicleOrderID(id.0.wrapping_add(1));
+            let list = order_list(v, s).unwrap_or(list);
+            let order = list.get_order_at(id).unwrap();
+            let mut ot = order.view().kind();
+            if ot == OrderType::OT_GOTO_DEPOT
+                && order
+                    .view()
+                    .depot_action_flags()
+                    .test(OrderDepotActionFlag::NearestDepot)
+            {
+                id = next_id;
+                continue;
             }
-            // Match the original captured span and unchanged local index after
-            // DeleteOrder. Erasure never reallocates; all capacity slots remain
-            // typed/live, including the retained former last order. No reference
-            // or borrow crosses the deletion/window callbacks.
-            if load(at(orders, usize::from(current))).kind() == OT_IMPLICIT {
-                self.delete(v, read_field!(state, implicit));
-            } else {
-                let next = g.next_index(g.orders(v), current);
-                if current < next {
-                    write_field!(
-                        state,
-                        implicit,
-                        read_field!(state, implicit).wrapping_add(1)
+            if ot == OrderType::OT_GOTO_DEPOT && hangar && !is_aircraft {
+                id = next_id;
+                continue; // Not an aircraft? Can't have a hangar order.
+            }
+            if ot == OrderType::OT_IMPLICIT
+                || (is_aircraft && ot == OrderType::OT_GOTO_DEPOT && !hangar)
+            {
+                ot = OrderType::OT_GOTO_STATION;
+            }
+            if ot == r#type && order.view().destination() == destination {
+                /* We want to clear implicit orders, but we don't want to make them
+                 * dummy orders. They should just vanish. Also check the actual order
+                 * type as ot is currently OT_GOTO_STATION. */
+                if order.view().is_type(OrderType::OT_IMPLICIT) {
+                    delete_order(v, id, s);
+                    next_id = id;
+                    id = next_id;
+                    continue;
+                }
+
+                /* Clear wait time */
+                list.update_total_duration(-i32::from(order.view().wait_time()));
+                if order.view().is_wait_timetabled() {
+                    list.update_timetable_duration(-i32::from(order.view().timetabled_wait()));
+                    order.set_wait_timetabled(false);
+                }
+                order.set_wait_time(0);
+
+                /* Clear order, preserving travel time */
+                let travel_timetabled = order.view().is_travel_timetabled();
+                order.make_dummy();
+                order.set_travel_timetabled(travel_timetabled);
+
+                let mut w = first_shared(v, s);
+                while let Some(shared) = w {
+                    /* In GUI, simulate by removing the order and adding it back */
+                    invalidate_vehicle_order(
+                        shared,
+                        i32::from(id.0) | (i32::from(VehicleOrderID::INVALID_VEH_ORDER_ID.0) << 8),
+                        s,
                     );
-                } else {
-                    write_field!(state, implicit, 0);
+                    invalidate_vehicle_order(
+                        shared,
+                        (i32::from(VehicleOrderID::INVALID_VEH_ORDER_ID.0) << 8) | i32::from(id.0),
+                        s,
+                    );
+                    w = next_shared(shared, s);
                 }
-                current = next;
             }
+            id = next_id;
         }
     }
-    fn move_order(&self, v: *mut c_void, from: u8, to: u8) {
-        let g = self.g;
-        let list = g.orders(v);
-        reenter!(openttd_rust_order_vector_move(
-            g.vector(list),
-            usize::from(from),
-            usize::from(to)
-        ));
-        let mut u = g.first(v);
-        g.delete_order_news(u);
-        fn remap(index: u8, from: u8, to: u8) -> u8 {
-            if index == from {
-                to
-            } else if index > from && index <= to {
-                index.wrapping_sub(1)
-            } else if index < from && index >= to {
-                index.wrapping_add(1)
-            } else {
-                index
-            }
-        }
-        while !u.is_null() {
-            let state = g.consist(u);
-            write_field!(state, real, remap(read_field!(state, real), from, to));
-            write_field!(
-                state,
-                implicit,
-                remap(read_field!(state, implicit), from, to)
-            );
-            g.reset(u);
-            g.invalidate_order(u, i32::from(u16::from(from) | (u16::from(to) << 8)));
-            u = g.next(u);
-        }
-        for i in 0..g.stored_count(list) {
-            let mut o = g.stored_order(list, i);
-            if o.kind() == OT_CONDITIONAL {
-                o.flags = remap(o.flags, from, to);
-                g.put_stored(list, i, o);
-            }
-        }
-        g.invalidate_vehicle_list(v);
-    }
-    fn add_shared(&self, v: *mut c_void, shared: *mut c_void) {
-        let g = self.g;
-        if g.orders(shared).is_null() {
-            let list = self.new_list(shared, None, ptr::null_mut());
-            write_field!(g.vehicle(v), orders, list);
-            write_field!(g.vehicle(shared), orders, list);
-        }
-        let next = g.next(shared);
-        write_field!(g.vehicle(v), next, next);
-        write_field!(g.vehicle(v), previous, shared);
-        write_field!(g.vehicle(shared), next, v);
-        if !next.is_null() {
-            write_field!(g.vehicle(next), previous, v);
-        }
-        let list = g.list(g.orders(shared));
-        write_field!(list, vehicles, read_field!(list, vehicles).wrapping_add(1));
-    }
-    fn remove_shared(&self, v: *mut c_void) {
-        let g = self.g;
-        let first = g.first(v);
-        let were_first = first == v;
-        // Window number is copied before changing the head, as in the original.
-        let identifier = g.shared_window(v, first);
-        let list = g.list(g.orders(v));
-        write_field!(list, vehicles, read_field!(list, vehicles).wrapping_sub(1));
-        if read_field!(list, first) == v {
-            write_field!(list, first, g.next(v));
-        }
-        let previous = g.previous(v);
-        let next = g.next(v);
-        if !were_first {
-            write_field!(g.vehicle(previous), next, next);
-        }
-        if !next.is_null() {
-            write_field!(g.vehicle(next), previous, previous);
-        }
-        if read_field!(list, vehicles) == 1 {
-            g.close_shared_window(v, identifier as u32);
-            g.invalidate_order(g.first(v), ((-2i64) as u64) as i32);
-        } else if were_first {
-            g.invalidate_shared_window(
-                v,
-                identifier as u32,
-                (g.vehicle_id(g.first(v)) | (1 << 31)) as i32,
-            );
-        }
-        write_field!(g.vehicle(v), next, ptr::null_mut());
-        write_field!(g.vehicle(v), previous, ptr::null_mut());
-    }
-    fn delete_vehicle_orders(&self, v: *mut c_void, keep: bool, reset: bool) {
-        let g = self.g;
-        g.delete_order_news(v);
-        let list = g.orders(v);
-        if !list.is_null() && read_field!(g.list(list), vehicles) > 1 {
-            self.remove_shared(v);
-            write_field!(g.vehicle(v), orders, ptr::null_mut());
-        } else if !list.is_null() {
-            let remove = reenter!(openttd_rust_list_free(list, (u32::from(keep)) as u8, g.0));
-            if remove != 0 {
-                g.delete_list(list);
-            }
-            if !keep {
-                write_field!(g.vehicle(v), orders, ptr::null_mut());
-            }
-        }
-        g.reset(v);
-        if reset {
-            let state = g.consist(v);
-            write_field!(state, implicit, 0);
-            write_field!(state, real, 0);
-            if g.current(v).kind() == OT_LOADING {
-                self.cancel_loading(v);
-            }
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_insert_order(
-    v: *mut c_void,
-    index: u8,
-    input: *const Order,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    let input = load(input);
-    control.insert(v, input, index);
-    0
+
+    order_backup_remove_order(r#type, destination, hangar, s);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_delete_vehicle_orders(
-    v: *mut c_void,
-    keep: u8,
-    reset: u8,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.delete_vehicle_orders(v, keep != 0, reset != 0);
-    0
+/// `CheckForValidOrders`: check if a vehicle has any valid orders. False if there are no
+/// valid orders; conditional orders are not considered valid destination orders.
+fn check_for_valid_orders(v: VehicleRef, s: &Leaves) -> bool {
+    any_order(v, s, |order| order.is_goto_order())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_add_shared(
-    v: *mut c_void,
-    shared: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.add_shared(v, shared);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_delete_implicit(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.delete_implicit(v);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_bulk(
-    v: *mut c_void,
-    field: u8,
-    value: u16,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    let g = control.g;
-    {
-        let valid = reenter!(openttd_rust_timetable_validate_bulk(v, field, output, g.0));
-        if valid == 0 {
-            return 0;
-        }
-        if execute != 0 {
-            let mut index = 0u8;
-            while index < g.count(v) {
-                let order = g.vehicle_order(v, index);
-                if order.is_some_and(|o| o.kind() != OT_IMPLICIT) {
-                    g.change_timetable_command(v, index, field, value);
-                }
-                index = index.wrapping_add(1);
-            }
-        }
-        1
+/// `OrderConditionCompare`: compare the variable and value based on the given comparator.
+pub(crate) fn order_condition_compare(
+    occ: OrderConditionComparator,
+    variable: i32,
+    value: i32,
+) -> bool {
+    match occ {
+        OrderConditionComparator::Equal => variable == value,
+        OrderConditionComparator::NotEqual => variable != value,
+        OrderConditionComparator::LessThan => variable < value,
+        OrderConditionComparator::LessThanOrEqual => variable <= value,
+        OrderConditionComparator::MoreThan => variable > value,
+        OrderConditionComparator::MoreThanOrEqual => variable >= value,
+        OrderConditionComparator::IsTrue => variable != 0,
+        OrderConditionComparator::IsFalse => variable == 0,
+        _ => not_reached(),
     }
 }
 
-/// `ProcessOrders`: handle the orders of a vehicle and determine the next place to go to
-/// if needed. Returns true if the order was a new (non-implicit) order.
-pub(crate) fn process_orders(v: VehicleRef, leaves: &'static Leaves) -> bool {
-    let control = Control { g: Game(leaves) };
-    control.process(v.shell())
+/// `ToPercent16`: converts a "fract" value 0..65535 to "percent" value 0..100.
+fn to_percent16(i: u32) -> i32 {
+    // `(i * 101) >> 16` of a `uint` fraction is at most 100.
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "the original's `uint` result, at most 100"
+    )]
+    let percent = ((i * 101) >> 16) as i32;
+    percent
+}
+
+/// `ProcessConditionalOrder`: process a conditional order and determine the next order.
+/// `order` is the order the vehicle currently has. Returns the index of next order to jump
+/// to, or `INVALID_VEH_ORDER_ID` to use the next order.
+pub(crate) fn process_conditional_order(
+    order: OrderView<'_>,
+    v: VehicleRef,
+    s: &Leaves,
+) -> VehicleOrderID {
+    if order.kind() != OrderType::OT_CONDITIONAL {
+        return VehicleOrderID::INVALID_VEH_ORDER_ID;
+    }
+
+    let occ = order.condition_comparator();
+    let value = i32::from(order.condition_value());
+
+    let skip_order = match order.condition_variable() {
+        OrderConditionVariable::LoadPercentage => order_condition_compare(
+            occ,
+            i32::from(crate::vehicle::visits::percent_filled(v, None, s.visits())),
+            value,
+        ),
+        OrderConditionVariable::Reliability => order_condition_compare(
+            occ,
+            to_percent16(u32::from(v.reliability(s.newgrf()))),
+            value,
+        ),
+        OrderConditionVariable::MaxReliability => order_condition_compare(
+            occ,
+            to_percent16(u32::from((s.base.engine)(v).reliability())),
+            value,
+        ),
+        OrderConditionVariable::MaxSpeed => {
+            order_condition_compare(occ, v.get_display_max_speed().wrapping_mul(10) / 16, value)
+        }
+        OrderConditionVariable::Age => order_condition_compare(
+            occ,
+            crate::timer_game_common::date_to_year(v.age(s.newgrf()).0),
+            value,
+        ),
+        OrderConditionVariable::RequiresService => order_condition_compare(
+            occ,
+            i32::from(crate::vehicle::maintenance::needs_servicing(v, s.base)),
+            value,
+        ),
+        OrderConditionVariable::Unconditionally => true,
+        OrderConditionVariable::RemainingLifetime => order_condition_compare(
+            occ,
+            crate::timer_game_common::date_to_year(
+                v.max_age(s.newgrf())
+                    .0
+                    .wrapping_sub(v.age(s.newgrf()).0)
+                    .wrapping_add(DAYS_IN_LEAP_YEAR)
+                    .wrapping_sub(1),
+            )
+            .max(0),
+            value,
+        ),
+        _ => not_reached(),
+    };
+
+    if skip_order {
+        order.condition_skip_to_order()
+    } else {
+        VehicleOrderID::INVALID_VEH_ORDER_ID
+    }
 }
 
 /// `UpdateOrderDest`: update the vehicle's destination tile from an order. `order` is the
@@ -2805,2292 +3357,3620 @@ pub(crate) fn update_order_dest(
     order: OrderView<'_>,
     conditional_depth: i32,
     pbs_look_ahead: bool,
-    leaves: &'static Leaves,
+    s: &Leaves,
 ) -> bool {
-    let control = Control { g: Game(leaves) };
-    control.destination(v.shell(), order.copied(), conditional_depth, pbs_look_ahead)
+    if conditional_depth > i32::from(get_num_orders(v, s).0) {
+        current_order(v).free();
+        crate::vehicle_base::set_dest_tile(v, TileIndex(0));
+        return false;
+    }
+
+    match order.kind() {
+        OrderType::OT_GOTO_STATION => {
+            let tile = get_order_station_location(v, order.destination().to_station_id(), s);
+            crate::vehicle_base::set_dest_tile(v, tile);
+            return true;
+        }
+
+        OrderType::OT_GOTO_DEPOT => {
+            if order.depot_type().test(OrderDepotTypeFlag::Service)
+                && !crate::vehicle::maintenance::needs_servicing(v, s.base)
+            {
+                assert_with(|| !pbs_look_ahead);
+                update_vehicle_timetable(v, true, s);
+                increment_real_order_index(v, s);
+            } else if v
+                .current_order()
+                .depot_action_flags()
+                .test(OrderDepotActionFlag::NearestDepot)
+            {
+                /* If the vehicle can't find its destination, delay its next search.
+                 * In case many vehicles are in this state, use the vehicle index to spread out pathfinder calls. */
+                // `v->index % Ticks::DAY_TICKS` compares with the `uint16_t` fraction in `uint`.
+                #[allow(clippy::cast_sign_loss, reason = "the positive `DAY_TICKS` as `uint`")]
+                let spread = v.index(s.newgrf()).0 % (DAY_TICKS as u32);
+                if !(v.dest_tile() == TileIndex(0)
+                    && u32::from(crate::timer_game_common::economy_fraction()) != spread)
+                {
+                    /* We need to search for the nearest depot (hangar). */
+                    let c = s.scheduler();
+                    let closest_depot = crate::vehicle_base::find_closest_depot(v, c);
+
+                    if closest_depot.found {
+                        /* PBS reservations cannot reverse */
+                        if pbs_look_ahead && closest_depot.reverse {
+                            return false;
+                        }
+
+                        crate::vehicle_base::set_dest_tile(v, closest_depot.location);
+                        current_order(v).set_destination(closest_depot.destination);
+
+                        /* If there is no depot in front, reverse automatically (trains only) */
+                        if v.vehicle_type() == VehicleType::VEH_TRAIN && closest_depot.reverse {
+                            reverse_train_direction(v, s);
+                        }
+
+                        if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+                            let a = v.aircraft_state();
+                            #[allow(unsafe_code)]
+                            let (state, targetairport) =
+                                (read_field!(a, state), read_field!(a, targetairport));
+                            if state == crate::airport::FLYING
+                                && DestinationID(targetairport) != closest_depot.destination
+                            {
+                                /* The aircraft is now heading for a different hangar than the next in the orders */
+                                crate::aircraft::aircraft_next_airport_pos_and_order(
+                                    c.aircraft(),
+                                    crate::aircraft::Vehicle::of(v, v.index(s.newgrf())),
+                                );
+                            }
+                        }
+                        return true;
+                    }
+
+                    /* If there is no depot, we cannot help PBS either. */
+                    if pbs_look_ahead {
+                        return false;
+                    }
+
+                    update_vehicle_timetable(v, true, s);
+                    increment_real_order_index(v, s);
+                }
+            } else {
+                if v.vehicle_type() != VehicleType::VEH_AIRCRAFT {
+                    crate::vehicle_base::set_dest_tile(
+                        v,
+                        TileIndex((s.depot_get)(order.destination().0)),
+                    );
+                } else {
+                    let a = v.aircraft_state();
+                    let destination = v.current_order().destination();
+                    #[allow(unsafe_code)]
+                    let targetairport = read_field!(a, targetairport);
+                    if DestinationID(targetairport) != destination {
+                        /* The aircraft is now heading for a different hangar than the next in the orders */
+                        let tile = get_order_station_location(v, destination.to_station_id(), s);
+                        crate::vehicle_base::set_dest_tile(v, tile);
+                    }
+                }
+                return true;
+            }
+        }
+
+        OrderType::OT_GOTO_WAYPOINT => {
+            crate::vehicle_base::set_dest_tile(
+                v,
+                TileIndex((s.shared().base_station_xy)(order.destination().0)),
+            );
+            return true;
+        }
+
+        OrderType::OT_CONDITIONAL => {
+            assert_with(|| !pbs_look_ahead);
+            let next_order = process_conditional_order(order, v, s);
+            if next_order != VehicleOrderID::INVALID_VEH_ORDER_ID {
+                let con = consist(v);
+                /* Jump to next_order. cur_implicit_order_index becomes exactly that order,
+                 * cur_real_order_index might come after next_order. */
+                update_vehicle_timetable(v, false, s);
+                con.set_cur_real_order_index(next_order);
+                con.set_cur_implicit_order_index(next_order);
+                update_real_order_index(v, s);
+                con.set_current_order_time(
+                    con.current_order_time().wrapping_add(i32::from(
+                        get_order(v, con.cur_real_order_index(), s)
+                            .unwrap()
+                            .view()
+                            .timetabled_travel(),
+                    )),
+                );
+
+                /* Disable creation of implicit orders.
+                 * When inserting them we do not know that we would have to make the conditional orders point to them. */
+                if is_ground_vehicle(v) {
+                    assign_suppress_implicit_orders(v, true);
+                }
+            } else {
+                update_vehicle_timetable(v, true, s);
+                increment_real_order_index(v, s);
+            }
+        }
+
+        _ => {
+            crate::vehicle_base::set_dest_tile(v, TileIndex(0));
+            return false;
+        }
+    }
+
+    let con = consist(v);
+    assert_with(|| con.cur_implicit_order_index() < get_num_orders(v, s));
+    assert_with(|| con.cur_real_order_index() < get_num_orders(v, s));
+
+    /* Get the current order */
+    let mut order = get_order(v, con.cur_real_order_index(), s).map(OrderRef::view);
+    if order.is_some_and(|order| order.is_type(OrderType::OT_IMPLICIT)) {
+        assert_with(|| get_num_manual_orders(v, s).0 == 0);
+        order = None;
+    }
+
+    let Some(order) = order else {
+        current_order(v).free();
+        crate::vehicle_base::set_dest_tile(v, TileIndex(0));
+        return false;
+    };
+
+    current_order(v).assign_order(order.copied());
+    update_order_dest(
+        v,
+        order,
+        conditional_depth.wrapping_add(1),
+        pbs_look_ahead,
+        s,
+    )
 }
 
-/// `ProcessConditionalOrder`: process a conditional order and determine the next order.
-/// Returns the index of the next order to jump to, or `INVALID_VEH_ORDER_ID` to use the
-/// next order.
-pub(crate) fn process_conditional_order(
-    order: OrderView<'_>,
-    v: VehicleRef,
-    leaves: &'static Leaves,
-) -> VehicleOrderID {
-    VehicleOrderID(Game(leaves).conditional(order.copied(), v.shell()))
+/// `v->GetOrderStationLocation(station)`, through the station command table's binding of the
+/// virtual.
+fn get_order_station_location(v: VehicleRef, station: StationID, s: &Leaves) -> TileIndex {
+    TileIndex((s.station_commands().order_station_location)(v, station.0))
 }
 
-/// `Vehicle::IncrementRealOrderIndex`: advance `cur_real_order_index` to the next real order,
-/// keeps care of the wrap-around and invalidates the GUI. `cur_implicit_order_index` is
-/// incremented as well, if it was equal to `cur_real_order_index`, i.e. `cur_real_order_index`
-/// is skipped but not any implicit orders.
-pub(crate) fn increment_real_order_index(v: VehicleRef, leaves: &'static Leaves) {
-    Game(leaves).increment_real(v.shell());
+/// `Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(DoCommandFlag::Execute, v->index, false)`.
+#[allow(unsafe_code)]
+fn reverse_train_direction(v: VehicleRef, s: &Leaves) {
+    // SAFETY: The maintenance table names the process-lifetime transaction table.
+    let build = (unsafe { &*s.maintenance().transaction }.build_services)();
+    let c = s.scheduler();
+    let veh_id = v.index(s.newgrf());
+    command_do(
+        s,
+        DoCommandFlags::from_element(DoCommandFlag::Execute),
+        |out, flags| {
+            crate::train::cmd_reverse_train_direction(
+                build,
+                out.0,
+                flags,
+                crate::train::CmdReverseTrainDirection {
+                    veh_id,
+                    reverse_single_veh: false,
+                },
+                c.train(),
+                c.shared(),
+            );
+        },
+    );
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_process_orders(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    u64::from(control.process(v))
+/// `ProcessOrders`: handle the orders of a vehicle and determine the next place to go to if
+/// needed. Returns true if the vehicle is eligible for reversing (basically only when leaving
+/// a station).
+pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
+    match v.current_order().kind() {
+        OrderType::OT_GOTO_DEPOT => {
+            /* Let a depot order in the orderlist interrupt. */
+            if !v
+                .current_order()
+                .depot_type()
+                .test(OrderDepotTypeFlag::PartOfOrders)
+            {
+                return false;
+            }
+        }
+
+        OrderType::OT_LOADING => return false,
+
+        OrderType::OT_LEAVESTATION => {
+            if v.vehicle_type() != VehicleType::VEH_AIRCRAFT {
+                return false;
+            }
+        }
+
+        _ => {}
+    }
+
+    /*
+     * Reversing because of order change is allowed only just after leaving a
+     * station (and the difficulty setting to allowed, of course)
+     * this can be detected because only after OT_LEAVESTATION, current_order
+     * will be reset to nothing. (That also happens if no order, but in that case
+     * it won't hit the point in code where may_reverse is checked)
+     */
+    let may_reverse = v.current_order().is_type(OrderType::OT_NOTHING);
+
+    /* Check if we've reached a 'via' destination. */
+    if ((v.current_order().is_type(OrderType::OT_GOTO_STATION)
+        && v.current_order()
+            .non_stop()
+            .test(OrderNonStopFlag::NoDestination))
+        || v.current_order().is_type(OrderType::OT_GOTO_WAYPOINT))
+        && crate::map_func::World::new(s.shared())
+            .is_tile_type(v.tile(), crate::tile_type::TileType::MP_STATION)
+        && v.current_order().destination().to_station_id()
+            == crate::map_func::World::new(s.shared()).get_station_index(v.tile())
+    {
+        delete_unreached_implicit_orders(v, s);
+        /* We set the last visited station here because we do not want
+         * the train to stop at this 'via' station if the next order
+         * is a no-non-stop order; in that case not setting the last
+         * visited station will cause the vehicle to still stop. */
+        v.set_last_station_visited(v.current_order().destination().to_station_id());
+        update_vehicle_timetable(v, true, s);
+        increment_implicit_order_index(v, s);
+    }
+
+    /* Get the current order */
+    let c = consist(v);
+    assert_with(|| {
+        c.cur_implicit_order_index().0 == 0 || c.cur_implicit_order_index() < get_num_orders(v, s)
+    });
+    update_real_order_index(v, s);
+
+    let mut order = get_order(v, c.cur_real_order_index(), s).map(OrderRef::view);
+    if order.is_some_and(|order| order.is_type(OrderType::OT_IMPLICIT)) {
+        assert_with(|| get_num_manual_orders(v, s).0 == 0);
+        order = None;
+    }
+
+    /* If no order, do nothing. */
+    let order = match order {
+        Some(order)
+            if !(v.vehicle_type() == VehicleType::VEH_AIRCRAFT
+                && !check_for_valid_orders(v, s)) =>
+        {
+            order
+        }
+        _ => {
+            if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+                /* Aircraft do something vastly different here, so handle separately */
+                crate::aircraft::handle_missing_aircraft_orders(
+                    s.scheduler().aircraft(),
+                    crate::aircraft::Vehicle::of(v, v.index(s.newgrf())),
+                );
+                return false;
+            }
+
+            current_order(v).free();
+            crate::vehicle_base::set_dest_tile(v, TileIndex(0));
+            return false;
+        }
+    };
+
+    /* If it is unchanged, keep it. */
+    if order.equals(v.current_order())
+        && (v.vehicle_type() == VehicleType::VEH_AIRCRAFT || v.dest_tile() != TileIndex(0))
+        && (v.vehicle_type() != VehicleType::VEH_SHIP
+            || !order.is_type(OrderType::OT_GOTO_STATION)
+            || TileIndex(ship_station_tile(order.destination().to_station_id(), s))
+                != TileIndex::INVALID)
+    {
+        return false;
+    }
+
+    /* Otherwise set it, and determine the destination tile. */
+    current_order(v).assign_order(order.copied());
+
+    invalidate_vehicle_order(v, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
+    match v.vehicle_type() {
+        VehicleType::VEH_ROAD | VehicleType::VEH_TRAIN => {}
+
+        VehicleType::VEH_AIRCRAFT | VehicleType::VEH_SHIP => {
+            set_window_classes_dirty(get_window_class_for_vehicle_type(v.vehicle_type()));
+        }
+
+        _ => not_reached(),
+    }
+
+    update_order_dest(v, order, 0, false, s) && may_reverse
 }
 
-/// `Vehicle::GetNextStoppingStation`: the stations the vehicle will stop at next, each
-/// passed to `next_station` in the order the original appends them.
-pub(crate) fn get_next_stopping_station(
-    v: VehicleRef,
-    leaves: &'static Leaves,
-    next_station: &mut impl FnMut(StationID),
+/// `Station::Get(st)->ship_station.tile`, read in place through the station command table's
+/// `ship_station` accessor.
+#[allow(unsafe_code)]
+fn ship_station_tile(st: StationID, s: &Leaves) -> u32 {
+    let area = (s.station_commands().ship_station_area)(station_get(st, s));
+    read_field!(area, tile).0
+}
+
+/// `CheckOwnership(owner)`, written to `cost`: true where it succeeded.
+fn check_ownership(owner: Owner, cost: Cost<'_>, s: &Leaves) -> bool {
+    crate::company::check_ownership(s.company(), cost, owner, TileIndex(0));
+    cost.ok()
+}
+
+/// `return CMD_ERROR;`
+fn cmd_error(cost: Cost<'_>) {
+    crate::command_func::cmd_error(cost);
+}
+
+/// `return CommandCost(msg);`
+fn command_cost(cost: Cost<'_>, msg: StringID) {
+    cost.error(msg.0);
+}
+
+/// `return CommandCost(msg, extra_msg);`
+fn command_cost_extra(cost: Cost<'_>, msg: StringID, extra_msg: StringID) {
+    cost.error_extra(msg, extra_msg);
+}
+
+/// `Command<cmd>::Do(flags, args)` around the Rust body `body` of a command with no tile
+/// argument; the result is discarded, as each caller here discards it.
+#[allow(unsafe_code)]
+fn command_do(s: &Leaves, flags: DoCommandFlags, mut body: impl FnMut(Cost<'_>, DoCommandFlags)) {
+    // SAFETY: `with_cost` constructs and destroys the native result around the call.
+    unsafe {
+        // SAFETY: The station command table names the process-lifetime cost table.
+        crate::command::with_cost(&*s.station_commands().cost, |out| {
+            crate::command::nested(s.commands(), s.shared(), out, 0, flags.0, |flags| {
+                body(out, DoCommandFlags(flags));
+            });
+        });
+    }
+}
+
+/// `CmdInsertOrder`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdInsertOrder<'a> {
+    /// ID of the vehicle.
+    pub(crate) veh: VehicleID,
+    /// The selected order (if any). If the last order is given, the order will be inserted
+    /// before that one; the maximum vehicle order id is 254.
+    pub(crate) sel_ord: VehicleOrderID,
+    /// Order to insert.
+    pub(crate) new_order: OrderView<'a>,
+}
+
+/// `CmdInsertOrder`: add an order to the orderlist of a vehicle. The cost of this operation
+/// or an error is written to `cost`.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the original body, with its comments"
+)]
+pub(crate) fn cmd_insert_order(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdInsertOrder<'_>,
 ) {
-    let g = Game(leaves);
-    let list = g.orders(v.shell());
-    if list.is_null() {
+    let CmdInsertOrder {
+        veh,
+        sel_ord,
+        new_order,
+    } = args;
+    let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
         return;
     }
-    g.stopping(list, v.shell(), u8::MAX, 0, &mut |station| {
-        next_station(StationID(station));
-    });
-}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_location(
-    v: *mut c_void,
-    airport: u8,
-    input: *const Order,
-    leaves: &'static Leaves,
-) -> u64 {
-    let g = Game(leaves);
+    /* Validate properties we don't want to have different from default as they are set by other commands. */
+    if new_order.refit_cargo() != CargoType(CARGO_NO_REFIT)
+        || new_order.wait_time() != 0
+        || new_order.travel_time() != 0
+        || new_order.max_speed() != u16::MAX
+    {
+        return cmd_error(cost);
+    }
 
-    let input = load(input);
-    u64::from(g.get_location(input, v, airport != 0).0)
-}
+    /* Check if the inserted order is to the correct destination (owner, type),
+     * and has the correct flags if any */
+    match new_order.kind() {
+        OrderType::OT_GOTO_STATION => {
+            let st_id = new_order.destination().to_station_id();
+            let st = (s.catchment().station_if_valid)(st_id);
+            if st.is_null() {
+                return cmd_error(cost);
+            }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_distance(
-    v: *mut c_void,
-    previous: u8,
-    current: u8,
-    depth: i32,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    let g = control.g;
-    u64::from(g.get_order_distance(VehicleOrderID(previous), VehicleOrderID(current), v, depth))
-}
+            if base_station_owner(st, s) != Owner::NONE
+                && !check_ownership(base_station_owner(st, s), cost, s)
+            {
+                return;
+            }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_insert(
-    v: *mut c_void,
-    index: u8,
-    execute: u8,
-    input: *const Order,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    let input = load(input);
-    control.insert_command(v, index, input, execute != 0, output)
-}
+            if !can_vehicle_use_station(v, st_id) {
+                return command_cost_extra(
+                    cost,
+                    STR_ERROR_CAN_T_ADD_ORDER,
+                    get_vehicle_cannot_use_station_reason(v, st_id, s),
+                );
+            }
+            let mut u = first_shared(v, s);
+            while let Some(shared) = u {
+                if !can_vehicle_use_station(shared, st_id) {
+                    return command_cost_extra(
+                        cost,
+                        STR_ERROR_CAN_T_ADD_ORDER_SHARED,
+                        get_vehicle_cannot_use_station_reason(shared, st_id, s),
+                    );
+                }
+                u = next_shared(shared, s);
+            }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_delete(
-    v: *mut c_void,
-    index: u8,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.delete_command(v, index, execute != 0, output)
-}
+            /* Non stop only allowed for ground vehicles. */
+            if new_order.non_stop().any() && !is_ground_vehicle(v) {
+                return cmd_error(cost);
+            }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_skip(
-    v: *mut c_void,
-    index: u8,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.skip_command(v, index, execute != 0, output)
-}
+            /* Filter invalid load/unload types. */
+            match new_order.load_type() {
+                OrderLoadType::LoadIfPossible | OrderLoadType::NoLoad => {}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_move(
-    v: *mut c_void,
-    from: u8,
-    to: u8,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.move_command(v, from, to, execute != 0, output)
-}
+                OrderLoadType::FullLoad | OrderLoadType::FullLoadAny => {
+                    if has_unbunching_order(v, s) {
+                        return command_cost(cost, STR_ERROR_UNBUNCHING_NO_FULL_LOAD);
+                    }
+                }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_modify(
-    v: *mut c_void,
-    index: u8,
-    field: u8,
-    value: u16,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.modify_command(v, index, field, value, execute != 0, output)
-}
+                _ => return cmd_error(cost),
+            }
+            match new_order.unload_type() {
+                OrderUnloadType::UnloadIfPossible
+                | OrderUnloadType::Unload
+                | OrderUnloadType::Transfer
+                | OrderUnloadType::NoUnload => {}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_refit(
-    v: *mut c_void,
-    index: u8,
-    cargo: u8,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.refit_command(v, index, cargo, execute != 0, output)
-}
+                _ => return cmd_error(cost),
+            }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_clone(
-    v: *mut c_void,
-    source: *mut c_void,
-    action: u8,
-    execute: u8,
-    output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    // SAFETY: the native command passes its live CommandCost slot and the vehicle
-    // shells `Vehicle::GetIfValid` returned.
-    unsafe {
-        cmd_clone_order(
-            leaves,
-            output,
-            execute != 0,
-            CmdCloneOrder {
-                action: CloneOptions(action),
-                veh_dst: v,
-                veh_src: source,
-            },
-        )
+            /* Filter invalid stop locations */
+            match new_order.stop_location() {
+                OrderStopLocation::NearEnd | OrderStopLocation::Middle => {
+                    if v.vehicle_type() != VehicleType::VEH_TRAIN {
+                        return cmd_error(cost);
+                    }
+                }
+
+                OrderStopLocation::FarEnd => {}
+
+                _ => return cmd_error(cost),
+            }
+        }
+
+        OrderType::OT_GOTO_DEPOT => {
+            if !new_order
+                .depot_action_flags()
+                .test(OrderDepotActionFlag::NearestDepot)
+            {
+                if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+                    let st_id = new_order.destination().to_station_id();
+                    let st = (s.catchment().station_if_valid)(st_id);
+
+                    if st.is_null() {
+                        return cmd_error(cost);
+                    }
+
+                    if !check_ownership(base_station_owner(st, s), cost, s) {
+                        return;
+                    }
+
+                    let airports = crate::newgrf_airport::runtime();
+                    if !can_vehicle_use_station(v, st_id)
+                        || !crate::station_base::airport_has_hangar(
+                            crate::newgrf_airport::station_by_id(st_id.0, airports),
+                            airports,
+                        )
+                    {
+                        return cmd_error(cost);
+                    }
+                } else {
+                    let dp = (s.depots().depot)(new_order.destination().to_depot_id());
+
+                    if dp.is_null() {
+                        return cmd_error(cost);
+                    }
+
+                    // SAFETY: The live depot `Depot::GetIfValid` returned.
+                    #[allow(unsafe_code)]
+                    let xy = TileIndex(unsafe { (s.depots().xy)(dp) });
+                    let map = crate::map_func::World::new(s.shared());
+                    if !check_ownership(map.owner(xy), cost, s) {
+                        return;
+                    }
+
+                    match v.vehicle_type() {
+                        VehicleType::VEH_TRAIN => {
+                            if !map.is_rail_depot_tile(xy) {
+                                return cmd_error(cost);
+                            }
+                        }
+
+                        VehicleType::VEH_ROAD => {
+                            if !map.road_depot(xy) {
+                                return cmd_error(cost);
+                            }
+                        }
+
+                        VehicleType::VEH_SHIP => {
+                            if !map.is_ship_depot_tile(xy) {
+                                return cmd_error(cost);
+                            }
+                        }
+
+                        _ => return cmd_error(cost),
+                    }
+                }
+            }
+
+            if new_order.non_stop().any() && !is_ground_vehicle(v) {
+                return cmd_error(cost);
+            }
+
+            /* Check depot order type is valid. */
+            let mut depot_order_type = new_order.depot_type();
+            if depot_order_type.test(OrderDepotTypeFlag::PartOfOrders) {
+                depot_order_type = depot_order_type.reset(OrderDepotTypeFlag::Service);
+            }
+            depot_order_type = depot_order_type.reset(OrderDepotTypeFlag::PartOfOrders);
+            if depot_order_type.any() {
+                return cmd_error(cost);
+            }
+
+            /* Check depot action type is valid. */
+            if new_order
+                .depot_action_flags()
+                .reset_all(
+                    OrderDepotActionFlags::from_element(OrderDepotActionFlag::Halt)
+                        .with(OrderDepotActionFlags::from_element(
+                            OrderDepotActionFlag::NearestDepot,
+                        ))
+                        .with(OrderDepotActionFlags::from_element(
+                            OrderDepotActionFlag::Unbunch,
+                        )),
+                )
+                .any()
+            {
+                return cmd_error(cost);
+            }
+
+            /* Vehicles cannot have a "service if needed" order that also has a depot action. */
+            if new_order.depot_type().test(OrderDepotTypeFlag::Service)
+                && new_order.depot_action_flags().any_of(
+                    OrderDepotActionFlags::from_element(OrderDepotActionFlag::Halt).with(
+                        OrderDepotActionFlags::from_element(OrderDepotActionFlag::Unbunch),
+                    ),
+                )
+            {
+                return cmd_error(cost);
+            }
+
+            /* Check if we're allowed to have a new unbunching order. */
+            if new_order
+                .depot_action_flags()
+                .test(OrderDepotActionFlag::Unbunch)
+            {
+                if has_full_load_order(v, s) {
+                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD);
+                }
+                if has_unbunching_order(v, s) {
+                    return command_cost(cost, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED);
+                }
+                if has_conditional_order(v, s) {
+                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL);
+                }
+            }
+        }
+
+        OrderType::OT_GOTO_WAYPOINT => {
+            let wp = (s.waypoint_get_if_valid)(new_order.destination().0);
+            if wp.is_null() {
+                return cmd_error(cost);
+            }
+            let facilities = s.station_commands().facilities(wp);
+
+            match v.vehicle_type() {
+                VehicleType::VEH_TRAIN => {
+                    if !facilities.test(crate::station_type::StationFacility::Train) {
+                        return command_cost_extra(
+                            cost,
+                            STR_ERROR_CAN_T_ADD_ORDER,
+                            STR_ERROR_NO_RAIL_WAYPOINT,
+                        );
+                    }
+
+                    if !check_ownership(base_station_owner(wp, s), cost, s) {
+                        return;
+                    }
+                }
+
+                VehicleType::VEH_ROAD => {
+                    if !facilities.test(crate::station_type::StationFacility::BusStop)
+                        && !facilities.test(crate::station_type::StationFacility::TruckStop)
+                    {
+                        return command_cost_extra(
+                            cost,
+                            STR_ERROR_CAN_T_ADD_ORDER,
+                            STR_ERROR_NO_ROAD_WAYPOINT,
+                        );
+                    }
+
+                    if !check_ownership(base_station_owner(wp, s), cost, s) {
+                        return;
+                    }
+                }
+
+                VehicleType::VEH_SHIP => {
+                    if !facilities.test(crate::station_type::StationFacility::Dock) {
+                        return command_cost_extra(
+                            cost,
+                            STR_ERROR_CAN_T_ADD_ORDER,
+                            STR_ERROR_NO_BUOY,
+                        );
+                    }
+                    if base_station_owner(wp, s) != Owner::NONE
+                        && !check_ownership(base_station_owner(wp, s), cost, s)
+                    {
+                        return;
+                    }
+                }
+
+                _ => return cmd_error(cost),
+            }
+
+            /* Order flags can be any of the following for waypoints:
+             * [non-stop]
+             * non-stop orders (if any) are only valid for trains and road vehicles */
+            if new_order.non_stop().any() && !is_ground_vehicle(v) {
+                return cmd_error(cost);
+            }
+        }
+
+        OrderType::OT_CONDITIONAL => {
+            let skip_to = new_order.condition_skip_to_order();
+            if skip_to.0 != 0 && skip_to >= get_num_orders(v, s) {
+                return cmd_error(cost); // Always allow jumping to the first (even when there is no order).
+            }
+            if new_order.condition_variable() >= OrderConditionVariable::End {
+                return cmd_error(cost);
+            }
+            if has_unbunching_order(v, s) {
+                return command_cost(cost, STR_ERROR_UNBUNCHING_NO_CONDITIONAL);
+            }
+
+            let occ = new_order.condition_comparator();
+            if occ >= OrderConditionComparator::End {
+                return cmd_error(cost);
+            }
+            match new_order.condition_variable() {
+                OrderConditionVariable::RequiresService => {
+                    if occ != OrderConditionComparator::IsTrue
+                        && occ != OrderConditionComparator::IsFalse
+                    {
+                        return cmd_error(cost);
+                    }
+                }
+
+                OrderConditionVariable::Unconditionally => {
+                    if occ != OrderConditionComparator::Equal {
+                        return cmd_error(cost);
+                    }
+                    if new_order.condition_value() != 0 {
+                        return cmd_error(cost);
+                    }
+                }
+
+                variable => {
+                    if matches!(
+                        variable,
+                        OrderConditionVariable::LoadPercentage
+                            | OrderConditionVariable::Reliability
+                            | OrderConditionVariable::MaxReliability
+                    ) && new_order.condition_value() > 100
+                    {
+                        return cmd_error(cost);
+                    }
+                    if occ == OrderConditionComparator::IsTrue
+                        || occ == OrderConditionComparator::IsFalse
+                    {
+                        return cmd_error(cost);
+                    }
+                }
+            }
+        }
+
+        _ => return cmd_error(cost),
+    }
+
+    if sel_ord > get_num_orders(v, s) {
+        return cmd_error(cost);
+    }
+
+    if get_num_orders(v, s) >= MAX_VEH_ORDER_ID {
+        return command_cost(cost, STR_ERROR_TOO_MANY_ORDERS);
+    }
+    if order_list(v, s).is_none() && (s.list_can_allocate_item)() == 0 {
+        return command_cost(cost, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        insert_order(v, new_order.copied(), sel_ord, s);
     }
 }
 
-/// `CmdCloneOrder`'s arguments, with each vehicle as its shell.
+/// `CmdDeleteOrder`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdDeleteOrder {
+    /// The ID of the vehicle.
+    pub(crate) veh_id: VehicleID,
+    /// The order to delete (max 255).
+    pub(crate) sel_ord: VehicleOrderID,
+}
+
+/// `CmdDeleteOrder`: delete an order from the orderlist of a vehicle.
+pub(crate) fn cmd_delete_order(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdDeleteOrder,
+) {
+    let CmdDeleteOrder { veh_id, sel_ord } = args;
+    let Some(v) = vehicle_get_if_valid(veh_id, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    /* If we did not select an order, we maybe want to de-clone the orders */
+    if sel_ord >= get_num_orders(v, s) {
+        return declone_order(v, flags, s);
+    }
+
+    if get_order(v, sel_ord, s).is_none() {
+        return cmd_error(cost);
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        delete_order(v, sel_ord, s);
+    }
+}
+
+/// `CmdSkipToOrder`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdSkipToOrder {
+    /// The ID of the vehicle which order is skipped.
+    pub(crate) veh_id: VehicleID,
+    /// The selected order to which we want to skip.
+    pub(crate) sel_ord: VehicleOrderID,
+}
+
+/// `CmdSkipToOrder`: goto order of order-list.
+pub(crate) fn cmd_skip_to_order(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdSkipToOrder,
+) {
+    let CmdSkipToOrder { veh_id, sel_ord } = args;
+    let Some(v) = vehicle_get_if_valid(veh_id, s).filter(|v| {
+        v.is_primary_vehicle()
+            && sel_ord != consist(*v).cur_implicit_order_index()
+            && sel_ord < get_num_orders(*v, s)
+            && get_num_orders(*v, s).0 >= 2
+    }) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        if v.current_order().is_type(OrderType::OT_LOADING) {
+            crate::vehicle::visits::leave_station(v, s.visits());
+        }
+
+        let c = consist(v);
+        c.set_cur_real_order_index(sel_ord);
+        c.set_cur_implicit_order_index(sel_ord);
+        update_real_order_index(v, s);
+
+        /* Unbunching data is no longer valid. */
+        c.reset_depot_unbunching();
+
+        invalidate_vehicle_order(v, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
+
+        /* We have an aircraft/ship, they have a mini-schedule, so update them all */
+        if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
+            set_window_classes_dirty(WindowClass::WC_AIRCRAFT_LIST);
+        }
+        if v.vehicle_type() == VehicleType::VEH_SHIP {
+            set_window_classes_dirty(WindowClass::WC_SHIPS_LIST);
+        }
+    }
+}
+
+/// `CmdMoveOrder`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdMoveOrder {
+    /// The ID of the vehicle.
+    pub(crate) veh: VehicleID,
+    /// The order to move.
+    pub(crate) moving_order: VehicleOrderID,
+    /// The target order.
+    pub(crate) target_order: VehicleOrderID,
+}
+
+/// `CmdMoveOrder`: move an order inside the orderlist. The target order will move one place
+/// down in the orderlist if you move the order upwards else it'll move it one place down.
+pub(crate) fn cmd_move_order(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdMoveOrder,
+) {
+    let CmdMoveOrder {
+        veh,
+        moving_order,
+        target_order,
+    } = args;
+    let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    /* Don't make senseless movements */
+    if moving_order >= get_num_orders(v, s)
+        || target_order >= get_num_orders(v, s)
+        || moving_order == target_order
+        || get_num_orders(v, s).0 <= 1
+    {
+        return cmd_error(cost);
+    }
+
+    /* Don't move an empty order */
+    if get_order(v, moving_order, s).is_none() {
+        return cmd_error(cost);
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        let list = order_list(v, s).unwrap();
+        list.move_order(moving_order, target_order);
+
+        /* Update shared list */
+        let mut u = first_shared(v, s);
+
+        delete_order_warnings(u.unwrap(), s);
+
+        let remap = |index: VehicleOrderID| {
+            if index == moving_order {
+                target_order
+            } else if index > moving_order && index <= target_order {
+                VehicleOrderID(index.0.wrapping_sub(1))
+            } else if index < moving_order && index >= target_order {
+                VehicleOrderID(index.0.wrapping_add(1))
+            } else {
+                index
+            }
+        };
+        while let Some(shared) = u {
+            let c = consist(shared);
+            /* Update the current order.
+             * There are multiple ways to move orders, which result in cur_implicit_order_index
+             * and cur_real_order_index to not longer make any sense. E.g. moving another
+             * real order between them.
+             *
+             * Basically one could choose to preserve either of them, but not both.
+             * While both ways are suitable in this or that case from a human point of view, neither
+             * of them makes really sense.
+             * However, from an AI point of view, preserving cur_real_order_index is the most
+             * predictable and transparent behaviour.
+             *
+             * With that decision it basically does not matter what we do to cur_implicit_order_index.
+             * If we change orders between the implicit- and real-index, the implicit orders are mostly likely
+             * completely out-dated anyway. So, keep it simple and just keep cur_implicit_order_index as well.
+             * The worst which can happen is that a lot of implicit orders are removed when reaching current_order.
+             */
+            c.set_cur_real_order_index(remap(c.cur_real_order_index()));
+            c.set_cur_implicit_order_index(remap(c.cur_implicit_order_index()));
+            /* Unbunching data is no longer valid. */
+            c.reset_depot_unbunching();
+
+            assert_with(|| {
+                crate::vehicle_base::order_list(v.0.as_ptr())
+                    == crate::vehicle_base::order_list(shared.0.as_ptr())
+            });
+            /* Update any possible open window of the vehicle */
+            invalidate_vehicle_order(
+                shared,
+                i32::from(moving_order.0) | (i32::from(target_order.0) << 8),
+                s,
+            );
+            u = next_shared(shared, s);
+        }
+
+        /* As we move an order, the order to skip to will be 'wrong'. */
+        if let Some(list) = orders(v, s) {
+            for index in 0..list.len() {
+                let order = list.order(index);
+                if order.view().is_type(OrderType::OT_CONDITIONAL) {
+                    order
+                        .set_condition_skip_to_order(remap(order.view().condition_skip_to_order()));
+                }
+            }
+        }
+
+        /* Make sure to rebuild the whole list */
+        invalidate_window_classes_data(
+            get_window_class_for_vehicle_type(v.vehicle_type()),
+            0,
+            false,
+        );
+    }
+}
+
+/// `CmdModifyOrder`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdModifyOrder {
+    /// ID of the vehicle.
+    pub(crate) veh: VehicleID,
+    /// The selected order (if any). If the last order is given, the order will be inserted
+    /// before that one; the maximum vehicle order id is 254.
+    pub(crate) sel_ord: VehicleOrderID,
+    /// What data to modify (`ModifyOrderFlags`).
+    pub(crate) mof: ModifyOrderFlags,
+    /// The data to modify.
+    pub(crate) data: u16,
+}
+
+/// `CmdModifyOrder`: modify an order in the orderlist of a vehicle.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the original body, with its comments"
+)]
+pub(crate) fn cmd_modify_order(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdModifyOrder,
+) {
+    let CmdModifyOrder {
+        veh,
+        sel_ord,
+        mof,
+        data,
+    } = args;
+    if mof >= ModifyOrderFlags::MOF_END {
+        return cmd_error(cost);
+    }
+
+    let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    /* Is it a valid order? */
+    if sel_ord >= get_num_orders(v, s) {
+        return cmd_error(cost);
+    }
+
+    let order = get_order(v, sel_ord, s);
+    assert_with(|| order.is_some());
+    let order = order.unwrap();
+    match order.view().kind() {
+        OrderType::OT_GOTO_STATION => {
+            if mof != ModifyOrderFlags::MOF_NON_STOP
+                && mof != ModifyOrderFlags::MOF_STOP_LOCATION
+                && mof != ModifyOrderFlags::MOF_UNLOAD
+                && mof != ModifyOrderFlags::MOF_LOAD
+            {
+                return cmd_error(cost);
+            }
+        }
+
+        OrderType::OT_GOTO_DEPOT => {
+            if mof != ModifyOrderFlags::MOF_NON_STOP && mof != ModifyOrderFlags::MOF_DEPOT_ACTION {
+                return cmd_error(cost);
+            }
+        }
+
+        OrderType::OT_GOTO_WAYPOINT => {
+            if mof != ModifyOrderFlags::MOF_NON_STOP {
+                return cmd_error(cost);
+            }
+        }
+
+        OrderType::OT_CONDITIONAL => {
+            if mof != ModifyOrderFlags::MOF_COND_VARIABLE
+                && mof != ModifyOrderFlags::MOF_COND_COMPARATOR
+                && mof != ModifyOrderFlags::MOF_COND_VALUE
+                && mof != ModifyOrderFlags::MOF_COND_DESTINATION
+            {
+                return cmd_error(cost);
+            }
+        }
+
+        _ => return cmd_error(cost),
+    }
+
+    // `static_cast<..>(data)` of the `uint16_t` data to each `uint8_t` enumeration.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the original's static_cast to `uint8_t`"
+    )]
+    let byte = data as u8;
+    match mof {
+        ModifyOrderFlags::MOF_NON_STOP => {
+            if !is_ground_vehicle(v) {
+                return cmd_error(cost);
+            }
+
+            let nonstop_flags = OrderNonStopFlags(byte);
+            if nonstop_flags == order.view().non_stop() {
+                return cmd_error(cost);
+            }
+
+            /* Test for invalid flags. */
+            let nonstop_flags = OrderNonStopFlags(
+                nonstop_flags.0
+                    & !(OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate)
+                        .with(OrderNonStopFlags::from_element(
+                            OrderNonStopFlag::NoDestination,
+                        ))
+                        .0),
+            );
+            if nonstop_flags.any() {
+                return cmd_error(cost);
+            }
+        }
+
+        ModifyOrderFlags::MOF_STOP_LOCATION => {
+            if v.vehicle_type() != VehicleType::VEH_TRAIN {
+                return cmd_error(cost);
+            }
+            if data >= u16::from(OrderStopLocation::End.0) {
+                return cmd_error(cost);
+            }
+        }
+
+        ModifyOrderFlags::MOF_UNLOAD => {
+            if order
+                .view()
+                .non_stop()
+                .test(OrderNonStopFlag::NoDestination)
+            {
+                return cmd_error(cost);
+            }
+
+            let unload_type = OrderUnloadType(byte);
+            if unload_type == order.view().unload_type() {
+                return cmd_error(cost);
+            }
+
+            /* Test for invalid types. */
+            match unload_type {
+                OrderUnloadType::UnloadIfPossible
+                | OrderUnloadType::Unload
+                | OrderUnloadType::Transfer
+                | OrderUnloadType::NoUnload => {}
+
+                _ => return cmd_error(cost),
+            }
+        }
+
+        ModifyOrderFlags::MOF_LOAD => {
+            if order
+                .view()
+                .non_stop()
+                .test(OrderNonStopFlag::NoDestination)
+            {
+                return cmd_error(cost);
+            }
+
+            let load_type = OrderLoadType(byte);
+            if load_type == order.view().load_type() {
+                return cmd_error(cost);
+            }
+
+            /* Test for invalid types. */
+            match load_type {
+                OrderLoadType::LoadIfPossible | OrderLoadType::NoLoad => {}
+
+                OrderLoadType::FullLoad | OrderLoadType::FullLoadAny => {
+                    if has_unbunching_order(v, s) {
+                        return command_cost(cost, STR_ERROR_UNBUNCHING_NO_FULL_LOAD);
+                    }
+                }
+
+                _ => return cmd_error(cost),
+            }
+        }
+
+        ModifyOrderFlags::MOF_DEPOT_ACTION => {
+            let depot_action = OrderDepotAction(byte);
+            if depot_action >= OrderDepotAction::End {
+                return cmd_error(cost);
+            }
+            /* Check if we are allowed to add unbunching. We are always allowed to remove it. */
+            if depot_action == OrderDepotAction::Unbunch {
+                /* Only one unbunching order is allowed in a vehicle's orders. If this order already has an unbunching action, no error is needed. */
+                if has_unbunching_order(v, s)
+                    && !order
+                        .view()
+                        .depot_action_flags()
+                        .test(OrderDepotActionFlag::Unbunch)
+                {
+                    return command_cost(cost, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED);
+                }
+                /* We don't allow unbunching if the vehicle has a conditional order. */
+                if has_conditional_order(v, s) {
+                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL);
+                }
+                /* We don't allow unbunching if the vehicle has a full load order. */
+                if has_full_load_order(v, s) {
+                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD);
+                }
+            }
+        }
+
+        ModifyOrderFlags::MOF_COND_VARIABLE => {
+            let cond_variable = OrderConditionVariable(byte);
+            if cond_variable >= OrderConditionVariable::End {
+                return cmd_error(cost);
+            }
+        }
+
+        ModifyOrderFlags::MOF_COND_COMPARATOR => {
+            let cond_comparator = OrderConditionComparator(byte);
+            if cond_comparator >= OrderConditionComparator::End {
+                return cmd_error(cost);
+            }
+            match order.view().condition_variable() {
+                OrderConditionVariable::Unconditionally => return cmd_error(cost),
+
+                OrderConditionVariable::RequiresService => {
+                    if cond_comparator != OrderConditionComparator::IsTrue
+                        && cond_comparator != OrderConditionComparator::IsFalse
+                    {
+                        return cmd_error(cost);
+                    }
+                }
+
+                _ => {
+                    if cond_comparator == OrderConditionComparator::IsTrue
+                        || cond_comparator == OrderConditionComparator::IsFalse
+                    {
+                        return cmd_error(cost);
+                    }
+                }
+            }
+        }
+
+        ModifyOrderFlags::MOF_COND_VALUE => match order.view().condition_variable() {
+            OrderConditionVariable::Unconditionally | OrderConditionVariable::RequiresService => {
+                return cmd_error(cost);
+            }
+
+            OrderConditionVariable::LoadPercentage
+            | OrderConditionVariable::Reliability
+            | OrderConditionVariable::MaxReliability => {
+                if data > 100 {
+                    return cmd_error(cost);
+                }
+            }
+
+            _ => {
+                if data > 2047 {
+                    return cmd_error(cost);
+                }
+            }
+        },
+
+        ModifyOrderFlags::MOF_COND_DESTINATION => {
+            if data >= u16::from(get_num_orders(v, s).0) {
+                return cmd_error(cost);
+            }
+        }
+
+        _ => not_reached(),
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        match mof {
+            ModifyOrderFlags::MOF_NON_STOP => {
+                order.set_non_stop_type(OrderNonStopFlags(byte));
+                if order
+                    .view()
+                    .non_stop()
+                    .test(OrderNonStopFlag::NoDestination)
+                {
+                    order.set_refit(CargoType(CARGO_NO_REFIT));
+                    order.set_load_type(OrderLoadType::LoadIfPossible);
+                    order.set_unload_type(OrderUnloadType::UnloadIfPossible);
+                }
+            }
+
+            ModifyOrderFlags::MOF_STOP_LOCATION => {
+                order.set_stop_location(OrderStopLocation(byte));
+            }
+
+            ModifyOrderFlags::MOF_UNLOAD => {
+                order.set_unload_type(OrderUnloadType(byte));
+            }
+
+            ModifyOrderFlags::MOF_LOAD => {
+                order.set_load_type(OrderLoadType(byte));
+                if order.view().load_type() == OrderLoadType::NoLoad {
+                    order.set_refit(CargoType(CARGO_NO_REFIT));
+                }
+            }
+
+            ModifyOrderFlags::MOF_DEPOT_ACTION => {
+                let halt_and_unbunch =
+                    OrderDepotActionFlags::from_element(OrderDepotActionFlag::Halt).with(
+                        OrderDepotActionFlags::from_element(OrderDepotActionFlag::Unbunch),
+                    );
+                match OrderDepotAction(byte) {
+                    OrderDepotAction::AlwaysGo => {
+                        order.set_depot_order_type(
+                            order.view().depot_type().reset(OrderDepotTypeFlag::Service),
+                        );
+                        order.set_depot_action_type(
+                            order
+                                .view()
+                                .depot_action_flags()
+                                .reset_all(halt_and_unbunch),
+                        );
+                    }
+
+                    OrderDepotAction::Service => {
+                        order.set_depot_order_type(
+                            order.view().depot_type().set(OrderDepotTypeFlag::Service),
+                        );
+                        order.set_depot_action_type(
+                            order
+                                .view()
+                                .depot_action_flags()
+                                .reset_all(halt_and_unbunch),
+                        );
+                        order.set_refit(CargoType(CARGO_NO_REFIT));
+                    }
+
+                    OrderDepotAction::Stop => {
+                        order.set_depot_order_type(
+                            order.view().depot_type().reset(OrderDepotTypeFlag::Service),
+                        );
+                        order.set_depot_action_type(
+                            order
+                                .view()
+                                .depot_action_flags()
+                                .set(OrderDepotActionFlag::Halt)
+                                .reset(OrderDepotActionFlag::Unbunch),
+                        );
+                        order.set_refit(CargoType(CARGO_NO_REFIT));
+                    }
+
+                    OrderDepotAction::Unbunch => {
+                        order.set_depot_order_type(
+                            order.view().depot_type().reset(OrderDepotTypeFlag::Service),
+                        );
+                        order.set_depot_action_type(
+                            order
+                                .view()
+                                .depot_action_flags()
+                                .reset(OrderDepotActionFlag::Halt)
+                                .set(OrderDepotActionFlag::Unbunch),
+                        );
+                    }
+
+                    _ => not_reached(),
+                }
+            }
+
+            ModifyOrderFlags::MOF_COND_VARIABLE => {
+                order.set_condition_variable(OrderConditionVariable(byte));
+
+                let occ = order.view().condition_comparator();
+                match order.view().condition_variable() {
+                    OrderConditionVariable::Unconditionally => {
+                        order.set_condition_comparator(OrderConditionComparator::Equal);
+                        order.set_condition_value(0);
+                    }
+
+                    OrderConditionVariable::RequiresService => {
+                        if occ != OrderConditionComparator::IsTrue
+                            && occ != OrderConditionComparator::IsFalse
+                        {
+                            order.set_condition_comparator(OrderConditionComparator::IsTrue);
+                        }
+                        order.set_condition_value(0);
+                    }
+
+                    variable => {
+                        if matches!(
+                            variable,
+                            OrderConditionVariable::LoadPercentage
+                                | OrderConditionVariable::Reliability
+                                | OrderConditionVariable::MaxReliability
+                        ) && order.view().condition_value() > 100
+                        {
+                            order.set_condition_value(100);
+                        }
+                        if occ == OrderConditionComparator::IsTrue
+                            || occ == OrderConditionComparator::IsFalse
+                        {
+                            order.set_condition_comparator(OrderConditionComparator::Equal);
+                        }
+                    }
+                }
+            }
+
+            ModifyOrderFlags::MOF_COND_COMPARATOR => {
+                order.set_condition_comparator(OrderConditionComparator(byte));
+            }
+
+            ModifyOrderFlags::MOF_COND_VALUE => {
+                order.set_condition_value(data);
+            }
+
+            ModifyOrderFlags::MOF_COND_DESTINATION => {
+                order.set_condition_skip_to_order(VehicleOrderID(byte));
+            }
+
+            _ => not_reached(),
+        }
+
+        /* Update the windows and full load flags, also for vehicles that share the same order list */
+        let mut u = first_shared(v, s);
+        delete_order_warnings(u.unwrap(), s);
+        while let Some(shared) = u {
+            /* Toggle u->current_order "Full load" flag if it changed.
+             * However, as the same flag is used for depot orders, check
+             * whether we are not going to a depot as there are three
+             * cases where the full load flag can be active and only
+             * one case where the flag is used for depot orders. In the
+             * other cases for the OrderType the flags are not used,
+             * so do not care and those orders should not be active
+             * when this function is called.
+             */
+            if sel_ord == consist(shared).cur_real_order_index()
+                && (shared.current_order().is_type(OrderType::OT_GOTO_STATION)
+                    || shared.current_order().is_type(OrderType::OT_LOADING))
+                && shared.current_order().load_type() != order.view().load_type()
+            {
+                current_order(shared).set_load_type(order.view().load_type());
+            }
+
+            /* Unbunching data is no longer valid. */
+            consist(shared).reset_depot_unbunching();
+
+            invalidate_vehicle_order(shared, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
+            u = next_shared(shared, s);
+        }
+    }
+}
+
+/// `CmdCloneOrder`'s arguments.
 #[derive(Clone, Copy)]
 pub(crate) struct CmdCloneOrder {
     /// Action to perform.
     pub(crate) action: CloneOptions,
     /// Destination vehicle to clone orders to.
-    pub(crate) veh_dst: *mut c_void,
+    pub(crate) veh_dst: VehicleID,
     /// Source vehicle to clone orders from, if any (none for `CO_UNSHARE`).
-    pub(crate) veh_src: *mut c_void,
+    pub(crate) veh_src: VehicleID,
 }
 
-/// `CmdCloneOrder`: clone, share or copy an order list of another vehicle. The cost or
-/// error is in `output`.
-///
-/// # Safety
-/// `output` is a live native `CommandCost`, and each vehicle is null or a live vehicle
-/// shell, for the whole synchronous call.
-pub(crate) unsafe fn cmd_clone_order(
-    leaves: &'static Leaves,
-    output: *mut c_void,
-    execute: bool,
+/// `CmdCloneOrder`: clone/share/copy an order-list of another vehicle.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the original body, with its comments"
+)]
+pub(crate) fn cmd_clone_order(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
     args: CmdCloneOrder,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.clone_command(args.veh_dst, args.veh_src, args.action, execute, output)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_capture_backup(
-    v: *mut c_void,
-    source: *const c_void,
-    user: u32,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.capture_backup(v, source, user)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_create(
-    v: *mut c_void,
-    user: u32,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_create(v, u64::from(user))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_restore(
-    v: *mut c_void,
-    user: u32,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_restore(v, u64::from(user))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_clear_user(
-    tile: u32,
-    user: u32,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_clear_user(u64::from(tile), u64::from(user))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_reset(user: u32, leaves: &'static Leaves) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_reset(u64::from(user))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_tile_clear(
-    tile: u32,
-    from_gui: u8,
-    leaves: &'static Leaves,
-) -> u64 {
-    order_backup_reset(leaves, crate::tile_type::TileIndex(tile), from_gui != 0);
-    0
-}
-
-/// `OrderBackup::Reset(t, from_gui)`: reset the order backups of the tile from GUI/game
-/// logic; `from_gui` says whether the call came from the GUI, i.e. whether it must be
-/// synced over the network.
-pub(crate) fn order_backup_reset(
-    leaves: &'static Leaves,
-    t: crate::tile_type::TileIndex,
-    from_gui: bool,
 ) {
-    let control = Control { g: Game(leaves) };
-    control.backup_tile_clear(t, from_gui);
-}
+    let CmdCloneOrder {
+        action,
+        veh_dst,
+        veh_src,
+    } = args;
+    let Some(dst) = vehicle_get_if_valid(veh_dst, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_group_clear(
-    group: u16,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_group_clear(u64::from(group))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_vehicle_clear(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_vehicle_clear(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_clear_backup(
-    tile: u32,
-    user: u32,
-    execute: u8,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    {
-        if execute != 0 {
-            control.backup_clear_user(
-                u64::from(if tile == 0 { u32::MAX } else { tile }),
-                u64::from(user),
-            );
-        }
-        1
+    if !check_ownership(dst.owner(), cost, s) {
+        return;
     }
-}
 
-/// `RemoveOrderFromAllVehicles`: removes an order from all vehicles. Triggers when, say, a
-/// station is removed.
-pub(crate) fn remove_order_from_all_vehicles(
-    leaves: &'static Leaves,
-    order_type: OrderType,
-    destination: StationID,
-    hangar: bool,
-) {
-    let control = Control { g: Game(leaves) };
-    control.remove_destination(order_type.0, destination.0, hangar);
-}
+    match action {
+        CloneOptions::CO_SHARE => {
+            let src = vehicle_get_if_valid(veh_src, s);
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_remove_destination(
-    kind: u8,
-    destination: u16,
-    hangar: u8,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.remove_destination(kind, destination, hangar != 0);
-    0
-}
-
-/// `CheckOrders`: check the orders of a vehicle, to see if there are invalid orders and stuff.
-pub(crate) fn check_orders(v: VehicleRef, leaves: &'static Leaves) {
-    let control = Control { g: Game(leaves) };
-    control.check_orders(|| v);
-}
-
-#[repr(C)]
-#[derive(Default)]
-pub struct Closest {
-    pub tile: u32,
-    pub destination: u16,
-    pub reverse: u8,
-    pub found: u8,
-}
-impl Game {
-    fn conditional(self, order: Order, v: *mut c_void) -> u8 {
-        if order.kind() != OT_CONDITIONAL {
-            return u8::MAX;
-        }
-        let variable = match order.variable() {
-            0 => i32::from(crate::vehicle::visits::percent_filled(
-                native_vehicle(v, self.0.base),
-                None,
-                self.0.base.visits(),
-            )),
-            1 => ((self.reliability(v) * 101) >> 16) as i32,
-            7 => {
-                (i32::from((self.0.base.engine)(native_vehicle(v, self.0.base)).reliability())
-                    * 101)
-                    >> 16
-            }
-            2 => (self.display_speed(v) as i32).wrapping_mul(10) / 16,
-            3 => self.age_years(v) as i32,
-            4 => self.needs_service(v) as i32,
-            5 => return order.flags,
-            6 => self.remaining_years(v) as i32,
-            _ => unreachable!(),
-        };
-        let value = i32::from(order.value());
-        let skip = match order.comparator() {
-            0 => variable == value,
-            1 => variable != value,
-            2 => variable < value,
-            3 => variable <= value,
-            4 => variable > value,
-            5 => variable >= value,
-            6 => variable != 0,
-            7 => variable == 0,
-            _ => unreachable!(),
-        };
-        if skip { order.flags } else { u8::MAX }
-    }
-    /// Returns a tile somewhat representing the order destination (not suitable for pathfinding).
-    /// `airport` gets the airport tile rather than the station location for aircraft.
-    /// Returns the destination of the order, or `INVALID_TILE` if none.
-    fn get_location(self, order: Order, v: *mut c_void, airport: bool) -> TileIndex {
-        match OrderType(order.kind()) {
-            OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_WAYPOINT | OrderType::OT_IMPLICIT => {
-                TileIndex(
-                    (if airport && self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0) {
-                        self.airport_tile(order.destination)
-                    } else {
-                        u64::from((self.shared().base_station_xy)(order.destination))
-                    }) as u32,
-                )
-            }
-            OrderType::OT_GOTO_DEPOT => {
-                if DepotID(order.destination) == DepotID::INVALID {
-                    return TileIndex::INVALID;
-                }
-                TileIndex(
-                    (if self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0) {
-                        u64::from((self.shared().station_xy)(order.destination))
-                    } else {
-                        self.depot_tile(order.destination)
-                    }) as u32,
-                )
-            }
-            _ => TileIndex::INVALID,
-        }
-    }
-    /// Get the distance between two orders of a vehicle. Conditional orders are resolved
-    /// and the bigger distance of the two order branches is returned.
-    fn get_order_distance(
-        self,
-        previous: VehicleOrderID,
-        current: VehicleOrderID,
-        v: *mut c_void,
-        depth: i32,
-    ) -> u32 {
-        let list = self.orders(v);
-        // This source helper indexes the full stored span, not GetOrderAt's
-        // uint8 count. Oversized save-loaded lists can still have conditional
-        // destinations beyond their narrowed GetNumOrders value.
-        let order = self.stored_order(list, usize::from(current.0));
-        if OrderType(order.kind()) == OrderType::OT_CONDITIONAL {
-            if depth > i32::from(self.count(v)) {
-                return 0;
-            }
-            let d1 = self.get_order_distance(
-                previous,
-                VehicleOrderID(order.flags),
-                v,
-                depth.wrapping_add(1),
-            ) as i32;
-            let d2 = self.get_order_distance(
-                previous,
-                VehicleOrderID(self.next_index(list, current.0)),
-                v,
-                depth.wrapping_add(1),
-            ) as i32;
-            return d1.max(d2) as u32;
-        }
-        let prev = self.get_location(self.stored_order(list, usize::from(previous.0)), v, true);
-        let cur = self.get_location(order, v, true);
-        if prev == TileIndex::INVALID || cur == TileIndex::INVALID {
-            return 0;
-        }
-        // SAFETY: get_location resolved live destination tiles and the invalid sentinel
-        // was excluded above. The vehicle shell is live; no owner borrow spans either call.
-        unsafe {
-            (self.0.distance)(
-                prev.0,
-                cur.0,
-                u8::from(self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0)),
-            ) as u32
-        }
-    }
-}
-impl Control {
-    fn destination(&self, v: *mut c_void, mut order: Order, mut depth: i32, pbs: bool) -> bool {
-        let g = self.g;
-        loop {
-            if depth > i32::from(g.count(v)) {
-                let mut current = g.current(v);
-                current.kind = OT_NOTHING;
-                current.flags = 0;
-                current.destination = 0;
-                g.put_current(v, current);
-                g.set_destination(v, 0);
-                return false;
-            }
-            match order.kind() {
-                OT_GOTO_STATION => {
-                    let tile = g.station_location(v, order.destination);
-                    g.set_destination(v, tile as u32);
-                    return true;
-                }
-                OT_GOTO_DEPOT => {
-                    if order.depot_type() & 1 != 0 && g.needs_service(v) == 0 {
-                        g.update_timetable(v, true);
-                        g.increment_real(v);
-                    } else if g.current(v).action() & 2 != 0 {
-                        if g.destination_tile(v) == 0
-                            && u64::from(crate::timer_game_common::economy_fraction())
-                                != g.vehicle_id(v) % DAY_TICKS as u64
-                        {
-                        } else {
-                            let mut closest = Closest::default();
-                            g.closest_depot(v, ptr::addr_of_mut!(closest));
-                            if closest.found != 0 {
-                                if pbs && closest.reverse != 0 {
-                                    return false;
-                                }
-                                g.set_destination(v, closest.tile);
-                                let mut current = g.current(v);
-                                current.destination = closest.destination;
-                                g.put_current(v, current);
-                                if g.vehicle_type(v) == u64::from(VEH_TRAIN) && closest.reverse != 0
-                                {
-                                    g.reverse_train(v);
-                                }
-                                if g.vehicle_type(v) == u64::from(VEH_AIRCRAFT)
-                                    && g.aircraft_flying(v) != 0
-                                    && g.target_airport(v) != u64::from(closest.destination)
-                                {
-                                    g.next_airport(v);
-                                }
-                                return true;
-                            }
-                            if pbs {
-                                return false;
-                            }
-                            g.update_timetable(v, true);
-                            g.increment_real(v);
-                        }
-                    } else {
-                        if g.vehicle_type(v) != u64::from(VEH_AIRCRAFT) {
-                            let tile = g.depot_tile(order.destination);
-                            g.set_destination(v, tile as u32);
-                        } else {
-                            let destination = g.current(v).destination;
-                            if g.target_airport(v) != u64::from(destination) {
-                                let tile = g.station_location(v, destination);
-                                g.set_destination(v, tile as u32);
-                            }
-                        }
-                        return true;
-                    }
-                }
-                OT_GOTO_WAYPOINT => {
-                    let tile = g.waypoint_tile(order.destination);
-                    g.set_destination(v, tile as u32);
-                    return true;
-                }
-                OT_CONDITIONAL => {
-                    let next = self.g.conditional(order, v);
-                    if next != u8::MAX {
-                        g.update_timetable(v, false);
-                        let state = g.consist(v);
-                        write_field!(state, implicit, next);
-                        write_field!(state, real, next);
-                        g.update_real(v);
-                        let travel = g
-                            .vehicle_order(v, read_field!(state, real))
-                            .unwrap()
-                            .timetabled_travel();
-                        write_field!(
-                            state,
-                            time,
-                            read_field!(state, time).wrapping_add(i32::from(travel))
-                        );
-                        if g.vehicle_type(v) < u64::from(VEH_SHIP) {
-                            assign_suppress_implicit(native_vehicle(v, g.0.base), true);
-                        }
-                    } else {
-                        g.update_timetable(v, true);
-                        g.increment_real(v);
-                    }
-                }
-                _ => {
-                    g.set_destination(v, 0);
-                    return false;
-                }
-            }
-            let real = read_field!(g.consist(v), real);
-            let next = g.vehicle_order(v, real).filter(|o| o.kind() != OT_IMPLICIT);
-            let Some(next) = next else {
-                let mut current = g.current(v);
-                current.kind = OT_NOTHING;
-                current.flags = 0;
-                current.destination = 0;
-                g.put_current(v, current);
-                g.set_destination(v, 0);
-                return false;
+            /* Sanity checks */
+            let Some(src) = src.filter(|src| {
+                src.is_primary_vehicle() && dst.vehicle_type() == src.vehicle_type() && dst != *src
+            }) else {
+                return cmd_error(cost);
             };
-            g.put_current(v, next);
-            order = next;
-            depth = depth.wrapping_add(1);
-        }
-    }
-    fn process(&self, v: *mut c_void) -> bool {
-        let g = self.g;
-        let mut vehicle = g.vehicle(v);
-        let current_ptr = current_order(vehicle);
-        // Match the source's early order-type exits before fetching anything else.
-        let order_kind = read_field!(current_ptr, kind) & 15;
-        match order_kind {
-            OT_GOTO_DEPOT => {
-                if (read_field!(current_ptr, flags) & 7) & 2 == 0 {
-                    return false;
-                }
-            }
-            OT_LOADING => return false,
-            OT_LEAVESTATION => {
-                if g.vehicle_type(v) != u64::from(VEH_AIRCRAFT) {
-                    return false;
-                }
-            }
-            _ => {}
-        }
-        let reverse = order_kind == OT_NOTHING;
-        let current = load(current_ptr);
-        if ((order_kind == OT_GOTO_STATION && current.non_stop() & 2 != 0)
-            || order_kind == OT_GOTO_WAYPOINT)
-            && g.at_station(v) != 0
-            && u64::from(current.destination) == g.tile_station(v)
-        {
-            self.delete_implicit(v);
-            native_vehicle(v, g.0.base).set_last_station_visited_raw(current.destination);
-            g.update_timetable(v, true);
-            g.increment_implicit(v);
-            // Deletion/timetable/index updates may mutate the list or reenter.
-            vehicle = g.vehicle(v);
-        }
-        let state = g.consist(v);
-        let access = g.order_access(vehicle);
-        access.update_real(state);
-        let order = access
-            .order_ptr(read_field!(state, real))
-            // SAFETY: The handle addresses a live order; this scalar observation
-            // ends before the next service call.
-            .filter(|o| unsafe { (&**o).kind() != OT_IMPLICIT });
-        let kind = g.vehicle_type(v);
-        if order.is_none() || (kind == u64::from(VEH_AIRCRAFT) && !access.valid()) {
-            if kind == u64::from(VEH_AIRCRAFT) {
-                g.missing_aircraft_orders(v);
-                return false;
-            }
-            let mut current = load(current_order(vehicle));
-            current.kind = OT_NOTHING;
-            current.flags = 0;
-            current.destination = 0;
-            store(current_order(vehicle), current);
-            g.set_destination(v, 0);
-            return false;
-        }
-        let order = order.unwrap();
-        // After update_real and order_ptr, valid only inspects the list.
-        // From order_ptr to materialization, vehicle_type,
-        // destination_tile and ship_station_tile are read-only native leaves;
-        // none reenters or mutates orders. Thus the raw handle stays live, with
-        // no owner/storage borrow crossing any callback. Earlier implicit-order
-        // mutations have already reacquired vehicle and order storage above.
-        // SAFETY: Equality only reads the canonical orders and calls no service;
-        // both shared borrows end before destination_tile or ship_station_tile.
-        if unsafe { (&*order).equals(&*(*vehicle).current.as_ptr()) }
-            && (kind == u64::from(VEH_AIRCRAFT) || g.destination_tile(v) != 0)
-            && (kind != u64::from(VEH_SHIP)
-                // SAFETY: Fresh scalar read of the still-live order after the
-                // destination gate, without retaining a borrow across a service.
-                || unsafe { (&*order).kind() } != OT_GOTO_STATION
-                || g.ship_station_tile(read_field!(order, destination)) != u64::from(u32::MAX))
-        {
-            return false;
-        }
-        let order = load(order);
-        store(current_order(vehicle), order);
-        g.invalidate_order(v, ((-2i64) as u64) as i32);
-        if kind == u64::from(VEH_SHIP) || kind == u64::from(VEH_AIRCRAFT) {
-            g.dirty_vehicle_windows(v);
-        }
-        self.destination(v, order, 0, false) && reverse
-    }
-}
 
-impl Game {
-    fn check_owner(self, owner: u64, output: *mut c_void) -> bool {
-        // SAFETY: The entry supplies immutable owning tables and a live native cost slot.
-        let station = unsafe { &*self.0.station_commands };
-        // SAFETY: These canonical command/cost tables outlive the synchronous entry.
-        let (costs, commands) = unsafe { (&*station.cost, &*station.command) };
-        let result = crate::services::Cost(output.cast(), costs);
-        result.ownership(commands, owner as u8, 0);
-        result.ok()
-    }
-}
-impl Control {
-    fn insert_command(
-        &self,
-        v: *mut c_void,
-        index: u8,
-        order: Order,
-        execute: bool,
-        output: *mut c_void,
-    ) -> u64 {
-        let g = self.g;
-        if !self.g.primary(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(v, output) {
-            return 0;
-        }
-        if order.refit != 0xfe || order.wait != 0 || order.travel != 0 || order.speed != u16::MAX {
-            return u64::from(self.g.cmd_error(output));
-        }
-        let kind = g.vehicle_type(v);
-        let destination = u64::from(order.destination);
-        match order.kind() {
-            OT_GOTO_STATION => {
-                if (g.0.valid_station)(destination as u16) == 0 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                let owner = g.station_owner(destination as u16);
-                if owner != u64::from(OWNER_NONE) && !self.g.check_owner(owner, output) {
-                    return 0;
-                }
-                if order_can_use_station(v, destination as u16) == 0 {
-                    return u64::from(self.g.command_cost_extra(
-                        output,
-                        STR_ERROR_CAN_T_ADD_ORDER,
-                        StringID(g.station_error(v, destination as u16) as u32),
-                    ));
-                }
-                let mut u = g.first(v);
-                while !u.is_null() {
-                    if order_can_use_station(u, destination as u16) == 0 {
-                        return u64::from(self.g.command_cost_extra(
-                            output,
-                            STR_ERROR_CAN_T_ADD_ORDER_SHARED,
-                            StringID(g.station_error(u, destination as u16) as u32),
-                        ));
-                    }
-                    u = g.next(u);
-                }
-                if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                match order.load() {
-                    0 | 4 => {}
-                    2 | 3 => {
-                        if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                            return u64::from(
-                                self.g
-                                    .command_cost(output, STR_ERROR_UNBUNCHING_NO_FULL_LOAD),
-                            );
-                        }
-                    }
-                    _ => return u64::from(self.g.cmd_error(output)),
-                }
-                if !matches!(order.unload(), 0 | 1 | 2 | 4) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                match (order.kind >> 4) & 3 {
-                    0 | 1 => {
-                        if kind != u64::from(VEH_TRAIN) {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                    2 => {}
-                    _ => return u64::from(self.g.cmd_error(output)),
-                }
+            if !check_ownership(src.owner(), cost, s) {
+                return;
             }
-            OT_GOTO_DEPOT => {
-                if order.action() & 2 == 0 {
-                    if kind == u64::from(VEH_AIRCRAFT) {
-                        if (g.0.valid_station)(destination as u16) == 0 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                        if !self
-                            .g
-                            .check_owner(g.station_owner(destination as u16), output)
-                        {
-                            return 0;
-                        }
-                        if order_can_use_station(v, destination as u16) == 0
-                            || u64::from(crate::station_base::airport_has_hangar(
-                                crate::newgrf_airport::station_by_id(
-                                    destination as u16,
-                                    crate::newgrf_airport::runtime(),
-                                ),
-                                crate::newgrf_airport::runtime(),
-                            )) == 0
-                        {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    } else {
-                        if (g.0.valid_depot)(destination as u16) == 0 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                        if !self
-                            .g
-                            .check_owner(g.depot_owner(destination as u16), output)
-                        {
-                            return 0;
-                        }
-                        if kind > u64::from(VEH_SHIP)
-                            || match kind {
-                                k if k == u64::from(VEH_TRAIN) => g.rail_depot(destination as u16),
-                                k if k == u64::from(VEH_ROAD) => g.road_depot(destination as u16),
-                                _ => g.ship_depot(destination as u16),
-                            } == 0
-                        {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                }
-                if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                let mut flags = order.depot_type();
-                if flags & 2 != 0 {
-                    flags &= !1;
-                }
-                flags &= !2;
-                if flags != 0 || order.action() & !7 != 0 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                if order.depot_type() & 1 != 0 && order.action() & 5 != 0 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                if order.action() & 4 != 0 {
-                    if g.any_order(v, |o| {
-                        o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
-                    }) {
-                        return u64::from(
-                            self.g
-                                .command_cost(output, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD),
-                        );
-                    }
-                    if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                        return u64::from(
-                            self.g
-                                .command_cost(output, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED),
-                        );
-                    }
-                    if g.any_order(v, |o| o.kind() == OT_CONDITIONAL) {
-                        return u64::from(
-                            self.g.command_cost(
-                                output,
-                                STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
-                            ),
-                        );
-                    }
-                }
-            }
-            OT_GOTO_WAYPOINT => {
-                if (g.0.valid_waypoint)(destination as u16) == 0 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                let facilities = g.waypoint_facilities(destination as u16);
-                match kind {
-                    k if k == u64::from(VEH_TRAIN) => {
-                        if facilities & 1 == 0 {
-                            return u64::from(self.g.command_cost_extra(
-                                output,
-                                STR_ERROR_CAN_T_ADD_ORDER,
-                                STR_ERROR_NO_RAIL_WAYPOINT,
-                            ));
-                        }
-                        if !self
-                            .g
-                            .check_owner(g.waypoint_owner(destination as u16), output)
-                        {
-                            return 0;
-                        }
-                    }
-                    k if k == u64::from(VEH_ROAD) => {
-                        if facilities & 6 == 0 {
-                            return u64::from(self.g.command_cost_extra(
-                                output,
-                                STR_ERROR_CAN_T_ADD_ORDER,
-                                STR_ERROR_NO_ROAD_WAYPOINT,
-                            ));
-                        }
-                        if !self
-                            .g
-                            .check_owner(g.waypoint_owner(destination as u16), output)
-                        {
-                            return 0;
-                        }
-                    }
-                    k if k == u64::from(VEH_SHIP) => {
-                        if facilities & 16 == 0 {
-                            return u64::from(self.g.command_cost_extra(
-                                output,
-                                STR_ERROR_CAN_T_ADD_ORDER,
-                                STR_ERROR_NO_BUOY,
-                            ));
-                        }
-                        let owner = g.waypoint_owner(destination as u16);
-                        if owner != u64::from(OWNER_NONE) && !self.g.check_owner(owner, output) {
-                            return 0;
-                        }
-                    }
-                    _ => return u64::from(self.g.cmd_error(output)),
-                }
-                if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            OT_CONDITIONAL => {
-                if order.flags != 0 && order.flags >= g.count(v) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                if order.variable() >= 8 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                    return u64::from(
-                        self.g
-                            .command_cost(output, STR_ERROR_UNBUNCHING_NO_CONDITIONAL),
-                    );
-                }
-                let compare = order.comparator();
-                if compare >= 8 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                match order.variable() {
-                    4 => {
-                        if compare != 6 && compare != 7 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                    5 => {
-                        if compare != 0 || order.value() != 0 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                    variable => {
-                        if matches!(variable, 0 | 1 | 7) && order.value() > 100 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                        if compare == 6 || compare == 7 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                }
-            }
-            _ => return u64::from(self.g.cmd_error(output)),
-        }
-        if index > g.count(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if g.count(v) >= 254 {
-            return u64::from(self.g.command_cost(output, STR_ERROR_TOO_MANY_ORDERS));
-        }
-        if g.orders(v).is_null() && (g.0.list_capacity)() == 0 {
-            return u64::from(
-                self.g
-                    .command_cost(output, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS),
-            );
-        }
-        if execute {
-            self.insert(v, order, index);
-        }
-        1
-    }
-    fn declone(&self, v: *mut c_void, execute: bool) -> u64 {
-        if execute {
-            self.delete_vehicle_orders(v, false, true);
-            self.g.invalidate_order(v, ((-1i64) as u64) as i32);
-            self.g.invalidate_vehicle_list(v);
-        }
-        1
-    }
-    fn delete_command(&self, v: *mut c_void, index: u8, execute: bool, output: *mut c_void) -> u64 {
-        let g = self.g;
-        if !self.g.primary(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(v, output) {
-            return 0;
-        }
-        if index >= g.count(v) {
-            return self.declone(v, execute);
-        }
-        if g.vehicle_order(v, index).is_none() {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if execute {
-            self.delete(v, index);
-        }
-        1
-    }
-    fn skip_command(&self, v: *mut c_void, index: u8, execute: bool, output: *mut c_void) -> u64 {
-        let g = self.g;
-        if !self.g.primary(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        let state = g.consist(v);
-        if index == read_field!(state, implicit) || index >= g.count(v) || g.count(v) < 2 {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(v, output) {
-            return 0;
-        }
-        if execute {
-            if g.current(v).kind() == OT_LOADING {
-                let vehicle = native_vehicle(v, self.g.0.base);
-                crate::vehicle::visits::leave_station(vehicle, g.0.base.visits());
-            }
-            write_field!(state, implicit, index);
-            write_field!(state, real, index);
-            g.update_real(v);
-            g.reset(v);
-            g.invalidate_order(v, ((-2i64) as u64) as i32);
-            if matches!(g.vehicle_type(v), 2 | 3) {
-                g.dirty_vehicle_windows(v);
-            }
-        }
-        1
-    }
-    fn move_command(
-        &self,
-        v: *mut c_void,
-        from: u8,
-        to: u8,
-        execute: bool,
-        output: *mut c_void,
-    ) -> u64 {
-        let g = self.g;
-        if !self.g.primary(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(v, output) {
-            return 0;
-        }
-        if from >= g.count(v)
-            || to >= g.count(v)
-            || from == to
-            || g.count(v) <= 1
-            || g.vehicle_order(v, from).is_none()
-        {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if execute {
-            self.move_order(v, from, to);
-        }
-        1
-    }
-    fn modify_command(
-        &self,
-        v: *mut c_void,
-        index: u8,
-        field: u8,
-        data: u16,
-        execute: bool,
-        output: *mut c_void,
-    ) -> u64 {
-        let g = self.g;
-        if field >= 9 {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.primary(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(v, output) {
-            return 0;
-        }
-        if index >= g.count(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        let list = g.orders(v);
-        let mut order = g.order(list, index).unwrap();
-        match order.kind() {
-            OT_GOTO_STATION => {
-                if !matches!(field, 0..=3) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            OT_GOTO_DEPOT => {
-                if !matches!(field, 0 | 4) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            OT_GOTO_WAYPOINT => {
-                if field != 0 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            OT_CONDITIONAL => {
-                if !matches!(field, 5..=8) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            _ => return u64::from(self.g.cmd_error(output)),
-        }
-        let byte = data as u8;
-        match field {
-            0 => {
-                if g.vehicle_type(v) >= u64::from(VEH_SHIP)
-                    || byte == order.non_stop()
-                    || byte & !3 != 0
-                {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            1 => {
-                if g.vehicle_type(v) != u64::from(VEH_TRAIN) || data >= 3 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            2 => {
-                if order.non_stop() & 2 != 0
-                    || byte == order.unload()
-                    || !matches!(byte, 0 | 1 | 2 | 4)
-                {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            3 => {
-                if order.non_stop() & 2 != 0 || byte == order.load() {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                match byte {
-                    0 | 4 => {}
-                    2 | 3 => {
-                        if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
-                            return u64::from(
-                                self.g
-                                    .command_cost(output, STR_ERROR_UNBUNCHING_NO_FULL_LOAD),
-                            );
-                        }
-                    }
-                    _ => return u64::from(self.g.cmd_error(output)),
-                }
-            }
-            4 => {
-                if byte >= 4 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                if byte == 3 {
-                    if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
-                        && order.action() & 4 == 0
-                    {
-                        return u64::from(
-                            self.g
-                                .command_cost(output, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED),
-                        );
-                    }
-                    if g.any_order(v, |o| o.kind() == OT_CONDITIONAL) {
-                        return u64::from(
-                            self.g.command_cost(
-                                output,
-                                STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL,
-                            ),
-                        );
-                    }
-                    if g.any_order(v, |o| {
-                        o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
-                    }) {
-                        return u64::from(
-                            self.g
-                                .command_cost(output, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD),
-                        );
-                    }
-                }
-            }
-            5 => {
-                if byte >= 8 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            6 => {
-                if byte >= 8 {
-                    return u64::from(self.g.cmd_error(output));
-                }
-                match order.variable() {
-                    5 => return u64::from(self.g.cmd_error(output)),
-                    4 => {
-                        if byte != 6 && byte != 7 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                    _ => {
-                        if byte == 6 || byte == 7 {
-                            return u64::from(self.g.cmd_error(output));
-                        }
-                    }
-                }
-            }
-            7 => match order.variable() {
-                4 | 5 => return u64::from(self.g.cmd_error(output)),
-                0 | 1 | 7 => {
-                    if data > 100 {
-                        return u64::from(self.g.cmd_error(output));
-                    }
-                }
-                _ => {
-                    if data > 2047 {
-                        return u64::from(self.g.cmd_error(output));
-                    }
-                }
-            },
-            8 => {
-                if data >= u16::from(g.count(v)) {
-                    return u64::from(self.g.cmd_error(output));
-                }
-            }
-            _ => unreachable!(),
-        }
-        if execute {
-            match field {
-                0 => {
-                    order.kind = (order.kind & !0xc0) | ((byte & 3) << 6);
-                    if order.non_stop() & 2 != 0 {
-                        order.refit = 0xfe;
-                        order.flags &= !0x77;
-                    }
-                }
-                1 => order.kind = (order.kind & !0x30) | ((byte & 3) << 4),
-                2 => order.flags = (order.flags & !7) | (byte & 7),
-                3 => {
-                    order.flags = (order.flags & !0x70) | ((byte & 7) << 4);
-                    if order.load() == 4 {
-                        order.refit = 0xfe;
-                    }
-                }
-                4 => match byte {
-                    0 => {
-                        order.flags &= !(1 | 8 | 32);
-                    }
-                    1 => {
-                        order.flags = (order.flags | 1) & !(8 | 32);
-                        order.refit = 0xfe;
-                    }
-                    2 => {
-                        order.flags = (order.flags | 8) & !(1 | 32);
-                        order.refit = 0xfe;
-                    }
-                    3 => {
-                        order.flags = (order.flags | 32) & !(1 | 8);
-                    }
-                    _ => unreachable!(),
-                },
-                5 => {
-                    order.destination = (order.destination & 2047) | (u16::from(byte & 31) << 11);
-                    let compare = order.comparator();
-                    match order.variable() {
-                        5 => {
-                            order.kind &= !0xe0;
-                            order.destination &= !2047;
-                        }
-                        4 => {
-                            if compare != 6 && compare != 7 {
-                                order.kind = (order.kind & !0xe0) | (6 << 5);
-                            }
-                            order.destination &= !2047;
-                        }
-                        variable => {
-                            if matches!(variable, 0 | 1 | 7) && order.value() > 100 {
-                                order.destination = (order.destination & !2047) | 0x64;
-                            }
-                            if compare == 6 || compare == 7 {
-                                order.kind &= !0xe0;
-                            }
-                        }
-                    }
-                }
-                6 => order.kind = (order.kind & !0xe0) | ((byte & 7) << 5),
-                7 => order.destination = (order.destination & !2047) | (data & 2047),
-                8 => order.flags = byte,
-                _ => unreachable!(),
-            }
-            g.put_order(list, index, order);
-            let mut u = g.first(v);
-            g.delete_order_news(u);
-            while !u.is_null() {
-                let state = g.consist(u);
-                let mut current = g.current(u);
-                if index == read_field!(state, real)
-                    && matches!(current.kind(), OT_GOTO_STATION | OT_LOADING)
-                    && current.load() != order.load()
-                {
-                    current.flags = (current.flags & !0x70) | ((order.load() & 7) << 4);
-                    g.put_current(u, current);
-                }
-                g.reset(u);
-                g.invalidate_order(u, ((-2i64) as u64) as i32);
-                u = g.next(u);
-            }
-        }
-        1
-    }
-    fn refit_command(
-        &self,
-        v: *mut c_void,
-        index: u8,
-        cargo: u8,
-        execute: bool,
-        output: *mut c_void,
-    ) -> u64 {
-        let g = self.g;
-        if cargo >= 64 && cargo != 0xfe && cargo != 0xfd {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.primary(v) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(v, output) {
-            return 0;
-        }
-        let Some(mut order) = g.vehicle_order(v, index) else {
-            return u64::from(self.g.cmd_error(output));
-        };
-        if cargo == 0xfd && order.kind() != OT_GOTO_STATION {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if order.load() == 4 {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if execute {
-            order.refit = cargo;
-            if cargo != 0xfe && order.kind() == OT_GOTO_DEPOT {
-                order.flags &= !(1 | 8);
-            }
-            g.put_order(g.orders(v), index, order);
-            let mut u = g.first(v);
-            while !u.is_null() {
-                g.invalidate_order(u, ((-2i64) as u64) as i32);
-                if index == read_field!(g.consist(u), real) && g.current(u).depot_type() & 2 != 0 {
-                    let mut current = g.current(u);
-                    current.refit = cargo;
-                    g.put_current(u, current);
-                }
-                u = g.next(u);
-            }
-        }
-        1
-    }
-}
 
-impl Vector {
-    unsafe fn transfer(&mut self, other: *mut Self) {
-        // Both owners are live/disjoint and no typed order pointer is used during
-        // transfer. Existing C++ Order lifetimes move with the allocation.
-        // SAFETY: `other` is a distinct live vector; the swaps exchange its owned storage.
-        unsafe {
-            std::mem::swap(&mut self.storage, &mut (*other).storage);
-            std::mem::swap(&mut self.length, &mut (*other).length);
-        }
-    }
-}
-impl Game {
-    fn backup(self, b: *mut c_void) -> *mut Backup {
-        // SAFETY: The pool traversal supplies a live OrderBackup shell.
-        unsafe { (self.0.backup)(b) }
-    }
-    fn backup_vector(self, b: *mut c_void) -> *mut Vector {
-        // SAFETY: The pool traversal supplies a live OrderBackup shell and its storage owner.
-        unsafe { (self.0.backup_vector)(b) }
-    }
-    fn backup_consist(self, b: *mut c_void) -> *mut Consist {
-        // SAFETY: The pool traversal supplies a live OrderBackup shell and its consist owner.
-        unsafe { (self.0.backup_consist)(b) }
-    }
-    fn next_backup(self, cursor: &mut u32) -> *mut c_void {
-        // SAFETY: The callback only advances this exclusive live cursor.
-        unsafe { (self.0.next_backup)(cursor) }
-    }
-    fn next_vehicle(self, first: u32) -> *mut c_void {
-        (self.0.next_vehicle)(first)
-    }
-    fn backed_order(self, b: *mut c_void, i: usize) -> Order {
-        load(slot(self.backup_vector(b), i))
-    }
-    fn captured(self, backup: *mut c_void, v: *mut c_void, user: u32) {
-        let state = self.backup(backup);
-        write_field!(state, user, user);
-        write_field!(state, tile, native_vehicle(v, self.0.base).tile_raw());
-        write_field!(state, group, self.vehicle_group(v) as u16);
-        reenter!(openttd_rust_consist_copy(
-            self.backup_consist(backup),
-            self.consist(v)
-        ));
-        self.capture_backup_metadata(backup, v);
-        let list = self.orders(v);
-        if !list.is_null() && read_field!(self.list(list), vehicles) > 1 {
-            let first = self.first(v);
-            let clone = if first == v { self.next(v) } else { first };
-            write_field!(state, clone, clone);
-        } else if !list.is_null() {
-            let vector = self.vector(list);
-            let data = data(vector);
-            let length = read_field!(vector, length);
-            reenter!(openttd_rust_order_vector_assign(
-                self.backup_vector(backup),
-                data,
-                length
-            ));
-        }
-    }
-    fn aircraft_range(self, dst: *mut c_void, src: *mut c_void) -> bool {
-        // SAFETY: The range check receives a live aircraft shell.
-        if unsafe { (self.0.aircraft_range)(dst) } == 0 || self.count(src) == 0 {
-            return true;
-        }
-        let list = self.orders(src);
-        let max = self.aircraft_range_square(dst) as u32;
-        for i in 0..self.size(list) {
-            if matches!(
-                self.order(list, i).unwrap().kind(),
-                OT_GOTO_STATION | OT_GOTO_DEPOT | OT_GOTO_WAYPOINT
-            ) && self.get_order_distance(
-                VehicleOrderID(i),
-                VehicleOrderID(self.next_index(list, i)),
-                src,
-                0,
-            ) > max
+            /* Trucks can't share orders with busses (and visa versa) */
+            if src.vehicle_type() == VehicleType::VEH_ROAD
+                && crate::road_stop::is_bus(s.shared(), src)
+                    != crate::road_stop::is_bus(s.shared(), dst)
             {
-                return false;
+                return cmd_error(cost);
             }
-        }
-        true
-    }
-}
-impl Control {
-    fn clone_command(
-        &self,
-        dst: *mut c_void,
-        src: *mut c_void,
-        action: CloneOptions,
-        execute: bool,
-        output: *mut c_void,
-    ) -> u64 {
-        let g = self.g;
-        if !self.g.primary(dst) {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(dst, output) {
-            return 0;
-        }
-        if action == CloneOptions::CO_UNSHARE {
-            return self.declone(dst, execute);
-        }
-        if action != CloneOptions::CO_SHARE && action != CloneOptions::CO_COPY {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.primary(src) || g.vehicle_type(dst) != g.vehicle_type(src) || dst == src {
-            return u64::from(self.g.cmd_error(output));
-        }
-        if !self.g.owner_check(src, output) {
-            return 0;
-        }
-        let kind = g.vehicle_type(src);
-        if action == CloneOptions::CO_SHARE {
-            if kind == u64::from(VEH_ROAD) && g.bus(src) != g.bus(dst) {
-                return u64::from(self.g.cmd_error(output));
+
+            /* Is the vehicle already in the shared list? */
+            if first_shared(src, s) == first_shared(dst, s) {
+                return cmd_error(cost);
             }
-            if g.first(src) == g.first(dst) {
-                return u64::from(self.g.cmd_error(output));
-            }
-        }
-        let list = g.orders(src);
-        if !list.is_null() {
-            for i in 0..g.stored_count(list) {
-                let order = g.stored_order(list, i);
-                if order.kind() != OT_GOTO_STATION
-                    && !(kind == u64::from(VEH_AIRCRAFT)
-                        && order.kind() == OT_GOTO_DEPOT
-                        && order.destination != u16::MAX)
-                {
-                    continue;
-                }
-                let destination = u64::from(order.destination);
-                if (action == CloneOptions::CO_COPY
-                    || order_can_use_station(src, destination as u16) != 0)
-                    && order_can_use_station(dst, destination as u16) == 0
-                {
-                    // Both the share and the copy branch of `CmdCloneOrder` return this.
-                    return u64::from(self.g.command_cost_extra(
-                        output,
-                        STR_ERROR_CAN_T_COPY_SHARE_ORDER,
-                        StringID(g.station_error(dst, destination as u16) as u32),
-                    ));
-                }
-            }
-        }
-        if kind == u64::from(VEH_AIRCRAFT) && !g.aircraft_range(dst, src) {
-            return u64::from(
-                self.g
-                    .command_cost(output, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE),
-            );
-        }
-        if (action == CloneOptions::CO_COPY || list.is_null()) && (g.0.list_capacity)() == 0 {
-            return u64::from(
-                self.g
-                    .command_cost(output, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS),
-            );
-        }
-        if execute {
-            self.delete_vehicle_orders(
-                dst,
-                action == CloneOptions::CO_COPY,
-                g.count(dst) != g.count(src),
-            );
-            if action == CloneOptions::CO_SHARE {
-                write_field!(g.vehicle(dst), orders, g.orders(src));
-                self.add_shared(dst, src);
-                g.invalidate_order(dst, ((-1i64) as u64) as i32);
-                g.invalidate_order(src, ((-2i64) as u64) as i32);
-                g.invalidate_vehicle_list(dst);
-            } else {
-                // Original copies the source before deleting the kept empty shell.
-                // Rust temporary storage is a scalar copy, never a live mirror.
-                let mut copied = Vec::new();
-                let source = g.orders(src);
-                if !source.is_null() {
-                    let vector = g.vector(source);
-                    for i in 0..read_field!(vector, length) {
-                        copied.push(load(slot(vector, i)));
-                    }
-                }
-                let old = g.orders(dst);
-                if !old.is_null() {
-                    g.delete_list(old);
-                }
-                let list = self.new_list(dst, None, ptr::null_mut());
-                reenter!(openttd_rust_order_vector_assign(
-                    g.vector(list),
-                    copied.as_ptr(),
-                    copied.len()
-                ));
-                // Initialize after copied orders, retaining original total calculation.
-                self.initialize_list(list, dst);
-                write_field!(g.vehicle(dst), orders, list);
-                g.invalidate_order(dst, ((-1i64) as u64) as i32);
-                g.invalidate_vehicle_list(dst);
-            }
-        }
-        1
-    }
-    fn restore_backup(&self, backup: *mut c_void, v: *mut c_void) {
-        let g = self.g;
-        let state = g.backup(backup);
-        let clone = read_field!(state, clone);
-        if !clone.is_null() {
-            g.share_command(v, clone);
-        } else if read_field!(g.backup_vector(backup), length) > 0 && (g.0.list_capacity)() != 0 {
-            let list = (g.0.allocate_list)();
-            // SAFETY: The list and backup vectors are distinct live owners.
-            unsafe {
-                (*g.vector(list)).transfer(g.backup_vector(backup));
-            }
-            self.initialize_list(list, v);
-            write_field!(g.vehicle(v), orders, list);
-            g.invalidate_station_list();
-        }
-        if g.unique_backup_name(backup) == 0 {
-            g.clear_backup_name(backup);
-        }
-        reenter!(openttd_rust_consist_copy(
-            g.consist(v),
-            g.backup_consist(backup)
-        ));
-        g.restore_backup_metadata(v, backup);
-        g.update_real(v);
-        let vs = g.consist(v);
-        if read_field!(vs, implicit) >= g.count(v) {
-            write_field!(vs, implicit, read_field!(vs, real));
-        }
-        g.group_command(v, read_field!(state, group));
-    }
-    fn capture_backup(&self, v: *mut c_void, source: *const c_void, user: u32) -> u64 {
-        let g = self.g;
-        g.captured(v, source.cast_mut(), user);
-        0
-    }
-    fn backup_create(&self, v: *mut c_void, a: u64) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            if read_field!(g.backup(ob), user) == a as u32 {
-                g.delete_backup(ob);
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        if (g.0.backup_capacity)() != 0 {
-            g.create_backup(v, a as u32);
-        }
-        0
-    }
-    fn backup_restore(&self, v: *mut c_void, a: u64) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            let state = g.backup(ob);
-            if native_vehicle(v, g.0.base).tile_raw() == read_field!(state, tile)
-                && read_field!(state, user) == a as u32
-            {
-                self.restore_backup(ob, v);
-                g.delete_backup(ob);
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        0
-    }
-    fn backup_reset(&self, a: u64) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            if read_field!(g.backup(ob), user) == a as u32 {
-                (g.0.clear_backup_post)(a as u32);
-                return 0;
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        0
-    }
-    fn backup_clear_user(&self, a: u64, b: u64) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            let state = g.backup(ob);
-            {
-                if read_field!(state, user) == b as u32
-                    && (read_field!(state, tile) == a as u32 || a as u32 == u32::MAX)
-                {
-                    g.delete_backup(ob);
-                }
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        0
-    }
-    /// `OrderBackup::Reset(t, from_gui)`.
-    fn backup_tile_clear(&self, t: crate::tile_type::TileIndex, from_gui: bool) {
-        let g = self.g;
-        /* The user has CLIENT_ID_SERVER as default when network play is not active,
-         * but compiled it. A network client has its own variable for the unique
-         * client/user identifier. Finally if networking isn't compiled in the
-         * default is just plain and simple: 0. */
-        let user = if (g.0.networking)() != 0 && !(g.0.network_server)() {
-            (g.0.network_client)() as u32
-        } else {
-            (g.0.server_client)() as u32
-        };
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            let state = g.backup(ob);
-            let tile = || crate::tile_type::TileIndex(read_field!(state, tile));
-            /* If this is a GUI action, and it's not a backup of us, ignore it.
-             * If it's not for our chosen tile either, ignore it. */
-            if (!from_gui || read_field!(state, user) == user)
-                && (t == crate::tile_type::TileIndex::INVALID || t == tile())
-            {
-                if from_gui {
-                    /* We need to circumvent the "prevention" from this command being executed
-                     * while the game is paused, so use the internal method. Nor do we want
-                     * this command to get its cost estimated when shift is pressed. */
-                    (g.0.clear_backup_gui)(tile().0, user);
-                } else {
-                    /* The command came from the game logic, i.e. the clearing of a tile.
-                     * In that case we have no need to actually sync this, just do it. */
-                    g.delete_backup(ob);
-                }
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-    }
-    fn backup_group_clear(&self, a: u64) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            let state = g.backup(ob);
-            {
-                if read_field!(state, group) == a as u16 {
-                    write_field!(state, group, (g.0.default_group)() as u16);
-                }
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        0
-    }
-    fn backup_vehicle_clear(&self, v: *mut c_void) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            let state = g.backup(ob);
-            {
-                if read_field!(state, clone) == v {
-                    let first = g.first(v);
-                    let clone = if first == v { g.next(v) } else { first };
-                    write_field!(state, clone, clone);
-                    if clone.is_null() {
-                        g.delete_backup(ob);
-                    }
-                }
-            }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        0
-    }
-    fn backup_destination_clear(&self, a: u64, b: u64, c: u64) -> u64 {
-        let g = self.g;
-        let mut cursor = 0;
-        let mut ob = self.g.next_backup(&mut cursor);
-        while !ob.is_null() {
-            {
-                let length = read_field!(g.backup_vector(ob), length);
-                for i in 0..length {
-                    let order = g.backed_order(ob, i);
-                    let mut kind = order.kind();
-                    if kind == OT_GOTO_DEPOT && order.action() & 2 != 0 {
+
+            if let Some(list) = orders(src, s) {
+                for index in 0..list.len() {
+                    let order = list.order(index).view();
+                    if !order_goes_to_station(dst, order) {
                         continue;
                     }
-                    let hangar = crate::station_map::is_hangar_tile_raw(
-                        read_field!(g.backup(ob), tile),
-                        crate::newgrf_airport::runtime(),
-                    );
-                    if kind == OT_GOTO_DEPOT && c != 0 && !hangar {
-                        continue;
-                    }
-                    if kind == OT_IMPLICIT || (hangar && kind == OT_GOTO_DEPOT && c == 0) {
-                        kind = OT_GOTO_STATION;
-                    }
-                    if u64::from(kind) == a && u64::from(order.destination) == b {
-                        g.delete_backup(ob);
-                        break;
+
+                    /* Allow copying unreachable destinations if they were already unreachable for the source.
+                     * This is basically to allow cloning / autorenewing / autoreplacing vehicles, while the stations
+                     * are temporarily invalid due to reconstruction. */
+                    let st = order.destination().to_station_id();
+                    if can_vehicle_use_station(src, st) && !can_vehicle_use_station(dst, st) {
+                        return command_cost_extra(
+                            cost,
+                            STR_ERROR_CAN_T_COPY_SHARE_ORDER,
+                            get_vehicle_cannot_use_station_reason(dst, st, s),
+                        );
                     }
                 }
             }
-            ob = self.g.next_backup(&mut cursor);
-        }
-        0
-    }
-}
 
-impl Control {
-    fn remove_destination(&self, kind: u8, destination: u16, hangar: bool) {
-        let g = self.g;
-        let mut v = self.g.next_vehicle(0);
-        while !v.is_null() {
-            let next = (g.vehicle_id(v) as u32).wrapping_add(1);
-            let aircraft = g.vehicle_type(v) == u64::from(VEH_AIRCRAFT);
-            let mut current = g.current(v);
-            let current_kind = if aircraft && current.kind() == OT_GOTO_DEPOT && !hangar {
-                OT_GOTO_STATION
-            } else {
-                current.kind()
-            };
-            if current_kind == kind && (!hangar || aircraft) && current.destination == destination {
-                current.kind = OT_DUMMY;
-                current.flags = 0;
-                g.put_current(v, current);
-                crate::window_func::set_window_dirty(
-                    crate::window_type::WindowClass::WC_VEHICLE_VIEW,
-                    crate::window_type::WindowNumber::from(
-                        native_vehicle(v, g.0.base).index(g.0.base.newgrf()),
-                    ),
+            /* Check for aircraft range limits. */
+            if dst.vehicle_type() == VehicleType::VEH_AIRCRAFT
+                && !check_aircraft_order_distance(dst, src, s)
+            {
+                return command_cost(cost, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE);
+            }
+
+            if order_list(src, s).is_none() && (s.list_can_allocate_item)() == 0 {
+                return command_cost(cost, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
+            }
+
+            if flags.test(DoCommandFlag::Execute) {
+                /* If the destination vehicle had a OrderList, destroy it.
+                 * We only reset the order indices, if the new orders are obviously different.
+                 * (We mainly do this to keep the order indices valid and in range.) */
+                delete_vehicle_orders(
+                    dst,
+                    false,
+                    get_num_orders(dst, s) != get_num_orders(src, s),
+                    s,
+                );
+
+                set_order_list(dst, order_list(src, s));
+
+                /* Link this vehicle in the shared-list */
+                add_to_shared(dst, src, s);
+
+                invalidate_vehicle_order(
+                    dst,
+                    VehicleInvalidateWindowData::VIWD_REMOVE_ALL_ORDERS.0,
+                    s,
+                );
+                invalidate_vehicle_order(src, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
+
+                invalidate_window_classes_data(
+                    get_window_class_for_vehicle_type(dst.vehicle_type()),
+                    0,
+                    false,
                 );
             }
-            if !g.orders(v).is_null() {
-                let mut index = 0u8;
-                while index < g.count(v) {
-                    let mut next = index.wrapping_add(1);
-                    let list = g.orders(v);
-                    let mut order = g.order(list, index).unwrap();
-                    let mut ty = order.kind();
-                    if !(ty == OT_GOTO_DEPOT && (order.action() & 2 != 0 || (hangar && !aircraft)))
-                    {
-                        if ty == OT_IMPLICIT || (aircraft && ty == OT_GOTO_DEPOT && !hangar) {
-                            ty = OT_GOTO_STATION;
-                        }
-                        if ty == kind && order.destination == destination {
-                            if order.kind() == OT_IMPLICIT {
-                                self.delete(v, index);
-                                next = index;
-                            } else {
-                                let state = g.list(list);
-                                write_field!(
-                                    state,
-                                    total,
-                                    read_field!(state, total).wrapping_sub(i32::from(order.wait))
-                                );
-                                if order.wait_timetabled() {
-                                    write_field!(
-                                        state,
-                                        timetable,
-                                        read_field!(state, timetable)
-                                            .wrapping_sub(i32::from(order.timetabled_wait()))
-                                    );
-                                    order.set_wait_timetabled(false);
-                                }
-                                order.wait = 0;
-                                let travel = order.travel_timetabled();
-                                order.kind = OT_DUMMY;
-                                order.flags = 0;
-                                order.set_travel_timetabled(travel);
-                                g.put_order(list, index, order);
-                                let mut shared = g.first(v);
-                                while !shared.is_null() {
-                                    let data = u16::from(index) | (u16::from(u8::MAX) << 8);
-                                    g.invalidate_order(shared, i32::from(data));
-                                    g.invalidate_order(shared, i32::from(data));
-                                    shared = g.next(shared);
-                                }
-                            }
-                        }
-                    }
-                    index = next;
-                }
-            }
-            v = self.g.next_vehicle(next);
         }
-        self.backup_destination_clear(u64::from(kind), u64::from(destination), u64::from(hangar));
-    }
-    /// `CheckOrders`. `vehicle` yields the typed record of `v`; the native entry resolves
-    /// its pointer only once the review setting is enabled.
-    fn check_orders(&self, vehicle: impl FnOnce() -> VehicleRef) {
-        let g = self.g;
-        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        let review = unsafe { g.shared().settings().order_review_system.read() };
-        // Does the user wants us to check things?
-        if review == 0 {
-            return;
-        }
-        let record = vehicle();
-        let v = record.shell();
-        // Do nothing for crashed vehicles
-        if record
-            .vehstatus()
-            .test(crate::vehicle_base::VehState::Crashed)
-        {
-            return;
-        }
-        // Do nothing for stopped vehicles if setting is '1'
-        if review == 1
-            && record
-                .vehstatus()
-                .test(crate::vehicle_base::VehState::Stopped)
-        {
-            return;
-        }
-        // do nothing we we're not the first vehicle in a share-chain
-        if g.first(v) != v {
-            return;
-        }
-        // Only check every 20 days, so that we don't flood the message log
-        if g.local_owner(v) == 0 || !record.day_counter().is_multiple_of(20) {
-            return;
-        }
-        let mut message = 0u32;
-        let mut stations = 0i32;
-        let list = g.orders(v);
-        if !list.is_null() {
-            for i in 0..g.stored_count(list) {
-                let order = g.stored_order(list, i);
-                if order.kind() == OT_DUMMY {
-                    message = 1;
-                    break;
-                }
-                if order.kind() == OT_GOTO_STATION {
-                    stations = stations.wrapping_add(1);
-                    if order_can_use_station(v, order.destination) == 0 {
-                        message = 2;
-                    } else if record.vehicle_type()
-                        == crate::vehicle_type::VehicleType::VEH_AIRCRAFT
-                        && (g.0.base.engine)(record).aircraft_subtype()
-                            & crate::engine_type::AIR_FAST
-                            != 0
-                        && u64::from(
-                            (crate::newgrf_airport::runtime().fta_flags)(
-                                crate::newgrf_airport::station_fta(
-                                    crate::newgrf_airport::station_by_id(
-                                        order.destination,
-                                        crate::newgrf_airport::runtime(),
-                                    ),
-                                    crate::newgrf_airport::runtime(),
-                                ),
-                            ) & crate::airport::FTA_SHORT_STRIP
-                                != 0,
-                        ) != 0
-                        && (g.0.no_jet_crash)() == 0
-                        && message == 0
-                    {
-                        message = 3;
-                    }
-                }
-            }
-        }
-        if g.count(v) > 1
-            && g.stored_order(list, 0)
-                .equals(&g.stored_order(list, g.stored_count(list) - 1))
-        {
-            message = 4;
-        }
-        if stations < 2 && message == 0 {
-            message = 5;
-        }
-        g.debug_list(v);
-        if message != 0 {
-            g.order_news(v, message);
-        }
-    }
-}
 
-impl Control {
-    fn begin_loading_orders(&self, v: *mut c_void) {
-        let g = self.g;
-        let current = g.current(v);
-        let record = native_vehicle(v, g.0.base);
-        let last = record.last_station_visited_raw();
-        if current.kind() == OT_GOTO_STATION && current.destination == last {
-            self.delete_implicit(v);
+        CloneOptions::CO_COPY => {
+            let src = vehicle_get_if_valid(veh_src, s);
 
-            /* Now both order indices point to the destination station, and we can start loading */
-            let mut current = g.current(v);
-            current.kind = OT_LOADING;
-            g.put_current(v, current);
-            g.update_timetable(v, true);
-
-            /* Furthermore add the Non Stop flag to mark that this station
-             * is the actual destination of the vehicle, which is (for example)
-             * necessary to be known for HandleTrainLoading to determine
-             * whether the train is lost or not; not marking a train lost
-             * that arrives at random stations is bad. */
-            let mut current = g.current(v);
-            current.kind = (current.kind & !0xc0) | 0xc0;
-            g.put_current(v, current);
-            return;
-        }
-        /* We weren't scheduled to stop here. Insert an implicit order
-         * to show that we are stopping here.
-         * While only groundvehicles have implicit orders, e.g. aircraft might still enter
-         * the 'wrong' terminal when skipping orders etc. */
-        let state = g.consist(v);
-        let implicit = read_field!(state, implicit);
-        let in_list = g.vehicle_order(v, implicit);
-        if g.vehicle_type(v) < u64::from(VEH_SHIP)
-            && !in_list.is_some_and(|o| o.kind() == OT_IMPLICIT && o.destination == last)
-        {
-            let suppress = suppress_implicit(record);
-            /* Do not create consecutive duplicates of implicit orders */
-            let previous = if implicit > 0 {
-                g.vehicle_order(v, implicit - 1)
-            } else if g.count(v) > 1 {
-                g.vehicle_order(v, g.count(v) - 1)
-            } else {
-                None
+            /* Sanity checks */
+            let Some(src) = src.filter(|src| {
+                src.is_primary_vehicle() && dst.vehicle_type() == src.vehicle_type() && dst != *src
+            }) else {
+                return cmd_error(cost);
             };
-            if !previous.is_some_and(|o| {
-                matches!(o.kind(), OT_GOTO_STATION | OT_IMPLICIT) && o.destination == last
-            }) {
-                /* Prefer deleting implicit orders instead of inserting new ones,
-                 * so test whether the right order follows later. In case of only
-                 * implicit orders treat the last order in the list like an
-                 * explicit one, except if the overall number of orders surpasses
-                 * IMPLICIT_ORDER_ONLY_CAP. */
-                let mut target = i32::from(implicit);
-                let mut found = false;
-                while target != i32::from(read_field!(state, real)) || g.manual(v) == 0 {
-                    let Some(order) = g.vehicle_order(v, target as u8) else {
-                        break; // No orders.
-                    };
-                    if order.kind() == OT_IMPLICIT && order.destination == last {
-                        found = true;
-                        break;
-                    }
-                    target = target.wrapping_add(1);
-                    if target >= i32::from(g.count(v)) {
-                        if g.manual(v) == 0 && g.count(v) < 32 {
-                            break;
-                        }
-                        target = 0;
-                    }
-                    if target == i32::from(read_field!(state, implicit)) {
-                        break; // Avoid infinite loop.
-                    }
-                }
-                if found {
-                    if suppress {
-                        /* Skip to the found order */
-                        write_field!(state, implicit, target as u8);
-                        g.invalidate_order(v, 0);
-                    } else {
-                        /* Delete all implicit orders up to the station we just reached */
-                        loop {
-                            let order = g.vehicle_order(v, read_field!(state, implicit)).unwrap();
-                            if order.kind() == OT_IMPLICIT && order.destination == last {
-                                break;
-                            }
-                            if order.kind() == OT_IMPLICIT {
-                                self.delete(v, read_field!(state, implicit));
-                            } else {
-                                /* Skip non-implicit orders, e.g. service-orders */
-                                write_field!(
-                                    state,
-                                    implicit,
-                                    read_field!(state, implicit).wrapping_add(1)
-                                );
-                            }
 
-                            /* Wrapped around. */
-                            if g.vehicle_order(v, read_field!(state, implicit)).is_none() {
-                                write_field!(state, implicit, 0);
-                            }
-                        }
+            if !check_ownership(src.owner(), cost, s) {
+                return;
+            }
+
+            /* Trucks can't copy all the orders from busses (and visa versa),
+             * and neither can helicopters and aircraft. */
+            if let Some(list) = orders(src, s) {
+                for index in 0..list.len() {
+                    let order = list.order(index).view();
+                    if !order_goes_to_station(dst, order) {
+                        continue;
                     }
-                } else if !suppress
-                    && (if g.orders(v).is_null() {
-                        (g.0.list_capacity)() != 0
-                    } else {
-                        g.count(v) < 254
-                    })
-                {
-                    /* Insert new implicit order */
-                    let order = Order {
-                        kind: OT_IMPLICIT,
-                        flags: 0,
-                        destination: last,
-                        refit: 0xfe,
-                        wait: 0,
-                        travel: 0,
-                        speed: u16::MAX,
-                    };
-                    self.insert(v, order, read_field!(state, implicit));
-                    if read_field!(state, implicit) > 0 {
-                        write_field!(
-                            state,
-                            implicit,
-                            read_field!(state, implicit).wrapping_sub(1)
+                    let st = order.destination().to_station_id();
+                    if !can_vehicle_use_station(dst, st) {
+                        return command_cost_extra(
+                            cost,
+                            STR_ERROR_CAN_T_COPY_SHARE_ORDER,
+                            get_vehicle_cannot_use_station_reason(dst, st, s),
                         );
                     }
-
-                    /* InsertOrder disabled creation of implicit orders for all vehicles with the same implicit order.
-                     * Reenable it for this vehicle */
-                    assign_suppress_implicit(record, false);
                 }
             }
+
+            /* Check for aircraft range limits. */
+            if dst.vehicle_type() == VehicleType::VEH_AIRCRAFT
+                && !check_aircraft_order_distance(dst, src, s)
+            {
+                return command_cost(cost, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE);
+            }
+
+            /* make sure there are orders available */
+            if (s.list_can_allocate_item)() == 0 {
+                return command_cost(cost, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
+            }
+
+            if flags.test(DoCommandFlag::Execute) {
+                /* If the destination vehicle had an order list, destroy the chain but keep the OrderList.
+                 * We only reset the order indices, if the new orders are obviously different.
+                 * (We mainly do this to keep the order indices valid and in range.) */
+                delete_vehicle_orders(
+                    dst,
+                    true,
+                    get_num_orders(dst, s) != get_num_orders(src, s),
+                    s,
+                );
+
+                let mut dst_orders: Vec<Order> = Vec::new();
+                if let Some(list) = orders(src, s) {
+                    for index in 0..list.len() {
+                        dst_orders.push(list.order(index).view().copied());
+                    }
+                }
+
+                if let Some(list) = order_list(dst, s) {
+                    assert_with(|| list.get_num_orders().0 == 0);
+                    assert_with(|| !list.is_shared());
+                    // SAFETY: The emptied, unshared list's live shell, deleted once.
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        (s.delete_list)(list.shell());
+                    }
+                }
+
+                assert_with(|| (s.list_can_allocate_item)() != 0);
+                let list = new_order_list(
+                    dst,
+                    // SAFETY: The new list's live vector and the local copies outside it.
+                    #[allow(unsafe_code)]
+                    |list| unsafe { (*list.vector).assign(dst_orders.as_ptr(), dst_orders.len()) },
+                    s,
+                );
+                set_order_list(dst, Some(list));
+
+                invalidate_vehicle_order(
+                    dst,
+                    VehicleInvalidateWindowData::VIWD_REMOVE_ALL_ORDERS.0,
+                    s,
+                );
+
+                invalidate_window_classes_data(
+                    get_window_class_for_vehicle_type(dst.vehicle_type()),
+                    0,
+                    false,
+                );
+            }
         }
-        let mut current = g.current(v);
-        current.kind = OT_LOADING;
-        current.flags = 0;
-        g.put_current(v, current);
+
+        CloneOptions::CO_UNSHARE => declone_order(dst, flags, s),
+        _ => cmd_error(cost),
     }
 }
 
-/// `PreviousOrderIsUnbunching`: check if the previous order is a depot unbunching order, over
-/// the vehicle's resolved order list and its consist.
-fn previous_order_is_unbunching(orders: &OrderAccess, consist: *mut Consist) -> bool {
-    let count = orders.count();
-    let implicit = read_field!(consist, implicit);
-    /* If we are headed for the first order, we must wrap around back to the last order. */
-    let index = if (implicit >= count && count == 0) || implicit == 0 {
-        count.wrapping_sub(1)
-    } else {
-        implicit.wrapping_sub(1)
-    };
-    let Some(previous_order) = orders.order_ptr(index) else {
-        return false;
-    };
-    // SAFETY: `order_ptr` names one of the list's live, initialised orders.
-    let previous_order = unsafe { OrderView::of(previous_order) };
-    if !previous_order.is_type(crate::order_type::OrderType::OT_GOTO_DEPOT) {
-        return false;
-    }
-    previous_order
-        .depot_action_flags()
-        .test(crate::order_type::OrderDepotActionFlag::Unbunch)
-}
-
-/// `BaseConsist::ResetDepotUnbunching` on the consist owner of a live vehicle record.
-pub(crate) fn reset_unbunching(v: VehicleRef) {
-    let consist = read_field!(v.0.as_ptr(), consist);
-    // SAFETY: The consist owner the live record stores.
-    unsafe { reset_depot_unbunching(consist) };
-}
-
-/// `OrderList::GetOrders()`: an order list's stored span, resolved once by its caller and
-/// read in place; no caller changes the list while it holds the span.
+/// `CmdOrderRefit`'s arguments.
 #[derive(Clone, Copy)]
-pub(crate) struct OrderSpan(*const Vector);
-impl OrderSpan {
-    /// `OrderList::GetNumOrders()`.
-    pub(crate) fn count(self) -> VehicleOrderID {
-        VehicleOrderID(read_field!(self.0, length) as u8)
+pub(crate) struct CmdOrderRefit {
+    /// `VehicleIndex` of the vehicle having the order.
+    pub(crate) veh: VehicleID,
+    /// Number of order to modify.
+    pub(crate) order_number: VehicleOrderID,
+    /// `CargoType`.
+    pub(crate) cargo: CargoType,
+}
+
+/// `CmdOrderRefit`: add/remove refit orders from an order.
+pub(crate) fn cmd_order_refit(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdOrderRefit,
+) {
+    let CmdOrderRefit {
+        veh,
+        order_number,
+        cargo,
+    } = args;
+    if cargo.0 >= NUM_CARGO && cargo.0 != CARGO_NO_REFIT && cargo.0 != CARGO_AUTO_REFIT {
+        return cmd_error(cost);
     }
-    /// `orders[index]` for an index below `count`, read in place.
-    pub(crate) fn order(self, index: VehicleOrderID) -> OrderView<'static> {
-        // SAFETY: An index below `count` names a live stored order of the span.
-        unsafe { OrderView::of(slot(self.0, usize::from(index.0))) }
+
+    let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
     }
-    /// `OrderList::GetNext`: the order after `index`, wrapping to the first.
-    pub(crate) fn next(self, index: VehicleOrderID) -> VehicleOrderID {
-        let count = self.count().0;
-        if count == 0 {
-            VehicleOrderID::INVALID_VEH_ORDER_ID
+
+    let Some(order) = get_order(v, order_number, s) else {
+        return cmd_error(cost);
+    };
+
+    /* Automatic refit cargo is only supported for goto station orders. */
+    if cargo.0 == CARGO_AUTO_REFIT && !order.view().is_type(OrderType::OT_GOTO_STATION) {
+        return cmd_error(cost);
+    }
+
+    if order.view().load_type() == OrderLoadType::NoLoad {
+        return cmd_error(cost);
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        order.set_refit(cargo);
+
+        /* Make the depot order an 'always go' order. */
+        if cargo.0 != CARGO_NO_REFIT && order.view().is_type(OrderType::OT_GOTO_DEPOT) {
+            order
+                .set_depot_order_type(order.view().depot_type().reset(OrderDepotTypeFlag::Service));
+            order.set_depot_action_type(
+                order
+                    .view()
+                    .depot_action_flags()
+                    .reset(OrderDepotActionFlag::Halt),
+            );
+        }
+
+        let mut u = first_shared(v, s);
+        while let Some(shared) = u {
+            /* Update any possible open window of the vehicle */
+            invalidate_vehicle_order(shared, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
+
+            /* If the vehicle already got the current depot set as current order, then update current order as well */
+            if consist(shared).cur_real_order_index() == order_number
+                && shared
+                    .current_order()
+                    .depot_type()
+                    .test(OrderDepotTypeFlag::PartOfOrders)
+            {
+                current_order(shared).set_refit(cargo);
+            }
+            u = next_shared(shared, s);
+        }
+    }
+}
+
+/// `GetStartTickFromDate` over the current `date`, `date_fract` and tick `counter`: get the
+/// `TimerGameTick::TickCounter` tick of a given date, the first tick of `start_date`.
+pub(crate) fn get_start_tick_from_date(
+    start_date: i32,
+    date: i32,
+    date_fract: u16,
+    counter: u64,
+) -> u64 {
+    /* Calculate the offset in ticks from the current date. */
+    let mut tick_offset = start_date.wrapping_sub(date).wrapping_mul(DAY_TICKS);
+
+    /* Compensate for the current date_fract. */
+    tick_offset = tick_offset.wrapping_sub(i32::from(date_fract));
+
+    /* Return the current tick plus the offset. */
+    // `TickCounter + Ticks`: the `int32_t` offset converts to `uint64_t`.
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "the original's conversion to `TickCounter`"
+    )]
+    counter.wrapping_add(tick_offset as u64)
+}
+
+/// `GetDateFromStartTick` over the current `date`, `date_fract` and tick `counter`: get the
+/// date when we reach the `TimerGameTick::TickCounter` `start_tick` of a timetable.
+pub(crate) fn get_date_from_start_tick(
+    start_tick: u64,
+    date: i32,
+    date_fract: u16,
+    counter: u64,
+) -> i32 {
+    /* Calculate the offset in ticks from the current counter tick. */
+    // `TickCounter - TickCounter` narrowed to `Ticks`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the original's `Ticks` result"
+    )]
+    let mut tick_offset = start_tick.wrapping_sub(counter) as i32;
+
+    /* Compensate for the current date_fract. */
+    tick_offset = tick_offset.wrapping_add(i32::from(date_fract));
+
+    /* Return the current date plus the offset in days. */
+    date.wrapping_add(tick_offset / DAY_TICKS)
+}
+
+/// `GetStartTickFromDate`, for the C++ callers.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_orders_start_tick(
+    date: i32,
+    current_date: i32,
+    fract: u16,
+    counter: u64,
+) -> u64 {
+    get_start_tick_from_date(date, current_date, fract, counter)
+}
+/// `GetDateFromStartTick`, for the C++ callers.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_orders_start_date(
+    start: u64,
+    date: i32,
+    fract: u16,
+    counter: u64,
+) -> i32 {
+    get_date_from_start_tick(start, date, fract, counter)
+}
+
+/// `ChangeTimetable`: change/update a particular timetable entry. `order_number` is the index
+/// of the timetable in the order list, `val` the new data of the timetable entry, `mtf` which
+/// part of the timetable entry to change and `timetabled` whether the new value is explicitly
+/// timetabled.
+fn change_timetable(
+    v: VehicleRef,
+    order_number: VehicleOrderID,
+    val: u16,
+    mtf: ModifyTimetableFlags,
+    timetabled: bool,
+    s: &Leaves,
+) {
+    let order = get_order(v, order_number, s);
+    assert_with(|| order.is_some());
+    let order = order.unwrap();
+    let mut total_delta = 0i32;
+    let mut timetable_delta = 0i32;
+
+    match mtf {
+        ModifyTimetableFlags::MTF_WAIT_TIME => {
+            total_delta = i32::from(val) - i32::from(order.view().wait_time());
+            timetable_delta = i32::from(if timetabled { val } else { 0 })
+                - i32::from(order.view().timetabled_wait());
+            order.set_wait_time(val);
+            order.set_wait_timetabled(timetabled);
+        }
+
+        ModifyTimetableFlags::MTF_TRAVEL_TIME => {
+            total_delta = i32::from(val) - i32::from(order.view().travel_time());
+            timetable_delta = i32::from(if timetabled { val } else { 0 })
+                - i32::from(order.view().timetabled_travel());
+            order.set_travel_time(val);
+            order.set_travel_timetabled(timetabled);
+        }
+
+        ModifyTimetableFlags::MTF_TRAVEL_SPEED => {
+            order.set_max_speed(val);
+        }
+
+        _ => not_reached(),
+    }
+    let list = order_list(v, s).unwrap();
+    list.update_total_duration(total_delta);
+    list.update_timetable_duration(timetable_delta);
+
+    let mut u = first_shared(v, s);
+    while let Some(v) = u {
+        if consist(v).cur_real_order_index() == order_number
+            && v.current_order().equals(order.view())
+        {
+            let current = current_order(v);
+            match mtf {
+                ModifyTimetableFlags::MTF_WAIT_TIME => {
+                    current.set_wait_time(val);
+                    current.set_wait_timetabled(timetabled);
+                }
+
+                ModifyTimetableFlags::MTF_TRAVEL_TIME => {
+                    current.set_travel_time(val);
+                    current.set_travel_timetabled(timetabled);
+                }
+
+                ModifyTimetableFlags::MTF_TRAVEL_SPEED => {
+                    current.set_max_speed(val);
+                }
+
+                _ => not_reached(),
+            }
+        }
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_TIMETABLE,
+            WindowNumber::from(v.index(s.newgrf())),
+        );
+        u = next_shared(v, s);
+    }
+}
+
+/// `CmdChangeTimetable`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdChangeTimetable {
+    /// Vehicle with the orders to change.
+    pub(crate) veh: VehicleID,
+    /// Order index to modify.
+    pub(crate) order_number: VehicleOrderID,
+    /// Timetable data to change (`ModifyTimetableFlags`).
+    pub(crate) mtf: ModifyTimetableFlags,
+    /// The data to modify as specified by `mtf`: 0 to clear times, `UINT16_MAX` to clear the
+    /// speed limit.
+    pub(crate) data: u16,
+}
+
+/// `CmdChangeTimetable`: change timetable data of an order.
+pub(crate) fn cmd_change_timetable(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdChangeTimetable,
+) {
+    let CmdChangeTimetable {
+        veh,
+        order_number,
+        mtf,
+        data,
+    } = args;
+    let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    let Some(order) =
+        get_order(v, order_number, s).filter(|order| !order.view().is_type(OrderType::OT_IMPLICIT))
+    else {
+        return cmd_error(cost);
+    };
+
+    if mtf >= ModifyTimetableFlags::MTF_END {
+        return cmd_error(cost);
+    }
+
+    let mut wait_time = i32::from(order.view().wait_time());
+    let mut travel_time = i32::from(order.view().travel_time());
+    let mut max_speed = i32::from(order.view().max_speed());
+    match mtf {
+        ModifyTimetableFlags::MTF_WAIT_TIME => wait_time = i32::from(data),
+
+        ModifyTimetableFlags::MTF_TRAVEL_TIME => travel_time = i32::from(data),
+
+        ModifyTimetableFlags::MTF_TRAVEL_SPEED => {
+            max_speed = i32::from(data);
+            if max_speed == 0 {
+                max_speed = i32::from(u16::MAX); // Disable speed limit.
+            }
+        }
+
+        _ => not_reached(),
+    }
+
+    if wait_time != i32::from(order.view().wait_time()) {
+        match order.view().kind() {
+            OrderType::OT_GOTO_STATION => {
+                if order
+                    .view()
+                    .non_stop()
+                    .test(OrderNonStopFlag::NoDestination)
+                {
+                    return command_cost(cost, STR_ERROR_TIMETABLE_NOT_STOPPING_HERE);
+                }
+            }
+
+            OrderType::OT_CONDITIONAL => {}
+
+            _ => return command_cost(cost, STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS),
+        }
+    }
+
+    if travel_time != i32::from(order.view().travel_time())
+        && order.view().is_type(OrderType::OT_CONDITIONAL)
+    {
+        return cmd_error(cost);
+    }
+    if max_speed != i32::from(order.view().max_speed())
+        && (order.view().is_type(OrderType::OT_CONDITIONAL)
+            || v.vehicle_type() == VehicleType::VEH_AIRCRAFT)
+    {
+        return cmd_error(cost);
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        // The `int` times are the `uint16_t` data or member values they were read from.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        match mtf {
+            ModifyTimetableFlags::MTF_WAIT_TIME => {
+                /* Set time if changing the value or confirming an estimated time as timetabled. */
+                if wait_time != i32::from(order.view().wait_time())
+                    || (wait_time > 0 && !order.view().is_wait_timetabled())
+                {
+                    change_timetable(
+                        v,
+                        order_number,
+                        wait_time as u16,
+                        ModifyTimetableFlags::MTF_WAIT_TIME,
+                        wait_time > 0,
+                        s,
+                    );
+                }
+            }
+
+            ModifyTimetableFlags::MTF_TRAVEL_TIME => {
+                /* Set time if changing the value or confirming an estimated time as timetabled. */
+                if travel_time != i32::from(order.view().travel_time())
+                    || (travel_time > 0 && !order.view().is_travel_timetabled())
+                {
+                    change_timetable(
+                        v,
+                        order_number,
+                        travel_time as u16,
+                        ModifyTimetableFlags::MTF_TRAVEL_TIME,
+                        travel_time > 0,
+                        s,
+                    );
+                }
+            }
+
+            ModifyTimetableFlags::MTF_TRAVEL_SPEED => {
+                if max_speed != i32::from(order.view().max_speed()) {
+                    change_timetable(
+                        v,
+                        order_number,
+                        max_speed as u16,
+                        ModifyTimetableFlags::MTF_TRAVEL_SPEED,
+                        max_speed != i32::from(u16::MAX),
+                        s,
+                    );
+                }
+            }
+
+            _ => {}
+        }
+
+        /* Unbunching data is no longer valid for any vehicle in this shared order group. */
+        let mut u = first_shared(v, s);
+        while let Some(shared) = u {
+            consist(shared).reset_depot_unbunching();
+            u = next_shared(shared, s);
+        }
+    }
+}
+
+/// `CmdBulkChangeTimetable`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBulkChangeTimetable {
+    /// Vehicle with the orders to change.
+    pub(crate) veh: VehicleID,
+    /// Timetable data to change (`ModifyTimetableFlags`).
+    pub(crate) mtf: ModifyTimetableFlags,
+    /// The data to modify as specified by `mtf`: 0 to clear times, `UINT16_MAX` to clear the
+    /// speed limit.
+    pub(crate) data: u16,
+}
+
+/// `CmdBulkChangeTimetable`: change timetable data of all orders of a vehicle.
+pub(crate) fn cmd_bulk_change_timetable(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdBulkChangeTimetable,
+) {
+    let CmdBulkChangeTimetable { veh, mtf, data } = args;
+    let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    if mtf >= ModifyTimetableFlags::MTF_END {
+        return cmd_error(cost);
+    }
+
+    if get_num_orders(v, s).0 == 0 {
+        return cmd_error(cost);
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        let mut order_number = VehicleOrderID(0);
+        while order_number < get_num_orders(v, s) {
+            let order = get_order(v, order_number, s);
+            if order.is_some_and(|order| !order.view().is_type(OrderType::OT_IMPLICIT)) {
+                command_do(
+                    s,
+                    DoCommandFlags::from_element(DoCommandFlag::Execute),
+                    |out, flags| {
+                        cmd_change_timetable(
+                            s,
+                            out,
+                            flags,
+                            CmdChangeTimetable {
+                                veh: v.index(s.newgrf()),
+                                order_number,
+                                mtf,
+                                data,
+                            },
+                        );
+                    },
+                );
+            }
+            order_number = VehicleOrderID(order_number.0.wrapping_add(1));
+        }
+    }
+}
+
+/// `CmdSetVehicleOnTime`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdSetVehicleOnTime {
+    /// Vehicle with the orders to change.
+    pub(crate) veh: VehicleID,
+    /// Set to reset the late counter for all vehicles sharing the orders.
+    pub(crate) apply_to_group: bool,
+}
+
+/// `CmdSetVehicleOnTime`: clear the lateness counter to make the vehicle on time.
+pub(crate) fn cmd_set_vehicle_on_time(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdSetVehicleOnTime,
+) {
+    let CmdSetVehicleOnTime {
+        veh,
+        apply_to_group,
+    } = args;
+    let Some(v) = vehicle_get_if_valid(veh, s)
+        .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
+    else {
+        return cmd_error(cost);
+    };
+    let c = consist(v);
+
+    /* A vehicle can't be late if its timetable hasn't started.
+     * If we're setting all vehicles in the group, we handle that below. */
+    if !apply_to_group && !c.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED) {
+        return command_cost(cost, STR_ERROR_TIMETABLE_NOT_STARTED);
+    }
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        if apply_to_group {
+            let mut most_late = 0i32;
+            let mut u = first_shared(v, s);
+            while let Some(shared) = u {
+                u = next_shared(shared, s);
+                /* A vehicle can't be late if its timetable hasn't started. */
+                if !c.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED) {
+                    continue;
+                }
+
+                if consist(shared).lateness_counter() > most_late {
+                    most_late = consist(shared).lateness_counter();
+                }
+
+                /* Unbunching data is no longer valid. */
+                consist(shared).reset_depot_unbunching();
+            }
+            if most_late > 0 {
+                let mut u = first_shared(v, s);
+                while let Some(shared) = u {
+                    u = next_shared(shared, s);
+                    /* A vehicle can't be late if its timetable hasn't started. */
+                    if !c.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED) {
+                        continue;
+                    }
+
+                    let sc = consist(shared);
+                    sc.set_lateness_counter(sc.lateness_counter().wrapping_sub(most_late));
+                    set_window_dirty(
+                        WindowClass::WC_VEHICLE_TIMETABLE,
+                        WindowNumber::from(shared.index(s.newgrf())),
+                    );
+                }
+            }
         } else {
-            VehicleOrderID(((u16::from(index.0) + 1) % u16::from(count)) as u8)
+            c.set_lateness_counter(0);
+            /* Unbunching data is no longer valid. */
+            c.reset_depot_unbunching();
+            set_window_dirty(
+                WindowClass::WC_VEHICLE_TIMETABLE,
+                WindowNumber::from(v.index(s.newgrf())),
+            );
         }
-    }
-    /// `OrderList::GetNextDecisionNode`: the next order which will make the given vehicle
-    /// stop at a station or refit at a depot or evaluate a non-trivial condition.
-    pub(crate) fn next_decision_node(self, next: VehicleOrderID, hops: u32) -> VehicleOrderID {
-        if hops > u32::from(self.count().0) || next >= self.count() {
-            return VehicleOrderID::INVALID_VEH_ORDER_ID;
-        }
-        let order = self.order(next).copied();
-        if order.kind() == OT_CONDITIONAL {
-            if order.variable() != 5 {
-                return next;
-            }
-            return self.next_decision_node(VehicleOrderID(order.flags), hops.wrapping_add(1));
-        }
-        if order.kind() == OT_GOTO_DEPOT {
-            if order.action() & 1 != 0 {
-                return VehicleOrderID::INVALID_VEH_ORDER_ID;
-            }
-            if order.is_refit() {
-                return next;
-            }
-        }
-        if !order.can_load_unload() {
-            return self.next_decision_node(self.next(next), hops.wrapping_add(1));
-        }
-        next
     }
 }
 
-/// Direct access to the canonical orders owner for route prediction.
-/// Handles are live for the synchronous entry; no owner borrow crosses a leaf.
+/// `VehicleTimetableSorter`: order vehicles based on their timetable. The vehicles will be
+/// sorted in order they would reach the first station. True where `a` sorts before `b`.
+fn vehicle_timetable_sorter(a: VehicleRef, b: VehicleRef, s: &Leaves) -> bool {
+    let mut a_order = consist(a).cur_real_order_index();
+    let mut b_order = consist(b).cur_real_order_index();
+    let j = i32::from(b_order.0) - i32::from(a_order.0);
+
+    /* Are we currently at an ordered station (un)loading? */
+    let a_load =
+        a.current_order().is_type(OrderType::OT_LOADING) && a.current_order().non_stop().any();
+    let b_load =
+        b.current_order().is_type(OrderType::OT_LOADING) && b.current_order().non_stop().any();
+
+    /* If the current order is not loading at the ordered station, decrease the order index by one since we have
+     * not yet arrived at the station (and thus the timetable entry; still in the travelling of the previous one).
+     * Since the ?_order variables are unsigned the -1 will flow under and place the vehicles going to order #0 at
+     * the begin of the list with vehicles arriving at #0. */
+    if !a_load {
+        a_order = VehicleOrderID(a_order.0.wrapping_sub(1));
+    }
+    if !b_load {
+        b_order = VehicleOrderID(b_order.0.wrapping_sub(1));
+    }
+
+    /* First check the order index that accounted for loading, then just the raw one. */
+    let i = i32::from(b_order.0) - i32::from(a_order.0);
+    if i != 0 {
+        return i < 0;
+    }
+    if j != 0 {
+        return j < 0;
+    }
+
+    /* Look at the time we spent in this order; the higher, the closer to its destination. */
+    let i = consist(b)
+        .current_order_time()
+        .wrapping_sub(consist(a).current_order_time());
+    if i != 0 {
+        return i < 0;
+    }
+
+    /* If all else is equal, use some unique index to sort it the same way. */
+    b.unitnumber(s.shared()) < a.unitnumber(s.shared())
+}
+
+/// `CmdSetTimetableStart`'s arguments.
 #[derive(Clone, Copy)]
-pub(crate) struct VisitOrders(Game);
-impl VisitOrders {
-    pub(crate) fn new(leaves: &'static Leaves) -> Self {
-        Self(Game(leaves))
+pub(crate) struct CmdSetTimetableStart {
+    /// Vehicle ID.
+    pub(crate) veh_id: VehicleID,
+    /// Set to set timetable start for all vehicles sharing this order.
+    pub(crate) timetable_all: bool,
+    /// The `TimerGameTick::counter` tick when the timetable starts.
+    pub(crate) start_tick: u64,
+}
+
+/// `CmdSetTimetableStart`: set the start date of the timetable.
+pub(crate) fn cmd_set_timetable_start(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdSetTimetableStart,
+) {
+    let CmdSetTimetableStart {
+        veh_id,
+        timetable_all,
+        start_tick,
+    } = args;
+    let Some(v) = vehicle_get_if_valid(veh_id, s)
+        .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
+    else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
     }
-    fn shell(v: VehicleRef) -> *mut c_void {
-        v.shell().cast()
+
+    let list = order_list(v, s).unwrap();
+    let total_duration = list.get_timetable_total_duration();
+
+    let date = crate::timer_game_common::economy_date().0;
+    let start_date = get_date_from_start_tick(
+        start_tick,
+        date,
+        crate::timer_game_common::economy_fraction(),
+        (s.shared().tick_counter)(),
+    );
+
+    /* Don't let a timetable start at an invalid date. */
+    if start_date < 0 || start_date > crate::timer_game_common::MAX_DATE {
+        return cmd_error(cost);
     }
-    /// `v->orders`, the native `OrderList` shell or null.
-    pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
-        self.0.orders(Self::shell(v))
+
+    /* Don't let a timetable start more than 15 years into the future... */
+    if start_date.wrapping_sub(date)
+        > crate::timer_game_common::date_at_start_of_year(
+            crate::timetable::MAX_TIMETABLE_START_YEARS,
+        )
+    {
+        return cmd_error(cost);
     }
-    /// `OrderList::GetOrders()` of `list`, resolved once.
-    pub(crate) fn span(self, list: *mut c_void) -> OrderSpan {
-        OrderSpan(self.0.vector(list))
+    /* ...or 1 year in the past. */
+    if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
+        return cmd_error(cost);
     }
-    /// Full `OrderList::GetOrders()` span length, without `VehicleOrderID` narrowing.
-    pub(crate) fn stored_count(self, list: *mut c_void) -> usize {
-        self.0.stored_count(list)
+
+    /* If trying to distribute start dates over a shared order group, we need to know the total duration. */
+    if timetable_all && !list.is_complete_timetable() {
+        return command_cost(cost, STR_ERROR_TIMETABLE_INCOMPLETE);
     }
-    /// Full stored-span entry, with `index` below `stored_count`.
-    pub(crate) fn stored_order(self, list: *mut c_void, index: usize) -> Order {
-        self.0.stored_order(list, index)
+
+    /* Don't allow invalid start dates for other vehicles in the shared order group. */
+    if timetable_all
+        && start_date.wrapping_add(total_duration / DAY_TICKS) > crate::timer_game_common::MAX_DATE
+    {
+        return cmd_error(cost);
     }
-    /// `OrderList::GetTotalDuration()`.
-    pub(crate) fn total(self, list: *mut c_void) -> i32 {
-        read_field!(self.0.list(list), total)
-    }
-    /// `v->current_order`.
-    pub(crate) fn current(self, v: VehicleRef) -> Order {
-        self.0.current(Self::shell(v))
-    }
-    /// `v->GetOrder(index)`: null without a list or beyond its orders, read in place.
-    pub(crate) fn get(self, v: VehicleRef, index: VehicleOrderID) -> Option<OrderView<'static>> {
-        let order = self.get_order(v, index);
-        // SAFETY: A non-null address names a live order of the vehicle's list.
-        (!order.is_null()).then(|| unsafe { OrderView::of(order) })
-    }
-    /// `v->GetNumOrders()`: the number of orders, zero for a vehicle without an order list.
-    pub(crate) fn get_num_orders(self, v: VehicleRef) -> VehicleOrderID {
-        let list = crate::vehicle_base::order_list(v.0.as_ptr());
-        VehicleOrderID(if list.is_null() { 0 } else { self.0.size(list) })
-    }
-    /// `v->GetOrder(index)`: the address of the order, null without a list or beyond its
-    /// orders. It names a live order until the list changes.
-    pub(crate) fn get_order(self, v: VehicleRef, index: VehicleOrderID) -> *const Order {
-        let list = crate::vehicle_base::order_list(v.0.as_ptr());
-        if list.is_null() {
-            return ptr::null();
+
+    if flags.test(DoCommandFlag::Execute) {
+        let mut vehs: Vec<VehicleRef> = Vec::new();
+
+        if timetable_all {
+            let mut w = list.get_first_shared_vehicle(s);
+            while let Some(shared) = w {
+                vehs.push(shared);
+                w = next_shared(shared, s);
+            }
+        } else {
+            vehs.push(v);
         }
-        order_at(self.0.vector(list), index).unwrap_or(ptr::null())
-    }
-    /// The implicit-order part of `Vehicle::BeginLoading`.
-    pub(crate) fn begin_loading(self, v: VehicleRef) {
-        Control { g: self.0 }.begin_loading_orders(Self::shell(v));
-    }
-    /// `Vehicle::DeleteUnreachedImplicitOrders`.
-    pub(crate) fn delete_implicit(self, v: VehicleRef) {
-        Control { g: self.0 }.delete_implicit(Self::shell(v));
-    }
-    /// `Vehicle::IncrementImplicitOrderIndex`.
-    pub(crate) fn increment_implicit(self, v: VehicleRef) {
-        self.0.increment_implicit(Self::shell(v));
-    }
-    /// `UpdateVehicleTimetable`.
-    pub(crate) fn update_timetable(self, v: VehicleRef, travelling: bool) {
-        self.0.update_timetable(Self::shell(v), travelling);
-    }
-    /// The unbunching round-trip measurement of `VehicleEnterDepot`.
-    pub(crate) fn measure_unbunching(self, v: VehicleRef) {
-        self.0.measure_unbunching(Self::shell(v));
-    }
-    /// `Vehicle::LeaveUnbunchingDepot`.
-    pub(crate) fn leave_unbunching_depot(self, v: VehicleRef) {
-        self.0.leave_unbunching(Self::shell(v));
-    }
-    /// `Vehicle::HasDepotOrder`: checks if a vehicle has a depot in its order list.
-    /// True iff at least one order is a depot order.
-    pub(crate) fn has_depot_order(self, v: VehicleRef) -> bool {
-        let list = crate::vehicle_base::order_list(v.0.as_ptr());
-        if list.is_null() {
-            return false;
+
+        // `(uint)vehs.size()` stored in `int`.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let num_vehs = vehs.len() as i32;
+
+        if num_vehs >= 2 {
+            // The sorter is a strict total order over the shared vehicles, whose unit numbers
+            // differ, so every correct sort gives `std::sort`'s result.
+            vehs.sort_by(|a, b| {
+                if vehicle_timetable_sorter(*a, *b, s) {
+                    std::cmp::Ordering::Less
+                } else if vehicle_timetable_sorter(*b, *a, s) {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            });
         }
-        // `Vehicle::Orders()`: the list's one stored span, resolved once.
-        let vector = self.0.vector(list);
-        (0..read_field!(vector, length)).any(|i| {
-            // SAFETY: Each index below the span's length names a live stored order.
-            unsafe { OrderView::of(slot(vector, i)) }
-                .is_type(crate::order_type::OrderType::OT_GOTO_DEPOT)
-        })
+
+        let mut idx = 0i32;
+
+        for w in vehs {
+            let c = consist(w);
+            c.set_lateness_counter(0);
+            c.set_vehicle_flags(c.vehicle_flags().reset(VehicleFlag::TIMETABLE_STARTED));
+            /* Do multiplication, then division to reduce rounding errors. */
+            // `TickCounter + int`: the `int` quotient converts to `uint64_t`.
+            #[allow(
+                clippy::cast_sign_loss,
+                reason = "the original's conversion to `TickCounter`"
+            )]
+            c.set_timetable_start(
+                start_tick.wrapping_add((idx.wrapping_mul(total_duration) / num_vehs) as u64),
+            );
+
+            /* Unbunching data is no longer valid. */
+            consist(v).reset_depot_unbunching();
+
+            set_window_dirty(
+                WindowClass::WC_VEHICLE_TIMETABLE,
+                WindowNumber::from(w.index(s.newgrf())),
+            );
+            idx = idx.wrapping_add(1);
+        }
     }
-    /// `Vehicle::IsWaitingForUnbunching` after its `assert(this->IsInDepot())`, which
-    /// `vehicle::is_waiting_for_unbunching` makes.
-    pub(crate) fn is_waiting_for_unbunching(self, v: VehicleRef) -> bool {
-        // `v->orders` and the consist owner, read in place from the live record.
-        let list = crate::vehicle_base::order_list(v.0.as_ptr());
-        let consist = read_field!(v.0.as_ptr(), consist);
-        /* Don't bother if there are no vehicles sharing orders. */
-        if list.is_null() {
-            return false;
+}
+
+/// `CmdAutofillTimetable`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdAutofillTimetable {
+    /// Vehicle index.
+    pub(crate) veh: VehicleID,
+    /// Enable or disable autofill.
+    pub(crate) autofill: bool,
+    /// Set to preserve waiting times in non-destructive mode.
+    pub(crate) preserve_wait_time: bool,
+}
+
+/// `CmdAutofillTimetable`: start or stop filling the timetable automatically from the time
+/// the vehicle actually takes to complete it. When starting to autofill the current times are
+/// cleared and the timetable will start again from scratch.
+pub(crate) fn cmd_autofill_timetable(
+    s: &Leaves,
+    cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdAutofillTimetable,
+) {
+    let CmdAutofillTimetable {
+        veh,
+        autofill,
+        preserve_wait_time,
+    } = args;
+    let Some(v) = vehicle_get_if_valid(veh, s)
+        .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
+    else {
+        return cmd_error(cost);
+    };
+
+    if !check_ownership(v.owner(), cost, s) {
+        return;
+    }
+
+    if flags.test(DoCommandFlag::Execute) {
+        let c = consist(v);
+        if autofill {
+            /* Start autofilling the timetable, which clears the
+             * "timetable has started" bit. Times are not cleared anymore, but are
+             * overwritten when the order is reached now. */
+            c.set_vehicle_flags(c.vehicle_flags().set(VehicleFlag::AUTOFILL_TIMETABLE));
+            c.set_vehicle_flags(c.vehicle_flags().reset(VehicleFlag::TIMETABLE_STARTED));
+
+            /* Overwrite waiting times only if they got longer */
+            if preserve_wait_time {
+                c.set_vehicle_flags(
+                    c.vehicle_flags()
+                        .set(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME),
+                );
+            }
+
+            c.set_timetable_start(0);
+            c.set_lateness_counter(0);
+        } else {
+            c.set_vehicle_flags(c.vehicle_flags().reset(VehicleFlag::AUTOFILL_TIMETABLE));
+            c.set_vehicle_flags(
+                c.vehicle_flags()
+                    .reset(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME),
+            );
         }
-        let state = self.0.list(list);
-        if read_field!(state, vehicles) <= 1 {
-            return false;
+
+        let mut v2 = first_shared(v, s);
+        while let Some(shared) = v2 {
+            if shared != v {
+                let c2 = consist(shared);
+                /* Stop autofilling; only one vehicle at a time can perform autofill */
+                c2.set_vehicle_flags(c2.vehicle_flags().reset(VehicleFlag::AUTOFILL_TIMETABLE));
+                c2.set_vehicle_flags(
+                    c2.vehicle_flags()
+                        .reset(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME),
+                );
+            }
+            set_window_dirty(
+                WindowClass::WC_VEHICLE_TIMETABLE,
+                WindowNumber::from(shared.index(s.newgrf())),
+            );
+            v2 = next_shared(shared, s);
         }
-        let orders = OrderAccess {
-            list: state,
-            vector: self.0.vector(list),
+    }
+}
+
+/// `UpdateVehicleTimetable`: update the timetable for the vehicle. `travelling` says whether
+/// we just travelled or waited at a station.
+pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leaves) {
+    let c = consist(v);
+    let time_taken = c.current_order_time();
+
+    c.set_current_order_time(0);
+
+    if v.current_order().is_type(OrderType::OT_IMPLICIT) {
+        return; // no timetabling of auto orders
+    }
+
+    if c.cur_real_order_index() >= get_num_orders(v, s) {
+        return;
+    }
+    let real_current_order = get_order(v, c.cur_real_order_index(), s);
+    assert_with(|| real_current_order.is_some());
+    let real_current_order = real_current_order.unwrap();
+
+    let mut first_manual_order = VehicleOrderID(0);
+    if let Some(list) = orders(v, s) {
+        for index in 0..list.len() {
+            if !list.order(index).view().is_type(OrderType::OT_IMPLICIT) {
+                break;
+            }
+            first_manual_order = VehicleOrderID(first_manual_order.0.wrapping_add(1));
+        }
+    }
+
+    let mut just_started = false;
+
+    /* This vehicle is arriving at the first destination in the timetable. */
+    if c.cur_real_order_index() == first_manual_order && travelling {
+        /* If the start date hasn't been set, or it was set automatically when
+         * the vehicle last arrived at the first destination, update it to the
+         * current time. Otherwise set the late counter appropriately to when
+         * the vehicle should have arrived. */
+        just_started = !c.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED);
+
+        if c.timetable_start() != 0 {
+            // `TickCounter - TickCounter` stored in `Ticks`.
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "the original's `Ticks` store"
+            )]
+            c.set_lateness_counter(
+                (s.shared().tick_counter)().wrapping_sub(c.timetable_start()) as i32,
+            );
+            c.set_timetable_start(0);
+        }
+
+        c.set_vehicle_flags(c.vehicle_flags().set(VehicleFlag::TIMETABLE_STARTED));
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_TIMETABLE,
+            WindowNumber::from(v.index(s.newgrf())),
+        );
+    }
+
+    if !c.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED) {
+        return;
+    }
+
+    let autofilling = c.vehicle_flags().test(VehicleFlag::AUTOFILL_TIMETABLE);
+    let remeasure_wait_time = !real_current_order.view().is_wait_timetabled()
+        || (autofilling
+            && !c
+                .vehicle_flags()
+                .test(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME));
+
+    if travelling && remeasure_wait_time {
+        /* We just finished travelling and want to remeasure the loading time,
+         * so do not apply any restrictions for the loading to finish. */
+        current_order(v).set_wait_time(0);
+    }
+
+    if just_started {
+        return;
+    }
+
+    /* Before modifying waiting times, check whether we want to preserve bigger ones. */
+    if !real_current_order.view().is_type(OrderType::OT_CONDITIONAL)
+        && (travelling
+            || time_taken > i32::from(real_current_order.view().wait_time())
+            || remeasure_wait_time)
+    {
+        /* Round up to the smallest unit of time commonly shown in the GUI (seconds) to avoid confusion.
+         * Players timetabling in Ticks can adjust later.
+         * For trains/aircraft multiple movement cycles are done in one
+         * tick. This makes it possible to leave the station and process
+         * e.g. a depot order in the same tick, causing it to not fill
+         * the timetable entry like is done for road vehicles/ships.
+         * Thus always make sure at least one tick is used between the
+         * processing of different orders when filling the timetable. */
+        // `CeilDiv(std::max(time_taken, 1), TICKS_PER_SECOND) * TICKS_PER_SECOND` as `uint`,
+        // passed to `ChangeTimetable`'s `uint16_t`.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let time_to_set = (crate::math::ceil_div(time_taken.max(1) as u32, TICKS_PER_SECOND as u32)
+            .wrapping_mul(TICKS_PER_SECOND as u32)) as u16;
+
+        if travelling && (autofilling || !real_current_order.view().is_travel_timetabled()) {
+            change_timetable(
+                v,
+                c.cur_real_order_index(),
+                time_to_set,
+                ModifyTimetableFlags::MTF_TRAVEL_TIME,
+                autofilling,
+                s,
+            );
+        } else if !travelling && (autofilling || !real_current_order.view().is_wait_timetabled()) {
+            change_timetable(
+                v,
+                c.cur_real_order_index(),
+                time_to_set,
+                ModifyTimetableFlags::MTF_WAIT_TIME,
+                autofilling,
+                s,
+            );
+        }
+    }
+
+    if c.cur_real_order_index() == first_manual_order && travelling {
+        /* If we just started we would have returned earlier and have not reached
+         * this code. So obviously, we have completed our round: So turn autofill
+         * off again. */
+        c.set_vehicle_flags(c.vehicle_flags().reset(VehicleFlag::AUTOFILL_TIMETABLE));
+        c.set_vehicle_flags(
+            c.vehicle_flags()
+                .reset(VehicleFlag::AUTOFILL_PRESERVE_WAIT_TIME),
+        );
+    }
+
+    if autofilling {
+        return;
+    }
+
+    let timetabled = i32::from(if travelling {
+        real_current_order.view().timetabled_travel()
+    } else {
+        real_current_order.view().timetabled_wait()
+    });
+
+    /* Vehicles will wait at stations if they arrive early even if they are not
+     * timetabled to wait there, so make sure the lateness counter is updated
+     * when this happens. */
+    if timetabled == 0 && (travelling || c.lateness_counter() >= 0) {
+        return;
+    }
+
+    c.set_lateness_counter(
+        c.lateness_counter()
+            .wrapping_sub(timetabled.wrapping_sub(time_taken)),
+    );
+
+    /* When we are more late than this timetabled bit takes we (somewhat expensively)
+     * check how many ticks the (fully filled) timetable has. If a timetable cycle is
+     * shorter than the amount of ticks we are late we reduce the lateness by the
+     * length of a full cycle till lateness is less than the length of a timetable
+     * cycle. When the timetable isn't fully filled the cycle will be Ticks::INVALID_TICKS. */
+    if c.lateness_counter() > timetabled {
+        let cycle = order_list(v, s).unwrap().get_timetable_total_duration();
+        if cycle != INVALID_TICKS && c.lateness_counter() > cycle {
+            c.set_lateness_counter(c.lateness_counter() % cycle);
+        }
+    }
+
+    let mut u = first_shared(v, s);
+    while let Some(shared) = u {
+        set_window_dirty(
+            WindowClass::WC_VEHICLE_TIMETABLE,
+            WindowNumber::from(shared.index(s.newgrf())),
+        );
+        u = next_shared(shared, s);
+    }
+}
+
+/// `OrderBackup::OrderBackup(v, user)`, the constructor of `ob`: create an order backup for
+/// the given vehicle. `user` is the user that is requesting the backup.
+fn order_backup_construct(ob: OrderBackupRef, v: VehicleRef, user: u32, s: &Leaves) {
+    ob.set_user(user);
+    ob.set_tile(v.tile());
+    ob.set_group(v.group_id(s.maintenance_groups()));
+
+    copy_consist_properties_to_backup(ob, v, s);
+
+    /* If we have shared orders, store the vehicle we share the order with. */
+    if is_order_list_shared(v, s) {
+        let clone = if first_shared(v, s) == Some(v) {
+            next_shared(v, s)
+        } else {
+            first_shared(v, s)
         };
-
-        /* Don't do anything if there aren't enough orders. */
-        if orders.count() <= 1 {
-            return false;
+        ob.set_clone(clone.map_or(ptr::null_mut(), VehicleRef::shell));
+    } else {
+        /* Else copy the orders */
+        let span = orders(v, s);
+        // SAFETY: The backup's live vector and the vehicle's distinct live orders.
+        #[allow(unsafe_code)]
+        unsafe {
+            (*ob.vector).assign(
+                span.map_or(ptr::null(), |list| list.data().cast_const()),
+                span.map_or(0, OrderListRef::len),
+            );
         }
-
-        /* Don't do anything if this is not our unbunching order. */
-        if !previous_order_is_unbunching(&orders, consist) {
-            return false;
-        }
-
-        read_field!(consist, next_departure) > (self.0.0.tick_counter)()
     }
+}
+
+/// `ob->CopyConsistPropertiesFrom(v)`: copy properties of other `BaseConsist`.
+#[allow(unsafe_code)]
+fn copy_consist_properties_to_backup(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
+    // SAFETY: The live backup and vehicle shells.
+    unsafe { (s.backup_set_name)(ob.shell, v.shell()) };
+    ob.consist.copy_consist_properties_from(consist(v));
+    // SAFETY: As above.
+    unsafe { (s.backup_set_service_interval)(ob.shell, v.get_service_interval(s.newgrf())) };
+}
+
+/// `v->CopyConsistPropertiesFrom(ob)`: copy properties of other `BaseConsist`.
+#[allow(unsafe_code)]
+fn copy_consist_properties_from_backup(v: VehicleRef, ob: OrderBackupRef, s: &Leaves) {
+    // SAFETY: The live vehicle and backup shells.
+    unsafe { (s.vehicle_set_name)(v.shell(), ob.shell) };
+    consist(v).copy_consist_properties_from(ob.consist);
+    // SAFETY: As above.
+    unsafe {
+        (s.vehicle_set_service_interval)(v.shell(), (s.backup_service_interval)(ob.shell));
+    }
+}
+
+/// `OrderBackup::DoRestore`: restore the data of this order to the given vehicle.
+#[allow(unsafe_code)]
+fn order_backup_do_restore(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
+    /* If we had shared orders, recover that */
+    if !ob.clone_shell().is_null() {
+        let clone = record(ob.clone_shell(), s);
+        command_do(
+            s,
+            DoCommandFlags::from_element(DoCommandFlag::Execute),
+            |out, flags| {
+                cmd_clone_order(
+                    s,
+                    out,
+                    flags,
+                    CmdCloneOrder {
+                        action: CloneOptions::CO_SHARE,
+                        veh_dst: v.index(s.newgrf()),
+                        veh_src: clone.index(s.newgrf()),
+                    },
+                );
+            },
+        );
+    } else if ob.len() != 0 && (s.list_can_allocate_item)() != 0 {
+        let list = new_order_list(
+            v,
+            // SAFETY: The new list's live vector and the backup's distinct live vector.
+            |list| unsafe { (*list.vector).take(ob.vector) },
+            s,
+        );
+        set_order_list(v, Some(list));
+        /* Make sure buoys/oil rigs are updated in the station list. */
+        invalidate_window_classes_data(WindowClass::WC_STATION_LIST, 0, false);
+    }
+
+    /* Remove backed up name if it's no longer unique. */
+    // SAFETY: The live backup shell.
+    if unsafe { (s.is_unique_vehicle_name)(ob.shell) } == 0 {
+        // SAFETY: As above.
+        unsafe { (s.backup_clear_name)(ob.shell) };
+    }
+
+    copy_consist_properties_from_backup(v, ob, s);
+
+    /* Make sure orders are in range */
+    update_real_order_index(v, s);
+    let c = consist(v);
+    if c.cur_implicit_order_index() >= get_num_orders(v, s) {
+        c.set_cur_implicit_order_index(c.cur_real_order_index());
+    }
+
+    /* Restore vehicle group */
+    let group = ob.group();
+    let groups = s.maintenance().group;
+    let id = v.index(s.newgrf());
+    command_do(
+        s,
+        DoCommandFlags::from_element(DoCommandFlag::Execute),
+        |out, flags| {
+            let mut new_group = 0;
+            // SAFETY: The process-lifetime group table; the command reads no list context.
+            let error = unsafe {
+                crate::fleet::openttd_rust_fleet_add_vehicle_group(
+                    groups,
+                    u32::from(flags.0),
+                    group.0,
+                    id.0,
+                    false,
+                    ptr::null_mut(),
+                    false,
+                    &raw mut new_group,
+                )
+            };
+            if error == u32::MAX {
+                out.zero();
+            } else {
+                out.error(error);
+            }
+        },
+    );
+}
+
+/// `OrderBackup::Backup`: create an order backup for the given vehicle. `user` is the user
+/// that is requesting the backup. Will automatically remove any previous backups of this
+/// user.
+#[allow(unsafe_code)]
+pub(crate) fn order_backup_backup(v: VehicleRef, user: u32, s: &Leaves) {
+    /* Don't use reset as that broadcasts over the network to reset the variable,
+     * which is what we are doing at the moment. */
+    for_each_backup(s, |ob| {
+        if ob.user() == user {
+            ob.delete(s);
+        }
+    });
+    if (s.backup_can_allocate_item)() != 0 {
+        // SAFETY: The live vehicle shell; the constructor runs `order_backup_construct`.
+        unsafe { (s.create_backup)(v.shell(), user) };
+    }
+}
+
+/// `OrderBackup::Restore`: restore the data of this order to the given vehicle. `user` is the
+/// user that built the vehicle, thus wants to restore. After restoration the backup will
+/// automatically be removed.
+pub(crate) fn order_backup_restore(v: VehicleRef, user: u32, s: &Leaves) {
+    for_each_backup(s, |ob| {
+        if v.tile() != ob.tile() || ob.user() != user {
+            return;
+        }
+
+        order_backup_do_restore(ob, v, s);
+        ob.delete(s);
+    });
+}
+
+/// `OrderBackup::ResetOfUser`: reset an `OrderBackup` given a tile and user. Must not be
+/// used from the GUI!
+pub(crate) fn order_backup_reset_of_user(tile: TileIndex, user: u32, s: &Leaves) {
+    for_each_backup(s, |ob| {
+        if ob.user() == user && (ob.tile() == tile || tile == TileIndex::INVALID) {
+            ob.delete(s);
+        }
+    });
+}
+
+/// `CmdClearOrderBackup`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdClearOrderBackup {
+    /// Tile related to the to-be-cleared `OrderBackup`.
+    pub(crate) tile: TileIndex,
+    /// User that had the `OrderBackup`.
+    pub(crate) user_id: ClientID,
+}
+
+/// `CmdClearOrderBackup`: clear an `OrderBackup`.
+pub(crate) fn cmd_clear_order_backup(
+    s: &Leaves,
+    _cost: Cost<'_>,
+    flags: DoCommandFlags,
+    args: CmdClearOrderBackup,
+) {
+    let CmdClearOrderBackup { tile, user_id } = args;
+    /* No need to check anything. If the tile or user don't exist we just ignore it. */
+    if flags.test(DoCommandFlag::Execute) {
+        order_backup_reset_of_user(
+            if tile == TileIndex(0) {
+                TileIndex::INVALID
+            } else {
+                tile
+            },
+            user_id.0,
+            s,
+        );
+    }
+}
+
+/// `OrderBackup::ResetUser`: reset an user's `OrderBackup` if needed. `_network_server`;
+/// must not be used from a command.
+pub(crate) fn order_backup_reset_user(user: u32, s: &'static Leaves) {
+    let p = (s.shared().command_post)();
+    // SAFETY: The command table returns the process-lifetime company table.
+    #[allow(unsafe_code)]
+    let company = unsafe { &*((p.command)().company)() };
+    assert_with(|| (company.network_server)());
+
+    let mut cursor = 0;
+    while let Some(ob) = next_backup(s, &mut cursor) {
+        /* If it's not a backup of us, ignore it. */
+        if ob.user() != user {
+            continue;
+        }
+
+        crate::command_post::clear_order_backup(s, TileIndex(0), ClientID(user));
+        return;
+    }
+}
+
+/// `OrderBackup::Reset`: reset the `OrderBackup`s from GUI/game logic. `t` is the tile of the
+/// order backup; `from_gui` says whether the call came from the GUI, i.e. whether it must be
+/// synced over the network.
+pub(crate) fn order_backup_reset(t: TileIndex, from_gui: bool, s: &Leaves) {
+    let p = (s.shared().command_post)();
+    // SAFETY: The command table returns the process-lifetime company table.
+    #[allow(unsafe_code)]
+    let company = unsafe { &*((p.command)().company)() };
+    /* The user has CLIENT_ID_SERVER as default when network play is not active,
+     * but compiled it. A network client has its own variable for the unique
+     * client/user identifier. Finally if networking isn't compiled in the
+     * default is just plain and simple: 0. */
+    let user = if (company.finance.networking)() && !(company.network_server)() {
+        // SAFETY: The session table names the process-lifetime network frame table.
+        #[allow(unsafe_code)]
+        let network = unsafe { &*(p.session)().network };
+        crate::network_client::own_client_id(network.client).0
+    } else {
+        CLIENT_ID_SERVER
+    };
+
+    for_each_backup(s, |ob| {
+        /* If this is a GUI action, and it's not a backup of us, ignore it. */
+        if from_gui && ob.user() != user {
+            return;
+        }
+        /* If it's not for our chosen tile either, ignore it. */
+        if t != TileIndex::INVALID && t != ob.tile() {
+            return;
+        }
+
+        if from_gui {
+            /* We need to circumvent the "prevention" from this command being executed
+             * while the game is paused, so use the internal method. Nor do we want
+             * this command to get its cost estimated when shift is pressed. */
+            (s.clear_order_backup_unsafe)(ob.tile().0, user);
+        } else {
+            /* The command came from the game logic, i.e. the clearing of a tile.
+             * In that case we have no need to actually sync this, just do it. */
+            ob.delete(s);
+        }
+    });
+}
+
+/// `OrderBackup::ClearGroup`: clear the group of all backups having this group ID.
+pub(crate) fn order_backup_clear_group(group: GroupID, s: &Leaves) {
+    for_each_backup(s, |ob| {
+        if ob.group() == group {
+            ob.set_group(GroupID::DEFAULT_GROUP);
+        }
+    });
+}
+
+/// `OrderBackup::ClearVehicle`: clear/update the (clone) vehicle from an order backup. If it
+/// is not possible to set another vehicle as clone "example", then this backed up order will
+/// be removed.
+pub(crate) fn order_backup_clear_vehicle(v: VehicleRef, s: &Leaves) {
+    for_each_backup(s, |ob| {
+        if ob.clone_shell() == v.shell() {
+            /* Get another item in the shared list. */
+            let clone = if first_shared(v, s) == Some(v) {
+                next_shared(v, s)
+            } else {
+                first_shared(v, s)
+            };
+            ob.set_clone(clone.map_or(ptr::null_mut(), VehicleRef::shell));
+            /* But if that isn't there, remove it. */
+            if ob.clone_shell().is_null() {
+                ob.delete(s);
+            }
+        }
+    });
+}
+
+/// `OrderBackup::RemoveOrder`: removes an order from all vehicles. Triggers when, say, a
+/// station is removed. `type` is the type of the order (`OT_GOTO_[STATION|DEPOT|WAYPOINT]`)
+/// and `destination` a `StationID`, `DepotID` or `WaypointID`. `hangar` is only used for
+/// airports in the destination: when false, remove airport and hangar orders; when true,
+/// remove either airport or hangar order.
+fn order_backup_remove_order(
+    r#type: OrderType,
+    destination: DestinationID,
+    hangar: bool,
+    s: &Leaves,
+) {
+    let airports = crate::newgrf_airport::runtime();
+    for_each_backup(s, |ob| {
+        for index in 0..ob.len() {
+            let order = ob.order(index);
+            let mut ot = order.kind();
+            if ot == OrderType::OT_GOTO_DEPOT
+                && order
+                    .depot_action_flags()
+                    .test(OrderDepotActionFlag::NearestDepot)
+            {
+                continue;
+            }
+            if ot == OrderType::OT_GOTO_DEPOT
+                && hangar
+                && !crate::station_map::is_hangar_tile_raw(ob.tile().0, airports)
+            {
+                continue; // Not an aircraft? Can't have a hangar order.
+            }
+            if ot == OrderType::OT_IMPLICIT
+                || (crate::station_map::is_hangar_tile_raw(ob.tile().0, airports)
+                    && ot == OrderType::OT_GOTO_DEPOT
+                    && !hangar)
+            {
+                ot = OrderType::OT_GOTO_STATION;
+            }
+            if ot == r#type && order.destination() == destination {
+                /* Remove the order backup! If a station/depot gets removed, we can't/shouldn't restore those broken orders. */
+                ob.delete(s);
+                break;
+            }
+        }
+    });
+}
+
+impl Leaves {
+    /// The group table, for `Vehicle::group_id`.
+    #[allow(unsafe_code)]
+    fn maintenance_groups(&self) -> &'static crate::fleet::GroupServices {
+        // SAFETY: The maintenance table names the process-lifetime group table.
+        unsafe { &*self.maintenance().group }
+    }
+}
+
+// The export shims of the C++ facades. Each converts the base integers C++ passes and calls
+// the body; a vehicle crosses as its live record, an order as the address of a live order,
+// a list or backup as its live shell, and a command's result as its live native
+// `CommandCost`.
+
+/// The order a facade passes by address.
+#[allow(unsafe_code)]
+fn order_arg<'a>(p: *const Order) -> OrderView<'a> {
+    // SAFETY: Each facade passes the address of a live order.
+    unsafe { OrderView::of(p) }
+}
+
+/// The order a facade writes by address.
+#[allow(unsafe_code)]
+fn order_mut(p: *mut Order) -> OrderRef {
+    // SAFETY: Each facade passes the address of a live, writable order.
+    unsafe { OrderRef::of(p) }
+}
+
+/// `Order::Free`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_free(p: *mut Order) {
+    order_mut(p).free();
+}
+/// `Order::MakeGoToStation`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_station(p: *mut Order, destination: u16) {
+    order_mut(p).make_go_to_station(StationID(destination));
+}
+/// `Order::MakeGoToDepot`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_depot(
+    p: *mut Order,
+    destination: u16,
+    order: u8,
+    non_stop_type: u8,
+    action: u8,
+    cargo: u8,
+) {
+    order_mut(p).make_go_to_depot(
+        DestinationID(destination),
+        OrderDepotTypeFlags(order),
+        OrderNonStopFlags(non_stop_type),
+        OrderDepotActionFlags(action),
+        CargoType(cargo),
+    );
+}
+/// `Order::MakeGoToWaypoint`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_waypoint(p: *mut Order, destination: u16) {
+    order_mut(p).make_go_to_waypoint(StationID(destination));
+}
+/// `Order::MakeLoading`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_loading(p: *mut Order, ordered: u8) {
+    order_mut(p).make_loading(ordered != 0);
+}
+/// `Order::MakeDummy`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_dummy(p: *mut Order) {
+    order_mut(p).make_dummy();
+}
+/// `Order::MakeConditional`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_conditional(p: *mut Order, order: u8) {
+    order_mut(p).make_conditional(VehicleOrderID(order));
+}
+/// `Order::MakeImplicit`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_implicit(p: *mut Order, destination: u16) {
+    order_mut(p).make_implicit(StationID(destination));
+}
+/// `Order::SetRefit`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_refit(p: *mut Order, cargo: u8) {
+    order_mut(p).set_refit(CargoType(cargo));
+}
+/// `Order::Equals`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_equals(p: *const Order, other: *const Order) -> u8 {
+    u8::from(order_arg(p).equals(order_arg(other)))
+}
+/// `Order::AssignOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_assign(p: *mut Order, other: *const Order) {
+    order_mut(p).assign_order(order_arg(other).copied());
+}
+/// `Order::MapOldOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_convert(p: *const Order) -> u16 {
+    order_arg(p).map_old_order()
+}
+/// `Order::GetLocation`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_location(
+    p: *const Order,
+    v: VehicleRef,
+    airport: u8,
+    s: &'static Leaves,
+) -> u32 {
+    get_location(order_arg(p), v, airport != 0, s).0
+}
+/// `GetOrderDistance`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_order_distance(
+    prev: u8,
+    cur: u8,
+    v: VehicleRef,
+    conditional_depth: i32,
+    s: &'static Leaves,
+) -> u32 {
+    get_order_distance(
+        VehicleOrderID(prev),
+        VehicleOrderID(cur),
+        v,
+        conditional_depth,
+        s,
+    )
+}
+
+/// `OrderList::Initialize`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_list_init(list: *mut c_void, v: VehicleRef, s: &'static Leaves) {
+    OrderListRef::of(list, s).initialize(v, s);
+}
+/// `OrderList::RecalculateTimetableDuration`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_list_recalculate(list: *mut c_void, s: &'static Leaves) {
+    OrderListRef::of(list, s).recalculate_timetable_duration();
+}
+/// `OrderList::FreeChain`, which deletes the list unless `keep_orderlist` is set.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_list_free(
+    list: *mut c_void,
+    keep_orderlist: u8,
+    s: &'static Leaves,
+) {
+    OrderListRef::of(list, s).free_chain(keep_orderlist != 0, s);
+}
+/// `OrderList::GetNextStoppingStation`, appending to the C++ vector `next_station`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_list_stopping(
+    list: *mut c_void,
+    next_station: *mut c_void,
+    v: VehicleRef,
+    first: u8,
+    hops: u32,
+    s: &'static Leaves,
+) {
+    OrderListRef::of(list, s).get_next_stopping_station(
+        // SAFETY: The facade's live output vector.
+        &mut |station| unsafe { (s.append_station)(next_station, station.0) },
+        v,
+        VehicleOrderID(first),
+        hops,
+    );
+}
+/// `OrderList::InsertOrderAt`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_list_insert(
+    list: *mut c_void,
+    order: *const Order,
+    index: u8,
+    s: &'static Leaves,
+) {
+    OrderListRef::of(list, s).insert_order_at(order_arg(order).copied(), VehicleOrderID(index), s);
+}
+/// `OrderList::IsCompleteTimetable`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_list_complete(list: *mut c_void, s: &'static Leaves) -> u8 {
+    u8::from(OrderListRef::of(list, s).is_complete_timetable())
+}
+
+/// `Vehicle::AddToShared`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_add_shared(
+    v: VehicleRef,
+    shared_chain: VehicleRef,
+    s: &'static Leaves,
+) {
+    add_to_shared(v, shared_chain, s);
+}
+/// `Vehicle::DeleteUnreachedImplicitOrders`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_delete_implicit(v: VehicleRef, s: &'static Leaves) {
+    delete_unreached_implicit_orders(v, s);
+}
+/// `Vehicle::IsWaitingForUnbunching`, after the facade's `assert(this->IsInDepot())`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_wait_unbunching(v: VehicleRef, s: &'static Leaves) -> u8 {
+    u8::from(is_waiting_for_unbunching(v, s))
+}
+/// `Vehicle::IncrementImplicitOrderIndex`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_increment_implicit(v: VehicleRef, s: &'static Leaves) {
+    increment_implicit_order_index(v, s);
+}
+/// `Vehicle::IncrementRealOrderIndex`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_increment_real(v: VehicleRef, s: &'static Leaves) {
+    increment_real_order_index(v, s);
+}
+/// `Vehicle::UpdateRealOrderIndex`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_update_real(v: VehicleRef, s: &'static Leaves) {
+    update_real_order_index(v, s);
+}
+/// `InsertOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_insert_order(
+    v: VehicleRef,
+    new_o: *const Order,
+    sel_ord: u8,
+    s: &'static Leaves,
+) {
+    insert_order(v, order_arg(new_o).copied(), VehicleOrderID(sel_ord), s);
+}
+/// `DeleteVehicleOrders`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_delete_vehicle_orders(
+    v: VehicleRef,
+    keep_orderlist: u8,
+    reset_order_indices: u8,
+    s: &'static Leaves,
+) {
+    delete_vehicle_orders(v, keep_orderlist != 0, reset_order_indices != 0, s);
+}
+/// `ProcessOrders`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_process_orders(v: VehicleRef, s: &'static Leaves) -> u8 {
+    u8::from(process_orders(v, s))
+}
+/// `RemoveOrderFromAllVehicles`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_remove_destination(
+    r#type: u8,
+    destination: u16,
+    hangar: u8,
+    s: &'static Leaves,
+) {
+    remove_order_from_all_vehicles(
+        OrderType(r#type),
+        DestinationID(destination),
+        hangar != 0,
+        s,
+    );
+}
+
+/// The live native `CommandCost` a command facade passes.
+fn cost_arg(out: *mut CommandCost, s: &'static Leaves) -> Cost<'static> {
+    s.cost(out)
+}
+
+/// `CmdInsertOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_insert(
+    flags: u16,
+    veh: u32,
+    sel_ord: u8,
+    new_order: *const Order,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_insert_order(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdInsertOrder {
+            veh: VehicleID(veh),
+            sel_ord: VehicleOrderID(sel_ord),
+            new_order: order_arg(new_order),
+        },
+    );
+}
+/// `CmdDeleteOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_delete(
+    flags: u16,
+    veh_id: u32,
+    sel_ord: u8,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_delete_order(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdDeleteOrder {
+            veh_id: VehicleID(veh_id),
+            sel_ord: VehicleOrderID(sel_ord),
+        },
+    );
+}
+/// `CmdSkipToOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_skip(
+    flags: u16,
+    veh_id: u32,
+    sel_ord: u8,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_skip_to_order(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdSkipToOrder {
+            veh_id: VehicleID(veh_id),
+            sel_ord: VehicleOrderID(sel_ord),
+        },
+    );
+}
+/// `CmdMoveOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_move(
+    flags: u16,
+    veh: u32,
+    moving_order: u8,
+    target_order: u8,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_move_order(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdMoveOrder {
+            veh: VehicleID(veh),
+            moving_order: VehicleOrderID(moving_order),
+            target_order: VehicleOrderID(target_order),
+        },
+    );
+}
+/// `CmdModifyOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_modify(
+    flags: u16,
+    veh: u32,
+    sel_ord: u8,
+    mof: u8,
+    data: u16,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_modify_order(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdModifyOrder {
+            veh: VehicleID(veh),
+            sel_ord: VehicleOrderID(sel_ord),
+            mof: ModifyOrderFlags(mof),
+            data,
+        },
+    );
+}
+/// `CmdCloneOrder`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_clone(
+    flags: u16,
+    action: u8,
+    veh_dst: u32,
+    veh_src: u32,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_clone_order(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdCloneOrder {
+            action: CloneOptions(action),
+            veh_dst: VehicleID(veh_dst),
+            veh_src: VehicleID(veh_src),
+        },
+    );
+}
+/// `CmdOrderRefit`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_refit(
+    flags: u16,
+    veh: u32,
+    order_number: u8,
+    cargo: u8,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_order_refit(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdOrderRefit {
+            veh: VehicleID(veh),
+            order_number: VehicleOrderID(order_number),
+            cargo: CargoType(cargo),
+        },
+    );
+}
+/// `CmdClearOrderBackup`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_clear_backup(
+    flags: u16,
+    tile: u32,
+    user_id: u32,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_clear_order_backup(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdClearOrderBackup {
+            tile: TileIndex(tile),
+            user_id: ClientID(user_id),
+        },
+    );
+}
+/// `CmdChangeTimetable`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_timetable_change(
+    flags: u16,
+    veh: u32,
+    order_number: u8,
+    mtf: u8,
+    data: u16,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_change_timetable(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdChangeTimetable {
+            veh: VehicleID(veh),
+            order_number: VehicleOrderID(order_number),
+            mtf: ModifyTimetableFlags(mtf),
+            data,
+        },
+    );
+}
+/// `CmdBulkChangeTimetable`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_timetable_bulk(
+    flags: u16,
+    veh: u32,
+    mtf: u8,
+    data: u16,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_bulk_change_timetable(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdBulkChangeTimetable {
+            veh: VehicleID(veh),
+            mtf: ModifyTimetableFlags(mtf),
+            data,
+        },
+    );
+}
+/// `CmdSetVehicleOnTime`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_timetable_on_time(
+    flags: u16,
+    veh: u32,
+    apply_to_group: u8,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_set_vehicle_on_time(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdSetVehicleOnTime {
+            veh: VehicleID(veh),
+            apply_to_group: apply_to_group != 0,
+        },
+    );
+}
+/// `CmdSetTimetableStart`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_timetable_start(
+    flags: u16,
+    veh_id: u32,
+    timetable_all: u8,
+    start_tick: u64,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_set_timetable_start(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdSetTimetableStart {
+            veh_id: VehicleID(veh_id),
+            timetable_all: timetable_all != 0,
+            start_tick,
+        },
+    );
+}
+/// `CmdAutofillTimetable`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_timetable_autofill(
+    flags: u16,
+    veh: u32,
+    autofill: u8,
+    preserve_wait_time: u8,
+    out: *mut CommandCost,
+    s: &'static Leaves,
+) {
+    cmd_autofill_timetable(
+        s,
+        cost_arg(out, s),
+        DoCommandFlags(flags),
+        CmdAutofillTimetable {
+            veh: VehicleID(veh),
+            autofill: autofill != 0,
+            preserve_wait_time: preserve_wait_time != 0,
+        },
+    );
+}
+
+/// The `OrderBackup(v, user)` constructor's body, run on the new backup `ob`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_capture_backup(
+    ob: *mut c_void,
+    v: VehicleRef,
+    user: u32,
+    s: &'static Leaves,
+) {
+    order_backup_construct(OrderBackupRef::of(ob, s), v, user, s);
+}
+/// `OrderBackup::Backup`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_create(v: VehicleRef, user: u32, s: &'static Leaves) {
+    order_backup_backup(v, user, s);
+}
+/// `OrderBackup::Restore`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_restore(v: VehicleRef, user: u32, s: &'static Leaves) {
+    order_backup_restore(v, user, s);
+}
+/// `OrderBackup::ResetOfUser`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_clear_user(tile: u32, user: u32, s: &'static Leaves) {
+    order_backup_reset_of_user(TileIndex(tile), user, s);
+}
+/// `OrderBackup::ResetUser`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_reset(user: u32, s: &'static Leaves) {
+    order_backup_reset_user(user, s);
+}
+/// `OrderBackup::Reset`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_tile_clear(tile: u32, from_gui: u8, s: &'static Leaves) {
+    order_backup_reset(TileIndex(tile), from_gui != 0, s);
+}
+/// `OrderBackup::ClearGroup`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_group_clear(group: u16, s: &'static Leaves) {
+    order_backup_clear_group(GroupID(group), s);
+}
+/// `OrderBackup::ClearVehicle`, after the facade's `assert(v != nullptr)`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_backup_vehicle_clear(v: VehicleRef, s: &'static Leaves) {
+    order_backup_clear_vehicle(v, s);
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDOrderFields" ["probe"] => Order {
-        kind => type,
+        r#type => type,
         flags,
-        destination,
-        refit => refit_cargo,
-        wait => wait_time,
-        travel => travel_time,
-        speed => max_speed,
+        dest,
+        refit_cargo,
+        wait_time,
+        travel_time,
+        max_speed,
     };
     "OpenTTDConsistState" ["probe"] => Consist {
-        time => current_order_time,
-        lateness => lateness_counter,
-        start => timetable_start,
-        last_departure,
-        next_departure,
-        round_trip => round_trip_time,
-        real => real_index,
-        implicit => implicit_index,
-        flags => vehicle_flags,
+        current_order_time,
+        lateness_counter,
+        timetable_start,
+        depot_unbunching_last_departure,
+        depot_unbunching_next_departure,
+        round_trip_time,
+        cur_real_order_index,
+        cur_implicit_order_index,
+        vehicle_flags,
     };
     "OpenTTDVehicleOrderState" ["probe"] => VehicleOrders {
-        current,
+        current_order,
         orders,
-        next => next_shared,
-        previous => previous_shared,
+        next_shared,
+        previous_shared,
     };
     "OpenTTDOrderListState" ["probe"] => List {
-        manual,
-        vehicles,
-        first => first_shared,
-        timetable => timetable_duration,
-        total => total_duration,
+        num_manual_orders,
+        num_vehicles,
+        first_shared,
+        timetable_duration,
+        total_duration,
     };
     "OpenTTDOrderBackupState" ["probe"] => Backup {
         user,
@@ -5099,757 +6979,36 @@ crate::abi::layouts! {
         clone,
     };
     "OpenTTDOrdersLeaves" ["probe"] => Leaves {
-        vehicle,
-        consist,
-        list,
-        vector,
-        backup,
-        backup_vector,
-        backup_consist,
-        ownerless_station,
-        vehicle_type,
-        tick_counter,
-        primary_vehicle,
-        ticks_per_second,
-        unit_number,
-        maximum_date,
         allocate_list,
-        shared_window,
-        vehicle_id,
-        reliability,
-        display_speed,
-        age_years,
-        needs_service,
-        remaining_years,
-        airport_tile,
-        depot_tile,
-        distance,
-        station_location,
-        destination_tile,
-        aircraft_flying,
-        target_airport,
-        waypoint_tile,
-        at_station,
-        tile_station,
-        ship_station_tile,
-        valid_station,
-        station_owner,
-        station_error,
-        valid_depot,
-        depot_owner,
-        rail_depot,
-        road_depot,
-        ship_depot,
-        valid_waypoint,
-        waypoint_facilities,
-        waypoint_owner,
-        list_capacity,
-        next_backup,
-        next_vehicle,
-        aircraft_range,
-        aircraft_range_square,
-        backup_capacity,
+        backup,
+        backup_can_allocate_item,
+        backup_consist,
+        backup_vector,
         create_backup,
-        networking,
-        network_server,
-        network_client,
-        server_client,
-        default_group,
-        vehicle_group,
-        unique_backup_name,
-        local_owner,
-        no_jet_crash,
-        append_station,
-        station_commands,
-        timetable_dirty,
-        invalidate_order,
-        delete_order_news,
-        invalidate_vehicle_list,
-        close_shared_window,
-        invalidate_shared_window,
-        dirty_vehicle_windows,
-        capture_backup_metadata,
-        clear_backup_name,
-        restore_backup_metadata,
-        order_news,
-        debug_list,
-        assert_departure_range,
-        delete_list,
-        reverse_train,
-        next_airport,
-        set_destination,
-        closest_depot,
-        share_command,
-        group_command,
         delete_backup,
-        clear_backup_gui,
-        clear_backup_post,
-        missing_aircraft_orders,
-        change_timetable_command,
+        delete_list,
+        list,
+        list_can_allocate_item,
+        next_backup,
+        vector,
+        backup_clear_name,
+        backup_service_interval,
+        backup_set_name,
+        backup_set_service_interval,
+        vehicle_set_name,
+        vehicle_set_service_interval,
+        base_station_get_if_valid,
+        depot_get,
+        waypoint_get_if_valid,
+        debug_check_sanity,
+        get_vehicle_cannot_use_station_reason,
+        invalidate_vehicle_order,
+        is_unique_vehicle_name,
+        append_station,
+        clear_order_backup_unsafe,
         base,
+        depots,
+        scheduler,
+        station_commands,
     };
-    "OpenTTDOrdersClosest" ["probe"] => Closest {
-        tile,
-        destination,
-        reverse,
-        found,
-    };
-}
-
-/// Shared named station eligibility operation, keeping the source vehicle gate.
-fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u64 {
-    // SAFETY: The caller supplies live serialized vehicle and destination shells.
-    u64::from(unsafe {
-        crate::vehicle_func::can_vehicle_use_station(
-            native_vehicle(vehicle, &*crate::newgrf_airport::runtime().vehicles),
-            crate::newgrf_airport::station_by_id(destination, crate::newgrf_airport::runtime()),
-            crate::newgrf_airport::runtime(),
-        )
-    })
-}
-
-/// `Vehicle::IsWaitingForUnbunching` over a live record: a vehicle sharing a two-order list
-/// whose previous order is its unbunching depot order waits while its next departure is still
-/// ahead, and does not wait once that tick comes or without a shared list. A
-/// vehicle outside a depot fails the native depot assertion first.
-#[cfg(test)]
-mod unbunching_tests {
-    use super::{
-        Consist, List, Order, Vector, openttd_rust_consist_new, openttd_rust_order_vector_insert,
-        openttd_rust_order_vector_new, openttd_rust_orderlist_new, openttd_rust_vehicle_orders_new,
-    };
-    use crate::order_type::OT_GOTO_DEPOT;
-    use crate::vehicle::VehicleRef;
-    use crate::vehicle_type::VehicleType;
-    use std::ffi::c_void;
-    use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
-
-    static LIST: AtomicPtr<List> = AtomicPtr::new(std::ptr::null_mut());
-    static VECTOR: AtomicPtr<Vector> = AtomicPtr::new(std::ptr::null_mut());
-    static FAILED: AtomicU32 = AtomicU32::new(0);
-    unsafe extern "C" fn list(_: *mut c_void) -> *mut List {
-        LIST.load(Ordering::Relaxed)
-    }
-    unsafe extern "C" fn vector(_: *mut c_void) -> *mut Vector {
-        VECTOR.load(Ordering::Relaxed)
-    }
-    extern "C" fn tick_counter() -> u64 {
-        100
-    }
-    unsafe extern "C" fn construct(data: *mut c_void, count: usize) {
-        for i in 0..count {
-            // SAFETY: The vector's storage for `count` orders.
-            unsafe { data.cast::<Order>().add(i).write(order(0, 0)) };
-        }
-    }
-    unsafe extern "C" fn destroy(_: *mut c_void, _: usize) {}
-    extern "C" fn record_failure(condition: bool) {
-        if !condition {
-            FAILED.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-    fn order(kind: u8, flags: u8) -> Order {
-        Order {
-            kind,
-            flags,
-            destination: 0,
-            refit: 0,
-            wait: 0,
-            travel: 0,
-            speed: 0,
-        }
-    }
-
-    #[test]
-    fn is_waiting_for_unbunching_follows_the_shared_list_and_departure_time() {
-        if crate::services_assert::isolate_test_check(
-            "orders::unbunching_tests::is_waiting_for_unbunching_follows_the_shared_list_and_departure_time",
-            record_failure,
-        ) {
-            return;
-        }
-        let shared = openttd_rust_orderlist_new();
-        let orders = openttd_rust_order_vector_new(construct, destroy);
-        LIST.store(shared, Ordering::Relaxed);
-        VECTOR.store(orders, Ordering::Relaxed);
-        let leaves: &'static super::Leaves = Box::leak(Box::new(super::Leaves {
-            list,
-            vector,
-            tick_counter,
-            ..crate::test_tables::ORDERS
-        }));
-        let consist: *mut Consist = openttd_rust_consist_new();
-        let owner = openttd_rust_vehicle_orders_new();
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
-            std::ptr::null_mut(),
-            VehicleType::VEH_ROAD,
-        );
-        // SAFETY: The test's fresh owners, which it leaks; any non-null shell names the list.
-        unsafe {
-            (*owner).orders = shared.cast();
-            (*record).orders = owner;
-            (*record).consist = consist;
-            (*shared).vehicles = 2;
-            // The second order is current, so the previous one is the unbunching depot order.
-            // The depot action type is bits 3-6 of `flags`.
-            let unbunch = crate::order_type::OrderDepotActionFlags::from_element(
-                crate::order_type::OrderDepotActionFlag::Unbunch,
-            );
-            openttd_rust_order_vector_insert(orders, 0, &order(OT_GOTO_DEPOT, unbunch.0 << 3));
-            openttd_rust_order_vector_insert(orders, 1, &order(1, 0));
-            (*consist).implicit = 1;
-            (*consist).next_departure = 101;
-        }
-        let v = VehicleRef::of(record);
-        let waiting = || crate::vehicle::is_waiting_for_unbunching(v, leaves, || true);
-        assert!(waiting());
-        // SAFETY: Each write below is to the test's leaked owners, with no other access live.
-        unsafe { (*consist).next_departure = 100 };
-        assert!(!waiting());
-        // SAFETY: As above.
-        unsafe {
-            (*consist).next_departure = 101;
-            (*shared).vehicles = 1;
-        };
-        assert!(!waiting());
-        // SAFETY: As above.
-        unsafe { (*shared).vehicles = 2 };
-        assert!(waiting());
-        assert_eq!(FAILED.load(Ordering::Relaxed), 0);
-        // Outside a depot the assertion fails before the same tests run.
-        assert!(crate::vehicle::is_waiting_for_unbunching(v, leaves, || {
-            false
-        }));
-        assert_eq!(FAILED.load(Ordering::Relaxed), 1);
-    }
-}
-
-/// `Order::Free` and `Order::MakeDummy` on a vehicle's current order write only the fields
-/// `order_cmd.cpp` names: `Free` the type, flags and destination; `MakeDummy` the type and
-/// flags. Every field starts with a distinct value, so a whole-order store fails.
-/// The `OrderView` getters `vehicle/visits.rs` reads, on orders whose fields are all
-/// distinct, against `order_base.h`'s bit layouts: the unload type is bits 0-2 of `flags`, the
-/// load type bits 4-6, the wait-timetabled flag bit 3 (`wait_time > 0` for a conditional
-/// order), and the skip-to order of a conditional order is the whole `flags` byte.
-#[cfg(test)]
-mod order_view_getter_tests {
-    use super::{Order, OrderView};
-    use crate::cargo_type::CargoType;
-    use crate::order_type::{OrderLoadType, OrderUnloadType, VehicleOrderID};
-
-    fn order(kind: u8, flags: u8, refit: u8, wait: u16) -> Order {
-        Order {
-            kind,
-            flags,
-            destination: 0x1234,
-            refit,
-            wait,
-            travel: 888,
-            speed: 999,
-        }
-    }
-    fn view(o: &Order) -> OrderView<'_> {
-        // SAFETY: A reference names a live, initialized order.
-        unsafe { OrderView::of(o) }
-    }
-
-    #[test]
-    fn a_station_order_decodes_its_flags_and_refit() {
-        // OT_GOTO_STATION with non-stop bits; full load (2 << 4), wait timetabled (bit 3),
-        // unload (1); refit to cargo 5.
-        let o = order(0x41, 0x29, 5, 777);
-        let v = view(&o);
-        assert_eq!(v.unload_type(), OrderUnloadType(1));
-        assert_eq!(v.load_type(), OrderLoadType(2));
-        assert!(v.is_refit());
-        assert!(!v.is_auto_refit());
-        assert_eq!(v.refit_cargo(), CargoType(5));
-        assert_eq!(v.condition_skip_to_order(), VehicleOrderID(0x29));
-        assert!(v.is_wait_timetabled());
-        assert_eq!(v.timetabled_wait(), 777);
-        assert!(v.can_leave_with_cargo(false));
-        assert_eq!(o.unload(), 1);
-        assert!(o.is_refit());
-        assert_eq!(o.timetabled_wait(), 777);
-    }
-
-    #[test]
-    fn a_conditional_order_takes_its_wait_from_the_wait_time() {
-        // OT_CONDITIONAL: bit 3 is part of the skip-to order, not the wait flag.
-        let timetabled = order(7, 0x0A, 0xFD, 300);
-        assert!(view(&timetabled).is_wait_timetabled());
-        assert_eq!(view(&timetabled).timetabled_wait(), 300);
-        assert_eq!(
-            view(&timetabled).condition_skip_to_order(),
-            VehicleOrderID(0x0A)
-        );
-        let untimed = order(7, 0x0A, 0xFD, 0);
-        assert!(!view(&untimed).is_wait_timetabled());
-        assert_eq!(view(&untimed).timetabled_wait(), 0);
-        // The station order's bit 3 clear: not timetabled, whatever its wait time.
-        assert_eq!(view(&order(1, 0x21, 0, 500)).timetabled_wait(), 0);
-    }
-
-    #[test]
-    fn refit_cargo_values_decode_as_refit_and_auto_refit() {
-        for (refit, is_refit, auto) in [
-            (0, true, false),
-            (63, true, false),
-            (64, false, false),
-            (0xFD, true, true),
-            (0xFE, false, false),
-            (0xFF, false, false),
-        ] {
-            let o = order(1, 0, refit, 0);
-            assert_eq!(view(&o).is_refit(), is_refit, "refit cargo {refit}");
-            assert_eq!(view(&o).is_auto_refit(), auto, "refit cargo {refit}");
-            assert_eq!(view(&o).refit_cargo(), CargoType(refit));
-        }
-    }
-
-    #[test]
-    fn can_leave_with_cargo_follows_the_load_and_unload_types() {
-        // (flags, has_cargo, expected): no load is 4 << 4; unload 1, transfer 2, no unload 4.
-        for (flags, has_cargo, expected) in [
-            (0x00, false, true),
-            (0x40, false, false),
-            (0x40, true, true),
-            (0x41, true, false),
-            (0x42, true, false),
-            (0x44, true, true),
-            (0x21, true, true),
-        ] {
-            let o = order(1, flags, 0xFE, 0);
-            assert_eq!(
-                view(&o).can_leave_with_cargo(has_cargo),
-                expected,
-                "flags {flags:#x}, has cargo {has_cargo}"
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-mod current_order_write_tests {
-    use super::{Order, VehicleOrders, free, make_dummy, openttd_rust_vehicle_orders_new};
-    use crate::order_type::{OT_DUMMY, OT_NOTHING};
-    use crate::vehicle::VehicleRef;
-    use crate::vehicle_type::VehicleType;
-
-    fn fields(o: Order) -> [u32; 7] {
-        [
-            o.kind.into(),
-            o.flags.into(),
-            o.destination.into(),
-            o.refit.into(),
-            o.wait.into(),
-            o.travel.into(),
-            o.speed.into(),
-        ]
-    }
-
-    #[test]
-    fn free_and_make_dummy_write_only_the_original_fields() {
-        let owner: *mut VehicleOrders = openttd_rust_vehicle_orders_new();
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
-            std::ptr::null_mut(),
-            VehicleType::VEH_TRAIN,
-        );
-        // SAFETY: The test's fresh record and orders owner.
-        unsafe { (*record).orders = owner };
-        let v = VehicleRef::of(record);
-        let full = Order {
-            kind: 0x12,
-            flags: 0x34,
-            destination: 0x5678,
-            refit: 0x9a,
-            wait: 0xbcde,
-            travel: 0xf012,
-            speed: 0x3456,
-        };
-        // SAFETY: The record's current order, written and read with no other access.
-        unsafe {
-            v.current_order_pointer().write(full);
-            free(v);
-            assert_eq!(
-                fields(v.current_order_pointer().read()),
-                [OT_NOTHING.into(), 0, 0, 0x9a, 0xbcde, 0xf012, 0x3456]
-            );
-            v.current_order_pointer().write(full);
-            make_dummy(v.current_order_pointer());
-            assert_eq!(
-                fields(v.current_order_pointer().read()),
-                [OT_DUMMY.into(), 0, 0x5678, 0x9a, 0xbcde, 0xf012, 0x3456]
-            );
-            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
-            crate::orders::openttd_rust_vehicle_orders_delete(owner);
-        }
-    }
-}
-
-#[cfg(test)]
-mod order_view_tests {
-    use super::{Order, OrderView};
-    use crate::order_type::{
-        OrderDepotActionFlags, OrderDepotTypeFlags, OrderNonStopFlags, OrderType,
-    };
-
-    /// `order_base.h` packs `type` as type (bits 0-3), stop location (4-5) and
-    /// non-stop flags (6-7), and `flags` as depot order type or unload type
-    /// (0-2), depot action type (3-6) and load type (4-6). The expectations are
-    /// those fields of distinct stored values, so a getter reading the wrong
-    /// field or bits fails.
-    #[test]
-    fn view_getters_decode_the_original_bit_layout() {
-        let order = Order {
-            kind: 0b1011_0110,
-            flags: 0b1101_1010,
-            destination: 0x1234,
-            refit: 7,
-            wait: 0x2345,
-            travel: 0x3456,
-            speed: 0x4567,
-        };
-        // SAFETY: The order lives on this stack through every read.
-        let view = unsafe { OrderView::of(&raw const order) };
-        assert_eq!(view.kind(), OrderType(6));
-        assert_eq!(view.kind_raw(), 6);
-        assert_eq!(view.non_stop(), OrderNonStopFlags(2));
-        assert_eq!(view.non_stop_raw(), 2);
-        assert_eq!(view.depot_type(), OrderDepotTypeFlags(2));
-        assert_eq!(view.depot_type_raw(), 2);
-        assert_eq!(view.depot_action_flags(), OrderDepotActionFlags(11));
-        assert_eq!(view.depot_action_flags_raw(), 11);
-        assert_eq!(view.destination(), crate::order_type::DestinationID(0x1234));
-        assert_eq!(view.destination_raw(), 0x1234);
-        assert_eq!(view.max_speed(), 0x4567);
-        // Load type 5 is neither `FullLoad` (2) nor `FullLoadAny` (3).
-        assert!(!view.is_full_load());
-        let copy = view.copied();
-        assert_eq!(
-            (
-                copy.kind,
-                copy.flags,
-                copy.destination,
-                copy.refit,
-                copy.wait,
-                copy.travel,
-                copy.speed
-            ),
-            (0b1011_0110, 0b1101_1010, 0x1234, 7, 0x2345, 0x3456, 0x4567)
-        );
-    }
-
-    #[test]
-    fn view_full_load_is_load_type_two_or_three() {
-        for (flags, full) in [
-            (0x20, true),
-            (0x30, true),
-            (0x40, false),
-            (0x10, false),
-            (0x0f, false),
-        ] {
-            let order = Order {
-                kind: 0,
-                flags,
-                destination: 0,
-                refit: 0,
-                wait: 0,
-                travel: 0,
-                speed: 0,
-            };
-            assert_eq!(
-                // SAFETY: The order lives on this stack through the read.
-                unsafe { OrderView::of(&raw const order) }.is_full_load(),
-                full,
-                "flags {flags:#x}"
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-mod command_cost_tests {
-    use super::{
-        Consist, Leaves, Order, VehicleOrders, openttd_rust_command_insert,
-        openttd_rust_timetable_on_time, openttd_rust_timetable_validate_bulk,
-    };
-    use crate::services::{CommandCost, CommandCostServices};
-    use crate::station_cmd::CommandServicesTable;
-    use crate::strings_type::StringID;
-    use crate::table::strings::{
-        STR_ERROR_CAN_T_ADD_ORDER, STR_ERROR_NO_BUOY, STR_ERROR_NO_RAIL_WAYPOINT,
-        STR_ERROR_NO_ROAD_WAYPOINT, STR_ERROR_TIMETABLE_NOT_STARTED,
-    };
-    use crate::test_tables::{
-        unreachable0, unreachable1, unreachable2, unreachable3, unreachable4,
-    };
-    use crate::vehicle_type::VehicleType;
-    use std::cell::{Cell, RefCell};
-    use std::ffi::c_void;
-    use std::mem::MaybeUninit;
-    use std::ptr;
-
-    /// One native `CommandCost` error constructor call.
-    #[derive(Debug, PartialEq, Eq)]
-    enum Constructed {
-        /// `CommandCost(msg)`.
-        Error(u32),
-        /// `CommandCost(msg, extra_msg)`.
-        ErrorExtra(u32, u32),
-    }
-    /// The fixture vehicle: its order owner, consist and record, reached through its shell.
-    struct Fixture {
-        orders: VehicleOrders,
-        consist: Consist,
-        record: *mut crate::vehicle_base::VehicleRecord,
-    }
-    thread_local! {
-        static CONSTRUCTED: RefCell<Vec<Constructed>> = const { RefCell::new(Vec::new()) };
-        static KIND: Cell<VehicleType> = const { Cell::new(VehicleType::TRAIN) };
-    }
-    extern "C" fn error(_: *mut CommandCost, msg: u32) {
-        CONSTRUCTED.with(|c| c.borrow_mut().push(Constructed::Error(msg)));
-    }
-    extern "C" fn error_extra(_: *mut CommandCost, msg: u32, extra_msg: u32) {
-        CONSTRUCTED.with(|c| c.borrow_mut().push(Constructed::ErrorExtra(msg, extra_msg)));
-    }
-    extern "C" fn zero(_: *mut CommandCost) {}
-    extern "C" fn success(_: *const CommandCost) -> bool {
-        true
-    }
-    extern "C" fn current_company() -> u8 {
-        1
-    }
-    extern "C" fn company() -> *const crate::company::Services {
-        const FINANCE: crate::company::FinanceServices = crate::company::FinanceServices {
-            current_company,
-            ..crate::test_tables::FINANCE
-        };
-        const SHARED: crate::services::Services = crate::services::Services {
-            current_company,
-            ..crate::test_tables::SHARED
-        };
-        const COMPANY: crate::company::Services = crate::company::Services {
-            finance: &FINANCE,
-            shared: &SHARED,
-            ..crate::test_tables::COMPANY
-        };
-        &COMPANY
-    }
-    unsafe extern "C" fn primary_vehicle(_: *mut c_void) -> u64 {
-        1
-    }
-    unsafe extern "C" fn vehicle_type(_: *mut c_void) -> u64 {
-        u64::from(KIND.get().0)
-    }
-    unsafe extern "C" fn vehicle(v: *mut c_void) -> *mut VehicleOrders {
-        // SAFETY: Every shell this test passes is its live `Fixture`.
-        unsafe { &raw mut (*v.cast::<Fixture>()).orders }
-    }
-    unsafe extern "C" fn consist(v: *mut c_void) -> *mut Consist {
-        // SAFETY: As `vehicle`.
-        unsafe { &raw mut (*v.cast::<Fixture>()).consist }
-    }
-    extern "C" fn record(v: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {
-        // SAFETY: As `vehicle`.
-        unsafe { (*v.cast::<Fixture>()).record }
-    }
-    extern "C" fn valid_waypoint(_: u16) -> u64 {
-        1
-    }
-    unsafe extern "C" fn waypoint_facilities(_: u16) -> u64 {
-        0
-    }
-
-    /// Order leaves over the fixture vehicle and a recording cost table.
-    fn leaves() -> &'static Leaves {
-        let cost: &'static CommandCostServices = Box::leak(Box::new(CommandCostServices {
-            zero,
-            error,
-            error_extra,
-            success,
-            ..crate::test_tables::COMMAND_COSTS
-        }));
-        let command: &'static crate::services::CommandServices =
-            Box::leak(Box::new(crate::services::CommandServices {
-                company,
-                ..crate::test_tables::COMMANDS
-            }));
-        let station_commands: *const CommandServicesTable =
-            Box::leak(Box::new(CommandServicesTable {
-                cost,
-                command,
-                ..crate::test_tables::STATION_COMMANDS
-            }));
-        let base: &'static crate::vehicle::VehicleServices =
-            Box::leak(Box::new(crate::vehicle::VehicleServices {
-                record_from_shell: record,
-                ..crate::test_tables::VEHICLE
-            }));
-        Box::leak(Box::new(Leaves {
-            vehicle,
-            consist,
-            list: unreachable1,
-            vector: unreachable1,
-            backup: unreachable1,
-            backup_vector: unreachable1,
-            backup_consist: unreachable1,
-            ownerless_station: unreachable2,
-            vehicle_type,
-            tick_counter: unreachable0,
-            primary_vehicle,
-            ticks_per_second: unreachable0,
-            unit_number: unreachable1,
-            maximum_date: unreachable0,
-            allocate_list: unreachable0,
-            shared_window: unreachable2,
-            vehicle_id: unreachable1,
-            reliability: unreachable1,
-            display_speed: unreachable1,
-            age_years: unreachable1,
-            needs_service: unreachable1,
-            remaining_years: unreachable1,
-            airport_tile: unreachable1,
-            depot_tile: unreachable1,
-            distance: unreachable3,
-            station_location: unreachable2,
-            destination_tile: unreachable1,
-            aircraft_flying: unreachable1,
-            target_airport: unreachable1,
-            waypoint_tile: unreachable1,
-            at_station: unreachable1,
-            tile_station: unreachable1,
-            ship_station_tile: unreachable1,
-            valid_station: unreachable1,
-            station_owner: unreachable1,
-            station_error: unreachable2,
-            valid_depot: unreachable1,
-            depot_owner: unreachable1,
-            rail_depot: unreachable1,
-            road_depot: unreachable1,
-            ship_depot: unreachable1,
-            valid_waypoint,
-            waypoint_facilities,
-            waypoint_owner: unreachable1,
-            list_capacity: unreachable0,
-            next_backup: unreachable1,
-            next_vehicle: unreachable1,
-            aircraft_range: unreachable1,
-            aircraft_range_square: unreachable1,
-            backup_capacity: unreachable0,
-            create_backup: unreachable2,
-            networking: unreachable0,
-            network_server: unreachable0,
-            network_client: unreachable0,
-            server_client: unreachable0,
-            default_group: unreachable0,
-            vehicle_group: unreachable1,
-            unique_backup_name: unreachable1,
-            local_owner: unreachable1,
-            no_jet_crash: unreachable0,
-            append_station: unreachable2,
-            station_commands,
-            timetable_dirty: unreachable1,
-            invalidate_order: unreachable2,
-            delete_order_news: unreachable1,
-            invalidate_vehicle_list: unreachable1,
-            close_shared_window: unreachable2,
-            invalidate_shared_window: unreachable3,
-            dirty_vehicle_windows: unreachable1,
-            capture_backup_metadata: unreachable2,
-            clear_backup_name: unreachable1,
-            restore_backup_metadata: unreachable2,
-            order_news: unreachable2,
-            debug_list: unreachable1,
-            assert_departure_range: unreachable2,
-            delete_list: unreachable1,
-            reverse_train: unreachable1,
-            next_airport: unreachable1,
-            set_destination: unreachable2,
-            closest_depot: unreachable2,
-            share_command: unreachable2,
-            group_command: unreachable2,
-            delete_backup: unreachable1,
-            clear_backup_gui: unreachable2,
-            clear_backup_post: unreachable1,
-            missing_aircraft_orders: unreachable1,
-            change_timetable_command: unreachable4,
-            base,
-        }))
-    }
-
-    /// Order entries write the original's `CommandCost` at their returns: `CMD_ERROR` as
-    /// `CommandCost(INVALID_STRING_ID)` (`CmdBulkChangeTimetable`), a single string
-    /// (`CmdSetVehicleOnTime`) and `CmdInsertOrder`'s three waypoint returns, whose message
-    /// and extra message take the original's positions.
-    #[test]
-    fn order_errors_construct_the_original_command_costs() {
-        let leaves = leaves();
-        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
-            ptr::null_mut(),
-            VehicleType::TRAIN,
-        );
-        // SAFETY: The fresh record is live and exclusively this test's.
-        crate::vehicle::VehicleRef(unsafe { ptr::NonNull::new_unchecked(record) })
-            .set_owner(crate::company_type::CompanyID(1));
-        let mut fixture = Fixture {
-            orders: VehicleOrders {
-                current: MaybeUninit::zeroed(),
-                orders: ptr::NonNull::<u8>::dangling().as_ptr().cast(),
-                next: ptr::null_mut(),
-                previous: ptr::null_mut(),
-            },
-            consist: Consist {
-                time: 0,
-                lateness: 0,
-                start: 0,
-                last_departure: 0,
-                next_departure: 0,
-                round_trip: 0,
-                real: 0,
-                implicit: 0,
-                flags: 0,
-            },
-            record,
-        };
-        let v = (&raw mut fixture).cast::<c_void>();
-        let output = ptr::NonNull::<u8>::dangling().as_ptr().cast();
-        let waypoint = Order {
-            kind: crate::order_type::OT_GOTO_WAYPOINT,
-            flags: 0,
-            destination: 0,
-            refit: 0xfe,
-            wait: 0,
-            travel: 0,
-            speed: u16::MAX,
-        };
-        CONSTRUCTED.with(|c| c.borrow_mut().clear());
-        // SAFETY: The null vehicle fails the first check; the output is never dereferenced.
-        let bulk =
-            unsafe { openttd_rust_timetable_validate_bulk(ptr::null_mut(), 0, output, leaves) };
-        // SAFETY: The fixture vehicle has orders and a consist whose timetable has not started.
-        let on_time = unsafe { openttd_rust_timetable_on_time(v, 0, 0, output, leaves) };
-        let mut inserted = Vec::new();
-        for kind in [VehicleType::TRAIN, VehicleType::ROAD, VehicleType::SHIP] {
-            KIND.set(kind);
-            // SAFETY: The fixture vehicle, its record and the order live through the call.
-            inserted.push(unsafe {
-                openttd_rust_command_insert(v, 0, 0, &raw const waypoint, output, leaves)
-            });
-        }
-        // SAFETY: The test allocated the record and nothing else retains it.
-        drop(unsafe { Box::from_raw(record) });
-        assert_eq!((bulk, on_time, inserted), (0, 0, vec![0, 0, 0]));
-        assert_eq!(
-            CONSTRUCTED.with(RefCell::take),
-            [
-                Constructed::Error(StringID::INVALID_STRING_ID.0),
-                Constructed::Error(STR_ERROR_TIMETABLE_NOT_STARTED.0),
-                Constructed::ErrorExtra(STR_ERROR_CAN_T_ADD_ORDER.0, STR_ERROR_NO_RAIL_WAYPOINT.0),
-                Constructed::ErrorExtra(STR_ERROR_CAN_T_ADD_ORDER.0, STR_ERROR_NO_ROAD_WAYPOINT.0),
-                Constructed::ErrorExtra(STR_ERROR_CAN_T_ADD_ORDER.0, STR_ERROR_NO_BUOY.0),
-            ]
-        );
-    }
 }

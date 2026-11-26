@@ -195,5 +195,4 @@ rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | openttd_orders_tick_counter | src/order_cmd.cpp | tick_counter
 rebound | openttd_orders_tick_counter | src/rust/services.cpp | tick_counter

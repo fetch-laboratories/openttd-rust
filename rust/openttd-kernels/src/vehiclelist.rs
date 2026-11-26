@@ -40,6 +40,34 @@ pub struct VehicleListIdentifier {
     pub index: u32,
 }
 impl VehicleListIdentifier {
+    /// `VehicleListIdentifier::ToWindowNumber`: pack a `VehicleListIdentifier` in 32 bits so
+    /// it can be used as unique `WindowNumber`.
+    #[must_use]
+    pub fn to_window_number(&self) -> crate::window_type::WindowNumber {
+        use crate::services_assert::assert_with;
+        let c: u8 = if self.company == crate::company_type::Owner::NONE {
+            0xF
+        } else {
+            self.company.0
+        };
+        assert_with(|| c < (1 << 4));
+        assert_with(|| self.vtype.0 < (1 << 2));
+        assert_with(|| self.index < (1 << 20));
+        assert_with(|| self.list_type < VehicleListType::VLT_END);
+        const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
+
+        // `c << 28 | type << 23 | vtype << 26 | index` in `uint`, as the `int` window number.
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "the original's conversion to `WindowNumber`"
+        )]
+        crate::window_type::WindowNumber(
+            (u32::from(c) << 28
+                | u32::from(self.list_type.0) << 23
+                | u32::from(self.vtype.0) << 26
+                | self.index) as i32,
+        )
+    }
     /// `VehicleListIdentifier::Valid`.
     #[must_use]
     pub fn valid(&self) -> bool {
