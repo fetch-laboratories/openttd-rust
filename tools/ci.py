@@ -122,19 +122,6 @@ def api(repository: str, path: str) -> dict:
     return json.loads(gh("api", f"repos/{repository}/{path}"))
 
 
-def detached_gh(*args: str) -> str:
-    """gh in its own session, so a signal to this command's process group,
-    such as Ctrl-C or signal-witness.py's SIGTERM, cannot end it mid-request:
-    its outcome is always known. Not retried: callers use it for writes."""
-    return subprocess.run(
-        ["gh", *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        start_new_session=True,
-    ).stdout.strip()
-
-
 def repository_of(repo: str | None) -> str:
     return (
         repo
