@@ -82,7 +82,7 @@ struct OpenTTDOrdersLeaves {
 	BaseStation *(*waypoint_get_if_valid)(uint16_t index) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_get_if_valid);
 	/* Unported bodies. */
 	void (*debug_check_sanity)(void *list) noexcept OPENTTD_SERVICE_DEFAULT(debug_check_sanity);
-	uint32_t (*get_vehicle_cannot_use_station_reason)(void *v, uint16_t st) noexcept OPENTTD_SERVICE_DEFAULT(get_vehicle_cannot_use_station_reason);
+	uint32_t (*get_vehicle_cannot_use_station_reason)(void *v, const BaseStation *st) noexcept OPENTTD_SERVICE_DEFAULT(get_vehicle_cannot_use_station_reason);
 	void (*invalidate_vehicle_order)(void *v, int32_t data) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_vehicle_order);
 	/* Commands and the C++ vector the export of GetNextStoppingStation fills. */
 	void (*append_station)(void *next_station, uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(append_station);

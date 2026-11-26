@@ -560,7 +560,8 @@ pub struct Leaves {
     /// `OrderList::DebugCheckSanity()`, under `WITH_ASSERT`.
     pub debug_check_sanity: unsafe extern "C" fn(list: *mut c_void),
     /// `GetVehicleCannotUseStationReason(v, st)`.
-    pub get_vehicle_cannot_use_station_reason: unsafe extern "C" fn(v: *mut c_void, st: u16) -> u32,
+    pub get_vehicle_cannot_use_station_reason:
+        unsafe extern "C" fn(v: *mut c_void, st: *const crate::station::BaseStation) -> u32,
     /// `InvalidateVehicleOrder(v, data)`.
     pub invalidate_vehicle_order: unsafe extern "C" fn(v: *mut c_void, data: i32),
 
@@ -2682,13 +2683,18 @@ fn station_get(st: StationID, s: &Leaves) -> *mut crate::station::BaseStation {
     (s.shared().base_station)(st.0)
 }
 
-/// `GetVehicleCannotUseStationReason(v, Station::Get(st))`: get reason string why this
-/// station can't be used by the given vehicle. Returns the string explaining why the vehicle
-/// cannot use the station.
+/// `GetVehicleCannotUseStationReason(v, st)`: get reason string why this station can't be
+/// used by the given vehicle. Returns the string explaining why the vehicle cannot use the
+/// station.
 #[allow(unsafe_code)]
-fn get_vehicle_cannot_use_station_reason(v: VehicleRef, st: StationID, s: &Leaves) -> StringID {
-    // SAFETY: The live vehicle shell and a station ID the caller's lookup validated.
-    StringID(unsafe { (s.get_vehicle_cannot_use_station_reason)(v.shell(), st.0) })
+fn get_vehicle_cannot_use_station_reason(
+    v: VehicleRef,
+    st: *const crate::station::BaseStation,
+    s: &Leaves,
+) -> StringID {
+    // SAFETY: The live vehicle shell and the station the caller resolved for
+    // `CanVehicleUseStation`, which the original passes on unchanged.
+    StringID(unsafe { (s.get_vehicle_cannot_use_station_reason)(v.shell(), st) })
 }
 
 /// `OrderGoesToStation`: checks whether the order goes to a station or not, i.e. whether the
@@ -3866,7 +3872,7 @@ pub(crate) fn cmd_insert_order(
             if !crate::vehicle_func::can_vehicle_use_station(v, st, airports) {
                 return cost.error_extra(
                     STR_ERROR_CAN_T_ADD_ORDER,
-                    get_vehicle_cannot_use_station_reason(v, st_id, s),
+                    get_vehicle_cannot_use_station_reason(v, st, s),
                 );
             }
             let mut u = first_shared_in(list, v, s);
@@ -3874,7 +3880,7 @@ pub(crate) fn cmd_insert_order(
                 if !crate::vehicle_func::can_vehicle_use_station(shared, st, airports) {
                     return cost.error_extra(
                         STR_ERROR_CAN_T_ADD_ORDER_SHARED,
-                        get_vehicle_cannot_use_station_reason(shared, st_id, s),
+                        get_vehicle_cannot_use_station_reason(shared, st, s),
                     );
                 }
                 u = next_shared(shared, s);
@@ -4932,7 +4938,7 @@ pub(crate) fn cmd_clone_order(
                     {
                         return cost.error_extra(
                             STR_ERROR_CAN_T_COPY_SHARE_ORDER,
-                            get_vehicle_cannot_use_station_reason(dst, st_id, s),
+                            get_vehicle_cannot_use_station_reason(dst, st, s),
                         );
                     }
                 }
@@ -5009,7 +5015,7 @@ pub(crate) fn cmd_clone_order(
                     if !crate::vehicle_func::can_vehicle_use_station(dst, st, airports) {
                         return cost.error_extra(
                             STR_ERROR_CAN_T_COPY_SHARE_ORDER,
-                            get_vehicle_cannot_use_station_reason(dst, st_id, s),
+                            get_vehicle_cannot_use_station_reason(dst, st, s),
                         );
                     }
                 }
