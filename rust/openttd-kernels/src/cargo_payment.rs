@@ -527,7 +527,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     s: *const crate::cargo_storage::Services,
     payment: *mut NativePayment,
     cargo: u8,
-    cp: *mut std::ffi::c_void,
+    cp: *mut crate::cargo_storage::NativeCargoPacket,
     count: u32,
     tile: u32,
 ) {

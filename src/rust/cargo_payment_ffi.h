@@ -21,6 +21,7 @@ struct OpenTTDIndustryDeliveryServices;
 struct Station;
 struct OpenTTDTownHandle;
 struct OpenTTDCargoStorageServices;
+struct CargoPacket;
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 struct CargoPayment;
@@ -76,7 +77,7 @@ void OPENTTD_RUST_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *,
 OpenTTDVehicle *OPENTTD_RUST_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
 void OPENTTD_RUST_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *);
 /* For the consoles only: CargoPayment::PayFinalDelivery for a packet shell. */
-void OPENTTD_RUST_CALL openttd_rust_cargo_payment_final(const OpenTTDCargoStorageServices *, CargoPayment *, uint8_t, void *, uint32_t, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_cargo_payment_final(const OpenTTDCargoStorageServices *, CargoPayment *, uint8_t, CargoPacket *, uint32_t, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);
 OpenTTDCargoDelivery *OPENTTD_RUST_CALL openttd_rust_cargo_delivery_new();
 void OPENTTD_RUST_CALL openttd_rust_cargo_delivery_destroy(OpenTTDCargoDelivery *);

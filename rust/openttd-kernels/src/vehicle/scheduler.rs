@@ -656,7 +656,6 @@ mod tests {
         use crate::newgrf_sound::VehicleSoundEvent;
         use crate::vehicle_base::{VehStates, VehicleRecord};
         use std::cell::RefCell;
-        use std::ffi::c_void;
         use std::ptr::{null, null_mut};
 
         const TRAIN: VehicleType = VehicleType::VEH_TRAIN;
@@ -830,7 +829,9 @@ mod tests {
             false
         }
         /// The cargo list's packet lookup; a reloading packet changes the part's period.
-        extern "C" fn packet(_: *mut c_void) -> *mut cargo_storage::CargoPacket {
+        extern "C" fn packet(
+            _: *mut cargo_storage::NativeCargoPacket,
+        ) -> *mut cargo_storage::CargoPacket {
             observed(|o| {
                 if o.packet_reloads {
                     // SAFETY: The pair's live part; no reference to it is live.
@@ -840,11 +841,13 @@ mod tests {
                 &raw mut o.packet
             })
         }
-        extern "C" fn destroy(_: *mut c_void) {}
+        extern "C" fn destroy(_: *mut cargo_storage::NativeCargoPacket) {}
         extern "C" fn can_allocate() -> u8 {
             1
         }
-        extern "C" fn create(_: *const cargo_storage::CargoPacket) -> *mut c_void {
+        extern "C" fn create(
+            _: *const cargo_storage::CargoPacket,
+        ) -> *mut cargo_storage::NativeCargoPacket {
             null_mut()
         }
         extern "C" fn flow_map(
@@ -852,7 +855,9 @@ mod tests {
         ) -> *mut crate::cargo_flow::FlowStatMap {
             null_mut()
         }
-        extern "C" fn packet_next(_: *mut c_void) -> *mut c_void {
+        extern "C" fn packet_next(
+            _: *mut cargo_storage::NativeCargoPacket,
+        ) -> *mut cargo_storage::NativeCargoPacket {
             null_mut()
         }
         pub(super) fn cargo_services() -> cargo_storage::Services {

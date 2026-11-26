@@ -9,16 +9,16 @@
 #include "services_ffi.h"
 #include "cargomonitor_ffi.h"
 static uint8_t CargoCanAllocate() noexcept { return CargoPacket::CanAllocateItem(); }
-static void *CargoCreate(const OpenTTDCargoPacket *fields) noexcept { return new CargoPacket(*fields); }
-static OpenTTDCargoPacket *CargoOwner(void *shell) noexcept { return static_cast<CargoPacket *>(shell)->RustOwner(); }
-static void CargoDestroy(void *shell) noexcept { delete static_cast<CargoPacket *>(shell); }
+static CargoPacket *CargoCreate(const OpenTTDCargoPacket *fields) noexcept { return new CargoPacket(*fields); }
+static OpenTTDCargoPacket *CargoOwner(CargoPacket *shell) noexcept { return shell->RustOwner(); }
+static void CargoDestroy(CargoPacket *shell) noexcept { delete shell; }
 static OpenTTDCargoFlowMap *CargoFlowMap(const GoodsEntry *ge) noexcept
 {
 	return ge->HasData() ? ge->GetData().flows.RustState() : nullptr;
 }
-static void *CargoNextPacket(void *shell) noexcept
+static CargoPacket *CargoNextPacket(CargoPacket *shell) noexcept
 {
-	auto range = CargoPacket::Iterate(shell == nullptr ? 0 : static_cast<CargoPacket *>(shell)->index.base() + 1);
+	auto range = CargoPacket::Iterate(shell == nullptr ? 0 : shell->index.base() + 1);
 	auto it = range.begin();
 	return it == range.end() ? nullptr : *it;
 }
@@ -68,11 +68,11 @@ template <class Tinst, class Tcont>
 std::unique_ptr<const Tcont> CargoList<Tinst, Tcont>::Packets() const
 {
 	auto result = std::make_unique<Tcont>();
-	openttd_rust_cargo_list_snapshot(this->state, result.get(), [](void *context, uint16_t key, void *shell) noexcept {
-		if constexpr (std::is_same_v<Tinst, VehicleCargoList>) static_cast<Tcont *>(context)->push_back(static_cast<CargoPacket *>(shell));
+	openttd_rust_cargo_list_snapshot(this->state, result.get(), [](void *context, uint16_t key, CargoPacket *shell) noexcept {
+		if constexpr (std::is_same_v<Tinst, VehicleCargoList>) static_cast<Tcont *>(context)->push_back(shell);
 		else {
 			auto &packets = (*static_cast<Tcont *>(context))[StationID(key)];
-			if (shell != nullptr) packets.push_back(static_cast<CargoPacket *>(shell));
+			if (shell != nullptr) packets.push_back(shell);
 		}
 	});
 	return result;

@@ -73,6 +73,12 @@ impl Default for CargoPacket {
         }
     }
 }
+/// Opaque live native `CargoPacket`, the pool shell that owns a [`CargoPacket`] record; never
+/// dereferenced by Rust.
+#[repr(C)]
+pub struct NativeCargoPacket {
+    _private: [u8; 0],
+}
 /// The cached fields of a cargo list, as the save code reads and writes them.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -81,7 +87,7 @@ pub struct Fields {
     pub(crate) feeder_share: i64,
     pub(crate) count: u32,
     pub(crate) reserved_count: u32,
-    pub(crate) action_counts: [u32; 4],
+    pub(crate) action_counts: [u32; MoveToAction::NUM_MOVE_TO_ACTION.0 as usize],
 }
 /// The native packet pool, the payment and the flows a cargo list reaches.
 #[repr(C)]
@@ -92,16 +98,16 @@ pub struct Services {
     /// `GetCargoDeliveryState()`, the process-wide delivery state final payments fill.
     pub(crate) cargo_delivery_state: extern "C" fn() -> *mut crate::cargo_payment::Delivery,
     /// `new CargoPacket(fields)`: a new shell owning a copy of the record.
-    pub(crate) create: extern "C" fn(*const CargoPacket) -> *mut c_void,
+    pub(crate) create: extern "C" fn(*const CargoPacket) -> *mut NativeCargoPacket,
     /// `delete cp`.
-    pub(crate) destroy: extern "C" fn(*mut c_void),
+    pub(crate) destroy: extern "C" fn(*mut NativeCargoPacket),
     /// `ge->HasData() ? &ge->GetData().flows : nullptr`.
     pub(crate) flow_map: extern "C" fn(*const GoodsEntry) -> *mut FlowStatMap,
     pub(crate) monitors: *const crate::cargomonitor::Services,
     /// `CargoPacket::state`: the record the shell owns.
-    pub(crate) packet: extern "C" fn(*mut c_void) -> *mut CargoPacket,
+    pub(crate) packet: extern "C" fn(*mut NativeCargoPacket) -> *mut CargoPacket,
     /// The next shell of `CargoPacket::Iterate()` after `shell`, from the first for null.
-    pub(crate) packet_next: extern "C" fn(*mut c_void) -> *mut c_void,
+    pub(crate) packet_next: extern "C" fn(*mut NativeCargoPacket) -> *mut NativeCargoPacket,
     pub(crate) payment: *const crate::cargo_payment::Services,
     /// `CargoPayment::rust_state`.
     pub(crate) payment_state:
@@ -129,7 +135,7 @@ struct Node {
     token: usize,
     /// The `MultiMap` key, a next hop; vehicle lists leave it unused.
     key: StationID,
-    shell: *mut c_void,
+    shell: *mut NativeCargoPacket,
     previous: Option<usize>,
     next: Option<usize>,
 }
@@ -164,6 +170,23 @@ pub struct VehicleCargoList(CargoList);
 /// `StationCargoList`: a station's packets by their next hop.
 #[repr(transparent)]
 pub struct StationCargoList(CargoList);
+
+/// `Tinst` of `CargoList<Tinst, Tcont>`: the list kind whose `AddToCache` the shared bodies
+/// call.
+trait CargoListKind {
+    /// `Tinst::AddToCache`.
+    fn add_to_cache(&mut self, cp: &CargoPacket);
+}
+impl CargoListKind for VehicleCargoList {
+    fn add_to_cache(&mut self, cp: &CargoPacket) {
+        Self::add_to_cache(self, cp);
+    }
+}
+impl CargoListKind for StationCargoList {
+    fn add_to_cache(&mut self, cp: &CargoPacket) {
+        self.0.add_to_cache(cp);
+    }
+}
 
 /// The typed list behind a native list handle.
 enum Typed {
@@ -208,7 +231,7 @@ impl CargoList {
     /// Links a new node for `shell` between `previous` and `next`.
     fn link(
         &mut self,
-        shell: *mut c_void,
+        shell: *mut NativeCargoPacket,
         key: StationID,
         previous: Option<usize>,
         next: Option<usize>,
@@ -308,7 +331,7 @@ impl CargoList {
     unsafe fn try_merge(
         s: &Services,
         icp: *mut CargoPacket,
-        cp: *mut c_void,
+        cp: *mut NativeCargoPacket,
         cp_state: *const CargoPacket,
         are_mergable: fn(&CargoPacket, &CargoPacket) -> bool,
     ) -> bool {
@@ -324,6 +347,24 @@ impl CargoList {
             true
         } else {
             false
+        }
+    }
+    /// `CargoList<Tinst, Tcont>::InvalidateCache`: invalidates the cached data and rebuilds it,
+    /// with `Tinst`'s `AddToCache`.
+    #[allow(unsafe_code, reason = "reads the live packets of the caller's list")]
+    unsafe fn invalidate_cache<Tinst: CargoListKind>(this: *mut Tinst, s: &Services) {
+        // `Tinst` is `#[repr(transparent)]` over the list.
+        let l: *mut Self = this.cast();
+        // SAFETY: The module's contract; each reference ends before the next call.
+        unsafe {
+            (*l).fields.count = 0;
+            (*l).fields.cargo_periods_in_transit = 0;
+        }
+        let mut it = unsafe { (*l).front() };
+        while let Some(current) = it {
+            it = unsafe { (*l).after(current.token) };
+            let cp = CargoPacket::of(s, current.shell);
+            unsafe { (*this).add_to_cache(&*cp) };
         }
     }
     /// `CargoList::PeriodsInTransit`: returns average number of cargo aging periods in
@@ -356,7 +397,7 @@ impl CargoList {
 
 impl CargoPacket {
     /// The record of the native shell `cp`.
-    fn of(s: &Services, cp: *mut c_void) -> *mut Self {
+    fn of(s: &Services, cp: *mut NativeCargoPacket) -> *mut Self {
         (s.packet)(cp)
     }
     /// `CargoPacket::Split`: split this packet in two and return the split off part, or null
@@ -366,7 +407,11 @@ impl CargoPacket {
         clippy::cast_possible_truncation,
         reason = "the split constructor and `count -= new_size` narrow `uint` to the `uint16_t` count, as the original does"
     )]
-    pub(crate) unsafe fn split(this: *mut Self, s: &Services, new_size: u32) -> *mut c_void {
+    pub(crate) unsafe fn split(
+        this: *mut Self,
+        s: &Services,
+        new_size: u32,
+    ) -> *mut NativeCargoPacket {
         if (s.can_allocate)() == 0 {
             return std::ptr::null_mut();
         }
@@ -389,7 +434,12 @@ impl CargoPacket {
         unsafe_code,
         reason = "writes the caller's live packet and deletes the other"
     )]
-    unsafe fn merge(this: *mut Self, s: &Services, cp: *mut c_void, cp_state: *const Self) {
+    unsafe fn merge(
+        this: *mut Self,
+        s: &Services,
+        cp: *mut NativeCargoPacket,
+        cp_state: *const Self,
+    ) {
         // SAFETY: Two live, distinct packet records; the writes end before the deletion.
         unsafe {
             (*this).count = (*this).count.wrapping_add((*cp_state).count);
@@ -596,7 +646,7 @@ trait CargoAction {
     /// # Safety
     /// The module's contract; `cp` is a live packet of the action's source list.
     #[allow(unsafe_code, reason = "each action moves the caller's live packet")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool;
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool;
 }
 /// `CargoRemoval`: abstract action of removing cargo from a vehicle or a station.
 struct CargoRemoval<'a, Tsource> {
@@ -622,7 +672,12 @@ impl<Tsource> CargoRemoval<'_, Tsource> {
     /// `CargoRemoval::Postprocess`: finalize cargo removal. Either delete the packet or reduce
     /// it. Returns true if the packet was deleted, false if it was reduced.
     #[allow(unsafe_code, reason = "reduces or deletes the caller's live packet")]
-    unsafe fn postprocess(&self, cp: *mut c_void, cp_state: *mut CargoPacket, remove: u32) -> bool {
+    unsafe fn postprocess(
+        &self,
+        cp: *mut NativeCargoPacket,
+        cp_state: *mut CargoPacket,
+        remove: u32,
+    ) -> bool {
         // SAFETY: The caller's live packet; the reference ends before the deletion.
         if remove == u32::from(unsafe { (*cp_state).count() }) {
             (self.s.destroy)(cp);
@@ -642,7 +697,7 @@ impl CargoAction for CargoRemoval<'_, VehicleCargoList> {
     /// `VehicleCargoList`. Returns true if the packet was completely delivered, false if only
     /// part of it was.
     #[allow(unsafe_code, reason = "removes the caller's live packet from its list")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let cp_state = CargoPacket::of(self.s, cp);
         // SAFETY: The module's contract; each reference ends before the next call.
         let remove = self.preprocess(unsafe { &*cp_state });
@@ -672,7 +727,7 @@ impl CargoAction for CargoDelivery<'_> {
         unsafe_code,
         reason = "delivers the caller's live packet from its list"
     )]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let s = self.removal.s;
         let cp_state = CargoPacket::of(s, cp);
         // SAFETY: The module's contract; each reference ends before the payment.
@@ -704,7 +759,11 @@ impl<Tsource, Tdest> CargoMovement<'_, Tsource, Tdest> {
     /// `CargoMovement::Preprocess`: decides if a packet needs to be split. Returns either new
     /// packet if splitting was necessary or the given one otherwise.
     #[allow(unsafe_code, reason = "splits the caller's live packet")]
-    unsafe fn preprocess(&mut self, cp: *mut c_void, cp_state: *mut CargoPacket) -> *mut c_void {
+    unsafe fn preprocess(
+        &mut self,
+        cp: *mut NativeCargoPacket,
+        cp_state: *mut CargoPacket,
+    ) -> *mut NativeCargoPacket {
         // SAFETY: The caller's live packet; the read ends before the split.
         let count = u32::from(unsafe { (*cp_state).count() });
         if self.max_move < count {
@@ -720,9 +779,9 @@ impl<Tsource, Tdest> CargoMovement<'_, Tsource, Tdest> {
     /// The record of `cp_new`, the packet `preprocess` returned for `cp`.
     fn state(
         &self,
-        cp: *mut c_void,
+        cp: *mut NativeCargoPacket,
         cp_state: *mut CargoPacket,
-        cp_new: *mut c_void,
+        cp_new: *mut NativeCargoPacket,
     ) -> *mut CargoPacket {
         if cp_new == cp {
             cp_state
@@ -744,7 +803,7 @@ impl CargoAction for CargoTransfer<'_> {
     /// `CargoTransfer::operator()`: transfers some cargo from a vehicle to a station. Returns
     /// true if the packet was completely reserved, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let m = &mut self.movement;
         let cp_state = CargoPacket::of(m.s, cp);
         // SAFETY: The module's contract; each reference ends before the next call.
@@ -780,7 +839,7 @@ impl CargoAction for CargoLoad<'_> {
     /// `CargoLoad::operator()`: loads some cargo onto a vehicle. Returns true if the packet
     /// was completely loaded, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let m = &mut self.movement;
         let cp_state = CargoPacket::of(m.s, cp);
         // SAFETY: The module's contract; each reference ends before the next call.
@@ -810,7 +869,7 @@ impl CargoAction for CargoReservation<'_> {
     /// `CargoReservation::operator()`: reserves some cargo for loading. Returns true if the
     /// packet was completely reserved, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let current_tile = self.load.current_tile;
         let m = &mut self.load.movement;
         let cp_state = CargoPacket::of(m.s, cp);
@@ -846,7 +905,7 @@ impl CargoAction for CargoReturn<'_> {
     /// `CargoReturn::operator()`: returns some reserved cargo. Returns true if the packet was
     /// completely returned, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let m = &mut self.movement;
         let cp_state = CargoPacket::of(m.s, cp);
         // SAFETY: The module's contract; each reference ends before the next call.
@@ -879,7 +938,7 @@ impl CargoAction for CargoShift<'_> {
     /// `CargoShift::operator()`: shifts some cargo from a vehicle to another one. Returns true
     /// if the packet was completely shifted, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let m = &mut self.movement;
         let cp_state = CargoPacket::of(m.s, cp);
         // SAFETY: The module's contract; each reference ends before the next call.
@@ -933,7 +992,7 @@ impl CargoAction for StationCargoReroute<'_> {
     /// `StationCargoReroute::operator()`: reroutes some cargo from one Station sublist to
     /// another. Returns true if the packet was completely rerouted, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let s = self.movement.s;
         let cp_state = CargoPacket::of(s, cp);
         // SAFETY: The module's contract; each reference ends before the next call, and the
@@ -997,7 +1056,7 @@ impl CargoAction for VehicleCargoReroute<'_> {
     /// `VehicleCargoReroute::operator()`: reroutes some cargo in a `VehicleCargoList`. Returns
     /// true if the packet was completely rerouted, false if part of it was.
     #[allow(unsafe_code, reason = "moves the caller's live packet between lists")]
-    unsafe fn call(&mut self, cp: *mut c_void) -> bool {
+    unsafe fn call(&mut self, cp: *mut NativeCargoPacket) -> bool {
         let s = self.movement.s;
         let cp_state = CargoPacket::of(s, cp);
         // SAFETY: The module's contract; each reference ends before the next call, and the
@@ -1056,17 +1115,17 @@ impl VehicleCargoList {
         l.cast()
     }
     /// `packets.push_back(cp)`.
-    fn push_back(&mut self, cp: *mut c_void) {
+    fn push_back(&mut self, cp: *mut NativeCargoPacket) {
         let previous = self.0.last;
         self.0.link(cp, StationID(0), previous, None);
     }
     /// `packets.push_front(cp)`.
-    fn push_front(&mut self, cp: *mut c_void) {
+    fn push_front(&mut self, cp: *mut NativeCargoPacket) {
         let next = self.0.first;
         self.0.link(cp, StationID(0), None, next);
     }
     /// `packets.insert(it, cp)`: `cp` before `it`, `None` being `end()`.
-    fn insert(&mut self, it: Option<usize>, cp: *mut c_void) {
+    fn insert(&mut self, it: Option<usize>, cp: *mut NativeCargoPacket) {
         let previous = it.map_or(self.0.last, |token| self.0.node(token).previous);
         self.0.link(cp, StationID(0), previous, it);
     }
@@ -1083,7 +1142,7 @@ impl VehicleCargoList {
     /// or `MTA_LOAD` if you want to reserve it first.
     ///
     /// # Safety
-    /// The module's contract; `cp` is a live packet in no list.
+    /// The module's contract; `cp` is a live packet that is in no node of this list; it may still be in a node of another list, which the caller erases after the call, and a merge may delete it.
     #[allow(
         unsafe_code,
         reason = "adds the caller's live packet to the caller's list"
@@ -1091,7 +1150,7 @@ impl VehicleCargoList {
     pub(crate) unsafe fn append(
         this: *mut Self,
         s: &Services,
-        cp: *mut c_void,
+        cp: *mut NativeCargoPacket,
         action: MoveToAction,
     ) {
         assert_with(|| !cp.is_null());
@@ -1438,17 +1497,10 @@ impl VehicleCargoList {
     /// `VehicleCargoList::InvalidateCache`: invalidates the cached data and rebuild it.
     #[allow(unsafe_code, reason = "reads the live packets of the caller's list")]
     unsafe fn invalidate_cache(this: *mut Self, s: &Services) {
-        // SAFETY: The module's contract; each reference ends before the next call.
+        // SAFETY: The module's contract.
         unsafe {
             (*this).0.fields.feeder_share = 0;
-            (*this).0.fields.count = 0;
-            (*this).0.fields.cargo_periods_in_transit = 0;
-        }
-        let mut it = unsafe { (*this).0.front() };
-        while let Some(current) = it {
-            it = unsafe { (*this).0.after(current.token) };
-            let cp = CargoPacket::of(s, current.shell);
-            unsafe { (*this).add_to_cache(&*cp) };
+            CargoList::invalidate_cache(this, s);
         }
     }
     /// `VehicleCargoList::Reassign<Tfrom, Tto>`: moves some cargo from one designation to
@@ -1678,7 +1730,9 @@ impl VehicleCargoList {
         }
         max_move
     }
-    /// `VehicleCargoList::KeepAll`: marks all cargo in the vehicle as to be kept.
+    /// `VehicleCargoList::KeepAll`: marks all cargo in the vehicle as to be kept. This is mostly
+    /// useful for loading old savegames. When loading is aborted the reserved cargo has to be
+    /// returned first.
     pub(crate) fn keep_all(&mut self) {
         let counts = &mut self.0.fields.action_counts;
         // `action_counts[MTA_DELIVER] = action_counts[MTA_TRANSFER] = action_counts[MTA_LOAD] =
@@ -1759,7 +1813,7 @@ impl StationCargoList {
         l.cast()
     }
     /// `packets.Insert(key, cp)`: insert `cp` at the end of the range with `key`.
-    fn insert(&mut self, key: StationID, cp: *mut c_void) {
+    fn insert(&mut self, key: StationID, cp: *mut NativeCargoPacket) {
         let l = &mut self.0;
         let next = if let Some(ends) = l.destinations.get(&key) {
             l.node(ends.last).next
@@ -1801,12 +1855,17 @@ impl StationCargoList {
     /// the same next station. After appending this packet may not exist anymore!
     ///
     /// # Safety
-    /// The module's contract; `cp` is a live packet in no list.
+    /// The module's contract; `cp` is a live packet that is in no node of this list; it may still be in a node of another list, which the caller erases after the call, and a merge may delete it.
     #[allow(
         unsafe_code,
         reason = "adds the caller's live packet to the caller's list"
     )]
-    pub(crate) unsafe fn append(this: *mut Self, s: &Services, cp: *mut c_void, next: StationID) {
+    pub(crate) unsafe fn append(
+        this: *mut Self,
+        s: &Services,
+        cp: *mut NativeCargoPacket,
+        next: StationID,
+    ) {
         assert_with(|| !cp.is_null());
         let cp_state = CargoPacket::of(s, cp);
         // SAFETY: The module's contract; each reference ends before the next call.
@@ -2065,22 +2124,6 @@ impl StationCargoList {
         };
         // SAFETY: The module's contract.
         unsafe { Self::shift_cargo(this, action, &[avoid], false) }
-    }
-    /// `StationCargoList::InvalidateCache`: `CargoList::InvalidateCache` with the station's
-    /// `AddToCache`.
-    #[allow(unsafe_code, reason = "reads the live packets of the caller's list")]
-    unsafe fn invalidate_cache(this: *mut Self, s: &Services) {
-        // SAFETY: The module's contract; each reference ends before the next call.
-        unsafe {
-            (*this).0.fields.count = 0;
-            (*this).0.fields.cargo_periods_in_transit = 0;
-        }
-        let mut it = unsafe { (*this).0.front() };
-        while let Some(current) = it {
-            it = unsafe { (*this).0.after(current.token) };
-            let cp = CargoPacket::of(s, current.shell);
-            unsafe { (*this).0.add_to_cache(&*cp) };
-        }
     }
     /// `StationCargoList::HasCargoFor`: are there packets waiting for any of the given next
     /// stations?
@@ -2562,17 +2605,15 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_key_count(l: *const CargoList) 
 pub unsafe extern "C" fn openttd_rust_cargo_list_snapshot(
     l: *const CargoList,
     context: *mut c_void,
-    output: extern "C" fn(*mut c_void, u16, *mut c_void),
+    output: extern "C" fn(*mut c_void, u16, *mut NativeCargoPacket),
 ) {
     // SAFETY: The caller's live list, which `output` does not change.
     let l = unsafe { &*l };
-    let empty: Vec<StationID> = l
+    for key in l
         .keys
         .iter()
-        .copied()
         .filter(|key| !l.destinations.contains_key(key))
-        .collect();
-    for key in empty {
+    {
         output(context, key.0, std::ptr::null_mut());
     }
     let mut it = l.front();
@@ -2592,7 +2633,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_snapshot(
 pub unsafe extern "C" fn openttd_rust_cargo_list_insert(
     l: *mut CargoList,
     key: u16,
-    shell: *mut c_void,
+    shell: *mut NativeCargoPacket,
 ) {
     // SAFETY: The caller's live list.
     match unsafe { CargoList::typed(l) } {
@@ -2613,7 +2654,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_rebuild(l: *mut CargoList, s: *
     // SAFETY: The caller's live list and table.
     match unsafe { CargoList::typed(l) } {
         Typed::Vehicle(l) => unsafe { VehicleCargoList::invalidate_cache(l, &*s) },
-        Typed::Station(l) => unsafe { StationCargoList::invalidate_cache(l, &*s) },
+        Typed::Station(l) => unsafe { CargoList::invalidate_cache(l, &*s) },
     }
 }
 /// `VehicleCargoList::GetFirstStation` and `StationCargoList::GetFirstStation`.
@@ -2645,13 +2686,13 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_keep(l: *mut CargoList) {
 /// `VehicleCargoList::Append`.
 ///
 /// # Safety
-/// `l` is a live vehicle list, `s` the live table and `cp` a live packet in no list.
+/// `l` is a live vehicle list, `s` the live table and `cp` a live packet that is in no node of this list; it may still be in a node of another list, which the caller erases after the call, and a merge may delete it.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol and the caller's list")]
 pub unsafe extern "C" fn openttd_rust_vehicle_cargo_list_append(
     l: *mut CargoList,
     s: *const Services,
-    cp: *mut c_void,
+    cp: *mut NativeCargoPacket,
     action: u8,
 ) {
     // SAFETY: The caller's live list, table and packet.
@@ -2660,13 +2701,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_cargo_list_append(
 /// `StationCargoList::Append`.
 ///
 /// # Safety
-/// `l` is a live station list, `s` the live table and `cp` a live packet in no list.
+/// `l` is a live station list, `s` the live table and `cp` a live packet that is in no node of this list; it may still be in a node of another list, which the caller erases after the call, and a merge may delete it.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol and the caller's list")]
 pub unsafe extern "C" fn openttd_rust_station_cargo_list_append(
     l: *mut CargoList,
     s: *const Services,
-    cp: *mut c_void,
+    cp: *mut NativeCargoPacket,
     next: u16,
 ) {
     // SAFETY: The caller's live list, table and packet.
@@ -2742,7 +2783,7 @@ pub(crate) mod tests {
     thread_local! {
         static CAPACITY_CALLS: RefCell<Vec<(&'static str, u8)>> = const { RefCell::new(Vec::new()) };
         static ALLOCATE: Cell<bool> = const { Cell::new(true) };
-        static POOL: RefCell<Vec<*mut c_void>> = const { RefCell::new(Vec::new()) };
+        static POOL: RefCell<Vec<*mut NativeCargoPacket>> = const { RefCell::new(Vec::new()) };
         /// The raw draws `random_range` scales, in order; zero once they run out.
         static DRAWS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
     }
@@ -2753,19 +2794,19 @@ pub(crate) mod tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    extern "C" fn create(fields: *const CargoPacket) -> *mut c_void {
+    extern "C" fn create(fields: *const CargoPacket) -> *mut NativeCargoPacket {
         let shell = Box::into_raw(Box::new(unsafe { *fields })).cast();
         POOL.with(|pool| pool.borrow_mut().push(shell));
         shell
     }
-    extern "C" fn owner(shell: *mut c_void) -> *mut CargoPacket {
+    extern "C" fn owner(shell: *mut NativeCargoPacket) -> *mut CargoPacket {
         shell.cast()
     }
     #[allow(
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    extern "C" fn destroy(shell: *mut c_void) {
+    extern "C" fn destroy(shell: *mut NativeCargoPacket) {
         POOL.with(|pool| pool.borrow_mut().retain(|&entry| entry != shell));
         unsafe {
             drop(Box::from_raw(shell.cast::<CargoPacket>()));
@@ -2794,7 +2835,7 @@ pub(crate) mod tests {
     thread_local! {
         static SHARED: crate::services::Services = crate::services::fixture(std::ptr::null_mut(), draw);
     }
-    extern "C" fn next_packet(shell: *mut c_void) -> *mut c_void {
+    extern "C" fn next_packet(shell: *mut NativeCargoPacket) -> *mut NativeCargoPacket {
         POOL.with(|pool| {
             let pool = pool.borrow();
             let index = if shell.is_null() {
@@ -2829,7 +2870,7 @@ pub(crate) mod tests {
             ..crate::test_tables::CARGO_STORAGE
         }
     }
-    fn cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
+    fn cargo(count: u16, first: u16, feeder: i64) -> *mut NativeCargoPacket {
         let fields = CargoPacket {
             feeder_share: feeder,
             source_xy: 5,
@@ -2850,7 +2891,7 @@ pub(crate) mod tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    pub(crate) fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
+    pub(crate) fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut NativeCargoPacket {
         let shell = cargo(count, first, feeder);
         // SAFETY: the fixture shell was just created and owns its live packet.
         unsafe { (*owner(shell)).in_vehicle = 0 };
@@ -2880,7 +2921,7 @@ pub(crate) mod tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    pub(crate) unsafe fn append_to(list: *mut CargoList, shell: *mut c_void, key: u16) {
+    pub(crate) unsafe fn append_to(list: *mut CargoList, shell: *mut NativeCargoPacket, key: u16) {
         unsafe { StationCargoList::append(station(list), &services(), shell, StationID(key)) }
     }
     /// `VehicleCargoList::Append` of `shell` to keep.
@@ -2888,7 +2929,7 @@ pub(crate) mod tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    unsafe fn keep(list: *mut CargoList, s: &Services, shell: *mut c_void) {
+    unsafe fn keep(list: *mut CargoList, s: &Services, shell: *mut NativeCargoPacket) {
         unsafe { VehicleCargoList::append(vehicle(list), s, shell, MoveToAction::MTA_KEEP) }
     }
     /// The list's nodes, in list order.
@@ -2911,7 +2952,7 @@ pub(crate) mod tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    unsafe fn packet(shell: *mut c_void) -> CargoPacket {
+    unsafe fn packet(shell: *mut NativeCargoPacket) -> CargoPacket {
         unsafe { *owner(shell) }
     }
     #[allow(
@@ -2938,7 +2979,7 @@ pub(crate) mod tests {
         0
     }
 
-    extern "C" fn unexpected_allocation(_: *const CargoPacket) -> *mut c_void {
+    extern "C" fn unexpected_allocation(_: *const CargoPacket) -> *mut NativeCargoPacket {
         panic!("denied Split must return before allocating a packet")
     }
 
@@ -3211,7 +3252,10 @@ pub(crate) mod tests {
                 1
             );
             assert_eq!(fields(rerouted).count, 3);
-            assert_eq!(fields(rerouted).action_counts[2], u32::MAX - 1);
+            assert_eq!(
+                fields(rerouted).action_counts[usize::from(MoveToAction::MTA_KEEP.0)],
+                u32::MAX - 1
+            );
             clean(rerouted);
         }
         assert_eq!(FAILED_CHECKS.get(), 0);
@@ -4035,7 +4079,7 @@ mod scaling_tests {
     thread_local! {
         static READS: Cell<u32> = const { Cell::new(0) };
     }
-    extern "C" fn packet_of(shell: *mut c_void) -> *mut CargoPacket {
+    extern "C" fn packet_of(shell: *mut NativeCargoPacket) -> *mut CargoPacket {
         READS.set(READS.get() + 1);
         shell.cast()
     }
@@ -4043,7 +4087,7 @@ mod scaling_tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    extern "C" fn destroy_packet(shell: *mut c_void) {
+    extern "C" fn destroy_packet(shell: *mut NativeCargoPacket) {
         // SAFETY: Every shell in these lists is a packet from `openttd_rust_cargo_packet_new`.
         unsafe { openttd_rust_cargo_packet_destroy(shell.cast()) };
     }
@@ -4054,17 +4098,17 @@ mod scaling_tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    extern "C" fn collect(context: *mut c_void, _: u16, shell: *mut c_void) {
+    extern "C" fn collect(context: *mut c_void, _: u16, shell: *mut NativeCargoPacket) {
         if !shell.is_null() {
             // SAFETY: `snapshot`'s own vector.
-            unsafe { (*context.cast::<Vec<*mut c_void>>()).push(shell) };
+            unsafe { (*context.cast::<Vec<*mut NativeCargoPacket>>()).push(shell) };
         }
     }
     #[allow(
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    fn snapshot(list: *const CargoList) -> Vec<*mut c_void> {
+    fn snapshot(list: *const CargoList) -> Vec<*mut NativeCargoPacket> {
         let mut shells = Vec::new();
         // SAFETY: A live list; the callback writes only the local vector.
         unsafe { openttd_rust_cargo_list_snapshot(list, (&raw mut shells).cast(), collect) };
@@ -4074,7 +4118,7 @@ mod scaling_tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
-    fn packet_aged(periods: u32) -> *mut c_void {
+    fn packet_aged(periods: u32) -> *mut NativeCargoPacket {
         // SAFETY: A null input allocates a default packet.
         let packet = unsafe { openttd_rust_cargo_packet_new(std::ptr::null()) };
         // SAFETY: Allocated above; the list takes it.
@@ -4104,7 +4148,7 @@ mod scaling_tests {
             cargo_periods_in_transit: periods,
             ..Fields::default()
         };
-        fields.action_counts[2] = keep;
+        fields.action_counts[usize::from(MoveToAction::MTA_KEEP.0)] = keep;
         // SAFETY: A live list and a local input.
         unsafe { openttd_rust_cargo_list_import(list, &raw const fields) };
     }
@@ -4149,7 +4193,10 @@ mod scaling_tests {
             assert!(snapshot(list) == expected, "{size}: append order");
             let fields = exported(list);
             assert_eq!(
-                (fields.count, fields.action_counts[2]),
+                (
+                    fields.count,
+                    fields.action_counts[usize::from(MoveToAction::MTA_KEEP.0)]
+                ),
                 (size + 1024, size + 1024)
             );
             VehicleCargoList::truncate(vehicle, s, size + 1024);
@@ -4161,7 +4208,7 @@ mod scaling_tests {
             assert_eq!(
                 (
                     fields.count,
-                    fields.action_counts[2],
+                    fields.action_counts[usize::from(MoveToAction::MTA_KEEP.0)],
                     fields.cargo_periods_in_transit
                 ),
                 (0, 0, 0),

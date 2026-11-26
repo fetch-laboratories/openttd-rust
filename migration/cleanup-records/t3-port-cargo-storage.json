@@ -616,18 +616,6 @@
     "tool": "rust",
     "before": 0,
     "after": 1,
-    "site": "rust/openttd-kernels/src/cargo_storage.rs | impl StationCargoList > fn invalidate_cache | allow unsafe_code",
-    "operation": "cargo_storage::StationCargoList::invalidate_cache",
-    "source_contract": "`StationCargoList::InvalidateCache` (cargopacket.h, cargopacket.cpp).",
-    "reason": "Reads the live packets of the caller's list, under the module's contract.",
-    "retiring_owner": "#634",
-    "retirement_condition": "Retires when the packet pool's records are Rust-owned and a list holds its packets by value, so the bodies borrow lists and packets safely (#634)."
-  },
-  {
-    "kind": "suppression",
-    "tool": "rust",
-    "before": 0,
-    "after": 1,
     "site": "rust/openttd-kernels/src/cargo_storage.rs | impl StationCargoList > fn load | allow unsafe_code",
     "operation": "cargo_storage::StationCargoList::load",
     "source_contract": "`StationCargoList::Load` (cargopacket.h, cargopacket.cpp).",
@@ -739,7 +727,7 @@
     "site": "rust/openttd-kernels/src/cargo_storage.rs | impl VehicleCargoList > fn invalidate_cache | allow unsafe_code",
     "operation": "cargo_storage::VehicleCargoList::invalidate_cache",
     "source_contract": "`VehicleCargoList::InvalidateCache` (cargopacket.h, cargopacket.cpp).",
-    "reason": "Reads the live packets of the caller's list, under the module's contract.",
+    "reason": "Writes the caller's live list and calls the shared `CargoList::invalidate_cache`, under the module's contract.",
     "retiring_owner": "#634",
     "retirement_condition": "Retires when the packet pool's records are Rust-owned and a list holds its packets by value, so the bodies borrow lists and packets safely (#634)."
   },
@@ -1499,5 +1487,17 @@
     "existing_alternatives": "Keeping the facade members fails the uncalled-member check, since no production C++ calls them; building the reservation from `Append` and `SetReservedCount` would make the orders fixture's `amount == 7` observation vacuous.",
     "retiring_owner": "#734",
     "retirement_condition": "Each line retires with its console: `orders-console.cpp` (#906), `cargo-registry-console.inc` (#634), `subsidies-console.inc` (#635), `cargomonitor-console.inc` (#573), as `tools/kept-fixture-exports.txt` lists them."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_storage.rs | impl CargoList > fn invalidate_cache | allow unsafe_code",
+    "operation": "cargo_storage::CargoList::invalidate_cache",
+    "source_contract": "`CargoList<Tinst, Tcont>::InvalidateCache` (cargopacket.cpp), with `Tinst`'s `AddToCache`.",
+    "reason": "Reads the live packets of the caller's list, under the module's contract.",
+    "retiring_owner": "#634",
+    "retirement_condition": "Retires when the packet pool's records are Rust-owned and a list holds its packets by value, so the bodies borrow lists and packets safely (#634)."
   }
 ]

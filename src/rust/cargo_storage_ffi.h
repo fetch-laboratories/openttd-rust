@@ -32,6 +32,7 @@ struct OpenTTDCargoListFields {
  * list import never dereferences unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call.
  * Handles are live and serially accessed, create/destroy match once, and callbacks retain no arguments;
  * snapshot output is confined to local exports. */
+struct CargoPacket;
 struct GoodsEntry;
 struct OpenTTDCargoDelivery;
 struct OpenTTDCargoMonitorServices;
@@ -42,12 +43,12 @@ struct CargoPayment;
 struct OpenTTDCargoStorageServices {
 	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	OpenTTDCargoDelivery *(*cargo_delivery_state)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_delivery_state);
-	void *(*create)(const OpenTTDCargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(create);
-	void (*destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
+	CargoPacket *(*create)(const OpenTTDCargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(create);
+	void (*destroy)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	OpenTTDCargoFlowMap *(*flow_map)(const GoodsEntry *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);
 	const OpenTTDCargoMonitorServices *monitors;
-	OpenTTDCargoPacket *(*packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
-	void *(*packet_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
+	OpenTTDCargoPacket *(*packet)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
+	CargoPacket *(*packet_next)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
 	const OpenTTDCargoServices *payment;
 	OpenTTDCargoPayment *(*payment_state)(CargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(payment_state);
 	const OpenTTDSharedServices *shared;
@@ -73,13 +74,13 @@ int64_t openttd_rust_cargo_list_feeder(const OpenTTDCargoList *);
 uint32_t openttd_rust_cargo_list_action_count(const OpenTTDCargoList *, uint8_t);
 uint32_t openttd_rust_cargo_list_stored(const OpenTTDCargoList *);
 size_t openttd_rust_cargo_list_key_count(const OpenTTDCargoList *);
-void openttd_rust_cargo_list_snapshot(const OpenTTDCargoList *, void *, void (*)(void *, uint16_t, void *) noexcept);
-void openttd_rust_cargo_list_insert(OpenTTDCargoList *, uint16_t, void *);
+void openttd_rust_cargo_list_snapshot(const OpenTTDCargoList *, void *, void (*)(void *, uint16_t, CargoPacket *) noexcept);
+void openttd_rust_cargo_list_insert(OpenTTDCargoList *, uint16_t, CargoPacket *);
 void openttd_rust_cargo_list_rebuild(OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 uint16_t openttd_rust_cargo_list_first(const OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 void openttd_rust_cargo_list_keep(OpenTTDCargoList *);
-void openttd_rust_vehicle_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, void *, uint8_t);
-void openttd_rust_station_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, void *, uint16_t);
+void openttd_rust_vehicle_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, CargoPacket *, uint8_t);
+void openttd_rust_station_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, CargoPacket *, uint16_t);
 uint32_t openttd_rust_vehicle_cargo_list_truncate(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint32_t);
 uint32_t openttd_rust_station_cargo_list_truncate(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint32_t);
 /* For the orders console only: StationCargoList::Reserve over `length` station IDs. */
