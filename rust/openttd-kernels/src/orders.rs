@@ -1327,9 +1327,22 @@ impl OrderRef {
     pub(crate) fn set_max_speed(self, speed: u16) {
         write_field!(self.0, max_speed, speed);
     }
-    /// `Order::AssignOrder`, and the defaulted copy assignment `*this = other`, which copy the
-    /// same members: assign data to an order (from another order).
-    pub(crate) fn assign_order(self, other: Order) {
+    /// `Order::AssignOrder`: assign data to an order (from another order), member by member
+    /// in the original's order.
+    pub(crate) fn assign_order(self, other: OrderView<'_>) {
+        let other = other.as_ptr();
+        write_field!(self.0, r#type, read_field!(other, r#type));
+        write_field!(self.0, flags, read_field!(other, flags));
+        write_field!(self.0, dest, read_field!(other, dest));
+
+        write_field!(self.0, refit_cargo, read_field!(other, refit_cargo));
+
+        write_field!(self.0, wait_time, read_field!(other, wait_time));
+        write_field!(self.0, travel_time, read_field!(other, travel_time));
+        write_field!(self.0, max_speed, read_field!(other, max_speed));
+    }
+    /// The defaulted copy assignment `*this = other`.
+    pub(crate) fn copy_assign(self, other: Order) {
         // SAFETY: The handle names a live, writable order; the store creates no reference.
         unsafe { self.0.write(other) };
     }
@@ -3635,7 +3648,7 @@ fn update_order_dest_in(
         return false;
     };
 
-    current_order(v).assign_order(order.copied());
+    current_order(v).copy_assign(order.copied());
     update_order_dest_in(
         v,
         list,
@@ -3789,7 +3802,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
     }
 
     /* Otherwise set it, and determine the destination tile. */
-    current_order(v).assign_order(order.copied());
+    current_order(v).copy_assign(order.copied());
 
     invalidate_vehicle_order(v, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
     match v.vehicle_type() {
@@ -6547,7 +6560,7 @@ pub extern "C" fn openttd_rust_order_equals(p: *const Order, other: *const Order
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_order_assign(p: *mut Order, other: *const Order) {
-    order_mut(p).assign_order(order_arg(other).copied());
+    order_mut(p).assign_order(order_arg(other));
 }
 /// `Order::MapOldOrder`.
 #[allow(unsafe_code)]

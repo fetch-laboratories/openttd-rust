@@ -311,6 +311,27 @@ fn is_waiting_for_unbunching_follows_the_shared_list_and_departure_time() {
     assert!(is_waiting_for_unbunching(v, s));
 }
 
+/// `Order::AssignOrder` copies each of the seven members of the source order.
+#[test]
+fn assign_order_copies_every_member() {
+    let source = Order {
+        r#type: 0x15,
+        flags: 0x26,
+        dest: 0x3456,
+        refit_cargo: 7,
+        wait_time: 0x1234,
+        travel_time: 0x2345,
+        max_speed: 0x3456,
+    };
+    let mut target = Order::default();
+    target.edit().assign_order(view(&source));
+    assert!(view(&target).equals(view(&source)));
+    assert_eq!(
+        (target.wait_time, target.travel_time, target.max_speed),
+        (0x1234, 0x2345, 0x3456)
+    );
+}
+
 /// `OrderList::MoveOrder` rotates the moved order to its new place in both directions, as
 /// `std::rotate` over the original's vector does, and leaves the list unchanged for an equal
 /// pair or an index at or past the order count.
@@ -457,7 +478,7 @@ fn free_and_make_dummy_write_only_the_original_fields() {
         travel_time: 0xf012,
         max_speed: 0x3456,
     };
-    current_order(v).assign_order(full);
+    current_order(v).copy_assign(full);
     free(v);
     assert_eq!(
         fields(current_order(v).view().copied()),
@@ -471,7 +492,7 @@ fn free_and_make_dummy_write_only_the_original_fields() {
             0x3456
         ]
     );
-    current_order(v).assign_order(full);
+    current_order(v).copy_assign(full);
     make_dummy(v);
     assert_eq!(
         fields(current_order(v).view().copied()),
@@ -781,7 +802,7 @@ fn change_timetable_updates_only_matching_current_orders() {
     ] {
         // SAFETY: The fixture's owners, with no other access live.
         unsafe { (*consist(v)).cur_real_order_index = index };
-        current_order(v).assign_order(current);
+        current_order(v).copy_assign(current);
     }
     crate::window_func::testing::take();
     change_timetable(
