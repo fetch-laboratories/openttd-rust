@@ -21,12 +21,12 @@ At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-wai
 ## Spawning
 
 - Root starts each planner with this fixed message:
-  > Plan the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/planner-brief.md`. You are <name>. Root's thread is <thread ID>.
+  > Plan the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/planner-brief.md`. You are <name>, on <model> at <effort> effort. Root's thread is <thread ID>.
 - Root starts each implementer with this fixed message, and adds only facts the plan and the docs do not hold, such as a base change since the plan was written:
-  > Implement the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/implementer-brief.md`. You are <name>. Complete the whole task. Root's thread is <thread ID>.
+  > Implement the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/implementer-brief.md`. You are <name>, on <model> at <effort> effort. Complete the whole task. Root's thread is <thread ID>.
 - Root, a steering review or a navigation review starts a [fathom](skills/fathom/SKILL.md) agent for a case as a thread of its own and does not wait on it: `t3_thread_launch` with the role table's model and effort as `modelSelection`, `workspaceStrategy: {type: "root"}`, a title that names the case, a stable `clientRequestId` and the prompt `/fathom <case issue URL>`.
 - Spawn a fresh agent named for each task; its name is its attribution.
-- The host does not report a child's model or effort to it. Root's spawn message names both, and the child signs with them; a planner or implementer names them to the reviewers it starts.
+- The host does not report a child's model or effort to it, so the fixed message that starts a child names the child's own, and the child signs with them. A planner or implementer starts each reviewer on the review row of the [role table](#roles-and-models), never on its own model, and that reviewer's message names the review row's model and effort. `delegate_task` starts a child on its parent's model unless the call names another.
 - Root writes no summary of a child's waiting notice.
 - An agent's own thread ID is `$T3CODE_THREAD_ID`, or in its thread metadata when that is unset. Children send mid-task messages to the `parentThreadId` in their thread metadata.
 - Every agent-to-agent `t3_thread_send` uses `mode: "queue"` unless the sender means to interrupt: a steer arriving during a Claude Code agent's tool call cancels the call. An agent whose call is cancelled as a message arrives reads the message, reruns the call and carries on unless the message says to stop.
