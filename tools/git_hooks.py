@@ -123,9 +123,10 @@ def git_merge_base(base: str, sha: str) -> str:
 
 # The forms of a GitHub push URL: https (with any credential), scp-like ssh, and
 # ssh://, including GitHub's SSH over port 443 at ssh.github.com. Host names
-# ignore case.
+# ignore case, and any explicit port (such as :443 or Git's :0443) still names
+# github.com, so it reads the queue rather than skip it.
 GITHUB_URL = re.compile(
-    r"(?:https://(?:[^@/]+@)?github\.com(?::443)?/"
+    r"(?:https://(?:[^@/]+@)?github\.com(?::\d+)?/"
     r"|ssh://(?:[^@/]+@)?(?:ssh\.)?github\.com(?::\d+)?/"
     r"|[^@/:]+@(?:ssh\.)?github\.com:)([\w.-]+)/([\w.-]+?)(?:\.git)?/?",
     re.IGNORECASE,
