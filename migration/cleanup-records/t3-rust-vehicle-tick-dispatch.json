@@ -42,7 +42,7 @@
     },
     "reason": "#1011: the station crash fixture ticked its bus through the C++ `RoadVehicle::Tick` override, which this work order deletes. The Rust build now calls the kept road tick export with the command slot the override built, and the build without Rust keeps the original `bus->Tick()`, which adds the `#ifdef` branch, the slot and the export's includes.",
     "existing_alternatives": "No C++ entry to a road vehicle's tick remains but the kept export; the fixture compiles against the original too, so the original call stays in its branch.",
-    "retiring_owner": "#656",
-    "retirement_condition": "Retires with the native station fixture when road vehicles run on Rust storage."
+    "retiring_owner": "#634",
+    "retirement_condition": "Retires with the native station fixture, which #736's classification places under #634."
   }
 ]

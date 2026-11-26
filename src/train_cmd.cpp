@@ -798,10 +798,6 @@ Money Train::GetRunningCost() const
 }
 
 /**
- * Update train vehicle data for a tick.
- * @return True if the vehicle still exists, false if it has ceased to exist (front of consists only).
- */
-/**
  * Get the tracks of the train vehicle.
  * @return Current tracks of the vehicle.
  */
