@@ -30,7 +30,7 @@ Where the plan has a speed check, count instructions at the base and the head ([
 
 ## Messaging root
 
-Message root, at the thread your spawn message names, with `t3_thread_send`, only when the queue merges or removes the PR (one line: PR, head, outcome), when `ci.py reviewer` refuses a review (the line it prints), for a question only root can answer, or for a stop you cannot work past. The line you end a waiting turn on does not reach root ([background jobs](team.md#background-jobs)). When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
+Message root, at the thread your spawn message names, with `t3_thread_send`, only when the queue merges or removes the PR (one line: PR, head, outcome), when `ci.py reviewer` prints a line for root, for a question only root can answer, or for a stop you cannot work past. The line you end a waiting turn on does not reach root ([background jobs](team.md#background-jobs)). When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
 
 ## Starting reviewers
 
@@ -38,6 +38,6 @@ This brief authorizes you to start your PR's reviewers with `delegate_task`, as 
 
 Start each reviewer with the call `python3 tools/ci.py reviewer PR KIND` prints, passed to `delegate_task` as written: it names the review row of the [role table](team.md#roles-and-models), never your own model, and the reviewer's fixed message. KIND is `behaviour` or `porting` for the first stage, `recheck --commits <SHAs>` for the re-check when [review](workflow.md#review) calls for one, and `base`, `simulation` or `records` with `--commits <SHAs>` for the scoped reviews it allows. A call you write yourself starts the reviewer on your model unless it names another, and `ci.py report` refuses that reviewer's report.
 
-The command counts the PR's reviews and refuses one beyond [review](workflow.md#review): a second whole-PR review of a kind, a second re-check, or a third scoped review that is not a base update's. Then send root the line it prints and start no reviewer until root answers; run it again with `--root '<the answer>'` and put the answer in the status comment.
+The command counts the PR's reviews. It refuses what [review](workflow.md#review) does not allow: a second whole-PR review of a kind, a second re-check, and a re-check before every first-stage report. For a third scoped review that is not a base update's, it prints a line for root instead. Send that line, and start no reviewer until root answers. If root approves, run the command again with `--root '<the answer>'`; otherwise do as root says. Put the answer in the status comment. If a dispatch fails, `--again` prints the same call. A reviewer that ends with no report counts as no review: free its start with `--release NAME`.
 
 Each reviewer's last message, with its report's URL and disposition, reaches you when its turn ends. A tool call cancelled with a notice to stop as such a message arrives is the host delivering it: read the message, rerun the call and carry on.

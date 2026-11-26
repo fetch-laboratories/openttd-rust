@@ -6327,6 +6327,9 @@ class ReportTests(unittest.TestCase):
                 patch.object(status_comment, "gh", side_effect=github.gh),
                 # These reports sign m-1; ReviewerTests holds the model check.
                 patch.object(review_start, "review_models", return_value={"m-1"}),
+                patch.object(
+                    review_start, "review_pairs", return_value={("m-1", "high")}
+                ),
                 patch.object(review_start, "running_model", return_value=None),
                 patch("sys.argv", ["ci.py", "report", *argv, "--repo", "example/fork"]),
                 patch("sys.stdout", new_callable=io.StringIO) as out,
@@ -6619,12 +6622,14 @@ class ReviewerTests(unittest.TestCase):
         *argv: str,
         ledger: Path,
         models: dict[str, str] | None = None,
+        extra: list[status_comment.Comment] | None = None,
+        submitted: list[review_report.Review] | None = None,
     ) -> tuple[int, str, str]:
         models = models or {}
         comments = [
             self.report(1000 + i, a, models.get(a, "gpt-6.2-sol"))
             for i, a in enumerate(agents)
-        ]
+        ] + (extra or [])
 
         def gh(
             *args: str, payload: str | None = None, timeout: float | None = None
@@ -6635,7 +6640,7 @@ class ReviewerTests(unittest.TestCase):
             if path.endswith("/issues/170/comments?per_page=100"):
                 return json.dumps([comments])
             if path.endswith("/pulls/170/reviews?per_page=100"):
-                return json.dumps([[]])
+                return json.dumps([submitted or []])
             raise AssertionError(args)
 
         with (
@@ -6749,7 +6754,8 @@ class ReviewerTests(unittest.TestCase):
             self.assertEqual(out, "")
             self.assertIn("Send root this line", err)
             self.assertIn(
-                f"PR #170, head {HEAD[:10]}: asks for a scoped review after 2 others",
+                f"PR #170, head {HEAD[:10]}: a records review of c2 would be a "
+                "scoped review after 2 others",
                 err,
             )
             self.assertIn(
@@ -6776,6 +6782,94 @@ class ReviewerTests(unittest.TestCase):
             )
             entries = json.loads((ledger / "170.json").read_text())
             self.assertEqual(entries[-1]["root"], "one more, then residue")
+
+    def test_an_adr_limit_is_not_lifted_by_root(self) -> None:
+        agents = ["review-170-behaviour", "review-170-recheck"]
+        with tempfile.TemporaryDirectory() as directory:
+            code, out, err = self.run_reviewer(
+                agents,
+                "recheck",
+                "--commits",
+                "c",
+                "--root",
+                "residue",
+                ledger=Path(directory),
+            )
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("a second re-check", err)
+        self.assertNotIn("Send root", err)
+
+    def test_a_re_check_waits_for_every_first_stage_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            self.assertEqual(self.run_reviewer([], "porting", ledger=ledger)[0], 0)
+            code, _, err = self.run_reviewer(
+                ["review-170-behaviour"], "recheck", "--commits", "c", ledger=ledger
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("wait for review-170-porting", err)
+            agents = ["review-170-behaviour", "review-170-porting"]
+            code, _, err = self.run_reviewer(
+                agents, "recheck", "--commits", "c", ledger=ledger
+            )
+            self.assertEqual(code, 0, err)
+
+    def test_a_start_can_be_printed_again_or_released(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            _, first, _ = self.run_reviewer([], "behaviour", ledger=ledger)
+            code, again, _ = self.run_reviewer(
+                [], "behaviour", "--again", ledger=ledger
+            )
+            self.assertEqual((code, again), (0, first))
+            self.assertEqual(len(json.loads((ledger / "170.json").read_text())), 1)
+            code, out, _ = self.run_reviewer(
+                [], "--release", "review-170-behaviour", ledger=ledger
+            )
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads((ledger / "170.json").read_text()), [])
+            self.assertEqual(self.run_reviewer([], "behaviour", ledger=ledger)[0], 0)
+            # A start whose reviewer reported is a review, not a start to free.
+            code, _, err = self.run_reviewer(
+                ["review-170-behaviour"],
+                "--release",
+                "review-170-behaviour",
+                ledger=ledger,
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("has reported", err)
+
+    def test_a_ledger_it_cannot_read_is_named_not_taken_as_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "170.json").write_text("{not json")
+            code, _, err = self.run_reviewer([], "behaviour", ledger=Path(directory))
+        self.assertEqual(code, 1)
+        self.assertIn("is not a ledger of starts", err)
+
+    def test_reports_with_no_disposition_or_off_the_row_spend_nothing(self) -> None:
+        open_ended = FakeComments.comment(
+            1100,
+            f"Reviewed commit: {HEAD}\n"
+            "Agent: /root/review-170-behaviour | Model: gpt-6.2-sol | Reasoning effort: high\n"
+            "Still reading.",
+        )
+        submitted: list[review_report.Review] = [
+            {
+                "html_url": "https://github.com/example/fork/pull/170#pullrequestreview-9",
+                "state": "COMMENTED",
+                "commit_id": HEAD,
+                "submitted_at": "2026-11-25T20:00:00Z",
+                "body": "Agent: /root/review-170-porting | Model: claude-opus-5-5 | "
+                "Reasoning effort: medium\nDisposition: accepted, whole PR",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            for kind in ("behaviour", "porting"):
+                code, _, err = self.run_reviewer(
+                    [], kind, ledger=ledger, extra=[open_ended], submitted=submitted
+                )
+                self.assertEqual(code, 0, err)
 
     def test_a_void_review_counts_for_nothing(self) -> None:
         agents = ["review-170-behaviour", "review-170-porting"]
@@ -6809,7 +6903,14 @@ class ReviewerTests(unittest.TestCase):
             "Agent: /root/rev | Model: claude-opus-5-5 | Reasoning effort: medium\n"
             "Disposition: accepted, whole PR"
         )
-        right = signed.replace("claude-opus-5-5", "gpt-6.2-sol")
+        right = signed.replace("claude-opus-5-5", "gpt-6.2-sol").replace(
+            "medium", "high"
+        )
+        low = right.replace("effort: high", "effort: low")
+        self.assertIn(
+            "gpt-6.2-sol at Reasoning effort: low",
+            review_start.report_refusal(low, environ={}) or "",
+        )
         self.assertIn(
             "signed Model: claude-opus-5-5",
             review_start.report_refusal(signed, environ={}) or "",

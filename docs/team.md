@@ -49,7 +49,7 @@ A job's end usually resumes its agent, but not always. Root checks no child's jo
 
 ### Review loop
 
-The review loop is in [review](workflow.md#review). Root reads dispositions, not diffs, and answers only a disagreement between implementer and reviewer, a policy question no recorded decision answers, or a review `ci.py reviewer` refused: one more, or what it would review recorded as residue.
+The review loop is in [review](workflow.md#review). Root reads dispositions, not diffs, and answers only a disagreement between implementer and reviewer, a policy question no recorded decision answers, or a scoped review `ci.py reviewer` sent to it: one more, or what it would review recorded as residue.
 
 ### Ready queue and pipelining
 
