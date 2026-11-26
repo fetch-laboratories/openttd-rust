@@ -178,7 +178,7 @@ fn cargo_callbacks(
         }
         let cargo = crate::cargo_registry::get_cargo_translation(
             gb(u32::from(res), 0, 8) as u8,
-            unsafe { (*indspec).grf_prop.grffile },
+            grffile,
             false,
         );
         // Industries without "unlimited" cargo types support depend on the specific

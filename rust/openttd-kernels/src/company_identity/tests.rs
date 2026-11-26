@@ -740,3 +740,81 @@ fn set_company_manager_face_style_asserts_its_spec() {
     faces.set_style = stored;
     set_company_manager_face_style(&faces, std::ptr::null_mut(), 4);
 }
+
+/// The livery test's engine; the test holds the global test lock.
+static LIVERY_ENGINE: std::sync::atomic::AtomicPtr<crate::vehicle::OpenTTDEngine> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+extern "C" fn livery_engine(_: u16) -> *const crate::vehicle::OpenTTDEngine {
+    LIVERY_ENGINE.load(std::sync::atomic::Ordering::Relaxed)
+}
+// Cargo 3 is passengers and cargo 4 is goods; each spec pointer is its cargo plus one, which
+// no stub reads through.
+extern "C" fn livery_cargo_spec(cargo: u8) -> *const crate::cargotype::CargoSpec {
+    std::ptr::without_provenance(usize::from(cargo) + 1)
+}
+extern "C" fn livery_cargo_classes(cs: *const crate::cargotype::CargoSpec) -> u16 {
+    use crate::cargotype::{CargoClass, CargoClasses};
+    match cs.addr() - 1 {
+        3 => CargoClasses::from_element(CargoClass::Passengers).0,
+        _ => CargoClasses::from_element(CargoClass::PieceGoods).0,
+    }
+}
+
+/// `GetEngineLiveryScheme` chooses the passenger or freight livery of a ship, bus and tram by
+/// `IsCargoInClass(cargo_type, CargoClass::Passengers)` on the engine's default cargo, which
+/// it reads through the cargo registry's `classes` member.
+#[test]
+fn engine_livery_scheme_reads_the_cargo_classes_through_the_registry() {
+    use crate::engine_type::{EngineMiscFlag, EngineMiscFlags};
+    use crate::vehicle::VehicleType;
+    let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+    let mut registry = crate::cargo_registry::TEST_TABLE;
+    registry.spec = livery_cargo_spec;
+    registry.classes = livery_cargo_classes;
+    crate::cargo_registry::install_test_table(registry);
+    let mut caps = crate::engine_capabilities::test_table_with_shared(&SHARED);
+    let mut vehicles = crate::test_tables::VEHICLE;
+    vehicles.newgrf = newgrf;
+    caps.vehicles = leak(vehicles);
+    caps.engine = livery_engine;
+    let mut s = COMPANY_IDENTITY;
+    s.capabilities = leak(caps);
+    let engine = crate::engine::openttd_rust_engine_new();
+    LIVERY_ENGINE.store(engine, std::sync::atomic::Ordering::Relaxed);
+    let mut schemes = Vec::new();
+    for (kind, misc) in [
+        (VehicleType::VEH_SHIP, 0),
+        (VehicleType::VEH_ROAD, 0),
+        (
+            VehicleType::VEH_ROAD,
+            EngineMiscFlags::from_element(EngineMiscFlag::RoadIsTram).0,
+        ),
+    ] {
+        for cargo in [3, 4] {
+            // SAFETY: The fresh engine; the test owns it.
+            unsafe {
+                (*engine).r#type = kind;
+                (*engine).info.misc_flags = misc;
+                (*engine).info.cargo_type = cargo;
+            }
+            schemes.push(get_engine_livery_scheme(
+                &s,
+                EngineID(0),
+                EngineID::INVALID,
+                None,
+            ));
+        }
+    }
+    crate::cargo_registry::clear_test_labels();
+    assert_eq!(
+        schemes,
+        [
+            LiveryScheme::LS_PASSENGER_SHIP,
+            LiveryScheme::LS_FREIGHT_SHIP,
+            LiveryScheme::LS_BUS,
+            LiveryScheme::LS_TRUCK,
+            LiveryScheme::LS_PASSENGER_TRAM,
+            LiveryScheme::LS_FREIGHT_TRAM,
+        ]
+    );
+}

@@ -620,11 +620,8 @@ fn industries_get_variable(
             )
         }
         0x69..=0x6D | 0x70 | 0x71 => {
-            let cargo: CargoType = get_cargo_translation(
-                parameter as u8,
-                s.resolver_grffile(ro).as_ptr().cast(),
-                false,
-            );
+            let cargo: CargoType =
+                get_cargo_translation(parameter as u8, s.resolver_grffile(ro), false);
             let Some(it) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0; // invalid cargo
             };
@@ -640,11 +637,8 @@ fn industries_get_variable(
             }
         }
         0x6E | 0x6F => {
-            let cargo: CargoType = get_cargo_translation(
-                parameter as u8,
-                s.resolver_grffile(ro).as_ptr().cast(),
-                false,
-            );
+            let cargo: CargoType =
+                get_cargo_translation(parameter as u8, s.resolver_grffile(ro), false);
             let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0; // invalid cargo
             };

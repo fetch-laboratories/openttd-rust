@@ -926,6 +926,20 @@ pub unsafe extern "C" fn openttd_rust_resolver_resolve(
     state: *mut State,
     file: Handle,
 ) -> ResultValue {
+    unsafe { do_resolve(s, group, ro, state, file) }
+}
+/// `ResolverObject::DoResolve`: reset the frame's per-resolution state and resolve the root
+/// group.
+///
+/// # Safety
+/// The resolver frame and its state are live.
+pub(crate) unsafe fn do_resolve(
+    s: &Services,
+    group: Handle,
+    ro: Resolver,
+    state: *mut State,
+    file: Handle,
+) -> ResultValue {
     unsafe {
         openttd_rust_storage_temp_clear();
         (*state).last_value = 0;
@@ -961,7 +975,7 @@ pub(crate) unsafe fn resolve_callback(
     count: usize,
 ) -> u16 {
     unsafe {
-        let result = openttd_rust_resolver_resolve(s, group, ro, state, file);
+        let result = do_resolve(s, group, ro, state, file);
         if result.kind != 1 {
             return CALLBACK_FAILED;
         }

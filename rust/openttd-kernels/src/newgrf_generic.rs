@@ -9,6 +9,7 @@
 //! on the evaluating Rust stack through a pointer, for that synchronous call only.
 use crate::bitmath_func::gb;
 use crate::cargo_type::CargoType;
+use crate::cargotype::cargo_spec_get;
 use crate::debug::{debug, grf_msg};
 use crate::game_state::GameState;
 use crate::industry_type::IndustryType;
@@ -86,7 +87,11 @@ impl GenericScopeResolver {
                 }
 
                 0x80 => return u32::from(self.cargo_type.0),
-                0x81 => return u32::from((services().cargo_bitnum)(self.cargo_type.0)),
+                0x81 => {
+                    return u32::from(
+                        cargo_spec_get(crate::cargo_registry::services(), self.cargo_type).bitnum(),
+                    );
+                }
                 0x82 => return u32::from(self.default_selection),
                 0x83 => return u32::from(self.src_industry.0),
                 0x84 => return u32::from(self.dst_industry.0),
@@ -159,8 +164,6 @@ pub struct Services {
     /// Builds the native `GenericResolverObject` frame for the object and calls
     /// `openttd_rust_generic_evaluate` with it (#1064 replaces it with the resolver frames).
     callback_frame: extern "C" fn(*const GenericResolverObject, *mut i32, usize) -> u16,
-    /// `CargoSpec::Get(cargo_type)->bitnum` (#1057's `CargoSpecRef` replaces it).
-    cargo_bitnum: extern "C" fn(u8) -> u8,
     /// The common sprite-group table.
     common: *const crate::newgrf_spritegroup::Services,
     /// The global-variable table.
@@ -592,5 +595,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => GenericScopeResolver { cargo_type, default_selection, src_industry, dst_industry, distance, event, count, station_size, feature, ai_callback };
     "OpenTTDGenericInvocation" ["probe"] => GenericResolverObject { generic_scope, callback, callback_param1, grffile, root_spritegroup };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { callback_frame, cargo_bitnum, common, global, play_tile_sound, shared };
+    "OpenTTDGenericServices" ["probe"] => Services { callback_frame, common, global, play_tile_sound, shared };
 }

@@ -3062,11 +3062,11 @@ pub(crate) fn recompute_prices(s: &Services) {
     }
 
     // Setup cargo payment
-    for cs in crate::cargo_registry::cargo_specs() {
-        let payment = (s.cargo_initial_payment)(cs)
+    for cs in crate::cargotype::iterate(crate::cargo_registry::services()) {
+        let payment = (s.cargo_initial_payment)(cs.as_ptr().cast())
             .saturating_mul(read_field!(e, inflation_payment).cast_signed())
             >> 16;
-        (s.cargo_set_current_payment)(cs, payment);
+        (s.cargo_set_current_payment)(cs.as_ptr().cast(), payment);
     }
 
     set_window_classes_dirty(WindowClass::WC_BUILD_VEHICLE);

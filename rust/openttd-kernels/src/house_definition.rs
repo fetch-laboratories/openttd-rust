@@ -397,12 +397,8 @@ fn property(
                 }
                 for index in 0..HOUSE_ORIGINAL_NUM_ACCEPTS {
                     // Get the cargo number from the list.
-                    let cargo = get_cargo_translation(
-                        gb(cargos, 8 * index, 8) as u8,
-                        grffile.as_ptr().cast(),
-                        false,
-                    )
-                    .0;
+                    let cargo =
+                        get_cargo_translation(gb(cargos, 8 * index, 8) as u8, grffile, false).0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_cargo)(spec, index, cargo);
                     } else {
@@ -418,8 +414,7 @@ fn property(
             0x20 => {
                 let count = reader.byte()?;
                 for _ in 0..count {
-                    let cargo =
-                        get_cargo_translation(reader.byte()?, grffile.as_ptr().cast(), false).0;
+                    let cargo = get_cargo_translation(reader.byte()?, grffile, false).0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_watched)(spec, set_bit64(&mut (s.watched)(spec), cargo));
                     }
@@ -455,7 +450,7 @@ fn property(
                         (s.set_cargo)(
                             spec,
                             index,
-                            get_cargo_translation(reader.byte()?, grffile.as_ptr().cast(), false).0,
+                            get_cargo_translation(reader.byte()?, grffile, false).0,
                         );
                         (s.set_acceptance)(spec, index, reader.byte()?);
                     } else {

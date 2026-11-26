@@ -28,7 +28,6 @@ struct OpenTTDGenericInvocation {
 struct OpenTTDGenericResult { const GRFFile *file; uint16_t result; };
 struct OpenTTDGenericServices {
 	uint16_t (*callback_frame)(const OpenTTDGenericInvocation *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_frame);
-	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
 	const OpenTTDSpriteGroupServices *common;
 	const OpenTTDGlobalVariableServices *global;
 	void (*play_tile_sound)(const GRFFile *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(play_tile_sound);

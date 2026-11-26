@@ -265,6 +265,15 @@ struct House<'a> {
     h: &'a HouseServices,
     map: OnceCell<Map>,
 }
+impl House<'_> {
+    /// The handle of `HouseSpec::Get(house)->grf_prop.grffile`, a file the original
+    /// dereferences when the house's callback has answered.
+    fn house_grffile(&self, house: HouseID) -> crate::newgrf::GRFFileRef<'_> {
+        // SAFETY: A spec's file is live until the loader's next reset, and a house whose
+        // callback answered has one.
+        unsafe { crate::newgrf::GRFFileRef::of(self.s, (self.h.cargo_file)(house).cast()) }
+    }
+}
 fn house<'a>(leaves: *const Leaves, services: *const Services) -> House<'a> {
     // SAFETY: Native immutable static tables outlive every synchronous entry.
     let (l, s) = unsafe { (&*leaves, &*services) };
@@ -785,19 +794,19 @@ impl<'a> House<'a> {
         rate: u8,
         stations: &StationFinder<'a>,
     ) {
+        let town_production_cargoes = crate::cargo_registry::town_production_cargoes(tpe);
         let mut at = 0;
-        loop {
-            let cs = crate::cargo_registry::production(tpe.0, at);
-            if cs.cargo == CargoType::INVALID_CARGO.0 {
-                break;
-            }
+        while at < town_production_cargoes.len() {
+            let cs = town_production_cargoes.get(at);
             at += 1;
             let r = self.s.random();
             if gb(r, 0, 8) < u32::from(rate) {
                 witness::hit(W_ORIGINAL);
-                let cargo_type = CargoType(cs.cargo);
-                let amt =
-                    (gb(r, 0, 8) * u32::from(cs.multiplier) / TOWN_PRODUCTION_DIVISOR) / 8 + 1;
+                let cargo_type = cs.index();
+                let amt = (gb(r, 0, 8) * u32::from(cs.town_production_multiplier())
+                    / TOWN_PRODUCTION_DIVISOR)
+                    / 8
+                    + 1;
                 self.town_generate_cargo(town, cargo_type, amt, stations, true);
             }
         }
@@ -810,14 +819,12 @@ impl<'a> House<'a> {
         rate: u8,
         stations: &StationFinder<'a>,
     ) {
+        let town_production_cargoes = crate::cargo_registry::town_production_cargoes(tpe);
         let mut at = 0;
-        loop {
-            let cs = crate::cargo_registry::production(tpe.0, at);
-            if cs.cargo == CargoType::INVALID_CARGO.0 {
-                break;
-            }
+        while at < town_production_cargoes.len() {
+            let cs = town_production_cargoes.get(at);
             at += 1;
-            let cargo_type = CargoType(cs.cargo);
+            let cargo_type = cs.index();
             let r = self.s.random();
             // Make a bitmask with up to 32 bits set, one for each potential pax.
             let genmax = u32::from(rate).div_ceil(8);
@@ -828,8 +835,8 @@ impl<'a> House<'a> {
             };
             witness::hit(W_BINOMIAL);
             // Mask random value by potential pax and count number of actual pax.
-            let amt =
-                (r & genmask).count_ones() * u32::from(cs.multiplier) / TOWN_PRODUCTION_DIVISOR;
+            let amt = (r & genmask).count_ones() * u32::from(cs.town_production_multiplier())
+                / TOWN_PRODUCTION_DIVISOR;
             self.town_generate_cargo(town, cargo_type, amt, stations, true);
         }
     }
@@ -872,10 +879,9 @@ impl<'a> House<'a> {
                 if callback == CALLBACK_FAILED || callback == CALLBACK_HOUSEPRODCARGO_END {
                     break;
                 }
-                let file = (self.h.cargo_file)(house_id);
                 let cargo = crate::cargo_registry::get_cargo_translation(
                     gb(u32::from(callback), 8, 7) as u8,
-                    file,
+                    self.house_grffile(house_id),
                     false,
                 );
                 if !is_valid_cargo_type(cargo.0) {
@@ -1336,17 +1342,17 @@ impl<'a> House<'a> {
                 let callback = u32::from(callback);
                 accepts[0] = crate::cargo_registry::get_cargo_translation(
                     gb(callback, 0, 5) as u8,
-                    (self.h.cargo_file)(house),
+                    self.house_grffile(house),
                     false,
                 );
                 accepts[1] = crate::cargo_registry::get_cargo_translation(
                     gb(callback, 5, 5) as u8,
-                    (self.h.cargo_file)(house),
+                    self.house_grffile(house),
                     false,
                 );
                 accepts[2] = crate::cargo_registry::get_cargo_translation(
                     gb(callback, 10, 5) as u8,
-                    (self.h.cargo_file)(house),
+                    self.house_grffile(house),
                     false,
                 );
             }
@@ -1421,10 +1427,9 @@ impl<'a> House<'a> {
                 if callback == CALLBACK_FAILED || callback == CALLBACK_HOUSEPRODCARGO_END {
                     break;
                 }
-                let file = (self.h.cargo_file)(house_id);
                 let cargo = crate::cargo_registry::get_cargo_translation(
                     gb(u32::from(callback), 8, 7) as u8,
-                    file,
+                    self.house_grffile(house_id),
                     false,
                 );
                 if !is_valid_cargo_type(cargo.0) {
@@ -1440,13 +1445,10 @@ impl<'a> House<'a> {
                 if rate == 0 {
                     continue;
                 }
+                let town_production_cargoes = crate::cargo_registry::town_production_cargoes(tpe);
                 let mut at = 0;
-                loop {
-                    let cs = crate::cargo_registry::production(tpe.0, at);
-                    if cs.cargo == CargoType::INVALID_CARGO.0 {
-                        break;
-                    }
-                    add_one(produced, CargoType(cs.cargo));
+                while at < town_production_cargoes.len() {
+                    add_one(produced, town_production_cargoes.get(at).index());
                     at += 1;
                 }
             }

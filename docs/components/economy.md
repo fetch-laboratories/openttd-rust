@@ -194,3 +194,9 @@
 - Existing finalisation, translation-table selection, cargo translation, inverse mapping and fallback bodies use canonical cargo identities and original comments. Distinct pre-v7/usebit rules, eager reads, clear/traverse order, first matching label, narrowing, file reread and resize/write order remain unchanged.
 - Raw label/file/spec records, services and exports retain their shapes and owners. Source review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited read-staging/container differences and coverage limits remain on #156.
 - PRs: #792, integrated in #794. Other registry callback/sprite vocabulary remains in the cleanup workset.
+
+## Cargo types and registry file pass (#1057 part 1)
+
+- `cargotype.rs` and `cargo_registry.rs` are finished. `CargoSpec` stays in C++'s `CargoSpec::array` until #1058; Rust reaches a spec through `cargotype::CargoSpecRef`, from `cargo_spec_get` or `iterate`, with one registry-table slot for each member it reads or writes. `GRFFile`'s cargo list, fallback flag and cargo map are methods of `newgrf::GRFFileRef` over the shared table until #669.
+- Each original body (`SetupCargoForClimate`, `BuildCargoLabelMap`, `IsDefaultCargo`, `InitializeSortedCargoSpecs`, `FinaliseCargoArray`, the translation and fallback bodies, `GetCargoCallback`, `GetCustomCargoSprite`, `FindFirstCargoWithTownAcceptanceEffect`) is one Rust function under its name; the exports are shims. `CargoResolverObject` is built in C++ from the spec, as the original's constructor does.
+- Kept in C++: the default cargo table and its copy, `CargoSpecClassSorter`, the sorted-list spans GUI code reads, and the resolver frame (#1064).

@@ -308,15 +308,10 @@ impl Services {
             return false;
         }
         // Pick a random TPE_PASSENGER type
-        let r = self
-            .shared()
-            .random_range(
-                crate::cargo_registry::town_count(TownProductionEffect::TPE_PASSENGERS.0) as u32,
-            );
-        let cargo_type = CargoType(crate::cargo_registry::town_cargo(
-            TownProductionEffect::TPE_PASSENGERS.0,
-            r as usize,
-        ));
+        let passengers =
+            crate::cargo_registry::town_production_cargoes(TownProductionEffect::TPE_PASSENGERS);
+        let r = self.shared().random_range(passengers.len() as u32);
+        let cargo_type = passengers.get(r as usize).index();
         let src = town::spatial::get_random_town(unsafe { &*self.shared });
         if unsafe {
             town::population(src.state) < SUBSIDY_PAX_MIN_POPULATION
@@ -410,11 +405,10 @@ impl Services {
         // Calculate the produced cargo of houses around town center.
         self.scan(scratch, src.state, false);
         // Passenger subsidies are not handled here.
-        for index in 0..crate::cargo_registry::town_count(TownProductionEffect::TPE_PASSENGERS.0) {
-            let cargo = CargoType(crate::cargo_registry::town_cargo(
-                TownProductionEffect::TPE_PASSENGERS.0,
-                index,
-            ));
+        let passengers =
+            crate::cargo_registry::town_production_cargoes(TownProductionEffect::TPE_PASSENGERS);
+        for index in 0..passengers.len() {
+            let cargo = passengers.get(index).index();
             unsafe {
                 scratch.data.add(usize::from(cargo.0)).write(0);
             }

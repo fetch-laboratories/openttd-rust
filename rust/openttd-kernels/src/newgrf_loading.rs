@@ -1521,9 +1521,9 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
             (s.clear_errors)(c);
             i += 1;
         }
-        crate::cargo_registry::openttd_rust_cargo_setup(
-            s.cargo,
-            s.shared().settings().climate.read(),
+        crate::cargo_registry::setup_cargo_for_climate(
+            &*s.cargo,
+            crate::landscape_type::LandscapeType(s.shared().settings().climate.read()),
         );
         (s.set_misc)(0);
         (s.reset_loaded_features)();
@@ -1539,14 +1539,14 @@ unsafe fn after_load(s: &Services) {
         (s.finalise_strings)();
         openttd_rust_grf_clear_overrides();
         (s.finalise_badges)();
-        crate::cargo_registry::openttd_rust_cargo_finalise();
+        crate::cargo_registry::finalise_cargo_array(&*s.cargo);
         crate::engine_loading::openttd_rust_engine_calculate_refits(&*s.engine);
         crate::engine_loading::openttd_rust_engine_finalise(&*s.engine);
         (s.finalise_canals)();
         crate::house_definition::finalise(&*s.houses);
         crate::industry::definitions::finalise(&*s.industry);
         (s.finalise_objects)();
-        crate::cargo_registry::openttd_rust_cargo_sort(s.cargo);
+        crate::cargo_registry::initialize_sorted_cargo_specs(&*s.cargo);
         (s.sort_industries)();
         (s.industry_legend)();
         (s.linkstats_legend)();
@@ -1688,7 +1688,7 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                     (s.set_flag)(c, RESERVED, false);
                     (s.assert_file_match)(c, file());
                     clear_labels(file());
-                    crate::cargo_registry::openttd_rust_cargo_build_inverse(file());
+                    crate::cargo_registry::build_cargo_translation_map_raw(file());
                     debug!(
                         sprite,
                         2,

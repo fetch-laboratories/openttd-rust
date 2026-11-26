@@ -415,7 +415,8 @@ unsafe fn refit_vehicle(
         mail_total = mail_total.wrapping_add(u32::from(mail));
         total.cargo[usize::from(cargo)] = total.cargo[usize::from(cargo)].wrapping_add(amount);
         let mail_cargo =
-            crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
+            crate::cargo_registry::get_cargo_type_by_label(crate::cargo_type::CargoLabel::CT_MAIL)
+                .0;
         if (s.common.valid_cargo)(mail_cargo) {
             total.cargo[usize::from(mail_cargo)] =
                 total.cargo[usize::from(mail_cargo)].wrapping_add(u32::from(mail));

@@ -1,753 +1,1176 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Cargo registry and stack invocation policy. Native specifications/files remain canonical;
-//! reset and rebuild exclude runtime calls. Native views alias the sole Rust buffers.
-//! No registry reference survives a service call; nested Action2 invocations own stack state.
-#![allow(
-    unsafe_code,
-    missing_docs,
-    clippy::missing_safety_doc,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
-)]
+//! The cargo registry: the globals of `cargotype.cpp` and the bodies over `CargoSpec::array`
+//! from `cargotype.cpp`, `newgrf_cargo.cpp`, `newgrf.cpp`, `newgrf/newgrf_act0_cargo.cpp`
+//! and `town_cmd.cpp`.
+//!
+//! The specs stay in C++'s `CargoSpec::array` and the files in `_grf_files`; both are read
+//! through their handles ([`CargoSpecRef`], [`GRFFileRef`]). The registry's state is
+//! process-wide. It is reset and rebuilt only by `NewGRF` loading and language loading, which
+//! run outside the game loop and command execution. C++ reads the two masks, the sort order
+//! and the three label tables in place, and the sorted lists through spans this module
+//! publishes after each change. No borrow of the state lasts across a service call.
 use crate::bitmath_func::{clr_bit64, set_bit64};
-use crate::cargo_type::{CT_INVALID, CargoLabel, CargoType, NUM_CARGO, NUM_ORIGINAL_CARGO};
-use crate::cargotype::{NUM_TPE, TownAcceptanceEffect, TownProductionEffect, is_cargo_spec_valid};
+use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, NUM_CARGO};
+use crate::cargotype::{
+    CargoClass, CargoSpec, CargoSpecRef, TownAcceptanceEffect, TownProductionEffect,
+    cargo_spec_get, iterate,
+};
 use crate::game_state::GameState;
 use crate::gfx_type::SpriteID;
-use crate::newgrf::GrfSpecFeature;
-use crate::newgrf_callbacks::{CBID_NO_CALLBACK, CallbackID};
+use crate::landscape_type::{LandscapeType, NUM_LANDSCAPE};
+use crate::newgrf::{GRFFile, GRFFileRef, GrfSpecFeature};
+use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_spritegroup::{self, State};
+use crate::services_assert::assert_with;
+use crate::table::strings::{
+    STR_NEWGRF_INVALID_CARGO, STR_NEWGRF_INVALID_CARGO_ABBREV, STR_NEWGRF_INVALID_CARGO_QUANTITY,
+};
 use std::{collections::BTreeMap, ffi::c_void, ptr};
+
 type Handle = *const c_void;
-#[repr(C)]
-pub struct ProductionCargo {
-    pub cargo: u8,
-    pub multiplier: u16,
-}
-#[repr(C)]
-pub struct Sprite {
-    sprite: u32,
-    count: u16,
-}
+
+/// `std::span<const CargoLabel>`: a cargo translation table, live while its owner is
+/// unchanged (a `GRFFile`'s `cargo_list`, or one of the registry's two label tables).
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct LabelSpec {
-    label: u32,
-    bitnum: u8,
-}
-#[repr(C)]
-pub struct FinaliseSpec {
-    label: u32,
-    bitnum: u8,
-    effect: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct OrderSpec {
-    cargo: u8,
-    effect: u8,
-    special: bool,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-/// Data stays live through pure searches; native vector limits fit a Rust slice.
 pub struct Labels {
-    pub(crate) data: *const u32,
+    pub(crate) data: *const CargoLabel,
     pub(crate) size: usize,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct File {
-    labels: Labels,
-    version: u8,
-    fallback: bool,
+
+impl Labels {
+    /// The labels, borrowed for a search with no call in between.
+    #[allow(
+        unsafe_code,
+        reason = "the span's live labels; an empty span may carry a null pointer"
+    )]
+    pub(crate) fn as_slice(&self) -> &[CargoLabel] {
+        if self.size == 0 {
+            &[]
+        } else {
+            // SAFETY: A span holds `size` live labels until its owner changes, and the
+            // returned slice borrows the span for a search that makes no call.
+            unsafe { std::slice::from_raw_parts(self.data, self.size) }
+        }
+    }
 }
-#[repr(C)]
-pub struct Invocation {
-    label: u32,
-    file: Handle,
-    root: Handle,
-    callback: u16,
-    param1: u32,
-    pub(crate) param2: u32,
-}
+
+/// The cargo registry table: the `CargoSpec` members Rust reads and writes, the C++ bodies
+/// over the default cargo table, the sorted-list spans GUI code reads, and the resolver
+/// frame of `CargoResolverObject`.
 #[repr(C)]
 pub struct Services {
-    shared: *const crate::services::Services,
+    /// The common sprite-group table.
     common: *const newgrf_spritegroup::Services,
-    pub(crate) spec: extern "C" fn(u8) -> Handle,
-    copy_default: extern "C" fn(u8, u8),
-    clear_specs: extern "C" fn(u8),
-    label_spec: extern "C" fn(Handle) -> LabelSpec,
-    bitnum: extern "C" fn(Handle) -> u8,
-    town_acceptance_effect: extern "C" fn(u8) -> u8,
-    finalise_spec: extern "C" fn(Handle) -> FinaliseSpec,
-    order_spec: extern "C" fn(Handle) -> OrderSpec,
-    index: extern "C" fn(Handle) -> u8,
-    production: extern "C" fn(Handle) -> ProductionCargo,
-    sort: extern "C" fn(*mut Handle, usize),
-    publish_sorted: extern "C" fn(*mut Handle, usize),
-    publish_standard: extern "C" fn(*mut Handle, usize),
-    publish_town: extern "C" fn(u8, *mut Handle, usize),
-    set_file: extern "C" fn(Handle, Handle),
-    set_effect: extern "C" fn(Handle, u8),
-    invalidate_strings: extern "C" fn(Handle),
-    file: extern "C" fn(Handle) -> File,
-    assign_fallback: extern "C" fn(*mut c_void, Labels),
-    resize_fallback: extern "C" fn(*mut c_void, usize),
-    set_fallback: extern "C" fn(*mut c_void, u32, u32),
-    clear_inverse: extern "C" fn(*mut c_void),
-    set_inverse: extern "C" fn(*mut c_void, u8, u8),
-    pub(crate) invocation: extern "C" fn(Handle, *mut Invocation),
-    pub(crate) callback_frame: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
-    sprite_frame: extern "C" fn(*const Invocation) -> u32,
-    sprite: extern "C" fn(Handle) -> Sprite,
+    /// The shared table.
+    shared: *const crate::services::Services,
+
+    /// `CargoSpec::Get`, with its native index assertion.
+    pub(crate) spec: extern "C" fn(u8) -> *const CargoSpec,
+    /// `*insert = std::visit(visitor{}, _default_climate_cargo[l][slot])` (`SetupCargoForClimate`),
+    /// with the visitor's `NOT_REACHED`.
+    pub(crate) copy_default_cargo: extern "C" fn(*mut CargoSpec, u8, u8),
+    /// `std::fill(insert, std::end(CargoSpec::array), CargoSpec{})` from slot `first`.
+    fill_default: extern "C" fn(u8),
+
+    /// `CargoSpec::bitnum`.
+    pub(crate) bitnum: extern "C" fn(*const CargoSpec) -> u8,
+    /// `CargoSpec::classes`.
+    pub(crate) classes: extern "C" fn(*const CargoSpec) -> u16,
+    /// `CargoSpec::Index`.
+    pub(crate) index: extern "C" fn(*const CargoSpec) -> u8,
+    /// `CargoSpec::label`.
+    pub(crate) label: extern "C" fn(*const CargoSpec) -> u32,
+    /// `CargoSpec::town_acceptance_effect`.
+    pub(crate) town_acceptance_effect: extern "C" fn(*const CargoSpec) -> u8,
+    /// `CargoSpec::town_production_effect`.
+    pub(crate) town_production_effect: extern "C" fn(*const CargoSpec) -> u8,
+    /// `CargoSpec::town_production_multiplier`.
+    pub(crate) town_production_multiplier: extern "C" fn(*const CargoSpec) -> u16,
+
+    /// Store `CargoSpec::abbrev`.
+    pub(crate) set_abbrev: extern "C" fn(*mut CargoSpec, u32),
+    /// Store `CargoSpec::grffile`.
+    pub(crate) set_grffile: extern "C" fn(*mut CargoSpec, *const GRFFile),
+    /// Store `CargoSpec::name`.
+    pub(crate) set_name: extern "C" fn(*mut CargoSpec, u32),
+    /// Store `CargoSpec::name_single`.
+    pub(crate) set_name_single: extern "C" fn(*mut CargoSpec, u32),
+    /// Store `CargoSpec::quantifier`.
+    pub(crate) set_quantifier: extern "C" fn(*mut CargoSpec, u32),
+    /// Store `CargoSpec::town_production_effect`.
+    pub(crate) set_town_production_effect: extern "C" fn(*mut CargoSpec, u8),
+    /// Store `CargoSpec::units_volume`.
+    pub(crate) set_units_volume: extern "C" fn(*mut CargoSpec, u32),
+
+    /// Store the span `_sorted_cargo_specs`.
+    set_sorted_cargo_specs: extern "C" fn(*mut *const CargoSpec, usize),
+    /// Store the span `_sorted_standard_cargo_specs`.
+    set_sorted_standard_cargo_specs: extern "C" fn(*mut *const CargoSpec, usize),
+    /// Store the span `CargoSpec::town_production_cargoes[tpe]`.
+    set_town_production_cargoes: extern "C" fn(u8, *mut *const CargoSpec, usize),
+    /// `std::sort(..., &CargoSpecClassSorter)`, whose names are compared by `GetString`.
+    sort: extern "C" fn(*mut *const CargoSpec, usize),
+
+    /// Builds `CargoResolverObject object(cs, callback, callback_param1, callback_param2)`
+    /// and calls `openttd_rust_cargo_evaluate_callback` with it.
+    pub(crate) callback_frame:
+        extern "C" fn(*const CargoSpec, u16, u32, u32, *mut i32, usize) -> u16,
+    /// `ResultSpriteGroup::num_sprites`.
+    num_sprites: extern "C" fn(Handle) -> u8,
+    /// `ResultSpriteGroup::sprite`.
+    sprite: extern "C" fn(Handle) -> u32,
+    /// Builds `CargoResolverObject object(cs)` and calls `openttd_rust_cargo_evaluate_sprite`
+    /// with it.
+    sprite_frame: extern "C" fn(*const CargoSpec) -> u32,
 }
+
 /// Test-only table for `crate::test_tables`; its private fields keep it in this module.
 #[cfg(test)]
 pub(crate) const TEST_TABLE: Services = Services {
-    shared: std::ptr::null(),
     common: std::ptr::null(),
+    shared: std::ptr::null(),
+
     spec: crate::test_tables::unreachable1,
-    copy_default: crate::test_tables::unreachable2,
-    clear_specs: crate::test_tables::unreachable1,
-    label_spec: crate::test_tables::unreachable1,
+    copy_default_cargo: crate::test_tables::unreachable3,
+    fill_default: crate::test_tables::unreachable1,
+
     bitnum: crate::test_tables::unreachable1,
-    town_acceptance_effect: crate::test_tables::unreachable1,
-    finalise_spec: crate::test_tables::unreachable1,
-    order_spec: crate::test_tables::unreachable1,
+    classes: crate::test_tables::unreachable1,
     index: crate::test_tables::unreachable1,
-    production: crate::test_tables::unreachable1,
+    label: crate::test_tables::unreachable1,
+    town_acceptance_effect: crate::test_tables::unreachable1,
+    town_production_effect: crate::test_tables::unreachable1,
+    town_production_multiplier: crate::test_tables::unreachable1,
+
+    set_abbrev: crate::test_tables::unreachable2,
+    set_grffile: crate::test_tables::unreachable2,
+    set_name: crate::test_tables::unreachable2,
+    set_name_single: crate::test_tables::unreachable2,
+    set_quantifier: crate::test_tables::unreachable2,
+    set_town_production_effect: crate::test_tables::unreachable2,
+    set_units_volume: crate::test_tables::unreachable2,
+
+    set_sorted_cargo_specs: crate::test_tables::unreachable2,
+    set_sorted_standard_cargo_specs: crate::test_tables::unreachable2,
+    set_town_production_cargoes: crate::test_tables::unreachable3,
     sort: crate::test_tables::unreachable2,
-    publish_sorted: crate::test_tables::unreachable2,
-    publish_standard: crate::test_tables::unreachable2,
-    publish_town: crate::test_tables::unreachable3,
-    set_file: crate::test_tables::unreachable2,
-    set_effect: crate::test_tables::unreachable2,
-    invalidate_strings: crate::test_tables::unreachable1,
-    file: crate::test_tables::unreachable1,
-    assign_fallback: crate::test_tables::unreachable2,
-    resize_fallback: crate::test_tables::unreachable2,
-    set_fallback: crate::test_tables::unreachable3,
-    clear_inverse: crate::test_tables::unreachable1,
-    set_inverse: crate::test_tables::unreachable3,
-    invocation: crate::test_tables::unreachable2,
-    callback_frame: crate::test_tables::unreachable3,
-    sprite_frame: crate::test_tables::unreachable1,
+
+    callback_frame: crate::test_tables::unreachable6,
+    num_sprites: crate::test_tables::unreachable1,
     sprite: crate::test_tables::unreachable1,
+    sprite_frame: crate::test_tables::unreachable1,
 };
+
+/// The globals of `cargotype.cpp` that C++ reads in place, under their names. They are reached
+/// only through [`Global`] places, never through a borrow, so the references and spans C++
+/// keeps, and the label spans Rust hands out, stay valid.
+struct Globals {
+    /// Bitmask of cargo types available. This includes phony cargoes like regearing cargoes.
+    cargo_mask: CargoTypes,
+    /// Bitmask of real cargo types available. Phony cargoes like regearing cargoes are
+    /// excluded.
+    standard_cargo_mask: CargoTypes,
+    /// Default cargo translation for up to version 7 `NewGRF`s.
+    /// This maps the original 12 cargo slots to their original label. If a climate dependent
+    /// cargo is not present it will map to `CT_INVALID`. For default cargoes this ends up as a
+    /// 1:1 mapping via climate slot -> label -> cargo type.
+    climate_dependent_cargo_labels: [CargoLabel; 12],
+    /// Default cargo translation for version 8+ `NewGRF`s.
+    /// This maps the 32 "bitnum" cargo slots to their original label. If a bitnum is not
+    /// present it will map to `CT_INVALID`.
+    climate_independent_cargo_labels: [CargoLabel; 32],
+    /// Sort order of cargoes by cargo type.
+    sorted_cargo_types: [u8; NUM_CARGO as usize],
+}
+
+static GLOBALS: GameState<Globals> = GameState::new(Globals {
+    cargo_mask: CargoTypes(0),
+    standard_cargo_mask: CargoTypes(0),
+    climate_dependent_cargo_labels: [CargoLabel(0); 12],
+    climate_independent_cargo_labels: [CargoLabel(0); 32],
+    sorted_cargo_types: [0; NUM_CARGO as usize],
+});
+
+/// One published global, or one element of it: a field-sized place derived from the static's
+/// own pointer, read and written by raw loads and stores.
+#[derive(Clone, Copy)]
+struct Global<T>(*mut T);
+
+/// The [`Global`] of the field `$field`, of type `$ty`.
+macro_rules! global {
+    ($field:ident: $ty:ty) => {
+        Global::<$ty>(
+            GLOBALS
+                .get()
+                .wrapping_byte_add(std::mem::offset_of!(Globals, $field))
+                .cast(),
+        )
+    };
+}
+
+impl<T: Copy> Global<T> {
+    /// A field-sized load.
+    #[allow(unsafe_code, reason = "a field-sized load of a published global")]
+    fn load(self) -> T {
+        // SAFETY: The place is a field, or an element below its length, of the static, which
+        // no borrow covers; the game state is serialized.
+        unsafe { self.0.read() }
+    }
+
+    /// A field-sized store.
+    #[allow(unsafe_code, reason = "a field-sized store to a published global")]
+    fn store(self, value: T) {
+        // SAFETY: As for `load`.
+        unsafe { self.0.write(value) }
+    }
+}
+
+impl<E: Copy, const N: usize> Global<[E; N]> {
+    /// `operator[]`, unchecked as the original's `std::array` is.
+    fn at(self, index: usize) -> Global<E> {
+        Global(self.0.cast::<E>().wrapping_add(index))
+    }
+
+    /// `fill(value)`.
+    fn fill(self, value: E) {
+        for index in 0..N {
+            self.at(index).store(value);
+        }
+    }
+}
+
+impl<const N: usize> Global<[CargoLabel; N]> {
+    /// The table as a span.
+    fn labels(self) -> Labels {
+        Labels {
+            data: self.0.cast_const().cast(),
+            size: N,
+        }
+    }
+}
+
+/// `SetBit` on a published mask.
+fn set_mask_bit(mask: Global<CargoTypes>, bit: CargoType) {
+    let mut value = mask.load().0;
+    set_bit64(&mut value, bit.0);
+    mask.store(CargoTypes(value));
+}
+
+/// The registry state C++ does not read in place, with the table the last setup or sort
+/// installed. The sorted lists' buffers are published to C++ as spans after each change.
 struct Registry {
     services: *const Services,
-    /// Available cargoes, including phony cargoes such as regearing cargoes.
-    cargo_mask: u64,
-    /// Real cargoes, excluding phony cargoes such as regearing cargoes.
-    standard_cargo_mask: u64,
-    // Default vehicle cargoes are identified by label so a label can move to another slot.
+    /// List of default cargo labels, used when setting up cargo types for default vehicles.
+    /// This is done by label so that a cargo label can be redefined in a different slot.
     default_cargo_labels: Vec<CargoLabel>,
-    // Original 12 climate-dependent slots map via label to cargo type; absent cargoes use CT_INVALID.
-    climate_dependent_cargo_labels: [u32; NUM_ORIGINAL_CARGO as usize],
-    // Version 8+ translation maps 32 original bitnum slots to labels, or CT_INVALID if absent.
-    climate_independent_cargo_labels: [u32; 32],
+    /// `CargoSpec::label_map`.
     label_map: BTreeMap<CargoLabel, CargoType>,
-    sorted_cargo_specs: Vec<Handle>,
-    sorted_cargo_types: [u8; NUM_CARGO as usize],
-    town_production_cargoes: [Vec<Handle>; NUM_TPE as usize],
+    /// Cargo specifications sorted alphabetically by name.
+    sorted_cargo_specs: Vec<*const CargoSpec>,
+    /// List of cargo specs for each Town Product Effect.
+    town_production_cargoes: [Vec<*const CargoSpec>; TownProductionEffect::NUM_TPE.0 as usize],
 }
+
 static REGISTRY: GameState<Registry> = GameState::new(Registry {
     services: ptr::null(),
-    cargo_mask: 0,
-    standard_cargo_mask: 0,
     default_cargo_labels: Vec::new(),
-    climate_dependent_cargo_labels: [0; NUM_ORIGINAL_CARGO as usize],
-    climate_independent_cargo_labels: [0; 32],
     label_map: BTreeMap::new(),
     sorted_cargo_specs: Vec::new(),
-    sorted_cargo_types: [0; NUM_CARGO as usize],
-    town_production_cargoes: [const { Vec::new() }; NUM_TPE as usize],
+    town_production_cargoes: [const { Vec::new() }; TownProductionEffect::NUM_TPE.0 as usize],
 });
-fn services() -> &'static Services {
-    unsafe { &*(*REGISTRY.get()).services }
+
+/// Run `f` on the registry state. `f` makes no service call, so no other borrow of the
+/// state can begin while it runs.
+#[allow(
+    unsafe_code,
+    reason = "the process-wide registry, borrowed for one closure that makes no call"
+)]
+fn with_registry<R>(f: impl FnOnce(&mut Registry) -> R) -> R {
+    // SAFETY: The state is reset only by serialized loading, no pointer into it is published
+    // (the sorted lists publish their heap buffers), and the borrow ends before any service
+    // call.
+    f(unsafe { &mut *REGISTRY.get() })
 }
+
+/// The table the last setup or sort installed.
+#[allow(unsafe_code, reason = "the installed process-lifetime table")]
+pub(crate) fn services() -> &'static Services {
+    let s = with_registry(|r| r.services);
+    // SAFETY: Setup and sort install the process-lifetime table before any reader runs.
+    unsafe { &*s }
+}
+
+impl Services {
+    /// The shared table.
+    #[allow(unsafe_code, reason = "one borrow of the process-lifetime table")]
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: Both tables are process-lifetime.
+        unsafe { &*self.shared }
+    }
+
+    /// The common sprite-group table.
+    #[allow(unsafe_code, reason = "one borrow of the process-lifetime table")]
+    fn common(&self) -> &newgrf_spritegroup::Services {
+        // SAFETY: Both tables are process-lifetime.
+        unsafe { &*self.common }
+    }
+}
+
+/// The handle of a file an FFI entry or `_raw` adapter receives: `_cur_gps.grffile`, or a
+/// spec's or resolver's `grffile`, which the original dereferences unchecked.
+#[allow(unsafe_code, reason = "the caller's live file")]
+fn grf_file(file: Handle) -> GRFFileRef<'static> {
+    // SAFETY: Each FFI entry and `_raw` adapter receives a live `GRFFile` (its callers'
+    // contract), as the original's dereference requires.
+    unsafe { GRFFileRef::of(services().shared(), file.cast()) }
+}
+
+#[allow(unsafe_code, reason = "export; C++ binds a reference to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_mask() -> *mut u64 {
-    unsafe { &raw mut (*REGISTRY.get()).cargo_mask }
+    global!(cargo_mask: CargoTypes).0.cast()
 }
+
+#[allow(unsafe_code, reason = "export; C++ binds a reference to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_standard_cargo_mask() -> *mut u64 {
-    unsafe { &raw mut (*REGISTRY.get()).standard_cargo_mask }
+    global!(standard_cargo_mask: CargoTypes).0.cast()
 }
+
+#[allow(unsafe_code, reason = "export; C++ binds a span to the global")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_reverse() -> *mut u8 {
-    unsafe { (&raw mut (*REGISTRY.get()).sorted_cargo_types).cast() }
+    global!(sorted_cargo_types: [u8; NUM_CARGO as usize])
+        .0
+        .cast()
 }
+
+/// `SetupCargoForClimate`: set up the default cargo types for the given landscape type.
+pub(crate) fn setup_cargo_for_climate(s: &'static Services, l: LandscapeType) {
+    assert_with(|| l.0 < NUM_LANDSCAPE);
+
+    with_registry(|r| r.services = s);
+    global!(cargo_mask: CargoTypes).store(CargoTypes(0));
+    with_registry(|r| r.default_cargo_labels.clear());
+    global!(climate_dependent_cargo_labels: [CargoLabel; 12]).fill(CargoLabel::CT_INVALID);
+    global!(climate_independent_cargo_labels: [CargoLabel; 32]).fill(CargoLabel::CT_INVALID);
+
+    // Copy from default cargo by label or index.
+    let mut insert = 0;
+    while insert < CargoType::NUM_ORIGINAL_CARGO.0 {
+        let cs = cargo_spec_get(s, CargoType(insert));
+        // `*insert = std::visit(visitor{}, cl)`; the table's binding holds the visitor.
+        cs.copy_default_cargo(l, insert);
+
+        if cs.is_valid() {
+            let index = cs.index();
+            let label = cs.label();
+            let bitnum = cs.bitnum();
+            set_mask_bit(global!(cargo_mask: CargoTypes), index);
+            with_registry(|r| r.default_cargo_labels.push(label));
+            global!(climate_dependent_cargo_labels: [CargoLabel; 12])
+                .at(usize::from(index.0))
+                .store(label);
+            global!(climate_independent_cargo_labels: [CargoLabel; 32])
+                .at(usize::from(bitnum))
+                .store(label);
+        }
+        insert += 1;
+    }
+
+    // Reset and disable remaining cargo types.
+    (s.fill_default)(insert);
+
+    build_cargo_label_map();
+}
+
+#[allow(unsafe_code, reason = "export and the caller's process-lifetime table")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u8) {
-    let l = crate::landscape_type::LandscapeType(climate);
-    // SAFETY: serialized native loading excludes all runtime registry views.
-    unsafe {
-        (*REGISTRY.get()).services = s;
-        crate::movement::native_assert(&*(*s).shared, l.0 < crate::landscape_type::NUM_LANDSCAPE);
-        (*REGISTRY.get()).cargo_mask = 0;
-        (*REGISTRY.get()).default_cargo_labels.clear();
-        (*REGISTRY.get())
-            .climate_dependent_cargo_labels
-            .fill(CT_INVALID);
-        (*REGISTRY.get())
-            .climate_independent_cargo_labels
-            .fill(CT_INVALID);
-    }
-    let s = unsafe { &*s };
-    // Copy from default cargo by label or index.
-    for slot in 0..NUM_ORIGINAL_CARGO {
-        (s.copy_default)(l.0, slot);
-        let cs = (s.spec)(slot);
-        let spec = (s.label_spec)(cs);
-        if is_cargo_spec_valid(spec.bitnum) {
-            let cargo = CargoType((s.index)(cs));
-            unsafe {
-                set_bit64(&mut (*REGISTRY.get()).cargo_mask, cargo.0);
-                (*REGISTRY.get())
-                    .default_cargo_labels
-                    .push(CargoLabel(spec.label));
-                (*REGISTRY.get()).climate_dependent_cargo_labels[usize::from(cargo.0)] = spec.label;
-                (*REGISTRY.get()).climate_independent_cargo_labels[usize::from(spec.bitnum)] =
-                    spec.label;
-            }
-        }
-    }
-    // Reset and disable remaining cargo types.
-    (s.clear_specs)(NUM_ORIGINAL_CARGO);
-    openttd_rust_cargo_labels_rebuild();
+    // SAFETY: The caller passes the process-lifetime table.
+    setup_cargo_for_climate(unsafe { &*s }, LandscapeType(climate));
 }
-/// `BuildCargoLabelMap`, called repeatedly as `NewGRF` cargoes are defined so initialization
-/// callers of `TranslateRefitMask` and `GetCargoTranslation` see the correct information.
+
+/// `GetClimateDependentCargoTranslationTable`: get default climate-dependent cargo
+/// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
+pub(crate) fn get_climate_dependent_cargo_translation_table() -> Labels {
+    global!(climate_dependent_cargo_labels: [CargoLabel; 12]).labels()
+}
+
+#[allow(unsafe_code, reason = "export")]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
+    get_climate_dependent_cargo_translation_table()
+}
+
+/// `GetClimateIndependentCargoTranslationTable`: get default climate-independent cargo
+/// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
+pub(crate) fn get_climate_independent_cargo_translation_table() -> Labels {
+    global!(climate_independent_cargo_labels: [CargoLabel; 32]).labels()
+}
+
+/// `BuildCargoLabelMap`: build cargo label map.
+/// This is called multiple times during `NewGRF` initialization as cargos are defined, so
+/// that `TranslateRefitMask()` and `GetCargoTranslation()`, also used during initialization,
+/// get the correct information.
+pub(crate) fn build_cargo_label_map() {
+    with_registry(|r| r.label_map.clear());
+    let s = services();
+    for index in 0..CargoType::NUM_CARGO.0 {
+        let cs = cargo_spec_get(s, CargoType(index));
+        // During initialization, CargoSpec can be marked valid before the label has been set.
+        if !cs.is_valid() {
+            continue;
+        }
+        let label = cs.label();
+        // `CargoLabel{}`.
+        if label == CargoLabel(0) || label == CargoLabel::CT_INVALID {
+            continue;
+        }
+        // Label already exists, don't add again.
+        if with_registry(|r| r.label_map.contains_key(&label)) {
+            continue;
+        }
+
+        let index = cs.index();
+        with_registry(|r| r.label_map.insert(label, index));
+    }
+}
+
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_labels_rebuild() {
-    unsafe {
-        (*REGISTRY.get()).label_map.clear();
-    }
-    let s = services();
-    for cargo in 0..NUM_CARGO {
-        let cs = (s.spec)(cargo);
-        let spec = (s.label_spec)(cs);
-        let label = CargoLabel(spec.label);
-        // During initialization a CargoSpec can be marked valid before its label is set.
-        if is_cargo_spec_valid(spec.bitnum)
-            && label != CargoLabel(0)
-            && label != CargoLabel::CT_INVALID
-        {
-            let index = CargoType((s.index)(cs));
-            unsafe {
-                // A label that already exists keeps its first cargo slot.
-                (*REGISTRY.get()).label_map.entry(label).or_insert(index);
-            }
-        }
-    }
+    build_cargo_label_map();
 }
+
+/// `CargoReserveInfo`'s property `0x08` (bit number of cargo), after
+/// `cs->bitnum = buf.ReadByte()` (`newgrf/newgrf_act0_cargo.cpp`).
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_bitnum_changed(spec: Handle, cargo: u8, file: Handle) {
-    let s = services();
-    if is_cargo_spec_valid((s.bitnum)(spec)) {
-        (s.set_file)(spec, file);
-        unsafe {
-            set_bit64(&mut (*REGISTRY.get()).cargo_mask, cargo);
-        }
+pub extern "C" fn openttd_rust_cargo_bitnum_changed(
+    spec: *const CargoSpec,
+    id: u8,
+    grffile: *const GRFFile,
+) {
+    let cs = CargoSpecRef::of(services(), spec);
+    if cs.is_valid() {
+        cs.set_grffile(grffile);
+        set_mask_bit(global!(cargo_mask: CargoTypes), CargoType(id));
     } else {
-        unsafe {
-            clr_bit64(&mut (*REGISTRY.get()).cargo_mask, cargo);
-        }
+        let mask = global!(cargo_mask: CargoTypes);
+        let mut value = mask.load().0;
+        clr_bit64(&mut value, id);
+        mask.store(CargoTypes(value));
     }
-    openttd_rust_cargo_labels_rebuild();
+    build_cargo_label_map();
 }
-/// `GetCargoTypeByLabel`: the cargo type of `label`, or `INVALID_CARGO`.
+
+/// `GetCargoTypeByLabel`: get the cargo type of `label`, or `INVALID_CARGO`.
 pub(crate) fn get_cargo_type_by_label(label: CargoLabel) -> CargoType {
-    unsafe {
-        (*REGISTRY.get())
-            .label_map
+    with_registry(|r| {
+        r.label_map
             .get(&label)
             .copied()
             .unwrap_or(CargoType::INVALID_CARGO)
-    }
+    })
 }
+
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
     get_cargo_type_by_label(CargoLabel(label)).0
 }
-/// Canonical `CargoSpec::label`, including duplicate labels in distinct slots.
-pub(crate) fn cargo_label(cargo: u8) -> u32 {
-    let cargo = CargoType(cargo);
-    let s = services();
-    CargoLabel((s.label_spec)((s.spec)(cargo.0)).label).0
-}
+
 /// `IsDefaultCargo`: test if a cargo is a default cargo type.
+pub(crate) fn is_default_cargo(cargo_type: CargoType) -> bool {
+    let cs = cargo_spec_get(services(), cargo_type);
+    if !cs.is_valid() {
+        return false;
+    }
+
+    let label = cs.label();
+    with_registry(|r| r.default_cargo_labels.contains(&label))
+}
+
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_is_default_abi(cargo: u8) -> u8 {
-    let cargo_type = CargoType(cargo);
-    let s = services();
-    let cs = (s.label_spec)((s.spec)(cargo_type.0));
-    u8::from(
-        is_cargo_spec_valid(cs.bitnum)
-            && unsafe {
-                (*REGISTRY.get())
-                    .default_cargo_labels
-                    .contains(&CargoLabel(cs.label))
-            },
-    )
+    u8::from(is_default_cargo(CargoType(cargo)))
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
-    Labels {
-        data: unsafe { (&raw const (*REGISTRY.get()).climate_dependent_cargo_labels).cast() },
-        size: usize::from(NUM_ORIGINAL_CARGO),
+
+/// `CargoSpec::town_production_cargoes[tpe]`: the cargo specs of one town production effect.
+/// Each call reads the list again, so no borrow of the registry lasts across a caller's
+/// random draw or callback.
+#[derive(Clone, Copy)]
+pub(crate) struct TownProductionCargoes {
+    tpe: TownProductionEffect,
+}
+
+/// `CargoSpec::town_production_cargoes[tpe]`.
+pub(crate) fn town_production_cargoes(tpe: TownProductionEffect) -> TownProductionCargoes {
+    TownProductionCargoes { tpe }
+}
+
+impl TownProductionCargoes {
+    /// `size()`.
+    pub(crate) fn len(self) -> usize {
+        with_registry(|r| r.town_production_cargoes[usize::from(self.tpe.0)].len())
     }
-}
-/// `GetClimateIndependentCargoTranslationTable`: get default climate-independent cargo
-/// translation table for a `NewGRF`, used if the `NewGRF` does not provide its own.
-pub(crate) fn get_climate_independent_cargo_translation_table() -> Labels {
-    Labels {
-        data: unsafe { (&raw const (*REGISTRY.get()).climate_independent_cargo_labels).cast() },
-        size: 32,
+
+    /// `operator[]`, unchecked as the original's is: an index at or past [`Self::len`] reads
+    /// past the list, as `FindSubsidyPassengerRoute` does when no cargo has `TPE_PASSENGERS`.
+    #[allow(
+        unsafe_code,
+        reason = "the original's unchecked std::vector::operator[]"
+    )]
+    pub(crate) fn get(self, index: usize) -> CargoSpecRef<'static> {
+        let data = with_registry(|r| r.town_production_cargoes[usize::from(self.tpe.0)].as_ptr());
+        // SAFETY: Every caller but the one above passes an index below `len()`; that one reads
+        // past the list exactly as the original's `operator[]` does.
+        let cs = unsafe { data.add(index).read() };
+        CargoSpecRef::of(services(), cs)
     }
 }
 
-/// Scalar count adapter for `CargoSpec::town_production_cargoes`.
-pub fn town_count(effect: u8) -> usize {
-    let effect = TownProductionEffect(effect);
-    unsafe { (*REGISTRY.get()).town_production_cargoes[usize::from(effect.0)].len() }
-}
-/// Scalar cargo-index adapter for `CargoSpec::town_production_cargoes`.
-pub fn town_cargo(effect: u8, index: usize) -> u8 {
-    let effect = TownProductionEffect(effect);
-    let spec = unsafe {
-        let state = &*REGISTRY.get();
-        *state.town_production_cargoes[usize::from(effect.0)].get_unchecked(index)
-    };
-    CargoType((services().index)(spec)).0
-}
-/// Scalar production adapter for `CargoSpec::town_production_cargoes`.
-pub fn production(effect: u8, index: u32) -> ProductionCargo {
-    let effect = TownProductionEffect(effect);
-    let spec = unsafe {
-        let state = &*REGISTRY.get();
-        state.town_production_cargoes[usize::from(effect.0)]
-            .get(index as usize)
-            .copied()
-    };
-    spec.map_or(
-        ProductionCargo {
-            cargo: CargoType::INVALID_CARGO.0,
-            multiplier: 0,
-        },
-        |spec| (services().production)(spec),
-    )
-}
-/// Initialize the list of sorted cargo specifications.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
+/// `InitializeSortedCargoSpecs`: initialize the list of sorted cargo specifications.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "static_cast<uint8_t>(it - std::begin(_sorted_cargo_specs))"
+)]
+pub(crate) fn initialize_sorted_cargo_specs(s: &'static Services) {
     // Language loading sorts the initially empty specification array before climate setup.
-    unsafe {
-        (*REGISTRY.get()).services = native;
-    }
-    let s = services();
-    for effect in 0..TownProductionEffect::NUM_TPE.0 {
-        let effect = TownProductionEffect(effect);
-        let data = unsafe {
-            let tpc = &mut (*REGISTRY.get()).town_production_cargoes[usize::from(effect.0)];
+    with_registry(|r| r.services = s);
+    for tpe in 0..TownProductionEffect::NUM_TPE.0 {
+        let data = with_registry(|r| {
+            let tpc = &mut r.town_production_cargoes[usize::from(tpe)];
             tpc.clear();
             tpc.as_mut_ptr()
-        };
-        (s.publish_town)(effect.0, data, 0);
+        });
+        (s.set_town_production_cargoes)(tpe, data, 0);
     }
-    let data = unsafe {
-        (*REGISTRY.get()).sorted_cargo_specs.clear();
-        (*REGISTRY.get()).sorted_cargo_specs.as_mut_ptr()
-    };
-    (s.publish_sorted)(data, 0);
+    let data = with_registry(|r| {
+        r.sorted_cargo_specs.clear();
+        r.sorted_cargo_specs.as_mut_ptr()
+    });
+    (s.set_sorted_cargo_specs)(data, 0);
     // Add each cargo spec to the list, and determine the largest cargo icon size.
-    for (_, cargo) in crate::cargotype::iterate(
-        |cargo| (s.spec)(cargo),
-        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
-    ) {
-        unsafe {
-            (*REGISTRY.get()).sorted_cargo_specs.push(cargo);
-        }
+    for cargo in iterate(s) {
+        with_registry(|r| r.sorted_cargo_specs.push(cargo.as_ptr()));
     }
-    let (data, count) = unsafe {
+    let (data, count) = with_registry(|r| {
         (
-            (*REGISTRY.get()).sorted_cargo_specs.as_mut_ptr(),
-            (*REGISTRY.get()).sorted_cargo_specs.len(),
+            r.sorted_cargo_specs.as_mut_ptr(),
+            r.sorted_cargo_specs.len(),
         )
-    };
-    (s.publish_sorted)(data, count);
+    });
+    (s.set_sorted_cargo_specs)(data, count);
+
     // Sort cargo specifications by cargo class and name.
     (s.sort)(data, count);
-    // Populate.
-    for index in 0..count {
-        let cargo = CargoType((s.index)(unsafe { data.add(index).read() }));
-        unsafe {
-            (*REGISTRY.get()).sorted_cargo_types[usize::from(cargo.0)] = index as u8;
-        }
+
+    // Populate
+    let sorted = |index: usize| CargoSpecRef::of(s, with_registry(|r| r.sorted_cargo_specs[index]));
+    for it in 0..count {
+        let cargo = sorted(it).index();
+        global!(sorted_cargo_types: [u8; NUM_CARGO as usize])
+            .at(usize::from(cargo.0))
+            .store(it as u8);
     }
+
     // Count the number of standard cargos and fill the mask.
-    unsafe {
-        (*REGISTRY.get()).standard_cargo_mask = 0;
-    }
-    let mut nb_standard_cargo = 0;
-    for index in 0..count {
-        let cargo = unsafe { data.add(index).read() };
-        let order = (s.order_spec)(cargo);
-        let town_production_effect = TownProductionEffect(order.effect);
-        crate::movement::native_assert(
-            unsafe { &*s.shared },
-            town_production_effect != TownProductionEffect::INVALID_TPE,
-        );
-        let (town_data, town_count) = unsafe {
-            let tpc = &mut (*REGISTRY.get()).town_production_cargoes
-                [usize::from(town_production_effect.0)];
-            tpc.push(cargo);
+    global!(standard_cargo_mask: CargoTypes).store(CargoTypes(0));
+    let mut nb_standard_cargo: u8 = 0;
+    for it in 0..count {
+        let cargo = sorted(it);
+        let town_production_effect = cargo.town_production_effect();
+        assert_with(|| town_production_effect != TownProductionEffect::INVALID_TPE);
+        let (town_data, town_count) = with_registry(|r| {
+            let tpc = &mut r.town_production_cargoes[usize::from(town_production_effect.0)];
+            tpc.push(cargo.as_ptr());
             (tpc.as_mut_ptr(), tpc.len())
-        };
-        (s.publish_town)(town_production_effect.0, town_data, town_count);
-        if order.special {
+        });
+        (s.set_town_production_cargoes)(town_production_effect.0, town_data, town_count);
+        if cargo.classes().test(CargoClass::Special) {
             break;
         }
         nb_standard_cargo += 1;
-        let cargo_type = CargoType(order.cargo);
-        unsafe {
-            set_bit64(&mut (*REGISTRY.get()).standard_cargo_mask, cargo_type.0);
+        let index = cargo.index();
+        set_mask_bit(global!(standard_cargo_mask: CargoTypes), index);
+    }
+
+    // _sorted_standard_cargo_specs is a subset of _sorted_cargo_specs.
+    (s.set_sorted_standard_cargo_specs)(data, usize::from(nb_standard_cargo));
+}
+
+#[allow(unsafe_code, reason = "export and the caller's process-lifetime table")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_cargo_sort(s: *const Services) {
+    // SAFETY: The caller passes the process-lifetime table.
+    initialize_sorted_cargo_specs(unsafe { &*s });
+}
+
+/// `FinaliseCargoArray`: check for invalid cargoes.
+pub(crate) fn finalise_cargo_array(s: &Services) {
+    for index in 0..CargoType::NUM_CARGO.0 {
+        let cs = cargo_spec_get(s, CargoType(index));
+        if cs.town_production_effect() == TownProductionEffect::INVALID_TPE {
+            // Set default town production effect by cargo label.
+            cs.set_town_production_effect(match cs.label() {
+                CargoLabel::CT_PASSENGERS => TownProductionEffect::TPE_PASSENGERS,
+                CargoLabel::CT_MAIL => TownProductionEffect::TPE_MAIL,
+                _ => TownProductionEffect::TPE_NONE,
+            });
+        }
+        if !cs.is_valid() {
+            // `cs.name = cs.name_single = cs.units_volume = STR_NEWGRF_INVALID_CARGO`.
+            cs.set_units_volume(STR_NEWGRF_INVALID_CARGO);
+            cs.set_name_single(STR_NEWGRF_INVALID_CARGO);
+            cs.set_name(STR_NEWGRF_INVALID_CARGO);
+            cs.set_quantifier(STR_NEWGRF_INVALID_CARGO_QUANTITY);
+            cs.set_abbrev(STR_NEWGRF_INVALID_CARGO_ABBREV);
         }
     }
-    // _sorted_standard_cargo_specs is a subset of _sorted_cargo_specs.
-    (s.publish_standard)(data, nb_standard_cargo);
 }
-/// `FinaliseCargoArray`: check for invalid cargoes.
+
+/// Kept for the cargo registry console fixture (#634).
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_finalise() {
-    let s = services();
-    for cargo in 0..CargoType::NUM_CARGO.0 {
-        let cargo = CargoType(cargo);
-        let cs = (s.spec)(cargo.0);
-        let info = (s.finalise_spec)(cs);
-        let town_production_effect = TownProductionEffect(info.effect);
-        if town_production_effect == TownProductionEffect::INVALID_TPE {
-            // Set default town production effect by cargo label.
-            let label = CargoLabel(info.label);
-            (s.set_effect)(
-                cs,
-                match label {
-                    CargoLabel::CT_PASSENGERS => TownProductionEffect::TPE_PASSENGERS,
-                    CargoLabel::CT_MAIL => TownProductionEffect::TPE_MAIL,
-                    _ => TownProductionEffect::TPE_NONE,
-                }
-                .0,
-            );
-        }
-        if !is_cargo_spec_valid(info.bitnum) {
-            (s.invalidate_strings)(cs);
-        }
-    }
+    finalise_cargo_array(services());
 }
+
 /// `GetCargoTranslationTable`: get the cargo translation table to use for the given GRF file.
-pub(crate) fn get_cargo_translation_table(file: Handle) -> Labels {
-    let grffile = (services().file)(file);
+pub(crate) fn get_cargo_translation_table(grffile: GRFFileRef<'_>) -> Labels {
     // Always use the translation table if it's installed.
-    if grffile.labels.size != 0 {
-        grffile.labels
-    } else if grffile.version < 7 {
-        // Pre-v7 use climate-dependent "slot" table.
-        openttd_rust_cargo_climate_labels()
-    } else {
-        // Otherwise use climate-independent "bitnum" table.
-        get_climate_independent_cargo_translation_table()
+    let cargo_list = grffile.cargo_list();
+    if cargo_list.size != 0 {
+        return cargo_list;
     }
+
+    // Pre-v7 use climate-dependent "slot" table.
+    if grffile.grf_version() < 7 {
+        return get_climate_dependent_cargo_translation_table();
+    }
+
+    // Otherwise use climate-independent "bitnum" table.
+    get_climate_independent_cargo_translation_table()
 }
+
 /// `GetCargoTranslation`: translate a GRF-local cargo slot/bitnum into a `CargoType`.
-/// `usebit` defines whether pre-v7 cargo is a bitnum (true) or cargo slot (false).
-/// For GRF version >= 7 cargo is always a translated cargo bit.
-/// Returns `CargoType` or `INVALID_CARGO` if the cargo is not available.
-pub(crate) fn get_cargo_translation(cargo: u8, file: Handle, usebit: bool) -> CargoType {
-    let grffile = (services().file)(file);
+/// `usebit` defines the meaning of `cargo` for GRF version < 7: if true, then `cargo` is a
+/// bitnum; if false, then `cargo` is a cargoslot. For GRF version >= 7 `cargo` is always a
+/// translated cargo bit. Returns `CargoType` or `INVALID_CARGO` if the cargo is not available.
+pub(crate) fn get_cargo_translation(cargo: u8, grffile: GRFFileRef<'_>, usebit: bool) -> CargoType {
     // We can't use GetCargoTranslationTable here as the usebit flag changes behaviour.
     // Pre-version 7 uses the bitnum lookup from (standard in v8) instead of climate dependent in some places..
-    let cargo_list = if grffile.version < 7 && !usebit && !grffile.fallback {
-        openttd_rust_cargo_climate_labels()
-    } else if grffile.labels.size != 0 {
-        grffile.labels
+    let cargo_list = if grffile.grf_version() < 7 && !usebit && !grffile.cargo_list_is_fallback() {
+        get_climate_dependent_cargo_translation_table()
     } else {
-        get_climate_independent_cargo_translation_table()
+        let cargo_list = grffile.cargo_list();
+        if cargo_list.size != 0 {
+            cargo_list
+        } else {
+            get_climate_independent_cargo_translation_table()
+        }
     };
-    if usize::from(cargo) < cargo_list.size {
-        let label = CargoLabel(unsafe { cargo_list.data.add(usize::from(cargo)).read() });
-        get_cargo_type_by_label(label)
-    } else {
-        CargoType::INVALID_CARGO
+
+    match cargo_list.as_slice().get(usize::from(cargo)) {
+        Some(&label) => get_cargo_type_by_label(label),
+        None => CargoType::INVALID_CARGO,
     }
 }
+
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: bool) -> u8 {
-    get_cargo_translation(cargo, file, usebit).0
+    get_cargo_translation(cargo, grf_file(file), usebit).0
 }
-/// `BuildCargoTranslationMap`: construct the cargo mapping, the reverse of a cargo translation table.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
-    let s = services();
-    (s.clear_inverse)(file);
-    let cargo_list = get_cargo_translation_table(file);
-    for (_, (cs, info)) in crate::cargotype::iterate(
-        |cargo| {
-            let cs = (s.spec)(cargo);
-            (cs, (s.label_spec)(cs))
-        },
-        |(_, info)| is_cargo_spec_valid(info.bitnum),
-    ) {
-        // Check the translation table for this cargo's label.
-        let label = CargoLabel(info.label);
-        let idx = unsafe {
-            crate::container_func::find_index(
-                std::slice::from_raw_parts(cargo_list.data, cargo_list.size),
-                &label.0,
-            )
-        };
+
+/// `BuildCargoTranslationMap`: construct the cargo mapping, the reverse of a cargo
+/// translation table, for the file being loaded.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "cargo_map[cs->Index()] = idx stores the int to a uint8_t"
+)]
+pub(crate) fn build_cargo_translation_map(grffile: GRFFileRef<'_>) {
+    grffile.cargo_map_fill(u8::MAX);
+
+    let cargo_list = get_cargo_translation_table(grffile);
+
+    for cs in iterate(services()) {
+        // Check the translation table for this cargo's label
+        let label = cs.label();
+        let idx = crate::container_func::find_index(cargo_list.as_slice(), &label);
         if idx >= 0 {
-            let cargo = CargoType((s.index)(cs));
-            (s.set_inverse)(file, cargo.0, idx as u8);
+            grffile.set_cargo_map(cs.index(), idx as u8);
         }
     }
 }
-/// `MaybeInstallFallbackCargoLabel`: install a cargo label in a fallback cargo list,
-/// if a NewGRF-defined cargo list is not present. This allows this `NewGRF` to use its
-/// self-defined cargo types without needing an explicit translation table.
+
+/// Kept for the cargo registry console fixture (#634).
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_fallback(file: *mut c_void, id: u32, last: u32, label: u32) {
-    let label = CargoLabel(label);
-    let s = services();
-    if (s.file)(file).labels.size == 0 {
+pub extern "C" fn openttd_rust_cargo_build_inverse(file: Handle) {
+    build_cargo_translation_map(grf_file(file));
+}
+
+/// [`build_cargo_translation_map`] for `newgrf_loading.rs`, which no pass has finished.
+pub(crate) fn build_cargo_translation_map_raw(file: Handle) {
+    build_cargo_translation_map(grf_file(file));
+}
+
+/// `MaybeInstallFallbackCargoLabel`: install cargo label in a fallback cargo list, if a
+/// `NewGRF`-defined cargo list is not present. This allows this `NewGRF` to use its
+/// self-defined cargo types without needing an explicit translation table.
+pub(crate) fn maybe_install_fallback_cargo_label(
+    grffile: GRFFileRef<'_>,
+    id: u32,
+    last: u32,
+    label: CargoLabel,
+) {
+    if grffile.cargo_list().size == 0 {
         // Cargo translation table isn't configured yet, assume it won't be and configure the cargo list as a fallback list.
-        let default_cargo_list = get_cargo_translation_table(file);
-        (s.assign_fallback)(file, default_cargo_list);
+        let default_cargo_list = get_cargo_translation_table(grffile);
+        grffile.cargo_list_assign(default_cargo_list);
+        grffile.set_cargo_list_is_fallback(true);
     }
-    let grffile = (s.file)(file);
-    if grffile.fallback {
+
+    if grffile.cargo_list_is_fallback() {
         // Automatically fill fallback cargo list with the defined label, resizing as needed.
-        if grffile.labels.size < last as usize {
-            (s.resize_fallback)(file, last as usize);
+        let last = last as usize;
+        if grffile.cargo_list().size < last {
+            grffile.cargo_list_resize(last, CargoLabel::CT_INVALID);
         }
-        (s.set_fallback)(file, id, label.0);
+        grffile.set_cargo_list(id, label);
     }
 }
-/// Constructor of the cargo resolver (`CargoResolverObject`).
-/// The native frame uses this stack invocation for the synchronous resolution.
-fn invocation(spec: Handle, callback: u16, param1: u32, param2: u32) -> Invocation {
-    let callback = CallbackID(callback);
-    let mut invocation = Invocation {
-        label: 0,
-        file: ptr::null(),
-        root: ptr::null(),
-        callback: callback.0,
+
+#[allow(unsafe_code, reason = "export")]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_cargo_fallback(file: Handle, id: u32, last: u32, label: u32) {
+    maybe_install_fallback_cargo_label(grf_file(file), id, last, CargoLabel(label));
+}
+
+/// `GetCustomCargoSprite`: get the custom sprite for the given cargo type, or 0 if not
+/// available. The frame builds `CargoResolverObject object(cs)` and resolves in
+/// [`openttd_rust_cargo_evaluate_sprite`].
+pub(crate) fn get_custom_cargo_sprite(cs: CargoSpecRef<'_>) -> SpriteID {
+    (cs.services().sprite_frame)(cs.as_ptr())
+}
+
+#[allow(unsafe_code, reason = "export")]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_cargo_custom_sprite(spec: *const CargoSpec) -> u32 {
+    get_custom_cargo_sprite(CargoSpecRef::of(services(), spec))
+}
+
+/// `GetCargoCallback`. The frame builds
+/// `CargoResolverObject object(cs, callback, param1, param2)` and resolves in
+/// [`openttd_rust_cargo_evaluate_callback`].
+pub(crate) fn get_cargo_callback(
+    callback: CallbackID,
+    param1: u32,
+    param2: u32,
+    cs: CargoSpecRef<'_>,
+    regs100: &mut [i32],
+) -> u16 {
+    (cs.services().callback_frame)(
+        cs.as_ptr(),
+        callback.0,
         param1,
         param2,
-    };
-    (services().invocation)(spec, &raw mut invocation);
-    invocation
+        regs100.as_mut_ptr(),
+        regs100.len(),
+    )
 }
-/// `GetCargoCallback`, preserving the supplied register span through the native frame.
+
+/// # Safety
+/// `regs` holds `count` writable values.
+#[allow(unsafe_code, reason = "export and the caller's register span")]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_callback(
+pub unsafe extern "C" fn openttd_rust_cargo_callback(
     callback: u16,
     param1: u32,
     param2: u32,
-    spec: Handle,
+    spec: *const CargoSpec,
     regs: *mut i32,
     count: usize,
 ) -> u16 {
-    let invocation = invocation(spec, callback, param1, param2);
-    (services().callback_frame)(&raw const invocation, regs, count)
-}
-/// `GetCargoCallback` for runtime callers with an empty register span.
-pub unsafe fn get_cargo_callback(
-    s: &Services,
-    cargo: u8,
-    callback: u16,
-    param1: u32,
-    param2: u32,
-) -> u16 {
-    let cargo = CargoType(cargo);
-    let callback = CallbackID(callback);
-    let mut invocation = Invocation {
-        label: 0,
-        file: ptr::null(),
-        root: ptr::null(),
-        callback: callback.0,
+    let regs100 = if count == 0 {
+        &mut []
+    } else {
+        // SAFETY: The caller's span holds `count` writable values.
+        unsafe { std::slice::from_raw_parts_mut(regs, count) }
+    };
+    get_cargo_callback(
+        CallbackID(callback),
         param1,
         param2,
-    };
-    (s.invocation)((s.spec)(cargo.0), &raw mut invocation);
-    (s.callback_frame)(&raw const invocation, ptr::null_mut(), 0)
+        CargoSpecRef::of(services(), spec),
+        regs100,
+    )
 }
-/// Get the custom sprite for the given cargo type, or zero if not available.
-/// `GetCustomCargoSprite` constructs its cargo resolver with no callback.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_custom_sprite(spec: Handle) -> u32 {
-    let invocation = invocation(spec, CBID_NO_CALLBACK.0, 0, 0);
-    let sprite: SpriteID = (services().sprite_frame)(&raw const invocation);
-    sprite
-}
-/// `CargoResolverObject::ResolveCallback` within the live native callback frame.
+
+/// `object.ResolveCallback(regs100)` in `GetCargoCallback`'s live frame.
+///
+/// # Safety
+/// The resolver frame and its state are live, and `regs` holds `count` writable values.
+#[allow(unsafe_code, reason = "export and the live resolver frame")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_evaluate_callback(
-    invocation: *const Invocation,
+    root: Handle,
     resolver: *mut c_void,
     state: *mut State,
+    file: Handle,
     regs: *mut i32,
     count: usize,
 ) -> u16 {
-    let s = services();
-    let (root, file) = unsafe { ((*invocation).root, (*invocation).file) };
+    // SAFETY: The caller's live frame and register span.
     unsafe {
-        newgrf_spritegroup::openttd_rust_resolver_callback(
-            &*s.common, root, resolver, state, file, regs, count,
+        newgrf_spritegroup::resolve_callback(
+            services().common(),
+            root,
+            resolver,
+            state,
+            file,
+            regs,
+            count,
         )
     }
 }
-/// `CargoResolverObject::Resolve<ResultSpriteGroup>` within the live native sprite frame.
+
+/// The rest of `GetCustomCargoSprite` in its live frame, from
+/// `object.Resolve<ResultSpriteGroup>()`.
+///
+/// # Safety
+/// The resolver frame and its state are live.
+#[allow(unsafe_code, reason = "export and the live resolver frame")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_evaluate_sprite(
-    invocation: *const Invocation,
+    root: Handle,
     resolver: *mut c_void,
     state: *mut State,
+    file: Handle,
 ) -> u32 {
     let s = services();
-    let (root, file) = unsafe { ((*invocation).root, (*invocation).file) };
-    let result = unsafe {
-        newgrf_spritegroup::openttd_rust_resolver_resolve(&*s.common, root, resolver, state, file)
-    };
-    // ResolverResult alternative 2 is const ResultSpriteGroup*.
-    if result.kind != 2 || result.group.is_null() {
+    // SAFETY: The caller's live frame.
+    let result = unsafe { newgrf_spritegroup::do_resolve(s.common(), root, resolver, state, file) };
+    // ResolverResult alternative 2 is const ResultSpriteGroup*; another is a null group.
+    if result.kind != 2 || result.group.is_null() || (s.num_sprites)(result.group) == 0 {
         return 0;
     }
-    let sprite = (s.sprite)(result.group);
-    if sprite.count == 0 {
-        0
-    } else {
-        let sprite: SpriteID = sprite.sprite;
-        sprite
-    }
+
+    (s.sprite)(result.group)
 }
+
 /// `CargoResolverObject::GetFeature`.
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_feature() -> u8 {
     GrfSpecFeature::GSF_CARGOES.0
 }
+
 /// `CargoResolverObject::GetDebugID`.
+#[allow(unsafe_code, reason = "export")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_debug_id(invocation: *const Invocation) -> u32 {
-    unsafe { CargoLabel((*invocation).label).0 }
+pub extern "C" fn openttd_rust_cargo_debug_id(cargospec: *const CargoSpec) -> u32 {
+    CargoSpecRef::of(services(), cargospec).label().0
 }
+
+/// `FindFirstCargoWithTownAcceptanceEffect`: determines the first cargo with a certain town
+/// effect. Returns the first active cargo slot with that effect.
+pub(crate) fn find_first_cargo_with_town_acceptance_effect(
+    effect: TownAcceptanceEffect,
+) -> Option<CargoSpecRef<'static>> {
+    iterate(services()).find(|cs| cs.town_acceptance_effect() == effect)
+}
+
+/// [`get_cargo_translation_table`] for `newgrf_act3.rs`, which no pass has finished.
+pub(crate) fn get_cargo_translation_table_raw(file: Handle) -> Labels {
+    get_cargo_translation_table(grf_file(file))
+}
+
+/// `grffile->cargo_list.size()` for `newgrf_act3.rs`, which no pass has finished.
+pub(crate) fn file_cargo_count_raw(file: Handle) -> usize {
+    grf_file(file).cargo_list().size
+}
+
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDCargoProduction" ["probe"] => ProductionCargo {cargo,multiplier};
-    "OpenTTDCargoSprite" ["probe"] => Sprite {sprite,count};
-    "OpenTTDCargoLabelSpec" ["probe"] => LabelSpec {label,bitnum};
-    "OpenTTDCargoFinaliseSpec" ["probe"] => FinaliseSpec {label,bitnum,effect};
-    "OpenTTDCargoOrderSpec" ["probe"] => OrderSpec {cargo,effect,special};
     "OpenTTDCargoLabels" ["probe"] => Labels {data,size};
-    "OpenTTDCargoFile" ["probe"] => File {labels,version,fallback};
-    "OpenTTDCargoInvocation" ["probe"] => Invocation {label,file,root,callback,param1,param2};
-    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,town_acceptance_effect,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_file,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
+    "OpenTTDCargoRegistryServices" ["probe"] => Services {
+        common,
+        shared,
+
+        spec,
+        copy_default_cargo,
+        fill_default,
+
+        bitnum,
+        classes,
+        index,
+        label,
+        town_acceptance_effect,
+        town_production_effect,
+        town_production_multiplier,
+
+        set_abbrev,
+        set_grffile,
+        set_name,
+        set_name_single,
+        set_quantifier,
+        set_town_production_effect,
+        set_units_volume,
+
+        set_sorted_cargo_specs,
+        set_sorted_standard_cargo_specs,
+        set_town_production_cargoes,
+        sort,
+
+        callback_frame,
+        num_sprites,
+        sprite,
+        sprite_frame,
+    };
 }
 
-pub(crate) fn file_cargo_count(file: Handle) -> usize {
-    (services().file)(file).labels.size
+/// Test-only: the labels [`install_test_labels`] installed, which [`stub_test_label_file`]'s
+/// `GRFFile` stubs report for any file.
+#[cfg(test)]
+static TEST_LABELS: (
+    std::sync::atomic::AtomicPtr<u32>,
+    std::sync::atomic::AtomicUsize,
+) = (
+    std::sync::atomic::AtomicPtr::new(ptr::null_mut()),
+    std::sync::atomic::AtomicUsize::new(0),
+);
+
+/// Test-only: `shared`'s `GRFFile` readers report any file at version 8 with no fallback and
+/// the labels [`install_test_labels`] installed as its cargo list. No stub reads the file.
+#[cfg(test)]
+pub(crate) fn stub_test_label_file(shared: &mut crate::services::Services) {
+    use std::sync::atomic::Ordering;
+    extern "C" fn cargo_list(_: Handle) -> Labels {
+        Labels {
+            data: TEST_LABELS.0.load(Ordering::Relaxed).cast_const().cast(),
+            size: TEST_LABELS.1.load(Ordering::Relaxed),
+        }
+    }
+    extern "C" fn cargo_list_is_fallback(_: Handle) -> bool {
+        false
+    }
+    extern "C" fn grf_file_version(_: Handle) -> u8 {
+        8
+    }
+    shared.grf_file_cargo_list = cargo_list;
+    shared.grf_file_cargo_list_is_fallback = cargo_list_is_fallback;
+    shared.grf_file_version = grf_file_version;
 }
 
-/// `CargoSpec::Iterate()`: the native spec of each valid cargo, in cargo order, each looked
-/// up as the iteration advances.
-pub(crate) fn cargo_specs() -> impl Iterator<Item = *const c_void> {
-    let s = services();
-    crate::cargotype::iterate(
-        |cargo| (s.spec)(cargo),
-        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
-    )
-    .map(|(_, spec)| spec)
-}
-
-/// Determines the first active cargo slot with a certain town effect.
-/// `FindFirstCargoWithTownAcceptanceEffect`, in active cargo-slot order.
-pub(crate) fn first_town_acceptance(effect: u8) -> Option<u8> {
-    let effect = TownAcceptanceEffect(effect);
-    let s = services();
-    crate::cargotype::iterate(
-        |cargo| (s.spec)(cargo),
-        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
-    )
-    .find_map(|(cargo, _spec)| {
-        (TownAcceptanceEffect((s.town_acceptance_effect)(cargo)) == effect).then_some(cargo)
-    })
-}
-
-/// Scalar adapter for `CargoSpec::town_acceptance_effect`.
-pub(crate) fn town_acceptance(cargo: u8) -> u8 {
-    let cargo = CargoType(cargo);
-    TownAcceptanceEffect((services().town_acceptance_effect)(cargo.0)).0
-}
-
-/// Test-only: the current file reports `labels` as its cargo list, and each maps to its cargo.
+/// Test-only: a file reports `labels` as its cargo list at version 8 with no fallback, through
+/// the registry's shared table and any table [`stub_test_label_file`] stubs, and each label
+/// maps to its cargo. Forget it with [`clear_test_labels`].
 #[cfg(test)]
 pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
-    static TABLE: GameState<Services> = GameState::new(TEST_TABLE);
-    static LABELS: GameState<&'static [u32]> = GameState::new(&[]);
-    extern "C" fn file(_: Handle) -> File {
-        // SAFETY: Serialized by the caller's test lock; no borrow outlives this read.
-        let labels = unsafe { *LABELS.get() };
-        File {
-            labels: Labels {
-                data: labels.as_ptr(),
-                size: labels.len(),
-            },
-            version: 8,
-            fallback: false,
-        }
-    }
-    // SAFETY: Serialized by the caller's test lock.
-    unsafe {
-        LABELS.get().write(labels);
-        (*TABLE.get()).file = file;
-        let registry = &mut *REGISTRY.get();
-        registry.services = TABLE.get();
-        registry.label_map.clear();
+    use std::sync::atomic::Ordering;
+    TEST_LABELS
+        .0
+        .store(labels.as_ptr().cast_mut(), Ordering::Relaxed);
+    TEST_LABELS.1.store(labels.len(), Ordering::Relaxed);
+    let mut shared = crate::test_tables::SHARED;
+    stub_test_label_file(&mut shared);
+    let mut table = TEST_TABLE;
+    table.shared = Box::leak(Box::new(shared));
+    let table: &'static Services = Box::leak(Box::new(table));
+    with_registry(|r| {
+        r.services = table;
+        r.label_map.clear();
         for (label, cargo) in labels.iter().zip(cargos) {
-            registry
-                .label_map
-                .insert(CargoLabel(*label), CargoType(*cargo));
+            r.label_map.insert(CargoLabel(*label), CargoType(*cargo));
         }
-    }
+    });
 }
-/// Test-only: the registry holds no valid cargo spec, so [`cargo_specs`] visits none. Forget it
+
+/// Test-only: the registry holds no valid cargo spec, so [`iterate`] visits none. Forget it
 /// with [`clear_test_labels`].
 #[cfg(test)]
 pub(crate) fn install_test_no_cargo() {
-    static TABLE: GameState<Services> = GameState::new(TEST_TABLE);
-    extern "C" fn spec(_: u8) -> Handle {
+    extern "C" fn spec(_: u8) -> *const CargoSpec {
         ptr::null()
     }
-    extern "C" fn bitnum(_: Handle) -> u8 {
+    extern "C" fn bitnum(_: *const CargoSpec) -> u8 {
         crate::cargotype::INVALID_CARGO_BITNUM
     }
-    // SAFETY: Serialized by the caller's test lock.
-    unsafe {
-        (*TABLE.get()).spec = spec;
-        (*TABLE.get()).bitnum = bitnum;
-        (*REGISTRY.get()).services = TABLE.get();
-    }
+    let mut table = TEST_TABLE;
+    table.spec = spec;
+    table.bitnum = bitnum;
+    let table: &'static Services = Box::leak(Box::new(table));
+    with_registry(|r| r.services = table);
 }
-/// Test-only: forget [`install_test_labels`].
+
+/// Test-only: install `table` as the registry's table. Forget it with
+/// [`clear_test_labels`].
+#[cfg(test)]
+pub(crate) fn install_test_table(table: Services) {
+    let table: &'static Services = Box::leak(Box::new(table));
+    with_registry(|r| r.services = table);
+}
+
+/// Test-only: forget [`install_test_labels`], [`install_test_no_cargo`] and
+/// [`install_test_table`].
 #[cfg(test)]
 pub(crate) fn clear_test_labels() {
-    // SAFETY: Serialized by the caller's test lock.
-    unsafe {
-        let registry = &mut *REGISTRY.get();
-        registry.services = std::ptr::null();
-        registry.label_map.clear();
+    with_registry(|r| {
+        r.services = ptr::null();
+        r.label_map.clear();
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TEST_TABLE, finalise_cargo_array};
+    use crate::cargo_type::{CargoLabel, CargoType};
+    use crate::cargotype::{CargoSpec, INVALID_CARGO_BITNUM, TownProductionEffect};
+    use crate::table::strings::{
+        STR_NEWGRF_INVALID_CARGO, STR_NEWGRF_INVALID_CARGO_ABBREV,
+        STR_NEWGRF_INVALID_CARGO_QUANTITY,
+    };
+    use std::cell::RefCell;
+
+    /// One spec per cargo slot, as `FinaliseCargoArray` reads and writes it.
+    #[derive(Clone, Copy)]
+    struct Spec {
+        label: CargoLabel,
+        bitnum: u8,
+        town_production_effect: TownProductionEffect,
+    }
+
+    thread_local! {
+        static SPECS: RefCell<Vec<Spec>> = const { RefCell::new(Vec::new()) };
+        static STORES: RefCell<Vec<(u8, &'static str, u32)>> = const { RefCell::new(Vec::new()) };
+    }
+
+    // Each spec pointer is its slot number, offset by one so that slot 0 is not null; no
+    // stub reads through it.
+    fn slot(cs: *const CargoSpec) -> usize {
+        cs.addr() - 1
+    }
+    extern "C" fn spec(cargo: u8) -> *const CargoSpec {
+        std::ptr::without_provenance(usize::from(cargo) + 1)
+    }
+    extern "C" fn index(cs: *const CargoSpec) -> u8 {
+        u8::try_from(slot(cs)).unwrap()
+    }
+    extern "C" fn bitnum(cs: *const CargoSpec) -> u8 {
+        SPECS.with_borrow(|specs| specs[slot(cs)].bitnum)
+    }
+    extern "C" fn label(cs: *const CargoSpec) -> u32 {
+        SPECS.with_borrow(|specs| specs[slot(cs)].label.0)
+    }
+    extern "C" fn town_production_effect(cs: *const CargoSpec) -> u8 {
+        SPECS.with_borrow(|specs| specs[slot(cs)].town_production_effect.0)
+    }
+    extern "C" fn set_town_production_effect(cs: *mut CargoSpec, effect: u8) {
+        SPECS.with_borrow_mut(|specs| {
+            specs[slot(cs)].town_production_effect = TownProductionEffect(effect);
+        });
+        record(cs, "town_production_effect", u32::from(effect));
+    }
+    fn record(cs: *mut CargoSpec, member: &'static str, value: u32) {
+        STORES.with_borrow_mut(|stores| {
+            stores.push((u8::try_from(slot(cs)).unwrap(), member, value));
+        });
+    }
+    extern "C" fn set_name(cs: *mut CargoSpec, value: u32) {
+        record(cs, "name", value);
+    }
+    extern "C" fn set_name_single(cs: *mut CargoSpec, value: u32) {
+        record(cs, "name_single", value);
+    }
+    extern "C" fn set_units_volume(cs: *mut CargoSpec, value: u32) {
+        record(cs, "units_volume", value);
+    }
+    extern "C" fn set_quantifier(cs: *mut CargoSpec, value: u32) {
+        record(cs, "quantifier", value);
+    }
+    extern "C" fn set_abbrev(cs: *mut CargoSpec, value: u32) {
+        record(cs, "abbrev", value);
+    }
+
+    /// Runs `FinaliseCargoArray` over `specs` (the rest of the array is valid passengers with
+    /// an explicit effect) and returns the stores it made, in order.
+    fn finalise(specs: &[Spec]) -> Vec<(u8, &'static str, u32)> {
+        let mut all = vec![
+            Spec {
+                label: CargoLabel::CT_PASSENGERS,
+                bitnum: 0,
+                town_production_effect: TownProductionEffect::TPE_NONE,
+            };
+            usize::from(CargoType::NUM_CARGO.0)
+        ];
+        all[..specs.len()].copy_from_slice(specs);
+        SPECS.set(all);
+        STORES.with_borrow_mut(Vec::clear);
+        let mut table = TEST_TABLE;
+        table.spec = spec;
+        table.index = index;
+        table.bitnum = bitnum;
+        table.label = label;
+        table.town_production_effect = town_production_effect;
+        table.set_town_production_effect = set_town_production_effect;
+        table.set_name = set_name;
+        table.set_name_single = set_name_single;
+        table.set_units_volume = set_units_volume;
+        table.set_quantifier = set_quantifier;
+        table.set_abbrev = set_abbrev;
+        finalise_cargo_array(&table);
+        STORES.take()
+    }
+
+    /// `FinaliseCargoArray` stores the five strings of an invalid spec with their constants,
+    /// in the chained assignment's order, and none for a valid spec. The console observes
+    /// only `name`.
+    #[test]
+    fn finalise_cargo_array_invalidates_each_string_of_an_invalid_spec() {
+        let valid = Spec {
+            label: CargoLabel::CT_COAL,
+            bitnum: 1,
+            town_production_effect: TownProductionEffect::TPE_NONE,
+        };
+        let invalid = Spec {
+            bitnum: INVALID_CARGO_BITNUM,
+            ..valid
+        };
+        assert_eq!(
+            finalise(&[valid, invalid]),
+            [
+                (1, "units_volume", STR_NEWGRF_INVALID_CARGO.0),
+                (1, "name_single", STR_NEWGRF_INVALID_CARGO.0),
+                (1, "name", STR_NEWGRF_INVALID_CARGO.0),
+                (1, "quantifier", STR_NEWGRF_INVALID_CARGO_QUANTITY.0),
+                (1, "abbrev", STR_NEWGRF_INVALID_CARGO_ABBREV.0),
+            ]
+        );
+    }
+
+    /// `FinaliseCargoArray` gives a spec labelled `CT_MAIL` with no effect `TPE_MAIL`. The
+    /// console observes the passenger and default arms and an explicit effect being kept.
+    #[test]
+    fn finalise_cargo_array_defaults_mail_to_tpe_mail() {
+        let mail = Spec {
+            label: CargoLabel::CT_MAIL,
+            bitnum: 2,
+            town_production_effect: TownProductionEffect::INVALID_TPE,
+        };
+        assert_eq!(
+            finalise(&[mail]),
+            [(
+                0,
+                "town_production_effect",
+                u32::from(TownProductionEffect::TPE_MAIL.0)
+            )]
+        );
     }
 }

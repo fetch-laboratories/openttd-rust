@@ -40,6 +40,8 @@ enum class RoadTileType : uint8_t;
 /* Distinct trivial date carriers. Strong native Date classes stay inside C++;
  * wrappers convert explicitly so MSVC class-return rules cannot alter this ABI. */
 struct OpenTTDCalendarDate { int32_t value; };
+/** A `std::span<const CargoLabel>`, live until its owner changes. */
+struct OpenTTDCargoLabels { const uint32_t *data; size_t size; };
 struct OpenTTDEconomyDate { int32_t value; };
 static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
 static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
@@ -241,6 +243,14 @@ struct OpenTTDSharedServices {
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	size_t (*copyable_badges)(OpenTTDBadgeSpan, OpenTTDBadgeSpan, GrfSpecFeature, BadgeID *) noexcept OPENTTD_SERVICE_DEFAULT(copyable_badges);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
+	OpenTTDCargoLabels (*grf_file_cargo_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_cargo_list);
+	void (*grf_file_cargo_list_assign)(GRFFile *, OpenTTDCargoLabels) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_cargo_list_assign);
+	bool (*grf_file_cargo_list_is_fallback)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_cargo_list_is_fallback);
+	void (*grf_file_cargo_list_resize)(GRFFile *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_cargo_list_resize);
+	void (*grf_file_cargo_map_fill)(GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_cargo_map_fill);
+	void (*grf_file_set_cargo_list)(GRFFile *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_list);
+	void (*grf_file_set_cargo_list_is_fallback)(GRFFile *, bool) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_list_is_fallback);
+	void (*grf_file_set_cargo_map)(GRFFile *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_map);
 	int32_t (*grf_price_shift)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_price_shift);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);

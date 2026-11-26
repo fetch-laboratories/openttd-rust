@@ -841,15 +841,13 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
             } else {
                 u32::from(last_vehicle_type.0) + 0x10
             };
-            let callback = unsafe {
-                crate::cargo_registry::get_cargo_callback(
-                    &*w.cargo_registry,
-                    cargo.0,
-                    crate::newgrf_callbacks::CallbackID::CBID_CARGO_STATION_RATING_CALC.0,
-                    var10,
-                    var18,
-                )
-            };
+            let callback = crate::cargo_registry::get_cargo_callback(
+                crate::newgrf_callbacks::CallbackID::CBID_CARGO_STATION_RATING_CALC,
+                var10,
+                var18,
+                crate::cargotype::cargo_spec_get(unsafe { &*w.cargo_registry }, cargo),
+                &mut [],
+            );
             if callback != crate::newgrf_callbacks::CALLBACK_FAILED {
                 skip = true;
                 rating = gb(u32::from(callback), 0, 14) as i32;

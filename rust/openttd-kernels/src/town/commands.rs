@@ -737,7 +737,9 @@ pub(crate) unsafe fn cmd_town_cargo_goal(
     }
     let t = c.resolve(town_id);
     // Validate if there is a cargo which is the requested TownEffect.
-    if t.shell.is_null() || crate::cargo_registry::first_town_acceptance(effect.0).is_none() {
+    if t.shell.is_null()
+        || crate::cargo_registry::find_first_cargo_with_town_acceptance_effect(effect).is_none()
+    {
         c.error(out);
         return;
     }

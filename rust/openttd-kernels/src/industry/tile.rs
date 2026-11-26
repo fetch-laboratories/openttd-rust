@@ -703,11 +703,15 @@ pub(crate) unsafe fn add_accepted_cargo_industry(
         if res != CALLBACK_FAILED {
             info.cargo.fill(CargoType::INVALID_CARGO.0);
             for i in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
-                info.cargo[i] = crate::cargo_registry::openttd_rust_cargo_translate(
+                info.cargo[i] = crate::cargo_registry::get_cargo_translation(
                     gb(u32::from(res), (i * 5) as u8, 5) as u8,
-                    unsafe { (*itspec).grf_prop.grffile },
+                    // SAFETY: A spec's file is live until the loader's next reset.
+                    unsafe {
+                        crate::newgrf::GRFFileRef::of(&*t.shared, (*itspec).grf_prop.grffile.cast())
+                    },
                     false,
-                );
+                )
+                .0;
             }
         }
     }

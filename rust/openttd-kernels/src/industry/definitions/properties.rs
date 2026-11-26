@@ -27,6 +27,13 @@ pub struct Context {
     pub version: u8,
     pub climate: u8,
 }
+impl Context {
+    /// The handle of the context's file, the loader's `_cur_gps.grffile`.
+    fn grffile<'a>(&self, shared: &'a crate::services::Services) -> crate::newgrf::GRFFileRef<'a> {
+        // SAFETY: The loader's current file is live while it reads the file's properties.
+        unsafe { crate::newgrf::GRFFileRef::of(shared, self.file) }
+    }
+}
 /// `CT_INVALID` as a default cargo label.
 const INVALID_LABEL: crate::newgrf::CargoLabelChoice = crate::newgrf::CargoLabelChoice {
     value: CT_INVALID,
@@ -384,7 +391,11 @@ unsafe fn industrytiles_change_info(
             0x0A..=0x0C => {
                 let acctp = u32::from(buf.word()?);
                 let slot = (prop - 0x0A) as usize;
-                let cargo = get_cargo_translation(gb(acctp, 0, 8) as u8, c.file.cast(), false);
+                let cargo = get_cargo_translation(
+                    gb(acctp, 0, 8) as u8,
+                    c.grffile(loading.shared()),
+                    false,
+                );
                 unsafe {
                     (*tsp).accepts_cargo[slot] = cargo.0;
                     (*tsp).acceptance[slot] = gb(acctp, 8, 8).clamp(0, 16) as i8;
@@ -427,7 +438,8 @@ unsafe fn industrytiles_change_info(
                 }
                 for i in 0..INDUSTRY_NUM_INPUTS {
                     if i < num_cargoes {
-                        let cargo = get_cargo_translation(buf.byte()?, c.file.cast(), false);
+                        let cargo =
+                            get_cargo_translation(buf.byte()?, c.grffile(loading.shared()), false);
                         unsafe { (*tsp).accepts_cargo[i] = cargo.0 };
                         // Tile acceptance can be negative to counteract the
                         // IndustryTileSpecialFlag::AcceptsAllCargo flag
@@ -591,7 +603,8 @@ unsafe fn industries_change_info(
                     INDUSTRY_ORIGINAL_NUM_INPUTS
                 };
                 for j in 0..count {
-                    let cargo = get_cargo_translation(buf.byte()?, c.file.cast(), false);
+                    let cargo =
+                        get_cargo_translation(buf.byte()?, c.grffile(loading.shared()), false);
                     if produced {
                         unsafe {
                             (*indsp).produced_cargo[j] = cargo.0;
@@ -715,7 +728,7 @@ unsafe fn industries_change_info(
                 };
                 for i in 0..size {
                     let cargo = if i < num_cargoes {
-                        get_cargo_translation(buf.byte()?, c.file.cast(), false)
+                        get_cargo_translation(buf.byte()?, c.grffile(loading.shared()), false)
                     } else {
                         CargoType::INVALID_CARGO
                     };

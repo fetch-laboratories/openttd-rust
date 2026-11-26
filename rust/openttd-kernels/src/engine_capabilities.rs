@@ -144,7 +144,7 @@ pub(crate) unsafe fn determine_capacity(s: &Services, e: E, v: V, mail: *mut u16
         };
         if !mail.is_null()
             && carrying.kind == VehicleType::AIRCRAFT
-            && crate::cargotype::is_cargo_in_class(
+            && crate::cargotype::is_cargo_in_class_raw(
                 (s.cargo_classes)(cargo),
                 crate::cargotype::PASSENGERS,
             )
@@ -204,7 +204,7 @@ pub(crate) unsafe fn determine_capacity(s: &Services, e: E, v: V, mail: *mut u16
                     u32::from(EngineRef::of(e).passenger_capacity()),
                     v,
                 );
-                if !crate::cargotype::is_cargo_in_class(
+                if !crate::cargotype::is_cargo_in_class_raw(
                     (s.cargo_classes)(cargo),
                     crate::cargotype::PASSENGERS,
                 ) {

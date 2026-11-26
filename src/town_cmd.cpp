@@ -677,8 +677,7 @@ CommandCost CmdRenameTown(DoCommandFlags flags, TownID town_id, const std::strin
  */
 const CargoSpec *FindFirstCargoWithTownAcceptanceEffect(TownAcceptanceEffect effect)
 {
-	const CargoType cargo = openttd_rust_town_first_cargo(effect);
-	return cargo == INVALID_CARGO ? nullptr : CargoSpec::Get(cargo);
+	return openttd_rust_town_first_cargo(effect);
 }
 
 /**
