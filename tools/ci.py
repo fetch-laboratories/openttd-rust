@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import signal
 import subprocess
 import sys
 import time
@@ -23,6 +22,7 @@ import cleanup_contract
 import preflight_stamp
 import review_report
 import review_report_comment
+import review_start
 import status_comment
 import vcs
 
@@ -120,19 +120,6 @@ def gh(*args: str) -> str:
 
 def api(repository: str, path: str) -> dict:
     return json.loads(gh("api", f"repos/{repository}/{path}"))
-
-
-def detached_gh(*args: str) -> str:
-    """gh in its own session, so a signal to this command's process group,
-    such as Ctrl-C or signal-witness.py's SIGTERM, cannot end it mid-request:
-    its outcome is always known. Not retried: callers use it for writes."""
-    return subprocess.run(
-        ["gh", *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        start_new_session=True,
-    ).stdout.strip()
 
 
 def repository_of(repo: str | None) -> str:
@@ -503,6 +490,10 @@ def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] |
         pull = pushed_head(repository, args.pr, pull, expected)
     head = expected_head(pull, expected)
     require_stamp(args.pr, head, args.unstamped)
+    if args.profile == "native":
+        require_first_native(
+            repository, args.pr, pull["created_at"], head, args.diagnose
+        )
     if (
         args.profile == "full"
         and not args.bootstrap
@@ -1439,6 +1430,13 @@ class PrRuns:
     commits: list[str]
     runs: list[TestedRun]
     unread: list[str] = field(default_factory=list)
+    # How many of the newest runs only lacked a macOS runner: `enqueue` passes
+    # over them and reads the run before.
+    untested: int = 0
+
+    def gated(self) -> list[TestedRun]:
+        """The runs up to the one `enqueue` reads."""
+        return self.runs[: len(self.runs) - self.untested]
 
 
 def recorded_runs(
@@ -1562,21 +1560,100 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     print(f"Queueing PR #{pr} again unchanged after {url}; logged in {log}")
 
 
+MACOS_JOB = "Mac OS"
+# GitHub's failure annotation on a job no hosted runner ever took; a cancel by
+# hand also leaves no runner and no step, but says who cancelled.
+UNACQUIRED = "was not acquired by Runner of type hosted"
+# The jobs of a platform run that fail because a macOS job did not run: that
+# job's annotation fails both annotation checks, and completion needs macOS.
+MACOS_DOWNSTREAM = (
+    "platform / Check macos annotations",
+    "platform / Check Annotations",
+    "platform / complete",
+)
+
+
+class Annotation(TypedDict):
+    """A check-run annotation, with the field these tools read."""
+
+    message: str | None
+
+
+def annotations(repository: str, job: ci_log.Job) -> list[Annotation]:
+    return cast(
+        list[Annotation], api(repository, f"check-runs/{job['id']}/annotations")
+    )
+
+
+def capacity_cancelled(repository: str, job: ci_log.Job) -> bool:
+    """A macOS job GitHub cancelled because no hosted runner took it. A job
+    cancelled after a runner started it, or cancelled by hand, does not count."""
+    if not (
+        job["conclusion"] == "cancelled"
+        and not job.get("runner_id")
+        and not job.get("steps")
+    ):
+        return False
+    return any(
+        UNACQUIRED in (note.get("message") or "")
+        for note in annotations(repository, job)
+    )
+
+
+def untested_for_capacity(repository: str, tested: TestedRun) -> bool:
+    """Whether a `platform` run failed only because GitHub had no macOS runner.
+
+    Its failed jobs are macOS jobs no hosted runner took and the jobs that fail
+    with them, and every macOS job that did run passed with no annotation, so
+    the annotation checks failed for the cancellation alone. No macOS job runs
+    on a paid runner (ADR 0009), so such a run tested nothing the gate reads,
+    and the gate reads the run before it (root-workflow.md, CI administration)."""
+    run = tested.run
+    if tested.profile != "platform" or run["conclusion"] not in REMOVED:
+        return False
+    jobs = run_jobs(repository, run["id"])
+    macos = [job for job in jobs if MACOS_JOB in job["name"]]
+    unstarted = [job for job in macos if capacity_cancelled(repository, job)]
+    ran = [job for job in macos if job not in unstarted]
+    failed = [job for job in jobs if job["conclusion"] in JOB_FAILED]
+    return (
+        bool(unstarted)
+        and all(job in unstarted or job["name"] in MACOS_DOWNSTREAM for job in failed)
+        and all(
+            job["conclusion"] == "success" and not annotations(repository, job)
+            for job in ran
+        )
+    )
+
+
 def read_pr_runs(repository: str, pr: int, opened: str, head: str) -> PrRuns:
-    return pr_requested_runs(repository, pr, opened, pr_commits(repository, head))
+    """The PR's runs, with the one read of which newest runs only lacked a macOS
+    runner. Where GitHub does not return a run's jobs, the read names them as
+    unread, which blocks `enqueue` and leaves `state` its other facts."""
+    read = pr_requested_runs(repository, pr, opened, pr_commits(repository, head))
+    try:
+        while read.untested < len(read.runs) and untested_for_capacity(
+            repository, read.runs[-1 - read.untested]
+        ):
+            read.untested += 1
+    except subprocess.CalledProcessError:
+        newest = read.runs[-1 - read.untested]
+        read.unread.append(f"the jobs of {newest.profile} run {newest.run['id']}")
+    return read
 
 
 def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
     """The run `enqueue` reads: the PR's newest requested or bootstrap run on any of
-    its own commits, which must have succeeded. A workflow change also needs a
-    green bootstrap Full at the head itself (root-workflow.md, CI administration),
-    and its newest run there."""
+    its own commits, which must have succeeded; a `platform` run that only lacked
+    a macOS runner is passed over. A workflow change also needs a green bootstrap
+    Full at the head itself (root-workflow.md, CI administration), and its newest
+    run there."""
     if read.unread:
         raise ValueError(
             f"PR #{pr}'s request records name runs GitHub did not return: "
             + ", ".join(read.unread)
         )
-    runs = read.runs
+    runs = read.gated()
     if not runs:
         raise ValueError(
             f"PR #{pr} has no requested run on its commits up to {head}; "
@@ -1609,6 +1686,81 @@ def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
                 f"bootstrap Full at its head {head}: {state or 'none'}"
             )
     return newest
+
+
+def failed_full(repository: str, pr: int, named: str) -> ci_log.Run:
+    """The failed Full of PR `pr` that `named`, a run ID or URL, names: a
+    merge-group, requested or bootstrap run of the request workflow that failed
+    or was cancelled."""
+    match = RUN_URL.fullmatch(named)
+    if not match and not named.isdigit():
+        raise ValueError(f"--diagnose takes a run ID or URL, not {named!r}")
+    if match and (match[1] != repository or match[3] or match[4]):
+        raise ValueError(
+            f"--diagnose takes a run of {repository}, with no attempt or job: {named}"
+        )
+    run = cast(
+        ci_log.Run, api(repository, f"actions/runs/{match[2] if match else named}")
+    )
+    queued = (run.get("head_branch") or "").startswith(
+        f"gh-readonly-queue/{PROTECTED_REF}/pr-{pr}-"
+    )
+    title = (run.get("display_title") or "").split()
+    full = (
+        queued
+        if run.get("event") == "merge_group"
+        else title[1:4]
+        == [
+            "full",
+            "PR",
+            str(pr),
+        ]
+    )
+    if run.get("path") != f".github/workflows/{WORKFLOW}" or not full:
+        raise ValueError(f"{run['html_url']} is not a Full of PR #{pr}")
+    if run["conclusion"] not in REMOVED:
+        raise ValueError(
+            f"{run['html_url']} did not fail: {run['status']}/{run['conclusion']}"
+        )
+    return run
+
+
+def require_first_native(
+    repository: str, pr: int, opened: str, head: str, diagnose: str | None
+) -> None:
+    """A PR has one `native` run (workflow.md, checks): once one has passed on
+    the PR's commits, another needs --diagnose RUN, naming the failed Full it
+    diagnoses.
+
+    A paid run that repeats a green one was a quarter of each day's CI spend
+    before the rule (#896). A green Full does not count: a checker-only Full
+    runs Quick alone. A workflow change needs no exception: the bootstrap Full
+    it queues on is its passing run at the head."""
+    runs = read_pr_runs(repository, pr, opened, head).runs
+    passed = [
+        tested
+        for tested in runs
+        if tested.profile == "native" and tested.run["conclusion"] == "success"
+    ]
+    if not passed:
+        return
+    green = passed[-1]
+    if diagnose:
+        failed = failed_full(repository, pr, diagnose)
+        log = preflight_stamp.log_override(
+            "diagnose", f"PR #{pr}", head, failed["html_url"]
+        )
+        print(
+            f"PR #{pr} runs `native` again to diagnose {failed['html_url']}; "
+            f"logged in {log}"
+        )
+        return
+    raise ValueError(
+        f"PR #{pr} has had its one `native` run: it passed at {green.commit} "
+        f"({green.run['html_url']}). A review fix or a base update queues on Quick "
+        f"validation: run ci.py enqueue {pr}, and the queue's Full runs every job "
+        "`native` runs. To diagnose a failed Full, name it: --diagnose RUN"
+    )
 
 
 def enqueue_checks(
@@ -1895,7 +2047,7 @@ def pull_state(repository: str, pr: int) -> PullState:
         mergeable=mergeable_word(pull),
         quick=run_fact(quick) if quick else None,
         requests=requests_at_head(shown.runs, head),
-        newest_request=newest_on_commits(shown.runs, shown.commits),
+        newest_request=newest_on_commits(shown.gated(), shown.commits),
         queue=queue_fact(repository, pr),
         reports=reports,
         enqueue_checks=enqueue_assessment(repository, pr, pull, read),
@@ -2142,244 +2294,6 @@ def failure_logs(
         )
 
 
-# CI administration's macOS fallback: the paid runner, set by hand before.
-MACOS_VARIABLE = "CI_MACOS_HEAVY"
-MACOS_RUNNER = "blacksmith-6vcpu-macos-26"
-MACOS_JOB = "Mac OS"
-# GitHub's failure annotation on a job no hosted runner ever took; a cancel by
-# hand also leaves no runner and no step, but says who cancelled.
-UNACQUIRED = "was not acquired by Runner of type hosted"
-
-
-class Terminated(BaseException):
-    """SIGTERM, as signal-witness.py forwards it to a background job."""
-
-
-def capacity_cancelled(repository: str, job: ci_log.Job) -> bool:
-    """A macOS job GitHub cancelled because no hosted runner took it. A job
-    cancelled after a runner started it, or cancelled by hand, does not count."""
-    if not (
-        MACOS_JOB in job["name"]
-        and job["conclusion"] == "cancelled"
-        and not job.get("runner_id")
-        and not job.get("steps")
-    ):
-        return False
-    notes = json.loads(
-        gh("api", f"repos/{repository}/check-runs/{job['id']}/annotations")
-    )
-    return any(UNACQUIRED in (note.get("message") or "") for note in notes)
-
-
-def run_id_of(text: str) -> int:
-    if match := RUN_URL.fullmatch(text):
-        return int(match[2])
-    if text.isdigit():
-        return int(text)
-    raise ValueError(f"a run is an ID or URL, not {text!r}")
-
-
-def capacity_cancellations(repository: str, runs: list[int]) -> list[str]:
-    """Each distinct run attempt whose macOS jobs no hosted runner took; the
-    jobs of one attempt are one cancellation, and a run named twice is one run."""
-    found = []
-    for run_id in dict.fromkeys(runs):
-        latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
-        for attempt in range(1, latest + 1):
-            jobs = run_jobs(repository, run_id, attempt)
-            if any(capacity_cancelled(repository, job) for job in jobs):
-                found.append(f"run {run_id} attempt {attempt}")
-    return found
-
-
-def macos_attempt(
-    rerun: RunTarget, expected: set[str], deadline: float, interval: int
-) -> list[ci_log.Job]:
-    """Wait for an attempt after `rerun`'s to appear, then for every expected
-    macOS job, by name, to complete in it; return them. Other jobs are not
-    waited on."""
-    repository, run_id, after = rerun.repository, rerun.run_id, rerun.attempt
-    attempt = None
-    while True:
-        if attempt is None:
-            latest = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
-            if latest > after:
-                attempt = latest
-                print(f"Rerun is attempt {attempt} of run {run_id}", flush=True)
-        if attempt is not None:
-            jobs = {
-                job["name"]: job
-                for job in run_jobs(repository, run_id, attempt)
-                if job["name"] in expected
-            }
-            if len(jobs) == len(expected) and all(
-                job["status"] == "completed" for job in jobs.values()
-            ):
-                return list(jobs.values())
-        if time.monotonic() >= deadline:
-            raise WaitTimeout(
-                f"The macOS jobs of run {run_id} were still running at the timeout"
-            )
-        time.sleep(min(interval, max(0, deadline - time.monotonic())))
-
-
-def stamp_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def record_fallback(
-    args: argparse.Namespace, repository: str, lines: list[str]
-) -> None:
-    """Record the variable's changes on the PR, or print them for the cadence."""
-    body = (
-        "**macOS fallback** "
-        "([CI administration](docs/root-workflow.md#ci-administration))\n\n"
-        + "\n".join(f"- {line}" for line in lines)
-    )
-    if args.pr is None:
-        print(body)
-        return
-    body += (
-        f"\n\nAgent: {args.agent} | Model: {args.model} | "
-        f"Reasoning effort: {args.effort}"
-    )
-    try:
-        gh("pr", "comment", str(args.pr), "--repo", repository, "--body", body)
-    except subprocess.CalledProcessError as error:
-        print(f"Could not comment on PR #{args.pr} ({error}); the record:\n{body}")
-
-
-def acquire_fallback(repository: str, lines: list[str]) -> bool:
-    """Create the variable, failing when it exists, so two invocations cannot
-    both own it. Whether this invocation owns it; an unanswered create that
-    left the variable set is reported and not owned."""
-    try:
-        detached_gh(
-            "api",
-            "-X",
-            "POST",
-            f"repos/{repository}/actions/variables",
-            "-f",
-            f"name={MACOS_VARIABLE}",
-            "-f",
-            f"value={MACOS_RUNNER}",
-        )
-    except subprocess.CalledProcessError as error:
-        if "HTTP 409" in f"{error.stderr or ''}":
-            raise ValueError(
-                f"{MACOS_VARIABLE} already exists; another invocation or a person "
-                "owns it. Nothing changed."
-            ) from error
-        try:
-            observed = repr(variable(repository, MACOS_VARIABLE))
-        except subprocess.CalledProcessError as unread:
-            observed = f"unknown (reading it back failed too: {unread})"
-        lines.append(
-            f"{stamp_now()} creating {MACOS_VARIABLE} failed ({error}); it may be "
-            f"set (it reads {observed}), owner unknown, so it was left for root "
-            "to check"
-        )
-        raise ValueError(lines[-1]) from error
-    lines.append(f"{stamp_now()} set {MACOS_VARIABLE}={MACOS_RUNNER}")
-    return True
-
-
-def terminate(_number: int, _frame: object) -> None:
-    raise Terminated("SIGTERM")
-
-
-def macos_fallback(args: argparse.Namespace) -> None:
-    """Set the paid macOS runner, rerun the failed jobs, and delete the variable
-    once the rerun's macOS jobs finish, after two hosted-capacity cancellations."""
-    if args.pr is not None and not (args.agent and args.model and args.effort):
-        raise ValueError("--pr records on the PR: pass --agent, --model and --effort")
-    repository = repository_of(args.repo)
-    runs = [run_id_of(text) for text in args.runs]
-    counted = capacity_cancellations(repository, runs)
-    if len(counted) < 2:
-        raise ValueError(
-            f"Counted {len(counted)} hosted-capacity cancellation(s) of macOS jobs "
-            f"({', '.join(counted) or 'none'}); the fallback needs two. A job "
-            "cancelled by hand or after a runner took it does not count. "
-            "Nothing changed."
-        )
-    run_id = runs[-1]
-    before = api(repository, f"actions/runs/{run_id}").get("run_attempt", 1)
-    expected = {
-        job["name"]
-        for job in run_jobs(repository, run_id, before)
-        if MACOS_JOB in job["name"] and job["conclusion"] in JOB_FAILED
-    }
-    if not expected:
-        raise ValueError(
-            f"Run {run_id} attempt {before} has no failed macOS job to rerun. "
-            "Nothing changed."
-        )
-    url = f"https://github.com/{repository}/actions/runs/{run_id}"
-    lines = [f"capacity cancellations: {', '.join(counted)}"]
-    owned = left = False
-    previous = signal.signal(signal.SIGTERM, terminate)
-    try:
-        # A SIGTERM or Ctrl-C during the create waits until the create's outcome
-        # is known, so a variable this invocation set is always owned, and so
-        # deleted.
-        held = {signal.SIGTERM, signal.SIGINT}
-        signal.pthread_sigmask(signal.SIG_BLOCK, held)
-        try:
-            owned = acquire_fallback(repository, lines)
-        finally:
-            signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
-        gh("run", "rerun", str(run_id), "--failed", "--repo", repository)
-        lines.append(
-            f"{stamp_now()} reran the failed jobs of {url} after attempt {before}"
-        )
-        deadline = time.monotonic() + args.timeout
-        jobs = macos_attempt(
-            RunTarget(repository, run_id, before), expected, deadline, args.interval
-        )
-        lines += [
-            f"{job['name']}: {job['conclusion']} {job['html_url']}" for job in jobs
-        ]
-        if failed := [job["name"] for job in jobs if job["conclusion"] != "success"]:
-            raise RunFailed(
-                f"macOS jobs did not pass: {', '.join(failed)}", repository, run_id
-            )
-    except BaseException as error:
-        if owned:
-            lines.append(f"{stamp_now()} stopped: {str(error) or type(error).__name__}")
-        raise
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-        if owned:
-            left = delete_fallback(repository, lines)
-        if owned or len(lines) > 1:
-            record_fallback(args, repository, lines)
-    if left:
-        raise ValueError(f"{MACOS_VARIABLE} is still set; delete it by hand")
-    print(f"macOS jobs of {url} passed on {MACOS_RUNNER}; {MACOS_VARIABLE} deleted")
-
-
-def delete_fallback(repository: str, lines: list[str]) -> bool:
-    """Delete the variable this invocation set and read it back; whether it is
-    still set."""
-    try:
-        gh("variable", "delete", MACOS_VARIABLE, "--repo", repository)
-    except subprocess.CalledProcessError as error:
-        lines.append(f"{stamp_now()} deleting {MACOS_VARIABLE} failed: {error}")
-    try:
-        left = variable(repository, MACOS_VARIABLE) is not None
-    except subprocess.CalledProcessError:
-        left = True
-    if left:
-        lines.append(f"{stamp_now()} {MACOS_VARIABLE} is still set: delete it by hand")
-        print(f"{MACOS_VARIABLE} is still set; delete it by hand", file=sys.stderr)
-    else:
-        lines.append(
-            f"{stamp_now()} deleted {MACOS_VARIABLE}; the variable list no longer has it"
-        )
-    return left
-
-
 def control(repository: str, run: dict, branches: dict[int, str]) -> bool:
     """Whether a run tested a negative control: a PR branch under CONTROL."""
     branch = run.get("head_branch") or ""
@@ -2509,13 +2423,13 @@ HANDLERS = {
     "logs": show_log,
     "comment": lambda args: status_comment.run(args, repository_of(args.repo)),
     "report": lambda args: review_report_comment.run(args, repository_of(args.repo)),
+    "reviewer": lambda args: review_start.run(args, repository_of(args.repo)),
     "queue-wait": queue_wait_command,
     "ready": ready_command,
     "enqueue": lambda args: print(f"PR #{args.pr}: {enqueue(args)}"),
     "failures": failures,
     "request": request_command,
     "wait": lambda args: wait_command(args),
-    "macos-fallback": macos_fallback,
 }
 # The commands whose failure prints the failed jobs' log summary.
 WAITS = ("wait", "request", "queue-wait", "ready")
@@ -2595,6 +2509,13 @@ def request_parser(commands: argparse._SubParsersAction) -> None:
         metavar="REASON",
         help="request a head without a preflight stamp, such as a seeded control; logged",
     )
+    submit.add_argument(
+        "--diagnose",
+        metavar="RUN_ID|RUN_URL",
+        help="request native for a PR that has had its one green native run, to "
+        "diagnose this failed Full of the PR (a merge-group, requested or "
+        "bootstrap run); logged",
+    )
 
 
 def pr_parsers(commands: argparse._SubParsersAction) -> None:
@@ -2664,23 +2585,6 @@ def pr_parsers(commands: argparse._SubParsersAction) -> None:
     counted.add_argument("--since", required=True, help="date, such as 2026-11-10")
     counted.add_argument("--controls", action="store_true", help="count them too")
     counted.add_argument("--repo")
-    fallback_text = (
-        f"after two hosted-capacity cancellations of macOS jobs: set "
-        f"{MACOS_VARIABLE}, rerun the last run's failed jobs, delete the variable "
-        "when its macOS jobs finish, and record both changes. A SIGKILL cannot be "
-        f"caught and can leave {MACOS_VARIABLE} set; the command refuses to start "
-        f"while it is set, and `gh variable list` shows it"
-    )
-    fallback = commands.add_parser(
-        "macos-fallback", help=fallback_text, description=fallback_text
-    )
-    fallback.add_argument("runs", nargs="+", metavar="RUN", help="run IDs or URLs")
-    fallback.add_argument("--pr", type=int, help="record the changes on this PR")
-    fallback.add_argument("--agent", help="with --pr: your agent path")
-    fallback.add_argument("--model", help="with --pr")
-    fallback.add_argument("--effort", help="with --pr")
-    fallback.add_argument("--repo")
-    timing(fallback)
     queued = commands.add_parser(
         "queue-wait",
         help="wait until a queued PR merges (exit 0) or leaves the queue (exit 3)",
@@ -2697,15 +2601,13 @@ def main() -> int:
     log_parser(commands)
     status_comment.register(commands)
     review_report_comment.register(commands)
+    review_start.register(commands)
     request_parser(commands)
     pr_parsers(commands)
     args = parser.parse_args()
     try:
         dispatch(args)
         return 0
-    except Terminated:
-        print(f"ci.py {args.command} stopped by SIGTERM", file=sys.stderr)
-        return 128 + signal.SIGTERM
     except WaitTimeout as timeout:
         print(timeout)
         return 2

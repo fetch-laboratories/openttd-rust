@@ -18,7 +18,10 @@ class Node(Protocol):
     has_error: bool
     is_missing: bool
     named_children: list["Node"]
+    children: list["Node"]
+    child_count: int
     prev_named_sibling: "Node | None"
+    next_sibling: "Node | None"
     parent: "Node | None"
 
     def child_by_field_name(self, name: str) -> "Node": ...

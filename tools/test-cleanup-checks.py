@@ -1374,7 +1374,6 @@ class CarryTests(unittest.TestCase):
                 ),
                 original.replace("pub fn", "pub unsafe fn"),
                 original.replace("pub fn", "fn"),
-                original.replace("pub fn", "/// changed contract\npub fn"),
             ):
                 (root / "rust/x.rs").write_text(changed)
                 predicate = partial(POLICY.unchanged_scope, site)
@@ -1385,6 +1384,18 @@ class CarryTests(unittest.TestCase):
                     self.assertFalse(
                         reviewed(proposal, [comment], "/impl", "new-head", predicate)
                     )
+            # A comment is not the item's code: a reworded contract keeps it.
+            (root / "rust/x.rs").write_text(
+                original.replace("pub fn", "/// changed contract\npub fn")
+            )
+            with (
+                patch.object(POLICY, "ROOT", root),
+                patch.object(POLICY, "git", partial(git, cwd=root)),
+            ):
+                predicate = partial(POLICY.unchanged_scope, site)
+                self.assertTrue(
+                    reviewed(proposal, [comment], "/impl", "new-head", predicate)
+                )
 
     def test_suppression_carry_and_fidelity_reasons(self) -> None:
         old = "rust/a.rs | impl Flag > const ReplaceProtection | allow non_upper_case_globals"
@@ -1488,6 +1499,77 @@ class CarryTests(unittest.TestCase):
         for rule, kept in (("non_upper_case_globals", True), ("unsafe_code", False)):
             with self.subTest(rule=rule):
                 self.check_item_binding(rule, kept)
+
+    def test_unsafe_code_acceptance_survives_a_comment_only_change(self) -> None:
+        """A reworded contract keeps the acceptance; a changed operation voids it."""
+        body = (
+            "/// Reads a live record.\n///\n/// # Safety\n/// `p` names a live record.\n"
+            "#[allow(unsafe_code)]\npub unsafe fn read(p: *const u8) -> u8 {\n"
+            "    /** The tag. */\n    let _ = 1/* unused */;\n"
+            '    let _ = b"x y";\n    let _ = r#"a\n/// b"#;\n'
+            "    let _ = stringify!(><);\n    let _ = stringify!(/** Alpha */ 1);\n"
+            "    // SAFETY: the caller's live record.\n    unsafe { *p }\n}\n"
+        )
+        kept = {
+            "doc and SAFETY lines": body.replace(
+                "names a live record.",
+                "names a record the game keeps live,\n/// as the original's callers do.",
+            ).replace("the caller's live record.", "the module contract."),
+            "block doc": body.replace("/** The tag. */", "/** The record's tag. */"),
+            "inline block comment": body.replace("1/* unused */;", "1;"),
+        }
+        voided = {
+            "operation": body.replace("unsafe { *p }", "unsafe { *p.add(1) }"),
+            "byte string spacing": body.replace('b"x y"', 'b"x  y"'),
+            "raw string line": body.replace("/// b", "/// c"),
+            "raw string prefix": body.replace('r#"a', 'br#"a'),
+            "raw string word": body.replace('r#"a', 'r#"      a'),
+            "macro spacing": body.replace("stringify!(><)", "stringify!(> <)"),
+            "macro doc": body.replace("/** Alpha */ 1", "/** Beta */ 1"),
+        }
+        script = Path(__file__).with_name("lint-policy.py")
+        site = "rust/x.rs | fn read | allow unsafe_code"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"rust/x.rs": body})
+            accepted = git("rev-parse", "HEAD", cwd=root).strip()
+            for name, text in [*kept.items(), *voided.items()]:
+                (root / "rust/x.rs").write_text(text)
+                head = commit(root)
+                with self.subTest(change=name):
+                    with patch.object(POLICY, "git", partial(git, cwd=root)):
+                        same = POLICY.unchanged_scope(site, accepted, head)
+                    # `ci.py enqueue` asks the same question through --same-item.
+                    done = subprocess.run(
+                        [
+                            sys.executable,
+                            str(script),
+                            "--same-item",
+                            site,
+                            accepted,
+                            head,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        env={**os.environ, "GIT_DIR": str(root / ".git")},
+                    )
+                    self.assertEqual(same, name in kept)
+                    self.assertEqual(
+                        done.returncode,
+                        0 if name in kept else POLICY.ITEM_DIFFERS,
+                        done.stderr,
+                    )
+
+    def test_a_comment_in_an_impl_header_leaves_its_site(self) -> None:
+        sites = [
+            POLICY.rust_suppressions(
+                "rust/x.rs",
+                f"#[allow(unsafe_code)]\nimpl Native {comment}{{ fn f() {{}} }}\n",
+            )
+            for comment in ("", "/* before */ ", "/* after */ ")
+        ]
+        self.assertEqual(sites[0], sites[1])
+        self.assertEqual(sites[1], sites[2])
 
     def check_item_binding(self, rule: str, kept_when_item_changes: bool) -> None:
         with tempfile.TemporaryDirectory() as directory:

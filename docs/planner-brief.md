@@ -28,8 +28,8 @@ Write the plan into the issue's body under `## Implementation plan`, below root'
 
 Have the plan reviewed before you report to root. Nobody downstream checks a decision again: the implementer carries it out and the PR's reviewers take it as given.
 
-- Start one reviewer with T3 `delegate_task` and `isolation: "worktree"`, using the [role table](team.md#roles-and-models)'s review model, and this fixed message and nothing more:
-  > Review the plan in <issue URL> under `docs/review-brief.md`. You are /root/plan-review-<issue number>.
+- Start one reviewer with T3 `delegate_task` and `isolation: "worktree"`, on the review row of the [role table](team.md#roles-and-models), with that model, its provider and its effort named in the call, and this fixed message and nothing more:
+  > Review the plan in <issue URL> under `docs/review-brief.md`. You are /root/plan-review-<issue number>, on <the review row's model> at <its effort> effort.
 - Correct the plan in place for each finding. A finding that turns on a question no recorded rule answers, or one you dispute, goes under open questions with the reviewer's point and yours.
 - One review is enough; start a second only if you rewrote a decision.
 
