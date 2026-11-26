@@ -1264,10 +1264,9 @@ unsafe fn town_destruct(s: &CommandServices, t: TownRef) {
     delete_newgrf_inspect_window(GrfSpecFeature::GSF_FAKE_TOWNS, u32::from(t.id.0));
     // SAFETY: Cargo's canonical process owner and native pool remain live; town ID is copied before shell removal.
     unsafe {
-        crate::cargo_storage::openttd_rust_cargo_invalidate(
-            s.cargo,
-            t.id.0,
-            crate::source_type::Source::TOWN,
+        crate::cargo_storage::CargoPacket::invalidate_all_from_source(
+            &*s.cargo,
+            crate::source_type::Source::town(t.id.0),
         );
     }
     (unsafe { &*(*s.founding).shared }.screen_dirty)();

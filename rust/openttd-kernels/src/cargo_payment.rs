@@ -175,6 +175,7 @@ fn deliver_goods(
     src: Source,
     monitors: &crate::cargomonitor::Services,
 ) -> i64 {
+    crate::services_assert::assert_with(|| (num_pieces as i32) > 0);
     let industry_source = if src.kind == Source::INDUSTRY {
         IndustryID(src.id)
     } else {
@@ -400,71 +401,141 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
         drop(Box::from_raw(p));
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_transfer(
-    p: *mut Payment,
-    s: *const Services,
-    cargo: u8,
-    packet: *const crate::cargo_storage::Packet,
+/// `CargoPayment::PayTransfer`: handle payment for transfer of the given cargo packet; the
+/// payment for `count` items of `cp` is not made. Returns the amount of money paid for the
+/// transfer.
+///
+/// # Safety
+/// `payment` is the live payment and `cp` a live packet record; no reference to either spans a
+/// callback.
+pub(crate) unsafe fn pay_transfer(
+    payment: *mut Payment,
+    s: &Services,
+    shared: &crate::services::Services,
+    cargo: CargoType,
+    cp: *const crate::cargo_storage::CargoPacket,
     count: u32,
-    distance: u32,
-    periods: u16,
+    current_tile: crate::tile_type::TileIndex,
 ) -> i64 {
-    let s = unsafe { &*s };
-    let cargo = CargoType(cargo);
-    // Pay the transfer vehicle the journey's payment from the source to this point,
-    // less the sum of previous transfer payments.
-    let feeder = crate::cargo_storage::share(unsafe { packet.read() }, count).saturating_neg();
-    let profit = feeder
-        .saturating_add(get_transported_goods_income(
-            s, count, distance, periods, cargo,
-        ))
-        .saturating_mul(i64::from((s.feeder_payment_share)()))
-        / 100;
-    unsafe {
-        // Accumulate transfer profits for the whole vehicle.
-        (*p).fields.visual_transfer = (*p).fields.visual_transfer.saturating_add(profit);
-    }
-    profit // Account for the virtual profit already made for this cargo packet.
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
-    p: *mut Payment,
-    d: *mut Delivery,
-    s: *const Services,
-    cargo: u8,
-    packet: *const crate::cargo_storage::Packet,
-    count: u32,
-    distance: u32,
-    periods: u16,
-    source: Source,
-    monitors: *const crate::cargomonitor::Services,
-) {
-    let s = unsafe { &*s };
-    let front = unsafe { (*p).fields.front };
-    let station = unsafe { (*p).station };
-    let company = CompanyID(record(front).owner_raw());
-    // Handle end-of-route payment.
-    let profit = deliver_goods(
-        d,
+    // SAFETY: The caller's live record; the reads end before the income callback.
+    let (feeder_share, distance, periods_in_transit) = unsafe {
+        (
+            (*cp).get_feeder_share_part(count),
+            (*cp).get_distance(shared, current_tile),
+            (*cp).get_periods_in_transit(),
+        )
+    };
+    // Pay transfer vehicle the difference between the payment for the journey from the source
+    // to the current point, and the sum of the previous transfer payments.
+    let profit = feeder_share.saturating_neg().saturating_add(get_transported_goods_income(
         s,
         count,
-        CargoType(cargo),
+        distance,
+        periods_in_transit,
+        cargo,
+    ));
+    let profit = profit.saturating_mul(i64::from((s.feeder_payment_share)())) / 100;
+    // SAFETY: The caller's live payment.
+    unsafe {
+        // Accumulate transfer profits for whole vehicle.
+        (*payment).fields.visual_transfer = (*payment).fields.visual_transfer.saturating_add(profit);
+    }
+    profit // Account for the (virtual) profit already made for the cargo packet.
+}
+/// The payment and tables `CargoPayment::PayFinalDelivery` reaches.
+pub(crate) struct FinalDelivery<'a> {
+    /// `CargoPayment::rust_state` of the paying vehicle.
+    pub(crate) payment: *mut Payment,
+    pub(crate) services: &'a Services,
+    pub(crate) monitors: &'a crate::cargomonitor::Services,
+    pub(crate) shared: &'a crate::services::Services,
+    /// `GetCargoDeliveryState()`.
+    pub(crate) cargo_delivery_state: extern "C" fn() -> *mut Delivery,
+}
+impl<'a> FinalDelivery<'a> {
+    /// The context of the native payment `payment`, from the storage table's slots.
+    pub(crate) fn of(s: &'a crate::cargo_storage::Services, payment: *mut NativePayment) -> Self {
+        // SAFETY: The storage table names the immutable process-lifetime payment and monitor
+        // tables.
+        let (services, monitors) = unsafe { (&*s.payment, &*s.monitors) };
+        Self {
+            payment: (s.payment_state)(payment),
+            services,
+            monitors,
+            shared: s.shared(),
+            cargo_delivery_state: s.cargo_delivery_state,
+        }
+    }
+}
+/// `CargoPayment::PayFinalDelivery`: handle payment for final delivery of `count` items of the
+/// given cargo packet.
+///
+/// # Safety
+/// `ctx.payment` is the live payment and `cp` a live packet record; no reference to either spans
+/// a callback.
+pub(crate) unsafe fn pay_final_delivery(
+    ctx: &FinalDelivery<'_>,
+    cargo: CargoType,
+    cp: *const crate::cargo_storage::CargoPacket,
+    count: u32,
+    current_tile: crate::tile_type::TileIndex,
+) {
+    // SAFETY: The caller's live payment and record; the reads end before the delivery.
+    let (station, front, distance, periods_in_transit, source) = unsafe {
+        (
+            (*ctx.payment).station,
+            (*ctx.payment).fields.front,
+            (*cp).get_distance(ctx.shared, current_tile),
+            (*cp).get_periods_in_transit(),
+            (*cp).get_source(),
+        )
+    };
+    let company = CompanyID(record(front).owner_raw());
+    // Handle end of route payment.
+    let profit = deliver_goods(
+        (ctx.cargo_delivery_state)(),
+        ctx.services,
+        count,
+        cargo,
         station,
         distance,
-        periods,
+        periods_in_transit,
         company,
         source,
-        unsafe { &*monitors },
+        ctx.monitors,
     );
+    // SAFETY: As above.
     unsafe {
-        (*p).fields.route_profit = (*p).fields.route_profit.saturating_add(profit);
+        (*ctx.payment).fields.route_profit = (*ctx.payment).fields.route_profit.saturating_add(profit);
+        // The vehicle's profit is whatever route profit there is minus feeder shares.
+        let visual = profit.saturating_sub((*cp).get_feeder_share_part(count));
+        (*ctx.payment).fields.visual_profit = (*ctx.payment).fields.visual_profit.saturating_add(visual);
     }
-    // The vehicle's profit is the route profit minus feeder shares.
-    let visual =
-        profit.saturating_sub(crate::cargo_storage::share(unsafe { packet.read() }, count));
+}
+/// `CargoPayment::PayFinalDelivery`, for the consoles: `payment` pays for `count` items of the
+/// packet shell `cp` on `tile`.
+///
+/// # Safety
+/// `s` is the live storage table, `payment` a live payment and `cp` a live packet shell.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
+    s: *const crate::cargo_storage::Services,
+    payment: *mut NativePayment,
+    cargo: u8,
+    cp: *mut std::ffi::c_void,
+    count: u32,
+    tile: u32,
+) {
+    // SAFETY: The caller's live table, payment and packet.
+    let s = unsafe { &*s };
     unsafe {
-        (*p).fields.visual_profit = (*p).fields.visual_profit.saturating_add(visual);
+        pay_final_delivery(
+            &FinalDelivery::of(s, payment),
+            CargoType(cargo),
+            (s.packet)(cp),
+            count,
+            crate::tile_type::TileIndex(tile),
+        );
     }
 }
 #[unsafe(no_mangle)]

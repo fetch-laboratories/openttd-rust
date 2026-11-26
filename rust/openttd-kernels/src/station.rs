@@ -1078,7 +1078,7 @@ pub(crate) unsafe fn for_each_catchment_tile(
 pub(crate) unsafe fn move_goods_to_station(
     cargo: CargoType,
     amount: u32,
-    source: crate::cargo_storage::Source,
+    source: crate::source_type::Source,
     all_stations: *const StationList,
     exclusivity: CompanyID,
     c: &Ctx<'_>,
@@ -1102,7 +1102,7 @@ pub(crate) unsafe fn move_goods_to_station(
 pub(crate) unsafe fn move_goods_to_station_raw(
     cargo: u8,
     amount: u32,
-    source: crate::cargo_storage::Source,
+    source: crate::source_type::Source,
     all_stations: *const StationList,
     exclusivity: u8,
     c: &Ctx<'_>,

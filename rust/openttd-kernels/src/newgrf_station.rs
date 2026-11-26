@@ -123,7 +123,7 @@ pub struct Services {
     shared: *const Shared,
     pub(crate) cargo: *const crate::cargo_storage::Services,
     pub(crate) cargo_owner:
-        extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
+        extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::StationCargoList,
     group_count: extern "C" fn(*const RailSpec) -> usize,
     group_cargo: extern "C" fn(*const RailSpec, usize) -> u8,
     group: extern "C" fn(*const RailSpec, u8) -> *const c_void,
@@ -170,7 +170,7 @@ impl Services {
     /// other entries terminate.
     pub(crate) fn cargo_fixture(
         cargo: *const crate::cargo_storage::Services,
-        cargo_owner: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
+        cargo_owner: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::StationCargoList,
     ) -> Self {
         macro_rules! unused {
             (($($arg:ty),*) $(-> $result:ty)?) => {{
@@ -239,7 +239,7 @@ impl Services {
         if list.is_null() {
             0
         } else {
-            unsafe { crate::cargo_storage::openttd_rust_cargo_list_station_total(list) }
+            unsafe { (*list).total_count() }
         }
     }
     fn get_empty_mask(&self, st: *mut BaseStation) -> u64 {
@@ -594,12 +594,9 @@ fn cargo_variable(
             }
             unsafe {
                 if var == 0x68 {
-                    u32::from(crate::cargo_storage::openttd_rust_cargo_list_first(
-                        list,
-                        native.cargo,
-                    ))
+                    u32::from((*list).get_first_station(&*native.cargo).0)
                 } else {
-                    crate::cargo_storage::openttd_rust_cargo_list_periods(list)
+                    (*list).periods_in_transit()
                 }
             }
         }

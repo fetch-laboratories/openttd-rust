@@ -121,7 +121,7 @@ pub struct Services {
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
     order: unsafe extern "C" fn(V) -> OrderState,
-    pub(crate) cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
+    pub(crate) cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::VehicleCargoList,
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
@@ -179,6 +179,11 @@ pub struct Services {
 }
 
 impl Services {
+    /// `CargoStorageServices()`: the packet pool and payment table of `Vehicle::cargo`.
+    pub(crate) fn storage(&self) -> &crate::cargo_storage::Services {
+        // SAFETY: The binding returns the immutable process-lifetime storage table.
+        unsafe { &*(self.cargo_services)() }
+    }
     /// `Engine::Get(id)`, through the resolver's `RustEngineByID` binding.
     pub(crate) fn engine(&self, id: EngineID) -> crate::vehicle::EngineRef {
         // SAFETY: The binding is `RustEngineByID`, which asserts the ID in the native engine
@@ -301,7 +306,7 @@ test_leaves! {
     with_age: age: unsafe extern "C" fn(V) -> i32;
     with_cache: cache: unsafe extern "C" fn(V) -> *mut Cache;
     with_capabilities: capabilities: &'static crate::engine_capabilities::Services;
-    with_cargo_owner: cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List;
+    with_cargo_owner: cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::VehicleCargoList;
     with_cargo_type: cargo_type: unsafe extern "C" fn(V) -> u8;
     with_engine_by_id: engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine;
     with_id: id: unsafe extern "C" fn(V) -> u32;
@@ -343,7 +348,7 @@ pub(crate) const fn test_table_with_members(
     id: unsafe extern "C" fn(V) -> u32,
     cargo_type: unsafe extern "C" fn(V) -> u8,
     cargo_subtype: unsafe extern "C" fn(V) -> u8,
-    cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
+    cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::VehicleCargoList,
 ) -> Services {
     Services {
         cargo_owner,
@@ -863,7 +868,7 @@ pub(crate) unsafe fn resolve_real(s: &Services, state: *const State, group: Grou
         if total == 0 {
             return null();
         }
-        let cargo = crate::cargo_storage::openttd_rust_cargo_list_stored((s.cargo_owner)(v));
+        let cargo = (*(s.cargo_owner)(v)).stored_count();
         let set = cargo.wrapping_mul(total)
             / u32::from(crate::vehicle::VehicleRef::of(v).cargo_cap().max(1));
         (s.real_at)(group, motion, set.min(total - 1))
@@ -1756,19 +1761,14 @@ unsafe fn variable(
             0xba | 0xbb => return high(u32::from(crate::vehicle::VehicleRef::of(v).cargo_cap())),
             0xbc | 0xbd => {
                 return high(
-                    crate::cargo_storage::openttd_rust_cargo_list_stored((s.cargo_owner)(v))
-                        .min(u32::from(u16::MAX)),
+                    (*(s.cargo_owner)(v)).stored_count().min(u32::from(u16::MAX)),
                 );
             }
             0xbe => {
-                return u32::from(crate::cargo_storage::openttd_rust_cargo_list_first(
-                    (s.cargo_owner)(v),
-                    (s.cargo_services)(),
-                ));
+                return u32::from((*(s.cargo_owner)(v)).get_first_station(s.storage()).0);
             }
             0xbf => {
-                return crate::cargo_storage::openttd_rust_cargo_list_periods((s.cargo_owner)(v))
-                    .min(u32::from(u8::MAX));
+                return (*(s.cargo_owner)(v)).periods_in_transit().min(u32::from(u8::MAX));
             }
             0xc0 | 0xc1 => return high((s.age)(v).clamp(0, i32::from(u16::MAX)) as u32),
             0xc2 | 0xc3 => return high((s.max_age)(v).clamp(0, i32::from(u16::MAX)) as u32),

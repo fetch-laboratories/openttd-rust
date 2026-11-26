@@ -968,9 +968,9 @@ unsafe fn transport_industry_goods(
                 .wrapping_add(cw as u16);
         }
         let c = catchment.get_or_insert_with(|| crate::station::Ctx::from_shared(s.shared()));
-        let source = crate::cargo_storage::Source {
+        let source = crate::source_type::Source {
             id: (c.c.industry_id)(i.cast()).0,
-            source_type: crate::source_type::Source::INDUSTRY,
+            kind: crate::source_type::Source::INDUSTRY,
         };
         // SAFETY: Live owner; the station set is re-read between observations.
         let am = unsafe {

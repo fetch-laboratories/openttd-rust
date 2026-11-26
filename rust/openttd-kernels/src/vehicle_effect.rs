@@ -632,7 +632,7 @@ mod tests {
     }
     extern "C" fn unused_owner(
         _: *mut crate::vehicle::OpenTTDVehicle,
-    ) -> *const crate::cargo_storage::List {
+    ) -> *const crate::cargo_storage::VehicleCargoList {
         unreachable!()
     }
     extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {

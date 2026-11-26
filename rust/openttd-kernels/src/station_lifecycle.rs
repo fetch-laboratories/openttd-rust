@@ -513,9 +513,8 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
         for cargo in (0..NUM_CARGO).map(CargoType) {
             let list = links.station_cargo(st, cargo);
             if !list.is_null() {
-                unsafe {
-                    crate::cargo_storage::openttd_rust_cargo_list_clear(list.cast_mut());
-                }
+                // SAFETY: The goods entry's live list; no other reference covers it.
+                unsafe { (*list.cast_mut()).on_clean_pool() };
             }
         }
         return;
@@ -555,7 +554,7 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;
             let other = (w.get)(other_id);
             let goods = (links.goods_entry)(other, cargo);
-            let flows = (storage.flow_map)(goods.cast());
+            let flows = (storage.flow_map)(goods);
             if !flows.is_null() {
                 unsafe { &mut *flows }.erase(id);
                 let destination = (graphs.node)(st, cargo);
@@ -635,19 +634,17 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
         let list = links.station_cargo(st, cargo);
         if !list.is_null() {
             unsafe {
-                crate::cargo_storage::truncate_station(
+                crate::cargo_storage::StationCargoList::truncate(
                     list.cast_mut(),
-                    *storage,
+                    storage,
                     u32::MAX,
-                    std::ptr::null_mut(),
+                    None,
                 );
             }
         }
     }
-    // `CargoPacket::InvalidateAllFrom(StationID)`: the `u8::MAX` source kind selects
-    // the station form of the shared invalidation entry.
     unsafe {
-        crate::cargo_storage::openttd_rust_cargo_invalidate(storage, id.0, u8::MAX);
+        crate::cargo_storage::CargoPacket::invalidate_all_from_station(storage, id);
     }
     crate::station::spatial::remove(s.shared, id);
     if (s.sign_valid)(st) {

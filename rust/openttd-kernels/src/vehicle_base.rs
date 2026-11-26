@@ -1210,6 +1210,15 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn tile(self) -> TileIndex {
         read_field!(self.0.as_ptr(), tile)
     }
+    /// `Vehicle::GetCargoTile`: the tile cargo is loaded or unloaded on, which is the vehicle's
+    /// own tile; `Aircraft::GetCargoTile` overrides it with the first part's (`First()->tile`).
+    pub(crate) fn get_cargo_tile(self) -> TileIndex {
+        if self.vehicle_type() == VehicleType::AIRCRAFT {
+            self.first().tile()
+        } else {
+            self.tile()
+        }
+    }
     #[inline]
     pub(crate) fn tile_raw(self) -> u32 {
         self.tile().0
@@ -1344,7 +1353,7 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn cargo(
         self,
         newgrf: &crate::newgrf_vehicle::Services,
-    ) -> *mut crate::cargo_storage::List {
+    ) -> *mut crate::cargo_storage::VehicleCargoList {
         // SAFETY: The slot reads the live record's shell.
         unsafe { (newgrf.cargo_owner)(self.0.as_ptr()) }.cast_mut()
     }

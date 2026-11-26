@@ -1087,7 +1087,7 @@ impl Game<'_> {
         let refit = self.vs.visits().refit;
         let owner = u.vehicle().cargo(self.vs.newgrf());
         // SAFETY: The live record's canonical cargo list; no borrow survives the truncation.
-        unsafe { crate::cargo_storage::truncate_vehicle(owner, *refit.cargo, u32::from(max_move)) };
+        unsafe { crate::cargo_storage::VehicleCargoList::truncate(owner, refit.cargo, u32::from(max_move)) };
     }
 
     /// `Train::GetCurveSpeedModifier`: get the curve speed modifier of a single part of a

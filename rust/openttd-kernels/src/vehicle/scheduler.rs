@@ -363,7 +363,7 @@ fn age_cargo<const COUNTED: bool>(
                 crate::witness::hit(crate::witness::VEHICLE_CARGO_AGES);
             }
             // SAFETY: The surviving vehicle's live list and the process-lifetime cargo table.
-            unsafe { cargo_storage::age::<COUNTED>(cargo, tables.cargo) };
+            unsafe { cargo_storage::VehicleCargoList::age_cargo::<COUNTED>(cargo, &*tables.cargo) };
             store!(
                 COUNTED,
                 v.set_cargo_age_counter(load!(COUNTED, v.cached_cargo_age_period()))

@@ -282,7 +282,7 @@ impl Services {
     /// `v->cargo.StoredCount()`.
     fn stored_count(&self, v: VehicleRef) -> u32 {
         // SAFETY: the record's live canonical cargo list; no borrow survives this read.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_stored(v.cargo(self.newgrf())) }
+        unsafe { (*v.cargo(self.newgrf())).stored_count() }
     }
     /// `v->GetEngine()->DetermineCapacity(v)`.
     fn determine_capacity(&self, v: VehicleRef) -> u32 {
