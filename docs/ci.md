@@ -55,7 +55,6 @@ Full is the merge gate; its builds are set by [ADR 0018](adr/0018-builds-before-
 | `python3 tools/ci.py enqueue PR` | Queue a PR ([integration](workflow.md#integration)). It needs `Quick validation` green at the head and the PR's newest requested or bootstrap run, on any of its own commits, green; a PR that changes `.github/workflows/` needs that run, and a green bootstrap Full, at the head. It refuses, naming each one, while a cleanup record lacks its acceptance. |
 | `python3 tools/ci.py queue-wait PR` | Wait, as a background job, until a queued PR merges or leaves the queue. |
 | `python3 tools/ci.py failures --since DATE` | Count failed runs. |
-| `python3 tools/ci.py macos-fallback RUN [RUN ...] [--pr N]` | Root's macOS fallback ([CI administration](root-workflow.md#ci-administration)). |
 
 - Reads through `ci.py` (REST GETs, variable lists, the queue-state query) are tried three times on HTTP 502, 503 or 504, and on the `Bad credentials (HTTP 401)` GitHub sometimes gives a healthy login. A dispatch, rerun, variable change or comment is not repeated; `enqueue` reads the queue after a failed merge call and tries once more only when the PR is not queued.
 
@@ -95,7 +94,7 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 | `CI_LINUX_COMPARISONS` | Component comparison runner | unset | `ubuntu-24.04` |
 | `CI_LINUX_PLATFORM` | Linux Clang runner | unset | `ubuntu-24.04` |
 | `CI_WINDOWS_HEAVY` | Windows runner | `blacksmith-4vcpu-windows-2025` | `windows-2022` |
-| `CI_MACOS_HEAVY` | macOS runner | unset | `macos-latest` |
+| `CI_MACOS_HEAVY` | macOS runner | unset, and stays unset: no macOS job runs on a paid runner ([ADR 0009](adr/0009-paid-runner-assignment.md)) | `macos-latest` |
 | `CI_MERGE_QUEUE` | [Merge-queue](#merge-queue) behaviour; set it together with the ruleset | `true` | queue behaviour off |
 | `CI_ON_DEMAND` | Requested CI: PR pushes skip automatic heavy jobs and `ci:full` label requests are refused | `true` | every PR push runs the heavy jobs |
 | `MIGRATION_CCACHE` | Nothing: no workflow or tool reads it | `true` | no effect |
