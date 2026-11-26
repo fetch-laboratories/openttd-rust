@@ -328,6 +328,10 @@ impl CargoList {
     }
     /// `CargoList::PeriodsInTransit`: returns average number of cargo aging periods in
     /// transit for a cargo entity.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the original narrows the `uint64_t` quotient to `uint`"
+    )]
     pub(crate) fn periods_in_transit(&self) -> u32 {
         if self.fields.count == 0 {
             0
@@ -358,6 +362,10 @@ impl CargoPacket {
     /// `CargoPacket::Split`: split this packet in two and return the split off part, or null
     /// if no packet could be allocated!
     #[allow(unsafe_code, reason = "copies and writes the caller's live packet")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the split constructor and `count -= new_size` narrow `uint` to the `uint16_t` count, as the original does"
+    )]
     pub(crate) unsafe fn split(this: *mut Self, s: &Services, new_size: u32) -> *mut c_void {
         if (s.can_allocate)() == 0 {
             return std::ptr::null_mut();
@@ -393,6 +401,10 @@ impl CargoPacket {
     }
     /// `CargoPacket::Reduce`: reduce the packet by the given amount and remove the feeder
     /// share.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`this->count -= count` narrows `uint` to the `uint16_t` count, as the original does"
+    )]
     pub(crate) fn reduce(&mut self, count: u32) {
         assert_with(|| count < u32::from(self.count));
         self.feeder_share = self
@@ -413,6 +425,10 @@ impl CargoPacket {
     ///
     /// Further more, we keep track of the amount of tiles the cargo moved inside a vehicle. This
     /// is used in `GetDistance()` below.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`travelled.x += TileX(tile)` narrows the `uint` coordinate to `int16_t`, as the original does"
+    )]
     pub(crate) fn update_loading_tile(
         &mut self,
         shared: &crate::services::Services,
@@ -437,6 +453,10 @@ impl CargoPacket {
             .wrapping_add(world.dimensions.tile_y(tile) as i16);
     }
     /// `CargoPacket::UpdateUnloadingTile`: update for the cargo being unloaded on this tile.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`travelled.x -= TileX(tile)` narrows the `uint` coordinate to `int16_t`, as the original does"
+    )]
     pub(crate) fn update_unloading_tile(
         &mut self,
         shared: &crate::services::Services,
@@ -463,6 +483,10 @@ impl CargoPacket {
     }
     /// `CargoPacket::GetFeederShare(part)`: gets part of the amount of money already paid to
     /// earlier vehicles in the feeder chain.
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "`Money * uint` multiplies by the part as the `int` factor `OverflowSafeInt` takes"
+    )]
     pub(crate) fn get_feeder_share_part(&self, part: u32) -> i64 {
         self.feeder_share.saturating_mul(i64::from(part as i32)) / i64::from(i32::from(self.count))
     }
@@ -488,6 +512,10 @@ impl CargoPacket {
         StationID(self.next_hop)
     }
     /// `CargoPacket::GetDistance`: get the current distance the cargo has travelled.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`travelled.x - TileX(current_tile)` narrows the `uint` coordinate to `int16_t`, as the original does"
+    )]
     pub(crate) fn get_distance(
         &self,
         shared: &crate::services::Services,
@@ -1122,6 +1150,10 @@ impl VehicleCargoList {
     /// some action to it. If the action returns true the cargo packet will be removed from the
     /// list. Otherwise it will be kept and the loop will be aborted.
     #[allow(unsafe_code, reason = "applies the action to the caller's live list")]
+    #[allow(
+        clippy::if_not_else,
+        reason = "`PopCargo` tests `it != begin` first, as the original does"
+    )]
     unsafe fn pop_cargo(this: *mut Self, mut action: impl CargoAction) {
         // SAFETY: The module's contract; each reference ends before the action.
         let (Some(mut it), Some(begin)) = (unsafe { (*this).0.last }, unsafe { (*this).0.first })
@@ -1257,6 +1289,10 @@ impl VehicleCargoList {
     #[allow(
         unsafe_code,
         reason = "reorders the caller's live list and pays its transfers"
+    )]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one original body, `VehicleCargoList::Stage`"
     )]
     pub(crate) unsafe fn stage(this: *mut Self, s: &Services, args: &StageArgs<'_>) -> bool {
         // SAFETY: The module's contract; each reference ends before the next call.
@@ -3047,6 +3083,10 @@ pub(crate) mod tests {
         unsafe_code,
         reason = "the fixture builds, reads or frees raw lists, packets and records"
     )]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one case for each restored assertion, in the plan's order"
+    )]
     fn list_assertions_reach_the_native_check() {
         if crate::services_assert::isolate_test_check(
             "cargo_storage::tests::list_assertions_reach_the_native_check",
@@ -3425,8 +3465,8 @@ pub(crate) mod tests {
             let owner = crate::station_service::openttd_rust_station_service_new();
             unsafe {
                 (*crate::station_service::openttd_rust_station_service_fields(owner))
-                    .always_accepted = 1
-            };
+                    .always_accepted = 1;
+            }
             STATION.set(owner);
             FINANCES.set(crate::company::openttd_rust_company_state_create());
             TOWN.set(crate::town::openttd_rust_town_new());
@@ -3446,8 +3486,8 @@ pub(crate) mod tests {
                 station_town,
                 subsidies,
                 finance,
-                feeder_payment_share,
                 shared,
+                feeder_payment_share,
                 ..crate::test_tables::CARGO
             }));
             let monitors: &'static _ = Box::leak(Box::new(crate::cargomonitor::Services {
@@ -3892,14 +3932,18 @@ pub(crate) mod tests {
             articulate(&parts[3]);
         }
         for (index, entry) in source.iter_mut().enumerate() {
-            entry.id = index as u8 + 1;
+            entry.id = u8::try_from(index).unwrap() + 1;
         }
         for (index, entry) in destination.iter_mut().enumerate() {
-            entry.id = index as u8 + 11;
+            entry.id = u8::try_from(index).unwrap() + 11;
         }
         unsafe {
             for (index, entry) in source.iter().enumerate() {
-                keep(entry.list, &service, cargo(1, index as u16 + 10, 0));
+                keep(
+                    entry.list,
+                    &service,
+                    cargo(1, u16::try_from(index).unwrap() + 10, 0),
+                );
             }
             CAPACITY_CALLS.with(|calls| calls.borrow_mut().clear());
             assert!(!transfer_cargo(
@@ -4036,7 +4080,7 @@ mod scaling_tests {
         // SAFETY: Allocated above; the list takes it.
         unsafe {
             (*packet).count = 1;
-            (*packet).periods_in_transit = periods as u16;
+            (*packet).periods_in_transit = u16::try_from(periods).unwrap();
         }
         packet.cast()
     }
@@ -4140,12 +4184,13 @@ mod scaling_tests {
         unsafe {
             openttd_rust_cargo_list_insert(list, 0, packet_aged(size));
             for i in 0..size {
-                openttd_rust_cargo_list_insert(list, (i + 2) as u16, packet_aged(i));
+                openttd_rust_cargo_list_insert(list, u16::try_from(i + 2).unwrap(), packet_aged(i));
             }
             let periods = u64::from(size) * u64::from(size - 1) / 2 + u64::from(size);
             imported(list, size + 1, periods, 0);
             let mut expected = snapshot(list);
-            let (last_key, missing_key) = (StationID((size + 1) as u16), StationID(1));
+            let (last_key, missing_key) =
+                (StationID(u16::try_from(size + 1).unwrap()), StationID(1));
             for _ in 0..1024 {
                 assert!((*station).has_cargo_for(&[last_key]));
                 assert!(!(*station).has_cargo_for(&[missing_key]));

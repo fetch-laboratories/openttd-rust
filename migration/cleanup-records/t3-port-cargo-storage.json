@@ -1438,5 +1438,41 @@
     "reason": "Each action moves the caller's live packet, under the module's contract.",
     "retiring_owner": "#634",
     "retirement_condition": "Retires when the packet pool's records are Rust-owned and a list holds its packets by value, so the bodies borrow lists and packets safely (#634)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_storage.rs | impl VehicleCargoList > fn pop_cargo | allow clippy::if_not_else",
+    "operation": "cargo_storage::VehicleCargoList::pop_cargo",
+    "source_contract": "`VehicleCargoList::PopCargo` (cargopacket.cpp).",
+    "reason": "The original tests `it != begin` first and erases with `it--` there; the branches keep its order.",
+    "retiring_owner": "none",
+    "retirement_condition": "Permanent while the body follows the original's branch order."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_storage.rs | impl VehicleCargoList > fn stage | allow clippy::too_many_lines",
+    "operation": "cargo_storage::VehicleCargoList::stage",
+    "source_contract": "`VehicleCargoList::Stage` (cargopacket.cpp).",
+    "reason": "One original body, ported whole with its assertions, as the porting standard has it.",
+    "retiring_owner": "none",
+    "retirement_condition": "Permanent while the body is the original's one function."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_storage.rs | mod tests > fn list_assertions_reach_the_native_check | allow clippy::too_many_lines",
+    "operation": "cargo_storage::tests::list_assertions_reach_the_native_check",
+    "source_contract": "The plan's first new test: one case for each restored list assertion; no original body.",
+    "reason": "One isolated child process runs every case, since only that child's policy counts failed checks.",
+    "retiring_owner": "none",
+    "retirement_condition": "Permanent while the cases share the isolated child."
   }
 ]
