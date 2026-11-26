@@ -763,8 +763,8 @@ impl<'a> Ctx<'a> {
             crate::landscape_cmd::clear_command(
                 self.command,
                 out.0,
-                tile.0,
-                DoCommandFlags::from_element(DoCommandFlag::Auto).0,
+                tile,
+                DoCommandFlags::from_element(DoCommandFlag::Auto),
             );
             return;
         }
@@ -1747,7 +1747,7 @@ impl Ctx<'_> {
             }) {
                 return;
             }
-            crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur.0, flags.0);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -3118,7 +3118,7 @@ impl Ctx<'_> {
         } else if rt == RoadType::INVALID_ROADTYPE {
             cost.error(STR_ERROR_THERE_IS_NO_ROAD.0);
         } else {
-            crate::landscape_cmd::clear_command(self.command, ret.0, cur_tile.0, flags.0);
+            crate::landscape_cmd::clear_command(self.command, ret.0, cur_tile, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -4491,7 +4491,12 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
-            crate::landscape_cmd::clear_command(self.command, ret.0, tile_iter.tile, flags.0);
+            crate::landscape_cmd::clear_command(
+                self.command,
+                ret.0,
+                crate::tile_type::TileIndex(tile_iter.tile),
+                flags,
+            );
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -5026,7 +5031,7 @@ impl Ctx<'_> {
             return;
         }
         cost.set(crate::company::price(Price::PR_BUILD_STATION_DOCK));
-        crate::landscape_cmd::clear_command(self.command, ret.0, tile.0, flags.0);
+        crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -5056,7 +5061,7 @@ impl Ctx<'_> {
         /* Get the water class of the water tile before it is cleared.*/
         let wc = WaterClass(world.water_class(tile_cur.0));
         let add_cost = !(self.shared.is_water_tile)(tile_cur.0);
-        crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur.0, flags.0);
+        crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur, flags);
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -5715,7 +5720,7 @@ impl Ctx<'_> {
                 return cost.set(crate::company::price(Price::PR_BUILD_FOUNDATION));
             }
         }
-        crate::landscape_cmd::clear_command(self.command, cost.0, tile.0, flags.0);
+        crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
     }
     /// `ChangeTileOwner_Station`'s removal of a drive-through road stop for a
     /// bankrupt owner: `CMD_REMOVE_FROM_ROAD_WAYPOINT` or `CMD_REMOVE_ROAD_STOP`.
@@ -5904,10 +5909,9 @@ impl Ctx<'_> {
             crate::landscape_cmd::clear_command(
                 self.command,
                 cost.0,
-                tile.0,
-                (DoCommandFlags::from_element(DoCommandFlag::Execute)
-                    | DoCommandFlags::from_element(DoCommandFlag::Bankrupt))
-                .0,
+                tile,
+                DoCommandFlags::from_element(DoCommandFlag::Execute)
+                    | DoCommandFlags::from_element(DoCommandFlag::Bankrupt),
             );
             /* Set tile owner of water under (now removed) buoy and dock to OWNER_NONE.
              * Update owner of buoy if it was not removed (was in orders).

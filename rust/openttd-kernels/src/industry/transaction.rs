@@ -67,7 +67,7 @@ pub struct TransactionServices {
     pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
     pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub town_position: unsafe extern "C" fn(*const TownHandle) -> u32,
-    pub industry: unsafe extern "C" fn(u16) -> *mut ShellHandle,
+    pub industry: unsafe extern "C" fn(u32) -> *mut ShellHandle,
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
     pub tile_height: unsafe extern "C" fn(u32) -> u32,
     pub set_company: unsafe extern "C" fn(u8),
@@ -317,7 +317,9 @@ impl Engine<'_> {
                 continue;
             }
             for n in 0..self.registry_count(conflicting_type) {
-                let shell = unsafe { (self.x.industry)(self.registry_id(conflicting_type, n).0) };
+                let shell = unsafe {
+                    (self.x.industry)(u32::from(self.registry_id(conflicting_type, n).0))
+                };
                 let owner = unsafe { (self.m.owner)(shell) };
                 let position = TileIndex(unsafe { (*owner).metadata.tile });
                 // Within 14 tiles from another industry is considered close.
@@ -342,7 +344,7 @@ impl Engine<'_> {
         );
         if !self.s.multiple_industry_per_town() {
             for n in 0..self.registry_count(kind) {
-                let shell = unsafe { (self.x.industry)(self.registry_id(kind, n).0) };
+                let shell = unsafe { (self.x.industry)(u32::from(self.registry_id(kind, n).0)) };
                 if unsafe { (self.x.town)(shell) } == town {
                     self.fail(STR_ERROR_ONLY_ONE_ALLOWED_PER_TOWN);
                     return None;
@@ -430,8 +432,8 @@ impl Engine<'_> {
                         crate::landscape_cmd::clear_command(
                             &*self.context.command_checks,
                             self.out.cast(),
-                            cur_tile.0,
-                            DoCommandFlags::EMPTY.0,
+                            cur_tile,
+                            DoCommandFlags::EMPTY,
                         );
                         (self.x.set_company)(cur_company.0);
                     };
@@ -444,10 +446,12 @@ impl Engine<'_> {
                         crate::landscape_cmd::clear_command(
                             &*self.context.command_checks,
                             self.out.cast(),
-                            cur_tile.0,
-                            DoCommandFlag::AUTO
-                                | DoCommandFlag::NO_TEST_TOWN_RATING
-                                | DoCommandFlag::NO_MODIFY_TOWN_RATING,
+                            cur_tile,
+                            crate::command_type::DoCommandFlags(
+                                DoCommandFlag::AUTO
+                                    | DoCommandFlag::NO_TEST_TOWN_RATING
+                                    | DoCommandFlag::NO_MODIFY_TOWN_RATING,
+                            ),
                         );
                     };
                     if !self.succeeded() {

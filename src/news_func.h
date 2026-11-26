@@ -42,11 +42,6 @@ inline void AddTileNewsItem(EncodedString &&headline, NewsType type, TileIndex t
 	AddNewsItem(std::move(headline), type, NewsStyle::Thin, {NewsFlag::NoTransparency, NewsFlag::Shaded}, tile, station == StationID::Invalid() ? NewsReference{} : station);
 }
 
-inline void AddIndustryNewsItem(EncodedString &&headline, NewsType type, IndustryID industry)
-{
-	AddNewsItem(std::move(headline), type, NewsStyle::Thin, {NewsFlag::NoTransparency, NewsFlag::Shaded}, industry, {});
-}
-
 void NewsLoop();
 void InitNewsItemStructs();
 

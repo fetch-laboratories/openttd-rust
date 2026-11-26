@@ -29,6 +29,8 @@ impl CrashReason {
     pub const CRASH_TRAIN: Self = Self(0);
     /// Road vehicle got under a train
     pub const CRASH_RV_LEVEL_CROSSING: Self = Self(1);
+    /// Road vehicle got under a landing ufo
+    pub const CRASH_RV_UFO: Self = Self(2);
     /// Plane crashed on landing
     pub const CRASH_PLANE_LANDING: Self = Self(3);
     /// Aircraft crashed after it found not a single airport for landing
@@ -121,6 +123,26 @@ impl ScriptEvent {
             victims,
             company: company.0,
             ..Self::of(ScriptEventType::ET_VEHICLE_CRASHED)
+        }
+    }
+
+    /// `ScriptEventDisasterZeppelinerCrashed(station)`: a zeppeliner crashed into an
+    /// airport and is blocking the runway.
+    #[must_use]
+    pub const fn disaster_zeppeliner_crashed(station: StationID) -> Self {
+        Self {
+            station: station.0,
+            ..Self::of(ScriptEventType::ET_DISASTER_ZEPPELINER_CRASHED)
+        }
+    }
+
+    /// `ScriptEventDisasterZeppelinerCleared(station)`: a zeppeliner crash at an airport
+    /// was cleared.
+    #[must_use]
+    pub const fn disaster_zeppeliner_cleared(station: StationID) -> Self {
+        Self {
+            station: station.0,
+            ..Self::of(ScriptEventType::ET_DISASTER_ZEPPELINER_CLEARED)
         }
     }
 

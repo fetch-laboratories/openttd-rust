@@ -1174,7 +1174,7 @@ impl<'a> House<'a> {
             }
         }
         // SAFETY: Static command table referenced by the house table.
-        crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile.0, flags.0);
+        crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile, flags);
     }
     /// `CmdPlaceHouse`; test clears write into the result, replaced on success.
     fn cmd_place_house(&self, call: HouseCommandCall, args: CmdPlaceHouse) {
@@ -1253,10 +1253,9 @@ impl<'a> House<'a> {
                 crate::landscape_cmd::clear_command(
                     commands,
                     call.result,
-                    subtile.0,
+                    subtile,
                     DoCommandFlags::from_element(DoCommandFlag::Auto)
-                        .with(DoCommandFlags::from_element(DoCommandFlag::NoWater))
-                        .0,
+                        .with(DoCommandFlags::from_element(DoCommandFlag::NoWater)),
                 );
                 if !(c.success)(call.result) {
                     witness::hit(W_PLACE_ERROR);

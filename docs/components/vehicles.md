@@ -12,10 +12,11 @@
 
 ## Disaster scheduling and vehicles
 
-- Rust owns: fifteen subtype controllers, eight initializers, eligibility, countdown/reset, industry construction reset, square clearing, movement, shadow/rotor updates, target release, private vehicle state and global delay.
-- C++ keeps: map, pools, base vehicles, viewport and square-clearing costs.
+- Rust owns: every simulation body of `disaster_vehicle.cpp` (`disaster.rs`) under its original name, the constructor's body, `_disaster_images`, `_disastervehicle_tick_procs`, `_disasters` and `_disaster_delay`; the members `image_override`, `big_ufo_destroyer_target`, `flags` and `state`, reached through the vehicle record's `disaster` link; `GetDirectionTowards` (`vehicle.rs`); and the road owner's `disaster_vehicle`. `DisasterClearSquare` runs the Rust `CMD_LANDSCAPE_CLEAR` with the company backup, and `ReleaseDisastersTargetingIndustry` is called from the industry destructor's Rust body.
+- C++ keeps: the `DisasterVehicle` shell with its save/load constructor, which the table's `allocate` calls, `Tick` as a one-call shim (#1011), `ReleaseDisasterVehicle`'s `GetIfValid` lookup, `UpdateDeltaXY`, the daily `IntervalTimer` registration, `_disaster_delay`'s save address, and the pools, stations, industries, towns and company road counts the bodies reach through shared tables (#656, #634, #635, #1048).
+- Checks: the `disasters-` scenarios, the ABI probe's disaster case and the Rust tests of `disaster.rs` and `vehicle.rs`.
 - Limits: Gaps remain in legacy save fixtures, viewport pixels, sound or all NewGRF combinations.
-- PRs: #118, #300, #520.
+- PRs: #118, #300, #520; file pass #1027 part 4.
 
 ## Road vehicle control and private state
 

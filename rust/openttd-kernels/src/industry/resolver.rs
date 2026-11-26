@@ -96,7 +96,7 @@ impl ResolverServices {
     pub(crate) fn lifecycle(&self) -> &LifecycleServices {
         unsafe { &*self.lifecycle }
     }
-    fn tile(&self) -> &TileServices {
+    pub(crate) fn tile(&self) -> &TileServices {
         unsafe { &*self.tile }
     }
     fn map(&self) -> crate::map_func::Map {
@@ -112,7 +112,7 @@ impl ResolverServices {
     }
     /// `Industry::TileBelongsToIndustry`, for the industry with this index.
     fn tile_belongs_to_industry(&self, tile: TileIndex, index: IndustryID) -> bool {
-        unsafe { (self.lifecycle().belongs)(tile.0, index.0) }
+        super::tile_belongs_to_industry(&crate::map_func::World::new(self.shared()), tile, index)
     }
     /// `GetNearbyTile`.
     fn get_nearby_tile(&self, parameter: u8, tile: TileIndex, signed_offsets: bool) -> TileIndex {
@@ -148,7 +148,7 @@ fn town_xy(town: *const TownHandle, s: &ResolverServices) -> TileIndex {
     TileIndex(unsafe { (s.town_tile)(town.cast()) })
 }
 /// `Town::index`.
-fn town_index(town: *const TownHandle, s: &ResolverServices) -> TownID {
+pub(crate) fn town_index(town: *const TownHandle, s: &ResolverServices) -> TownID {
     TownID(unsafe { (s.town_id)(town.cast()) })
 }
 

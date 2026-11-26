@@ -299,8 +299,6 @@ void ClearAllIndustryCachedNames();
 
 void PlantRandomFarmField(const Industry *i);
 
-void ReleaseDisastersTargetingIndustry(IndustryID);
-
 bool IsTileForestIndustry(TileIndex tile);
 
 /** Data for managing the number of industries of a single industry type. */

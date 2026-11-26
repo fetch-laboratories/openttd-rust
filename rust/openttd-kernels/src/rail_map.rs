@@ -297,10 +297,6 @@ impl World<'_> {
     pub(crate) fn has_signals_raw(&self, t: u32) -> bool {
         self.has_signals(TileIndex(t))
     }
-    /// Raw adapter: `IsRailDepot`.
-    pub(crate) fn is_rail_depot_raw(&self, t: u32) -> bool {
-        self.is_rail_depot(TileIndex(t))
-    }
     /// Raw adapter: `IsRailDepotTile`.
     pub(crate) fn is_rail_depot_tile_raw(&self, t: u32) -> bool {
         self.is_rail_depot_tile(TileIndex(t))

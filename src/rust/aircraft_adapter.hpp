@@ -144,7 +144,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_type = Aircraft_airport_type,
 	.airport_width = Aircraft_airport_width,
 	.copy_sprite = Aircraft_copy_sprite,
-	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
 	.fta_blocks = Aircraft_fta_blocks,
 	.fta_heading = Aircraft_fta_heading,
 	.fta_next = Aircraft_fta_next,

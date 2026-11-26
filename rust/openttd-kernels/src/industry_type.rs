@@ -21,12 +21,6 @@ pub const INDUSTRY_ORIGINAL_NUM_INPUTS: usize = 3;
 /// Native `INDUSTRY_ORIGINAL_NUM_OUTPUTS`.
 pub const INDUSTRY_ORIGINAL_NUM_OUTPUTS: usize = 2;
 
-/// `IndustryBehaviour::AirplaneAttacks`.
-pub use crate::industrytype::AIRPLANE_ATTACKS;
-/// `IndustryBehaviour::CanSubsidence`.
-pub use crate::industrytype::CAN_SUBSIDENCE;
-/// `IndustryBehaviour::ChopperAttacks`.
-pub use crate::industrytype::CHOPPER_ATTACKS;
 /// Native `IndustryID` with its full original integer domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

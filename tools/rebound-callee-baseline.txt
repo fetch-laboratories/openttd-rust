@@ -29,8 +29,6 @@ rebound | RustAirportSpec | src/newgrf_airport.cpp | base_spec
 rebound | RustAirportSpec | src/rust/airport_definitions.cpp | airport_base
 rebound | RustAirportTTDType | src/newgrf_station.cpp | airport_ttd_type
 rebound | RustAirportTTDType | src/rust/vehicle_services_newgrf.h | airport_ttd_type
-rebound | RustAirportTile | src/rust/disaster_adapter.hpp | airport_tile
-rebound | RustAirportTile | src/water_cmd.cpp | airport_tile
 rebound | RustAirportTileSpec | src/newgrf_airport.cpp | tile_spec
 rebound | RustAirportTileSpec | src/rust/airport_definitions.cpp | tile_base
 rebound | RustAnimationRailSpec | src/animated_tile.cpp | rail_spec
@@ -82,8 +80,6 @@ rebound | RustIndustryID | src/station.cpp | industry_id
 rebound | RustIndustryID | src/subsidy.cpp | industry_id
 rebound | RustIndustryNeutralBaseStation | src/rust/station_command_services.hpp | industry_neutral
 rebound | RustIndustryNeutralBaseStation | src/station.cpp | industry_neutral
-rebound | RustIndustryTileIndex | src/industry_cmd.cpp | industry_index
-rebound | RustIndustryTileIndex | src/rust/disaster_adapter.hpp | industry_index
 rebound | RustIsLocalCompany | src/economy.cpp | local_company
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
 rebound | RustMaxBridgeHeight | src/landscape.cpp | max_bridge_height
@@ -106,8 +102,6 @@ rebound | RustRealLoading | src/newgrf_station.cpp | loading
 rebound | RustRealLoading | src/rust/newgrf_spritegroup_services.cpp | loading
 rebound | RustRealLoadingCount | src/newgrf_station.cpp | loading_count
 rebound | RustRealLoadingCount | src/rust/newgrf_spritegroup_services.cpp | loading_count
-rebound | RustResetIndustryConstruction | src/industry_cmd.cpp | reset_construction
-rebound | RustResetIndustryConstruction | src/rust/disaster_adapter.hpp | reset_industry_tile
 rebound | RustResolverBaseScope | src/newgrf_airport.cpp | base_scope
 rebound | RustResolverBaseScope | src/newgrf_house.cpp | base_scope
 rebound | RustResolverBaseScope | src/newgrf_industries.cpp | base_scope
@@ -180,7 +174,6 @@ rebound | RustSubsidyServices | src/economy.cpp | subsidies
 rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
-rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
 rebound | RustTownStorageCount | src/rust/newgrf_storage_services.cpp | town_count
 rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count

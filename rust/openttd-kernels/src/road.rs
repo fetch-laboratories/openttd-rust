@@ -137,7 +137,6 @@ crate::abi::shared_records! {
     fn abi_record;
     /// The scalar members of `RoadVehicle`, with the original widths and zero defaults.
     /// This is the first member of the stable allocation; the path stays Rust-private.
-    #[derive(Default)]
     "OpenTTDRoadState" ["road_state"] => pub struct OpenTTDRoadState {
         /// @see `RoadVehicleStates`
         pub state: u8,
@@ -150,6 +149,23 @@ crate::abi::shared_records! {
         /// Animation counter when the vehicle has crashed. @see `RoadVehIsCrashed`
         pub crashed_ctr: u16,
         pub reverse_ctr: u8,
+        /// NOSAVE: Disaster vehicle targetting this vehicle.
+        pub disaster_vehicle: VehicleID,
+    }
+}
+
+impl Default for OpenTTDRoadState {
+    fn default() -> Self {
+        Self {
+            state: 0,
+            frame: 0,
+            blocked_ctr: 0,
+            overtaking: 0,
+            overtaking_ctr: 0,
+            crashed_ctr: 0,
+            reverse_ctr: 0,
+            disaster_vehicle: VehicleID::INVALID,
+        }
     }
 }
 
@@ -300,6 +316,18 @@ pub(crate) unsafe fn overtaking_ctr(s: *const State) -> u8 {
 /// The serialized native shell owns this live state for the scalar access.
 pub(crate) unsafe fn crashed_ctr(s: *const State) -> u16 {
     read_field!(s, fields.crashed_ctr)
+}
+/// `RoadVehicle::disaster_vehicle`.
+/// # Safety
+/// As [`crashed_ctr`].
+pub(crate) unsafe fn disaster_vehicle(s: *const State) -> VehicleID {
+    read_field!(s, fields.disaster_vehicle)
+}
+/// Store `RoadVehicle::disaster_vehicle`.
+/// # Safety
+/// As [`crashed_ctr`].
+pub(crate) unsafe fn set_disaster_vehicle(s: *mut State, disaster_vehicle: VehicleID) {
+    write_field!(s, fields.disaster_vehicle, disaster_vehicle);
 }
 
 /// The services a road vehicle entry calls; the shared tables are borrowed through pointers.
@@ -2890,6 +2918,14 @@ pub unsafe extern "C" fn openttd_rust_road_leave_depot_abi(
     leaves: *const Leaves,
 ) -> u8 {
     u8::from(entry!(leaves).road_veh_leave_depot(Part::new(v, state), first))
+}
+/// `RoadVehicle::Crash(flooded)`, for Rust callers.
+///
+/// # Safety
+/// `v` is a live road vehicle record and `s` the road owner its record names, which the
+/// caller has resolved.
+pub(crate) unsafe fn crash(leaves: &Leaves, v: VehicleRef, s: *mut State, flooded: bool) -> u32 {
+    entry!(leaves).crash(Part::new(v, s), flooded)
 }
 /// `RoadVehicle::Crash`.
 /// # Safety

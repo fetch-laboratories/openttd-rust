@@ -560,7 +560,7 @@ void Vehicle::PreDestructor()
 			openttd_rust_road_stop_leave(&GetRustSharedServices(), RustVehicle(v), v->GetRustState());
 		}
 
-		if (v->disaster_vehicle != VehicleID::Invalid()) ReleaseDisasterVehicle(v->disaster_vehicle);
+		if (v->GetDisasterVehicle() != VehicleID::Invalid()) ReleaseDisasterVehicle(v->GetDisasterVehicle());
 	}
 
 	if (this->Previous() == nullptr) {
@@ -986,33 +986,6 @@ GetNewVehiclePosResult GetNewVehiclePos(const Vehicle *v)
 	gp.old_tile = v->GetTile();
 	gp.new_tile = TileVirtXY(x, y);
 	return gp;
-}
-
-static const Direction _new_direction_table[] = {
-	DIR_N,  DIR_NW, DIR_W,
-	DIR_NE, DIR_SE, DIR_SW,
-	DIR_E,  DIR_SE, DIR_S
-};
-
-Direction GetDirectionTowards(const Vehicle *v, int x, int y)
-{
-	int i = 0;
-
-	if (y >= v->Record().y_pos) {
-		if (y != v->Record().y_pos) i += 3;
-		i += 3;
-	}
-
-	if (x >= v->Record().x_pos) {
-		if (x != v->Record().x_pos) i++;
-		i++;
-	}
-
-	Direction dir = v->GetDirection();
-
-	DirDiff dirdiff = DirDifference(_new_direction_table[i], dir);
-	if (dirdiff == DIRDIFF_SAME) return dir;
-	return ChangeDir(dir, dirdiff > DIRDIFF_REVERSE ? DIRDIFF_45LEFT : DIRDIFF_45RIGHT);
 }
 
 /**

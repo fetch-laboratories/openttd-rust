@@ -268,6 +268,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.construction_limits = &_settings_game.construction.limits,
 	.custom_industry_number = &_settings_game.game_creation.custom_industry_number,
 	.disable_elrails = &_settings_game.vehicle.disable_elrails,
+	.disasters = &_settings_game.difficulty.disasters,
 	.dist_local_authority = &_settings_game.economy.dist_local_authority,
 	.economy = &_settings_game.difficulty.economy,
 	.economy_type = reinterpret_cast<const uint8_t *>(&_settings_game.economy.type),
@@ -993,9 +994,10 @@ static const OpenTTDNewsServices _rust_news_services{
 
 static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFER_EXPIRED == 3 && ScriptEvent::ET_SUBSIDY_AWARDED == 4 && ScriptEvent::ET_SUBSIDY_EXPIRED == 5);
 static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT == 14 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
+static_assert(ScriptEvent::ET_DISASTER_ZEPPELINER_CRASHED == 20 && ScriptEvent::ET_DISASTER_ZEPPELINER_CLEARED == 21);
 static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
 static_assert(ScriptEvent::ET_COMPANY_RENAMED == 33 && ScriptEvent::ET_PRESIDENT_RENAMED == 34);
-static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
+static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_RV_UFO == 2 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
 
 /** Construct the native event a Rust record names: each case only constructs its class. */
 static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
@@ -1015,6 +1017,8 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 		case ScriptEvent::ET_INDUSTRY_OPEN: return new ScriptEventIndustryOpen(IndustryID{e.industry});
 		case ScriptEvent::ET_INDUSTRY_CLOSE: return new ScriptEventIndustryClose(IndustryID{e.industry});
 		case ScriptEvent::ET_STATION_FIRST_VEHICLE: return new ScriptEventStationFirstVehicle(StationID{e.station}, VehicleID{e.vehicle});
+		case ScriptEvent::ET_DISASTER_ZEPPELINER_CRASHED: return new ScriptEventDisasterZeppelinerCrashed(StationID{e.station});
+		case ScriptEvent::ET_DISASTER_ZEPPELINER_CLEARED: return new ScriptEventDisasterZeppelinerCleared(StationID{e.station});
 		case ScriptEvent::ET_TOWN_FOUNDED: return new ScriptEventTownFounded(TownID{e.town});
 		case ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR: return new ScriptEventAircraftDestTooFar(VehicleID{e.vehicle});
 		case ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS: return new ScriptEventExclusiveTransportRights(CompanyID{e.company}, TownID{e.town});
