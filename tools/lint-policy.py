@@ -33,7 +33,7 @@ from cleanup_contract import (
     write,
 )
 from code_lines import without_comments
-from rust_syntax import Node, item_source, nodes, syntax_trees
+from rust_syntax import Node, nodes, syntax_trees
 from vcs import git, merge_base
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -184,7 +184,8 @@ def item_scope(node: Node) -> str:
     current: Node | None = node
     while current:
         if current.type == "impl_item":
-            parts.append(" ".join(current.text.decode().split("{", 1)[0].split()))
+            header = without_comments(current.text.decode(), "x.rs").split("{", 1)[0]
+            parts.append(" ".join(header.split()))
         elif current.type in kinds:
             name = current.child_by_field_name("name")
             if name:
@@ -312,16 +313,6 @@ def carry_rule(site: str) -> tuple[str, bool]:
     return site.rsplit(" | ", 1)[1], item_scoped(site)
 
 
-def scope_text(path: str, text: str, scope: str) -> str | None:
-    """Source text of the items the attribute scope names."""
-    parts = [
-        item_source(node, text)
-        for node in nodes(syntax_trees({path: text})[path])
-        if node.type.endswith("_item") and item_scope(node) == scope
-    ]
-    return "\n".join(parts) if parts and scope != "module" else None
-
-
 def unchanged_scope(site: str, revision: str, current: str | None = None) -> bool:
     """Whether the site's item code at `revision` equals `current`'s, comments aside.
 
@@ -336,21 +327,53 @@ def unchanged_scope(site: str, revision: str, current: str | None = None) -> boo
             new = git("show", f"{current}:{path}")
     except subprocess.CalledProcessError:
         return False
-    before = scope_text(path, old, scope)
-    after = scope_text(path, new, scope) if new is not None else None
-    return (
-        before is not None
-        and after is not None
-        and item_code(path, before) == item_code(path, after)
-    )
+    return new is not None and same_code(path, old, new, scope)
 
 
-def item_code(path: str, text: str) -> str:
-    """An item's tokens without its comments: a reworded `SAFETY` line or
-    `# Safety` section leaves the accepted body's argument where it was."""
-    code = without_comments(text, path)  # keeps doc comments, which lex as strings
-    code = re.sub(r"(?m)^\s*//[/!].*$", "", code)
-    return " ".join(code.split())
+COMMENTS = ("line_comment", "block_comment")
+
+
+def scope_code(path: str, text: str, scope: str) -> list[str] | None:
+    """The tokens of the items the scope names, with their outer attributes,
+    without comments: a reworded `SAFETY` line or `# Safety` section leaves the
+    accepted body's argument where it was, and literals keep every byte."""
+    tokens: list[str] = []
+    found = False
+    for node in nodes(syntax_trees({path: text})[path]):
+        if not node.type.endswith("_item") or item_scope(node) != scope:
+            continue
+        found = True
+        first = node
+        while (previous := first.prev_named_sibling) is not None and previous.type in (
+            "attribute_item",
+            *COMMENTS,
+        ):
+            first = previous
+        sibling: Node | None = first
+        while sibling is not None:
+            tokens += code_tokens(sibling)
+            sibling = None if sibling == node else sibling.next_sibling
+    return tokens if found and scope != "module" else None
+
+
+def code_tokens(node: Node) -> list[str]:
+    """Leaf token texts below `node`, skipping comment subtrees."""
+    tokens, stack = [], [node]
+    while stack:
+        current = stack.pop()
+        if current.type in COMMENTS:
+            continue
+        if current.child_count == 0:
+            tokens.append(current.text.decode())
+        else:
+            stack.extend(reversed(current.children))
+    return tokens
+
+
+def same_code(path: str, old: str, new: str, scope: str) -> bool:
+    """Whether the scope's items have the same code in both texts."""
+    before = scope_code(path, old, scope)
+    return before is not None and before == scope_code(path, new, scope)
 
 
 def suppression_state(
@@ -460,21 +483,19 @@ def main() -> int:
         "--same-item",
         nargs=3,
         metavar=("SITE", "ACCEPTED", "HEAD"),
-        help="exit 0 when the suppressed item's text is equal at both commits, "
-        "3 when it differs",
+        help="exit 0 when the suppressed item's code, comments aside, is equal "
+        "at both commits, 3 when it differs",
     )
     args = parser.parse_args()
     if args.same_item:
-        # 0: the item's text is equal; ITEM_DIFFERS: it differs. An unreadable
+        # 0: the item's code is equal; ITEM_DIFFERS: it differs. An unreadable
         # file, a crash or a failed start exits otherwise, so a caller never
         # reads it as a change.
         site, accepted, head = args.same_item
         path, scope, _ = site.rsplit(" | ", 2)
         # Each blob is read once; a failed read raises, exiting 1, never 3.
         old, new = (git("show", f"{revision}:{path}") for revision in (accepted, head))
-        before = scope_text(path, old, scope)
-        same = before is not None and before == scope_text(path, new, scope)
-        return 0 if same else ITEM_DIFFERS
+        return 0 if same_code(path, old, new, scope) else ITEM_DIFFERS
     args.base_ref = merge_base(args.base_ref, run=git, announce=True)
     # Quick runs lint policy on every change, so every record file is validated
     # here even when no gate needs its records.

@@ -1505,27 +1505,66 @@ class CarryTests(unittest.TestCase):
         body = (
             "/// Reads a live record.\n///\n/// # Safety\n/// `p` names a live record.\n"
             "#[allow(unsafe_code)]\npub unsafe fn read(p: *const u8) -> u8 {\n"
+            "    /** The tag. */\n    let _ = 1/* unused */;\n"
+            '    let _ = b"x y";\n    let _ = r#"a\n/// b"#;\n'
             "    // SAFETY: the caller's live record.\n    unsafe { *p }\n}\n"
         )
+        kept = {
+            "doc and SAFETY lines": body.replace(
+                "names a live record.",
+                "names a record the game keeps live,\n/// as the original's callers do.",
+            ).replace("the caller's live record.", "the module contract."),
+            "block doc": body.replace("/** The tag. */", "/** The record's tag. */"),
+            "inline block comment": body.replace("1/* unused */;", "1;"),
+        }
+        voided = {
+            "operation": body.replace("unsafe { *p }", "unsafe { *p.add(1) }"),
+            "byte string spacing": body.replace('b"x y"', 'b"x  y"'),
+            "raw string line": body.replace("/// b", "/// c"),
+        }
+        script = Path(__file__).with_name("lint-policy.py")
+        site = "rust/x.rs | fn read | allow unsafe_code"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize(root, {"rust/x.rs": body})
             accepted = git("rev-parse", "HEAD", cwd=root).strip()
-            (root / "rust/x.rs").write_text(
-                body.replace(
-                    "names a live record.",
-                    "names a record the game keeps live,\n/// as the original's callers do.",
-                ).replace("the caller's live record.", "the module contract.")
+            for name, text in [*kept.items(), *voided.items()]:
+                (root / "rust/x.rs").write_text(text)
+                head = commit(root)
+                with self.subTest(change=name):
+                    with patch.object(POLICY, "git", partial(git, cwd=root)):
+                        same = POLICY.unchanged_scope(site, accepted, head)
+                    # `ci.py enqueue` asks the same question through --same-item.
+                    done = subprocess.run(
+                        [
+                            sys.executable,
+                            str(script),
+                            "--same-item",
+                            site,
+                            accepted,
+                            head,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        env={**os.environ, "GIT_DIR": str(root / ".git")},
+                    )
+                    self.assertEqual(same, name in kept)
+                    self.assertEqual(
+                        done.returncode,
+                        0 if name in kept else POLICY.ITEM_DIFFERS,
+                        done.stderr,
+                    )
+
+    def test_a_comment_in_an_impl_header_leaves_its_site(self) -> None:
+        sites = [
+            POLICY.rust_suppressions(
+                "rust/x.rs",
+                f"#[allow(unsafe_code)]\nimpl Native {comment}{{ fn f() {{}} }}\n",
             )
-            reworded = commit(root)
-            (root / "rust/x.rs").write_text(
-                body.replace("unsafe { *p }", "unsafe { *p.add(1) }")
-            )
-            changed = commit(root)
-            site = "rust/x.rs | fn read | allow unsafe_code"
-            with patch.object(POLICY, "git", partial(git, cwd=root)):
-                self.assertTrue(POLICY.unchanged_scope(site, accepted, reworded))
-                self.assertFalse(POLICY.unchanged_scope(site, accepted, changed))
+            for comment in ("", "/* before */ ", "/* after */ ")
+        ]
+        self.assertEqual(sites[0], sites[1])
+        self.assertEqual(sites[1], sites[2])
 
     def check_item_binding(self, rule: str, kept_when_item_changes: bool) -> None:
         with tempfile.TemporaryDirectory() as directory:
