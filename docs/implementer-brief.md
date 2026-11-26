@@ -30,20 +30,14 @@ Where the plan has a speed check, count instructions at the base and the head ([
 
 ## Messaging root
 
-Message root, at the thread your spawn message names, only when the queue merges or removes the PR (one line: PR, head, outcome), for a question only root can answer, or for a stop you cannot work past. When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
+Message root, at the thread your spawn message names, with `t3_thread_send`, only when the queue merges or removes the PR (one line: PR, head, outcome), when `ci.py reviewer` refuses a review (the line it prints), for a question only root can answer, or for a stop you cannot work past. The line you end a waiting turn on does not reach root ([background jobs](team.md#background-jobs)). When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
 
 ## Starting reviewers
 
-This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. When the pass is [ready for review](#finishing-a-file-pass), request `native` and mark the PR ready in one step, both as background jobs (`ci.py request PR --profile native --wait`, `ci.py ready PR --wait`), and start the reviewers then. Neither run's result holds them or the ready mark: put the `native` result in the PR when it arrives, and fix a failure while they review. Start each on the review row of the [role table](team.md#roles-and-models), with that model, its provider and its effort named in the `delegate_task` call: a call that names none starts the reviewer on your own model, and its report is void. Give each its fixed message and nothing more, where `<model>` and `<effort>` are the review row's, not yours:
+This brief authorizes you to start your PR's reviewers with `delegate_task`, as [review](workflow.md#review) says: one for behaviour and one for porting, both for the whole PR, or the behaviour reviewer alone for a PR with no game code. When the pass is [ready for review](#finishing-a-file-pass), request `native` and mark the PR ready in one step, both as background jobs (`ci.py request PR --profile native --wait`, `ci.py ready PR --wait`), and start the reviewers then. Neither run's result holds them or the ready mark: put the `native` result in the PR when it arrives, and fix a failure while they review.
 
-> Review PR <URL> under `docs/review-brief.md` for behaviour. You are /root/review-<PR>-behaviour, on <model> at <effort> effort. Review <the whole PR | the commits <SHAs>>.
+Start each reviewer with the call `python3 tools/ci.py reviewer PR KIND` prints, passed to `delegate_task` as written: it names the review row of the [role table](team.md#roles-and-models), never your own model, and the reviewer's fixed message. KIND is `behaviour` or `porting` for the first stage, `recheck --commits <SHAs>` for the re-check when [review](workflow.md#review) calls for one, and `base`, `simulation` or `records` with `--commits <SHAs>` for the scoped reviews it allows. A call you write yourself starts the reviewer on your model unless it names another, and `ci.py report` refuses that reviewer's report.
 
-> Review PR <URL> under `docs/review-brief.md` for porting. You are /root/review-<PR>-porting, on <model> at <effort> effort. Review <the whole PR | the commits <SHAs>>.
-
-A re-check, when [review](workflow.md#review) calls for one, is one reviewer for the whole PR, given every first-stage report:
-
-> Re-check PR <URL> under `docs/review-brief.md`. You are /root/review-<PR>-recheck, on <model> at <effort> effort. Check the fixing commits <SHAs> against the findings in <report URLs>.
-
-The scoped reviews that [review](workflow.md#review) allows after a review use the first two messages with `the commits <SHAs>` and a name that says what they cover, such as /root/review-<PR>-base-behaviour.
+The command counts the PR's reviews and refuses one beyond [review](workflow.md#review): a second whole-PR review of a kind, a second re-check, or a third scoped review that is not a base update's. Then send root the line it prints and start no reviewer until root answers; run it again with `--root '<the answer>'` and put the answer in the status comment.
 
 Each reviewer's last message, with its report's URL and disposition, reaches you when its turn ends. A tool call cancelled with a notice to stop as such a message arrives is the host delivering it: read the message, rerun the call and carry on.
