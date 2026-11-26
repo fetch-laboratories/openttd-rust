@@ -1498,13 +1498,13 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
             crate::landscape_type::LandscapeType(s.shared().settings().climate.read()),
             &*s.industry,
         );
-        crate::newgrf_class::object::reset(s.object_classes);
+        crate::newgrf_object::ObjectClass::reset(s.object_classes);
         (s.reset_objects)();
-        crate::newgrf_class::station::reset(s.station_classes);
-        crate::newgrf_class::airport::reset(s.airport_classes);
+        crate::newgrf_station::StationClass::reset(s.station_classes);
+        crate::newgrf_airport::AirportClass::reset(s.airport_classes);
         crate::airport_definitions::reset_airports(s.airports);
         crate::airport_definitions::reset_airport_tiles(s.airports);
-        crate::newgrf_class::roadstop::reset(s.roadstop_classes);
+        crate::newgrf_roadstop::RoadStopClass::reset(s.roadstop_classes);
         (s.reset_water_features)();
         (s.reset_faces)();
         crate::snow_line::clear(&*(*s.global).shared);

@@ -114,3 +114,10 @@
 - C++ keeps: `GRFFile` and `GRFConfig` storage and their member readers (#669), `PlayTileSound` (#669), the generic resolver's native frame (#1064), `CargoSpec::bitnum` (#1057) and the facades `AddGenericCallback`, `GetAiPurchaseCallbackResult`, `GRFTownNameGenerate` and `GetGRFTownNameList` for C++ callers.
 - Limits: #156 tracks Action D's target `0x9E` and `GetActiveCargoLabel`'s `NOT_REACHED` arm, which no scenario reaches. The other files' `GRFFile` member slots move to the handle in this workset's later parts and those files' passes (#734).
 - PRs: #1080.
+
+## NewGRF classes, override managers, properties and parser results (#1064 part 1)
+
+- Rust owns: `NewGRFClass` for stations, road stops, airports and objects (`classes`, each class's specs and UI count, and every `newgrf_class_func.h` body), with each instantiation's `InsertDefaults` and `IsUIAvailable` in its feature module; `OverrideManagerBase`'s storage and every body of `newgrf_commons.cpp`'s base class with `IndustryOverrideManager::GetID`, and the registered managers `_house_mngr`, `_industry_mngr`, `_industile_mngr`, `_airport_mngr` and `_airporttile_mngr`; `newgrf_properties.h`'s `PropertyID` and `newgrf_internal.h`'s `ChangeInfoResult` and `MAX_SPRITEGROUP`.
+- C++ keeps: the `NewGRFClass` facade, whose inline `Get` reads the shared class record in place, and the manager objects, their virtuals, copy and lifetime, the spans the facade and `SlObject` read and write, and `ObjectOverrideManager::SetEntitySpec`.
+- Limits: #156 tracks `Allocate`'s full-registry branch, which no scenario reaches. The raw `PROP_*` and `CIR_*` adapters serve unfinished files until their passes (#734).
+- PRs: #1096.

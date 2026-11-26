@@ -341,8 +341,7 @@ fn property(
                     continue;
                 }
                 unsafe {
-                    override_manager::openttd_rust_override_add(
-                        override_manager::house(),
+                    (*override_manager::house_mngr()).add(
                         id as HouseID,
                         grffile.grfid(),
                         u32::from(target),
@@ -631,14 +630,14 @@ pub fn reset(s: &Services) {
     }
     // Reset any overrides that have been set.
     unsafe {
-        override_manager::reset_override(override_manager::house());
+        (*override_manager::house_mngr()).reset_override();
     }
 }
 pub fn publish(s: &Services, spec: Spec) {
-    let manager = override_manager::house();
+    let manager = override_manager::house_mngr();
     let identity = (s.identity)(spec);
     let id = unsafe {
-        override_manager::allocate_house(
+        override_manager::house_add_entity_id(
             manager,
             identity.local,
             identity.grfid,
@@ -658,13 +657,15 @@ pub fn publish(s: &Services, spec: Spec) {
     (s.move_spec)(spec, id);
     for original in 0..NEW_HOUSE_OFFSET {
         let overridden = (s.get)(original);
-        let pending = unsafe { override_manager::pending_override(manager, original) };
-        if pending != (identity.local, identity.grfid) {
+        if unsafe { (*manager).entity_overrides(original) } != identity.local
+            || unsafe { (*manager).grfid_overrides(original) } != identity.grfid
+        {
             continue;
         }
         (s.set_override)(overridden, id);
         unsafe {
-            override_manager::clear_override(manager, original);
+            (*manager).set_entity_overrides(original, (*manager).invalid_id());
+            (*manager).set_grfid_overrides(original, 0);
         }
     }
 }

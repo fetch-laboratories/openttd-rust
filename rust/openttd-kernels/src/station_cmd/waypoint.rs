@@ -17,8 +17,8 @@ use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::direction_type::Axis;
 use crate::economy_type::ROAD_STOP_TRACKBIT_FACTOR;
-use crate::newgrf_roadstop::RoadStopClassID;
-use crate::newgrf_station::StationClassID;
+use crate::newgrf_roadstop::{RoadStopClass, RoadStopClassID};
+use crate::newgrf_station::{StationClass, StationClassID};
 use crate::rail_map::RailTileType;
 use crate::road_type::{RoadBits, RoadTramType, RoadType};
 use crate::slope_type::Slope;
@@ -473,12 +473,14 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
-        if u32::from(spec_class.0) >= crate::newgrf_class::station::count()
-            || !crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(
-                spec_class.0,
-            ))
-            || u32::from(args.spec_index) >= crate::newgrf_class::station::spec_count(spec_class.0)
-        {
+        if u32::from(spec_class.0) >= StationClass::get_class_count() {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        let cls = StationClass::get(spec_class);
+        if !crate::newgrf_station::is_waypoint_class(cls.global_id()) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        if u32::from(args.spec_index) >= cls.get_spec_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let Some((count, reuse, station_to_join)) =
@@ -502,7 +504,7 @@ impl Ctx<'_> {
         }
         /* Make sure the area below consists of clear tiles. (OR tiles belonging to a certain rail station) */
         let mut est = StationID::INVALID;
-        let spec = crate::newgrf_class::station::spec(spec_class.0, u32::from(args.spec_index));
+        let spec = StationClass::get(spec_class).get_spec(u32::from(args.spec_index));
         (self.s.waypoint_layout_init)(layout, spec, count);
         /* Check whether the tiles we're building on are valid rail or not. */
         let offset = self.offs_by_other_axis(axis);
@@ -680,16 +682,17 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
-        if u32::from(spec_class.0) >= crate::newgrf_class::roadstop::count()
-            || !crate::newgrf_station::is_waypoint_class(crate::newgrf_class::roadstop_label(
-                spec_class.0,
-            ))
-            || u32::from(args.spec_index) >= crate::newgrf_class::roadstop::spec_count(spec_class.0)
-        {
+        if u32::from(spec_class.0) >= RoadStopClass::get_class_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let roadstopspec =
-            crate::newgrf_class::roadstop::spec(spec_class.0, u32::from(args.spec_index));
+        let cls = RoadStopClass::get(spec_class);
+        if !crate::newgrf_station::is_waypoint_class(cls.global_id()) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        if u32::from(args.spec_index) >= cls.get_spec_count() {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        let roadstopspec = RoadStopClass::get(spec_class).get_spec(u32::from(args.spec_index));
         let Some((count, reuse, station_to_join)) =
             self.waypoint_parts_and_join(axis, width, height, args.station_to_join)
         else {

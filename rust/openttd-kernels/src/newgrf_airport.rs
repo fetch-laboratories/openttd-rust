@@ -23,6 +23,8 @@ pub struct TtdpAirportType(pub u8);
 use crate::airport::{AT_INVALID, INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AIRPORTTILE_OFFSET};
 use crate::debug::debug;
 use crate::game_state::GameState;
+use crate::newgrf_class::{ClassSpec, Registry};
+use crate::newgrf_specs::{SpecServices, Specs};
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 use crate::table::strings::{
     STR_AIRPORT_CLASS_HELIPORTS, STR_AIRPORT_CLASS_HUB, STR_AIRPORT_CLASS_LARGE,
@@ -213,21 +215,13 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     (s.check)(u16::from(kind) < crate::airport::NUM_AIRPORTS);
     let mut spec = (s.base_spec)(u16::from(kind));
     if kind >= NEW_AIRPORT_OFFSET && !(s.shared().specs().airport().substitute().enabled)(spec) {
-        if unsafe {
-            crate::override_manager::openttd_rust_override_grfid(
-                crate::override_manager::airport(),
-                u16::from(kind),
-            )
-        } == 0
-        {
+        let airport_mngr = crate::override_manager::airport_mngr();
+        // SAFETY: `_airport_mngr` is the live registered manager.
+        if unsafe { (*airport_mngr).get_grfid(u16::from(kind)) } == 0 {
             return spec;
         }
-        let substitute = unsafe {
-            crate::override_manager::openttd_rust_override_substitute(
-                crate::override_manager::airport(),
-                u16::from(kind),
-            )
-        } as u8;
+        // SAFETY: As above.
+        let substitute = unsafe { (*airport_mngr).get_substitute_id(u16::from(kind)) } as u8;
         if u16::from(substitute) == AT_INVALID {
             return spec;
         }
@@ -666,15 +660,39 @@ impl AirportClassID {
     pub const APC_MAX: Self = Self(16);
 }
 
-/// `AirportClass::InsertDefaults`: allocate the four default airport classes and set their
-/// names.
-pub(crate) unsafe fn insert_defaults() {
-    use crate::newgrf_class::airport::{allocate, get};
-    let max = AirportClassID::APC_MAX;
-    unsafe {
-        (*get(allocate(u32::from_be_bytes(*b"SMAL"), max))).name = STR_AIRPORT_CLASS_SMALL.0;
-        (*get(allocate(u32::from_be_bytes(*b"LARG"), max))).name = STR_AIRPORT_CLASS_LARGE.0;
-        (*get(allocate(u32::from_be_bytes(*b"HUB_"), max))).name = STR_AIRPORT_CLASS_HUB.0;
-        (*get(allocate(u32::from_be_bytes(*b"HELI"), max))).name = STR_AIRPORT_CLASS_HELIPORTS.0;
+/// `AirportClass`: the class registry of the airport specs.
+pub(crate) type AirportClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::AirportSpec>;
+
+static AIRPORT_REGISTRY: GameState<Registry<crate::station_cmd::AirportSpec>> =
+    GameState::new(Registry::new());
+static AIRPORT_SERVICES: GameState<
+    *const crate::newgrf_class::Services<crate::station_cmd::AirportSpec>,
+> = GameState::new(std::ptr::null());
+impl ClassSpec for crate::station_cmd::AirportSpec {
+    type Index = crate::newgrf_airport::AirportClassID;
+    type Triggers = u8;
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers> = Specs::airport;
+    fn registry() -> *mut Registry<Self> {
+        AIRPORT_REGISTRY.get()
+    }
+    fn services_slot() -> &'static GameState<*const crate::newgrf_class::Services<Self>> {
+        &AIRPORT_SERVICES
+    }
+    /// `AirportClass::IsUIAvailable`.
+    fn is_ui_available(_class: crate::newgrf_class::ClassRef<Self>, _index: u32) -> bool {
+        true
+    }
+    /// `AirportClass::InsertDefaults`: reset the airport classes to their default state, the
+    /// four default classes with their names, for the standard airports.
+    fn insert_defaults() {
+        let max = AirportClassID::APC_MAX;
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"SMAL"), max))
+            .set_name(STR_AIRPORT_CLASS_SMALL);
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"LARG"), max))
+            .set_name(STR_AIRPORT_CLASS_LARGE);
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HUB_"), max))
+            .set_name(STR_AIRPORT_CLASS_HUB);
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))
+            .set_name(STR_AIRPORT_CLASS_HELIPORTS);
     }
 }

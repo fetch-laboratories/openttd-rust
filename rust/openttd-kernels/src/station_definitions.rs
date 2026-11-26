@@ -156,7 +156,7 @@ unsafe fn station_change_info(
                         spec = (s.station_new)(grffile.as_ptr().cast_mut().cast(), id);
                     }
                     // Swap classid because we read it in BE meaning WAYP or DFLT
-                    let class = crate::newgrf_class::station::allocate(
+                    let class = crate::newgrf_station::StationClass::allocate(
                         reader.dword()?.swap_bytes(),
                         StationClassID::STAT_CLASS_MAX,
                     );
@@ -500,7 +500,7 @@ unsafe fn road_stop_change_info(
                     }
                     // The class label is read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
-                    let class = crate::newgrf_class::roadstop::allocate(
+                    let class = crate::newgrf_roadstop::RoadStopClass::allocate(
                         label,
                         RoadStopClassID::ROADSTOP_CLASS_MAX,
                     );
@@ -694,7 +694,7 @@ pub(crate) unsafe fn station_map_default(
             );
             (s.shared().specs().station().set_file)(spec, grffile.as_ptr().cast_mut().cast());
             (s.shared().specs().station().set_local_id)(spec, id);
-            crate::newgrf_class::station::assign(spec);
+            crate::newgrf_station::StationClass::assign(spec);
         }
     }
 }
@@ -748,7 +748,7 @@ pub(crate) unsafe fn roadstop_map_default(
             );
             (s.shared().specs().road_stop().set_file)(spec, grffile.as_ptr().cast_mut().cast());
             (s.shared().specs().road_stop().set_local_id)(spec, id);
-            crate::newgrf_class::roadstop::assign(spec);
+            crate::newgrf_roadstop::RoadStopClass::assign(spec);
         }
     }
 }

@@ -641,11 +641,7 @@ pub(crate) unsafe fn house_get_variable(
                 return 0;
             }
             let house = unsafe {
-                crate::override_manager::get(
-                    crate::override_manager::house(),
-                    parameter as HouseID,
-                    spec.grfid,
-                )
+                (*crate::override_manager::house_mngr()).get_id(parameter as HouseID, spec.grfid)
             };
             if house == INVALID_HOUSE_ID {
                 0
@@ -726,12 +722,7 @@ pub(crate) unsafe fn house_get_variable(
             } else {
                 // Checking the grffile information via HouseSpec doesn't work in case the
                 // newgrf was removed.
-                unsafe {
-                    crate::override_manager::openttd_rust_override_grfid(
-                        crate::override_manager::house(),
-                        house,
-                    )
-                }
+                unsafe { (*crate::override_manager::house_mngr()).get_grfid(house) }
             }
         }
         0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),

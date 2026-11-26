@@ -1,28 +1,63 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Canonical shared `NewGRF` class registry. Native presentation spans alias the Rust
-//! buffers until allocation/reset or insertion, just as the original native vectors.
-//! The game-state mutex serializes access; native spec shells outlive membership.
-//! No registry borrow survives an eligibility callback or a native field service.
-#![allow(
-    unsafe_code,
-    missing_docs,
-    clippy::missing_safety_doc,
-    clippy::cast_possible_truncation
-)]
+//! `newgrf_class.h` and `newgrf_class_func.h`: `NewGRFClass`, the classes of the `NewGRF`
+//! stations, road stops, airports and objects.
+//!
+//! Rust owns each instantiation's `classes` and the members of each class. C++ reads the
+//! three shared members of a class in place through `Classes()` and `Get`, and a class's specs
+//! through the spans its facade borrows; both alias the Rust buffers until the next `Reset`,
+//! `Allocate` or `Insert`, as they alias the original's vectors. The game-state mutex
+//! serializes every access, the specs are native records that outlive their membership, and
+//! no registry borrow survives an availability check or a native spec leaf.
 use crate::debug::grf_msg;
 use crate::game_state::GameState;
+use crate::newgrf_specs::{SpecServices, Specs};
+use crate::strings_type::StringID;
 use crate::table::strings::STR_EMPTY;
+use std::marker::PhantomData;
 use std::ptr;
 
+/// Struct containing information relating to `NewGRF` classes for stations and airports.
+/// Its three members are shared with the C++ `NewGRFClass`, which reads them in place.
 #[repr(C)]
-pub struct Class {
+pub struct NewGRFClass<T> {
+    /// Global ID for class, e.g. 'DFLT', 'WAYP', etc.
     pub global_id: u32,
-    pub name: u32,
-    pub rust_index: u32,
+    /// Name of this class.
+    pub name: StringID,
+    /// Index of class within the list of classes. The original's member is a `Tindex`; the
+    /// shared record holds it as `u32` for every instantiation, so `index()` narrows it back.
+    index: u32,
+    spec_type: PhantomData<*mut T>,
 }
+
+/// The members of a class that only Rust reads, kept beside `classes` in its registry.
+struct ClassMembers<T> {
+    /// Number of specs in this class potentially available to the user.
+    ui_count: u32,
+    /// List of specifications.
+    spec: Vec<*mut T>,
+}
+
+/// One instantiation's `NewGRFClass::classes`, with the Rust-only members of each class at
+/// the class's index.
+pub(crate) struct Registry<T> {
+    /// The actual classes. This may be reallocated during initialization so pointers may be
+    /// invalidated.
+    classes: Vec<NewGRFClass<T>>,
+    members: Vec<ClassMembers<T>>,
+}
+impl<T> Registry<T> {
+    pub(crate) const fn new() -> Self {
+        Self {
+            classes: Vec::new(),
+            members: Vec::new(),
+        }
+    }
+}
+
 /// A registry's `Tindex`: the class-ID wrapper its `NewGRFClass` instantiation indexes by.
-/// The registry's adapters and exports pass indices as `u16` (the shared record keeps
-/// `rust_index` as `u32`); `from_index` narrows as the original's `static_cast<Tindex>` does.
+/// The exports pass it as `u16`; `from_index` narrows as the original's
+/// `static_cast<Tindex>` does.
 pub trait ClassIndex: Copy {
     fn from_index(index: u16) -> Self;
     fn index(self) -> u16;
@@ -44,6 +79,10 @@ impl ClassIndex for crate::newgrf_roadstop::RoadStopClassID {
     }
 }
 impl ClassIndex for crate::newgrf_airport::AirportClassID {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "static_cast<AirportClassID> narrows to the enum's uint8_t"
+    )]
     fn from_index(index: u16) -> Self {
         Self(index as u8)
     }
@@ -59,328 +98,963 @@ impl ClassIndex for crate::newgrf_object::ObjectClassID {
         self.0
     }
 }
-#[repr(C)]
-pub struct Identity {
-    pub grfid: u32,
-    pub local_id: u16,
+
+/// The spec type of one `NewGRFClass` instantiation: its `Tindex`, its registry, and the
+/// specialisations the original writes per instantiation.
+pub(crate) trait ClassSpec: Sized + 'static {
+    /// `Tindex`.
+    type Index: ClassIndex;
+    /// The animation trigger type of the spec's leaves in `Specs`.
+    type Triggers;
+    /// This instantiation's registry.
+    fn registry() -> *mut Registry<Self>;
+    /// The slot of the class table C++ installs at each `Reset`.
+    fn services_slot() -> &'static GameState<*const Services<Self>>;
+    /// The class table C++ installed at the last `Reset`, which every entry but `Reset`
+    /// runs after.
+    #[allow(unsafe_code)]
+    fn services() -> &'static Services<Self> {
+        // SAFETY: Every entry runs after the reset that installs the table.
+        unsafe { Self::services_slot().table() }
+    }
+    /// The spec's leaves in the shared spec tables.
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers>;
+    /// `NewGRFClass::IsUIAvailable`: check whether the spec will be available to the user at
+    /// some point in time.
+    fn is_ui_available(class: ClassRef<Self>, index: u32) -> bool;
+    /// `NewGRFClass::InsertDefaults`: initialise the defaults.
+    fn insert_defaults();
 }
+
+/// The native leaves of a spec's `class_index` and `index` members, and the tables the
+/// instantiation's specialisations read. C++ fills one per instantiation.
 #[repr(C)]
 pub struct Services<T> {
+    /// `static_cast<uint16_t>(spec->class_index)`.
     pub class_index: unsafe extern "C" fn(*const T) -> u16,
+    /// `spec->index = index`.
     pub set_index: unsafe extern "C" fn(*mut T, u16),
-    pub identity: unsafe extern "C" fn(*const T) -> Identity,
+    /// The object table, which only the object instantiation's `IsUIAvailable` reads; null
+    /// for the others.
     pub object: *const crate::objects::ObjectServices,
     shared: *const crate::services::Services,
 }
-struct Members<T> {
-    specs: Vec<*mut T>,
-    ui_count: u32,
+
+/// A class of a registry, the `NewGRFClass *` that `Get` returns, with its Rust-only members.
+/// C++ reads and writes the shared record in place, so the handle holds its address and
+/// reads and writes each member with a field-sized access. The handle resolves the registry
+/// once, where it is made, and is valid until the next `Reset` or `Allocate`.
+pub(crate) struct ClassRef<T> {
+    record: *mut NewGRFClass<T>,
+    members: *mut ClassMembers<T>,
 }
-struct Registry<T> {
-    classes: Vec<Class>,
-    members: Vec<Members<T>>,
+impl<T> Clone for ClassRef<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
-impl<T> Registry<T> {
-    const fn new() -> Self {
-        Self {
-            classes: Vec::new(),
-            members: Vec::new(),
+impl<T> Copy for ClassRef<T> {}
+
+impl<T: ClassSpec> ClassRef<T> {
+    /// `global_id`.
+    #[allow(unsafe_code)]
+    pub(crate) fn global_id(self) -> u32 {
+        // SAFETY: The module's serialization contract; the handle names a live class.
+        unsafe { (*self.record).global_id }
+    }
+    /// Store `name`.
+    #[allow(unsafe_code)]
+    pub(crate) fn set_name(self, name: StringID) {
+        // SAFETY: As for `global_id`.
+        unsafe { (*self.record).name = name };
+    }
+    /// `NewGRFClass::Index`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the shared u32 holds a Tindex, which the narrowing restores"
+    )]
+    #[allow(unsafe_code)]
+    pub(crate) fn index(self) -> T::Index {
+        // SAFETY: As for `global_id`.
+        T::Index::from_index(unsafe { (*self.record).index } as u16)
+    }
+    /// `NewGRFClass::Specs`: get read-only span of specs of this class, as its start and
+    /// length.
+    #[allow(unsafe_code)]
+    pub(crate) fn specs(self) -> (*const *mut T, usize) {
+        // SAFETY: The module's serialization contract; the handle's members are live, and
+        // the vector's header is read, not its elements.
+        unsafe { ((*self.members).spec.as_ptr(), (*self.members).spec.len()) }
+    }
+
+    /// `NewGRFClass::GetSpecCount`: get the number of allocated specs within the class.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the size narrows to uint, as the original's static_cast"
+    )]
+    #[allow(unsafe_code)]
+    pub(crate) fn get_spec_count(self) -> u32 {
+        // SAFETY: As for `specs`.
+        unsafe { (*self.members).spec.len() as u32 }
+    }
+
+    /// `NewGRFClass::GetUISpecCount`: get the number of potentially user-available specs
+    /// within the class.
+    #[allow(unsafe_code)]
+    pub(crate) fn get_ui_spec_count(self) -> u32 {
+        // SAFETY: As for `specs`.
+        unsafe { (*self.members).ui_count }
+    }
+
+    /// `NewGRFClass::GetSpec`: get a spec from the class at a given index.
+    #[allow(unsafe_code)]
+    pub(crate) fn get_spec(self, index: u32) -> *const T {
+        /* If the custom spec isn't defined any more, then the GRF file probably was not loaded. */
+        if index < self.get_spec_count() {
+            // SAFETY: As for `specs`; `index` is below the count.
+            unsafe { *self.specs().0.add(index as usize) }
+        } else {
+            ptr::null()
+        }
+    }
+
+    /// `NewGRFClass::Insert`: insert a spec into the class, and update its index.
+    /// # Safety
+    /// The class table is installed, and a non-null `spec` is a live native spec.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the position narrows to uint16_t, as the original's static_cast"
+    )]
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn insert(self, spec: *mut T) {
+        let members = self.members;
+        // SAFETY: As for `specs`; the borrow ends with the statement.
+        let index = unsafe {
+            (*members).spec.push(spec);
+            ((*members).spec.len() - 1) as u16
+        };
+        if !spec.is_null() {
+            // SAFETY: The caller's spec contract.
+            unsafe { (T::services().set_index)(spec, index) };
+        }
+
+        // The availability is checked at the narrowed index, even after it wraps.
+        if T::is_ui_available(self, u32::from(index)) {
+            // SAFETY: As above; the availability check holds no borrow of the members.
+            unsafe { (*members).ui_count = (*members).ui_count.wrapping_add(1) };
         }
     }
 }
-/// `NewGRFClass::Index`, a field-sized load of the class's own index.
-pub(crate) unsafe fn index<I: ClassIndex>(class: *const Class) -> I {
-    I::from_index(unsafe { (*class).rust_index } as u16)
-}
-/// `NewGRFClass::Allocate`: allocate a class with a given global class ID.
-unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16) -> u16 {
-    if let Some(i) = unsafe {
-        (*state)
-            .classes
-            .iter()
-            .position(|c| c.global_id == global_id)
-    } {
-        return i as u16;
+
+impl<T: ClassSpec> NewGRFClass<T> {
+    /// `NewGRFClass::classes`, whose records C++ reads in place.
+    #[allow(unsafe_code)]
+    fn classes() -> *mut Self {
+        // SAFETY: The module's serialization contract.
+        unsafe { (*T::registry()).classes.as_mut_ptr() }
     }
-    let index = unsafe { (*state).classes.len() };
-    if index < usize::from(max) {
+    /// The class at position `i` of the registry, which is also its index, with its members,
+    /// from one resolution of the registry.
+    #[allow(unsafe_code)]
+    fn at(i: usize) -> ClassRef<T> {
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vectors' headers are read.
+        let (classes, members) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+            )
+        };
+        ClassRef {
+            record: classes.wrapping_add(i),
+            members: members.wrapping_add(i),
+        }
+    }
+
+    /// `NewGRFClass::Reset`: reset the classes, i.e. clear everything, after installing the
+    /// class table `services`.
+    /// # Safety
+    /// `services` is a process-lifetime class table.
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn reset(services: *const Services<T>) {
+        T::services_slot().exchange(services);
+        // SAFETY: The module's serialization contract.
+        unsafe { *T::registry() = Registry::new() };
+        T::insert_defaults();
+    }
+
+    /// `NewGRFClass::Allocate`: allocate a class with a given global class ID. Returns the
+    /// (non global!) class ID for the class. Upon allocating the same global class ID for a
+    /// second time, this first allocation will be given.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the position narrows to Tindex, as the original's static_cast"
+    )]
+    #[allow(unsafe_code)]
+    pub(crate) fn allocate(global_id: u32, tmax: T::Index) -> T::Index {
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vector's header is read, and each
+        // class's `global_id` with a field-sized load.
+        let (classes, members, count) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+                (*registry).classes.len(),
+            )
+        };
+        // SAFETY: As above; each position is below the count.
+        let found = (0..count).find(|&i| unsafe { (*classes.add(i)).global_id } == global_id);
+
+        /* Id is already allocated, so reuse it. */
+        if let Some(found) = found {
+            let found = ClassRef {
+                record: classes.wrapping_add(found),
+                members: members.wrapping_add(found),
+            };
+            return found.index();
+        }
+
+        /* More slots available, allocate a slot to the global id. */
+        // SAFETY: As above; no reference to a class is live while the vectors grow.
         unsafe {
-            (*state).classes.push(Class {
-                global_id,
-                name: STR_EMPTY.0,
-                rust_index: index as u32,
-            });
-            (*state).members.push(Members {
-                specs: Vec::new(),
-                ui_count: 0,
-            });
+            if count < usize::from(tmax.index()) {
+                let index = T::Index::from_index(count as u16);
+                (*registry).classes.push(NewGRFClass {
+                    global_id,
+                    name: STR_EMPTY,
+                    index: u32::from(index.index()),
+                    spec_type: PhantomData,
+                });
+                (*registry).members.push(ClassMembers {
+                    ui_count: 0,
+                    spec: Vec::new(),
+                });
+                return index;
+            }
         }
-        return index as u16;
+
+        grf_msg!(
+            2,
+            "ClassAllocate: already allocated {} classes, using default",
+            tmax.index()
+        );
+        T::Index::from_index(0)
     }
-    grf_msg!(
-        2,
-        "ClassAllocate: already allocated {} classes, using default",
-        max
-    );
-    0
-}
-/// `NewGRFClass::Get`: the class at `class_index`, after the original's bound assertion.
-unsafe fn get<T>(state: *mut Registry<T>, class_index: u16, s: &Services<T>) -> *mut Class {
-    let count = unsafe { (*state).classes.len() };
-    (crate::movement::table(unsafe { &*s.shared }).native_assert)(usize::from(class_index) < count);
-    // An assertion-free build indexes past the end, as the original's `classes[class_index]`.
-    unsafe {
-        (*state)
-            .classes
-            .as_mut_ptr()
-            .wrapping_add(usize::from(class_index))
+    /// `NewGRFClass::Assign`: assign a spec to one of the classes. The spec must have a valid
+    /// class index set.
+    /// # Safety
+    /// The class table is installed and `spec` is a live native spec.
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn assign(spec: *mut T) {
+        // SAFETY: The caller's contracts.
+        let class_index = T::Index::from_index(unsafe { (T::services().class_index)(spec) });
+        crate::services_assert::assert_with(|| {
+            usize::from(class_index.index()) < Self::get_class_count() as usize
+        });
+        // SAFETY: The caller's contracts.
+        unsafe { Self::get(class_index).insert(spec) };
     }
-}
-unsafe fn get_spec<T>(state: *mut Registry<T>, class: u16, index: u32) -> *mut T {
-    unsafe {
-        (&(*state).members)[usize::from(class)]
-            .specs
-            .get(index as usize)
-            .copied()
-            .unwrap_or(ptr::null_mut())
-    }
-}
-unsafe fn available<T>(state: *mut Registry<T>, class: u16, index: u32, s: &Services<T>) -> bool {
-    if s.object.is_null() {
-        return true;
-    }
-    let spec = unsafe { get_spec(state, class, index) };
-    unsafe { crate::objects::openttd_rust_object_ever_available_abi(s.object, spec.cast()) != 0 }
-}
-unsafe fn insert<T>(state: *mut Registry<T>, class: u16, spec: *mut T, s: &Services<T>) {
-    let index = unsafe {
-        let members = &mut (&mut (*state).members)[usize::from(class)];
-        let index = members.specs.len() as u16;
-        members.specs.push(spec);
-        index
-    };
-    if !spec.is_null() {
-        unsafe {
-            (s.set_index)(spec, index);
-        }
-    }
-    // NewGRFClass::Insert checks availability at the narrowed index, even after wrap.
-    if unsafe { available(state, class, u32::from(index), s) } {
-        unsafe {
-            (&mut (*state).members)[usize::from(class)].ui_count = (&(*state).members)
-                [usize::from(class)]
-            .ui_count
-            .wrapping_add(1);
+
+    /// `NewGRFClass::Get`: get a particular class.
+    #[allow(unsafe_code)]
+    pub(crate) fn get(class_index: T::Index) -> ClassRef<T> {
+        let class_index = usize::from(class_index.index());
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vector's header is read.
+        let (classes, members, count) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+                (*registry).classes.len(),
+            )
+        };
+        crate::services_assert::assert_with(|| class_index < count);
+        // A build without assertions indexes past the end, as the original's
+        // `classes[class_index]`.
+        ClassRef {
+            record: classes.wrapping_add(class_index),
+            members: members.wrapping_add(class_index),
         }
     }
+
+    /// `NewGRFClass::GetClassCount`: get the number of allocated classes.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the size narrows to uint, as the original's static_cast"
+    )]
+    #[allow(unsafe_code)]
+    pub(crate) fn get_class_count() -> u32 {
+        // SAFETY: The module's serialization contract.
+        unsafe { (*T::registry()).classes.len() as u32 }
+    }
+
+    /// `NewGRFClass::GetUIClassCount`: get the number of classes available to the user.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "count_if's difference narrows to the uint result"
+    )]
+    #[allow(unsafe_code)]
+    pub(crate) fn get_ui_class_count() -> u32 {
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vector's header is read.
+        let (classes, members, count) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+                (*registry).classes.len(),
+            )
+        };
+        (0..count)
+            .map(|i| ClassRef {
+                record: classes.wrapping_add(i),
+                members: members.wrapping_add(i),
+            })
+            .filter(|cls| cls.get_ui_spec_count() > 0)
+            .count() as u32
+    }
+
+    /// `NewGRFClass::GetByGrf`: retrieve a spec by GRF location.
+    #[allow(unsafe_code)]
+    pub(crate) fn get_by_grf(grfid: u32, local_id: u16) -> *const T {
+        // SAFETY: The class table names the process-lifetime shared table.
+        let leaves = (T::SPEC_SERVICES)(unsafe { &*T::services().shared }.specs());
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vector's header is read.
+        let (members, classes) =
+            unsafe { ((*registry).members.as_ptr(), (*registry).classes.len()) };
+        for class in 0..classes {
+            // SAFETY: As above; each class has its members at its position, and only the
+            // span's start and length are read.
+            let (specs, count) = unsafe {
+                (
+                    (*members.add(class)).spec.as_ptr(),
+                    (*members.add(class)).spec.len(),
+                )
+            };
+            for i in 0..count {
+                // SAFETY: As above; the pointer is copied before the native leaves run.
+                let spec = unsafe { *specs.add(i) };
+                if spec.is_null() {
+                    continue;
+                }
+                if (leaves.local_id)(spec) != local_id {
+                    continue;
+                }
+                if (leaves.grfid)(spec) == grfid {
+                    return spec;
+                }
+            }
+        }
+
+        ptr::null()
+    }
 }
-unsafe fn by_grf<T>(
-    state: *mut Registry<T>,
+
+/// The closure Action 0 registers for a class name property: `Get(spec->class_index)->name =
+/// str` once the string is mapped.
+/// # Safety
+/// The class table is installed and `spec` is a live native spec.
+#[allow(unsafe_code)]
+pub(crate) unsafe fn set_class_name<T: ClassSpec>(spec: *const T, name: StringID) {
+    // SAFETY: The caller's contracts.
+    let class_index = T::Index::from_index(unsafe { (T::services().class_index)(spec) });
+    NewGRFClass::<T>::get(class_index).set_name(name);
+}
+
+/// `NewGRFClass::Reset`.
+/// # Safety
+/// `s` is the process-lifetime class table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_class_reset(
+    s: *const Services<crate::station_cmd::RailSpec>,
+) {
+    // SAFETY: The caller's table contract.
+    unsafe { NewGRFClass::reset(s) };
+}
+/// `NewGRFClass::Allocate`, with the facade's `Tmax`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_allocate(global_id: u32, tmax: u16) -> u16 {
+    NewGRFClass::<crate::station_cmd::RailSpec>::allocate(
+        global_id,
+        crate::newgrf_station::StationClassID::from_index(tmax),
+    )
+    .index()
+}
+/// `NewGRFClass::Assign`.
+/// # Safety
+/// `spec` is a live native spec.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_class_assign(
+    spec: *mut crate::station_cmd::RailSpec,
+) {
+    // SAFETY: The caller's spec contract.
+    unsafe { NewGRFClass::assign(spec) };
+}
+/// `set_class_name`, for the native class name closure.
+/// # Safety
+/// `spec` is a live native spec.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_class_set_name(
+    spec: *const crate::station_cmd::RailSpec,
+    name: u32,
+) {
+    // SAFETY: The caller's spec contract.
+    unsafe { set_class_name(spec, StringID(name)) };
+}
+/// `NewGRFClass::classes`, which `Classes()` and `Get` read in place.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_classes()
+-> *mut NewGRFClass<crate::station_cmd::RailSpec> {
+    NewGRFClass::classes()
+}
+/// `NewGRFClass::GetClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_count() -> u32 {
+    NewGRFClass::<crate::station_cmd::RailSpec>::get_class_count()
+}
+/// `NewGRFClass::GetUIClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_ui_count() -> u32 {
+    NewGRFClass::<crate::station_cmd::RailSpec>::get_ui_class_count()
+}
+/// `NewGRFClass::Specs` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_specs(
+    class: u16,
+) -> *const *mut crate::station_cmd::RailSpec {
+    NewGRFClass::at(usize::from(class)).specs().0
+}
+/// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::station_cmd::RailSpec>::at(usize::from(class)).get_spec_count()
+}
+/// `NewGRFClass::GetUISpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_ui_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::station_cmd::RailSpec>::at(usize::from(class)).get_ui_spec_count()
+}
+/// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_spec(
+    class: u16,
+    index: u32,
+) -> *const crate::station_cmd::RailSpec {
+    NewGRFClass::at(usize::from(class)).get_spec(index)
+}
+/// `NewGRFClass::GetByGrf`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_class_by_grf(
     grfid: u32,
     local_id: u16,
-    s: &Services<T>,
-) -> *const T {
-    let classes = unsafe { (*state).members.len() };
-    for class in 0..classes {
-        let count = unsafe { (&(*state).members)[class].specs.len() };
-        for index in 0..count {
-            let spec = unsafe { (&(*state).members)[class].specs[index] };
-            if spec.is_null() {
-                continue;
-            }
-            let identity = unsafe { (s.identity)(spec) };
-            if identity.local_id == local_id && identity.grfid == grfid {
-                return spec;
-            }
-        }
-    }
-    ptr::null()
+) -> *const crate::station_cmd::RailSpec {
+    NewGRFClass::get_by_grf(grfid, local_id)
 }
-macro_rules! registry {
-    ($module:ident, $spec:ty, $index:ty, $prefix:literal, $insert_defaults:path, [$($assign_export:meta),*] $(, $set_name:ident)?) => {
-        pub mod $module {
-            use super::*;
-            type Spec = $spec;
-            static STATE: GameState<Registry<Spec>> = GameState::new(Registry::new());
-            pub(super) static SERVICES: GameState<*const Services<Spec>> = GameState::new(ptr::null());
-            #[unsafe(export_name = concat!($prefix, "_reset"))]
-            pub unsafe extern "C" fn reset(s: *const Services<Spec>) {
-                SERVICES.exchange(s);
-                unsafe {
-                    *STATE.get() = Registry::new();
-                    $insert_defaults();
-                }
-            }
-            /// `NewGRFClass::Allocate`.
-            pub unsafe fn allocate(id: u32, max: $index) -> $index {
-                <$index>::from_index(unsafe { super::allocate(STATE.get(), id, max.index()) })
-            }
-            #[unsafe(export_name = concat!($prefix, "_allocate"))]
-            pub unsafe extern "C" fn allocate_export(id: u32, max: u16) -> u16 {
-                unsafe { allocate(id, <$index>::from_index(max)) }.index()
-            }
-            /// `NewGRFClass::Get`.
-            pub unsafe fn get(class_index: $index) -> *mut Class {
-                unsafe { super::get(STATE.get(), class_index.index(), SERVICES.table()) }
-            }
-            /// `NewGRFClass::Insert`.
-            pub unsafe fn insert(class: $index, spec: *mut Spec) {
-                unsafe {
-                    super::insert(STATE.get(), class.index(), spec, SERVICES.table());
-                }
-            }
-            $(
-                #[unsafe(no_mangle)]
-                pub unsafe extern "C" fn $set_name(spec: *const Spec, name: u32) {
-                    let class = unsafe { (SERVICES.table().class_index)(spec) };
-                    unsafe { (*classes().add(usize::from(class))).name = name; }
-                }
-            )?
-            $(#[$assign_export])*
-            pub unsafe extern "C" fn assign(spec: *mut Spec) {
-                let s = unsafe { SERVICES.table() };
-                let class = <$index>::from_index(unsafe { (s.class_index)(spec) });
-                unsafe {
-                    insert(class, spec);
-                }
-            }
-            #[unsafe(export_name = concat!($prefix, "_classes"))]
-            pub extern "C" fn classes() -> *mut Class {
-                unsafe { (*STATE.get()).classes.as_mut_ptr() }
-            }
-            #[unsafe(export_name = concat!($prefix, "_count"))]
-            pub extern "C" fn count() -> u32 {
-                unsafe { (*STATE.get()).classes.len() as u32 }
-            }
-            #[unsafe(export_name = concat!($prefix, "_ui_count"))]
-            pub extern "C" fn ui_count() -> u32 {
-                unsafe {
-                    (*STATE.get())
-                        .members
-                        .iter()
-                        .filter(|m| m.ui_count > 0)
-                        .count() as u32
-                }
-            }
-            #[unsafe(export_name = concat!($prefix, "_specs"))]
-            pub unsafe extern "C" fn specs(class: u16) -> *const *mut Spec {
-                unsafe { (&(*STATE.get()).members)[usize::from(class)].specs.as_ptr() }
-            }
-            #[unsafe(export_name = concat!($prefix, "_spec_count"))]
-            pub extern "C" fn spec_count(class: u16) -> u32 {
-                unsafe { (&(*STATE.get()).members)[usize::from(class)].specs.len() as u32 }
-            }
-            #[unsafe(export_name = concat!($prefix, "_ui_spec_count"))]
-            pub unsafe extern "C" fn ui_spec_count(class: u16) -> u32 {
-                unsafe { (&(*STATE.get()).members)[usize::from(class)].ui_count }
-            }
-            #[unsafe(export_name = concat!($prefix, "_spec"))]
-            pub extern "C" fn spec(class: u16, index: u32) -> *mut Spec {
-                unsafe { get_spec(STATE.get(), class, index) }
-            }
-            #[unsafe(export_name = concat!($prefix, "_by_grf"))]
-            pub unsafe extern "C" fn by_grf(grfid: u32, local_id: u16) -> *const Spec {
-                unsafe { super::by_grf(STATE.get(), grfid, local_id, SERVICES.table()) }
-            }
-        }
-    };
+
+/// `NewGRFClass::Reset`.
+/// # Safety
+/// `s` is the process-lifetime class table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_roadstop_class_reset(
+    s: *const Services<crate::station_cmd::RoadSpec>,
+) {
+    // SAFETY: The caller's table contract.
+    unsafe { NewGRFClass::reset(s) };
 }
-registry!(
-    station,
-    crate::station_cmd::RailSpec,
-    crate::newgrf_station::StationClassID,
-    "openttd_rust_station_class",
-    crate::newgrf_station::insert_defaults,
-    [unsafe(export_name = "openttd_rust_station_class_assign")],
-    openttd_rust_station_class_set_name
-);
-registry!(
-    roadstop,
-    crate::station_cmd::RoadSpec,
-    crate::newgrf_roadstop::RoadStopClassID,
-    "openttd_rust_roadstop_class",
-    crate::newgrf_roadstop::insert_defaults,
-    [unsafe(export_name = "openttd_rust_roadstop_class_assign")],
-    openttd_rust_roadstop_class_set_name
-);
-registry!(
-    airport,
-    crate::station_cmd::AirportSpec,
-    crate::newgrf_airport::AirportClassID,
-    "openttd_rust_airport_class",
-    crate::newgrf_airport::insert_defaults,
-    []
-);
-registry!(
-    object,
-    crate::objects::Spec,
-    crate::newgrf_object::ObjectClassID,
-    "openttd_rust_object_class",
-    crate::newgrf_object::insert_defaults,
-    [unsafe(export_name = "openttd_rust_object_class_assign")]
-);
+/// `NewGRFClass::Allocate`, with the facade's `Tmax`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_allocate(global_id: u32, tmax: u16) -> u16 {
+    NewGRFClass::<crate::station_cmd::RoadSpec>::allocate(
+        global_id,
+        crate::newgrf_roadstop::RoadStopClassID::from_index(tmax),
+    )
+    .index()
+}
+/// `NewGRFClass::Assign`.
+/// # Safety
+/// `spec` is a live native spec.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_roadstop_class_assign(
+    spec: *mut crate::station_cmd::RoadSpec,
+) {
+    // SAFETY: The caller's spec contract.
+    unsafe { NewGRFClass::assign(spec) };
+}
+/// `set_class_name`, for the native class name closure.
+/// # Safety
+/// `spec` is a live native spec.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_roadstop_class_set_name(
+    spec: *const crate::station_cmd::RoadSpec,
+    name: u32,
+) {
+    // SAFETY: The caller's spec contract.
+    unsafe { set_class_name(spec, StringID(name)) };
+}
+/// `NewGRFClass::classes`, which `Classes()` and `Get` read in place.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_classes()
+-> *mut NewGRFClass<crate::station_cmd::RoadSpec> {
+    NewGRFClass::classes()
+}
+/// `NewGRFClass::GetClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_count() -> u32 {
+    NewGRFClass::<crate::station_cmd::RoadSpec>::get_class_count()
+}
+/// `NewGRFClass::GetUIClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_ui_count() -> u32 {
+    NewGRFClass::<crate::station_cmd::RoadSpec>::get_ui_class_count()
+}
+/// `NewGRFClass::Specs` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_specs(
+    class: u16,
+) -> *const *mut crate::station_cmd::RoadSpec {
+    NewGRFClass::at(usize::from(class)).specs().0
+}
+/// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::station_cmd::RoadSpec>::at(usize::from(class)).get_spec_count()
+}
+/// `NewGRFClass::GetUISpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_ui_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::station_cmd::RoadSpec>::at(usize::from(class)).get_ui_spec_count()
+}
+/// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_spec(
+    class: u16,
+    index: u32,
+) -> *const crate::station_cmd::RoadSpec {
+    NewGRFClass::at(usize::from(class)).get_spec(index)
+}
+/// `NewGRFClass::GetByGrf`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_roadstop_class_by_grf(
+    grfid: u32,
+    local_id: u16,
+) -> *const crate::station_cmd::RoadSpec {
+    NewGRFClass::get_by_grf(grfid, local_id)
+}
+
+/// `NewGRFClass::Reset`.
+/// # Safety
+/// `s` is the process-lifetime class table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_class_reset(
+    s: *const Services<crate::station_cmd::AirportSpec>,
+) {
+    // SAFETY: The caller's table contract.
+    unsafe { NewGRFClass::reset(s) };
+}
+/// `NewGRFClass::Allocate`, with the facade's `Tmax`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_allocate(global_id: u32, tmax: u16) -> u16 {
+    NewGRFClass::<crate::station_cmd::AirportSpec>::allocate(
+        global_id,
+        crate::newgrf_airport::AirportClassID::from_index(tmax),
+    )
+    .index()
+}
+/// `NewGRFClass::classes`, which `Classes()` and `Get` read in place.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_classes()
+-> *mut NewGRFClass<crate::station_cmd::AirportSpec> {
+    NewGRFClass::classes()
+}
+/// `NewGRFClass::GetClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_count() -> u32 {
+    NewGRFClass::<crate::station_cmd::AirportSpec>::get_class_count()
+}
+/// `NewGRFClass::GetUIClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_ui_count() -> u32 {
+    NewGRFClass::<crate::station_cmd::AirportSpec>::get_ui_class_count()
+}
+/// `NewGRFClass::Specs` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_specs(
+    class: u16,
+) -> *const *mut crate::station_cmd::AirportSpec {
+    NewGRFClass::at(usize::from(class)).specs().0
+}
+/// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::station_cmd::AirportSpec>::at(usize::from(class)).get_spec_count()
+}
+/// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_airport_class_spec(
+    class: u16,
+    index: u32,
+) -> *const crate::station_cmd::AirportSpec {
+    NewGRFClass::at(usize::from(class)).get_spec(index)
+}
+
+/// `NewGRFClass::Reset`.
+/// # Safety
+/// `s` is the process-lifetime class table.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_class_reset(s: *const Services<crate::objects::Spec>) {
+    // SAFETY: The caller's table contract.
+    unsafe { NewGRFClass::reset(s) };
+}
+/// `NewGRFClass::Allocate`, with the facade's `Tmax`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_allocate(global_id: u32, tmax: u16) -> u16 {
+    NewGRFClass::<crate::objects::Spec>::allocate(
+        global_id,
+        crate::newgrf_object::ObjectClassID::from_index(tmax),
+    )
+    .index()
+}
+/// `NewGRFClass::Assign`.
+/// # Safety
+/// `spec` is a live native spec.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_class_assign(spec: *mut crate::objects::Spec) {
+    // SAFETY: The caller's spec contract.
+    unsafe { NewGRFClass::assign(spec) };
+}
+/// `NewGRFClass::classes`, which `Classes()` and `Get` read in place.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_classes() -> *mut NewGRFClass<crate::objects::Spec> {
+    NewGRFClass::classes()
+}
+/// `NewGRFClass::GetClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_count() -> u32 {
+    NewGRFClass::<crate::objects::Spec>::get_class_count()
+}
+/// `NewGRFClass::GetUIClassCount`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_ui_count() -> u32 {
+    NewGRFClass::<crate::objects::Spec>::get_ui_class_count()
+}
+/// `NewGRFClass::Specs` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_specs(class: u16) -> *const *mut crate::objects::Spec {
+    NewGRFClass::at(usize::from(class)).specs().0
+}
+/// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::objects::Spec>::at(usize::from(class)).get_spec_count()
+}
+/// `NewGRFClass::GetUISpecCount` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_ui_spec_count(class: u16) -> u32 {
+    NewGRFClass::<crate::objects::Spec>::at(usize::from(class)).get_ui_spec_count()
+}
+/// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_spec(
+    class: u16,
+    index: u32,
+) -> *const crate::objects::Spec {
+    NewGRFClass::at(usize::from(class)).get_spec(index)
+}
+/// `NewGRFClass::GetByGrf`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_class_by_grf(
+    grfid: u32,
+    local_id: u16,
+) -> *const crate::objects::Spec {
+    NewGRFClass::get_by_grf(grfid, local_id)
+}
 
 crate::abi::layouts! {
     fn abi_layout;
-    "StationClass" ["station_service"] => Class { global_id, name, rust_index };
-    "RoadStopClass" ["station_service"] => Class { global_id, name, rust_index };
-    "AirportClass" ["station_service"] => Class { global_id, name, rust_index };
-    "ObjectClass" ["station_service"] => Class { global_id, name, rust_index };
-    "OpenTTDGRFClassIdentity" ["station_service"] => Identity { grfid, local_id };
-    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, object, shared };
-    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, object, shared };
-    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, object, shared };
-    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, object, shared };
-}
-
-pub(crate) unsafe fn station_identity(spec: *const crate::station_cmd::RailSpec) -> Identity {
-    unsafe { (station::SERVICES.table().identity)(spec) }
-}
-
-pub(crate) fn station_label(class: u16) -> u32 {
-    unsafe { (*station::classes().add(usize::from(class))).global_id }
-}
-pub(crate) fn roadstop_label(class: u16) -> u32 {
-    unsafe { (*roadstop::classes().add(usize::from(class))).global_id }
+    "StationClass" ["station_service"] => NewGRFClass<crate::station_cmd::RailSpec> { global_id, name, index };
+    "RoadStopClass" ["station_service"] => NewGRFClass<crate::station_cmd::RoadSpec> { global_id, name, index };
+    "AirportClass" ["station_service"] => NewGRFClass<crate::station_cmd::AirportSpec> { global_id, name, index };
+    "ObjectClass" ["station_service"] => NewGRFClass<crate::objects::Spec> { global_id, name, index };
+    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, object, shared };
+    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, object, shared };
+    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, object, shared };
+    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, object, shared };
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use crate::newgrf_airport::{AirportClass, AirportClassID};
+    use crate::newgrf_object::{ObjectClass, ObjectClassID};
+    use crate::station_cmd::AirportSpec;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
-    thread_local! {
-        static ASSERTIONS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
-    }
+    static FAILED_ASSERTIONS: AtomicU32 = AtomicU32::new(0);
     extern "C" fn record_assertion(condition: bool) {
-        ASSERTIONS.with_borrow_mut(|a| a.push(condition));
+        if !condition {
+            FAILED_ASSERTIONS.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
-    /// `NewGRFClass::Get` asserts `class_index < classes.size()` through the native
-    /// assertion, for the default classes and for any other lookup. The kept C++ class test
-    /// sees only lookups that pass. The object registry is the one no other test resets.
+    /// The indices `set_index` stores, in order.
+    static SET_INDEX: Mutex<Vec<u16>> = Mutex::new(Vec::new());
+    /// A stand-in spec: the `class_index` member the class leaves read, and the views the
+    /// object eligibility leaf reports.
+    struct StandIn {
+        class_index: u16,
+        views: u8,
+    }
+    #[allow(unsafe_code)]
+    unsafe extern "C" fn class_index<T>(spec: *const T) -> u16 {
+        // SAFETY: Every spec the tests pass is a live `StandIn`.
+        unsafe { (*spec.cast::<StandIn>()).class_index }
+    }
+    extern "C" fn set_index<T>(_: *mut T, index: u16) {
+        SET_INDEX.lock().unwrap().push(index);
+    }
+    fn services<T>(object: *const crate::objects::ObjectServices) -> &'static Services<T> {
+        Box::leak(Box::new(Services {
+            class_index: class_index::<T>,
+            set_index: set_index::<T>,
+            object,
+            shared: ptr::null(),
+        }))
+    }
+
+    /// `NewGRFClass::Get` asserts `class_index < classes.size()`, for the default classes and
+    /// for any other lookup, and an assertion-free build goes on to index past the end. The
+    /// kept C++ class test sees only lookups that pass.
     #[test]
+    #[allow(unsafe_code)] // The object registry's reset, with a table of only its leaves.
     fn get_makes_the_original_bound_assertion() {
-        let mut movement = crate::test_tables::MOVEMENT;
-        movement.native_assert = record_assertion;
-        let mut shared = crate::test_tables::SHARED;
-        shared.movement = Box::leak(Box::new(movement));
-        let services: &'static Services<crate::objects::Spec> = Box::leak(Box::new(Services {
-            class_index: crate::test_tables::unreachable1,
-            set_index: crate::test_tables::unreachable2,
-            identity: crate::test_tables::unreachable1,
-            object: ptr::null(),
-            shared: Box::leak(Box::new(shared)),
-        }));
-        unsafe { object::reset(services) };
-        // ObjectClass::InsertDefaults looks up both default classes.
-        assert_eq!(ASSERTIONS.take(), [true, true]);
-        let count = object::count() as u16;
-        assert_eq!(count, 2);
-        unsafe {
-            object::get(crate::newgrf_object::ObjectClassID(count - 1));
-            object::get(crate::newgrf_object::ObjectClassID(count));
+        if crate::services_assert::isolate_test_check(
+            "newgrf_class::tests::get_makes_the_original_bound_assertion",
+            record_assertion,
+        ) {
+            return;
         }
-        assert_eq!(ASSERTIONS.take(), [true, false]);
+        // SAFETY: The table lives for the process; `ObjectClass::InsertDefaults` reads none
+        // of its leaves.
+        unsafe { ObjectClass::reset(services(ptr::null())) };
+        // ObjectClass::InsertDefaults looks up both default classes.
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
+        let count = u16::try_from(ObjectClass::get_class_count()).unwrap();
+        assert_eq!(count, 2);
+        ObjectClass::get(ObjectClassID(count - 1));
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
+        ObjectClass::get(ObjectClassID(count));
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 1);
+    }
+
+    /// Exit code and marker of `two_failures`, which ends the process at the second failed
+    /// assertion.
+    const SECOND_FAILURE_CODE: i32 = 87;
+    const SECOND_FAILURE_MARKER: &str = "newgrf_class test: second failed assertion";
+    extern "C" fn two_failures(condition: bool) {
+        if !condition && FAILED_ASSERTIONS.fetch_add(1, Ordering::Relaxed) == 1 {
+            eprintln!("{SECOND_FAILURE_MARKER}");
+            std::process::exit(SECOND_FAILURE_CODE);
+        }
+    }
+
+    /// `NewGRFClass::Assign` asserts the spec's class index against the class count, and then
+    /// `Get` asserts it again. Under a policy that returns from the first failure and ends the
+    /// process at the second, a spec whose class index is the count ends at `Get`'s
+    /// assertion, before the class is indexed or anything is stored. Without either
+    /// assertion, the body goes on to insert the spec and the test fails; the class past the
+    /// count is a real record that the registry no longer counts, so that path reads only
+    /// initialised storage.
+    #[test]
+    #[allow(unsafe_code)] // A live stand-in spec that only the class leaves receive.
+    fn assign_of_a_class_index_past_the_classes_fails_both_assertions() {
+        if crate::services_assert::isolate_test_ends(
+            "newgrf_class::tests::assign_of_a_class_index_past_the_classes_fails_both_assertions",
+            SECOND_FAILURE_CODE,
+            SECOND_FAILURE_MARKER,
+        ) {
+            return;
+        }
+        crate::services_assert::bind_test_check(two_failures);
+        // SAFETY: The table lives for the process; `AirportClass::InsertDefaults` reads none
+        // of its leaves.
+        unsafe { AirportClass::reset(services(ptr::null())) };
+        let count = AirportClass::get_class_count() as usize;
+        // A fifth class, which the registry then stops counting without dropping it.
+        AirportClass::allocate(u32::from_be_bytes(*b"PAST"), AirportClassID::APC_MAX);
+        let registry = <AirportSpec as ClassSpec>::registry();
+        // SAFETY: Both vectors hold `count + 1` initialised elements; the last stays in place.
+        unsafe {
+            (*registry).classes.set_len(count);
+            (*registry).members.set_len(count);
+        }
+        let mut spec = StandIn {
+            class_index: u16::try_from(count).unwrap(),
+            views: 0,
+        };
+        // SAFETY: `spec` is live; the second failed assertion ends the process.
+        unsafe { AirportClass::assign((&raw mut spec).cast::<AirportSpec>()) };
+        unreachable!("Assign returned past its failed assertions");
+    }
+
+    /// `NewGRFClass::Assign` of a spec with a valid class index inserts it into that class:
+    /// the spec's index is its position, and `IsUIAvailable`, always true for an airport,
+    /// counts it for the user.
+    #[test]
+    #[allow(unsafe_code)] // Live stand-in specs that only the class leaves receive.
+    fn assign_inserts_into_the_spec_class_and_counts_it_for_the_ui() {
+        if crate::services_assert::isolate_test_check(
+            "newgrf_class::tests::assign_inserts_into_the_spec_class_and_counts_it_for_the_ui",
+            record_assertion,
+        ) {
+            return;
+        }
+        // SAFETY: The table lives for the process; `AirportClass::InsertDefaults` reads none
+        // of its leaves.
+        unsafe { AirportClass::reset(services(ptr::null())) };
+        // AirportClass::InsertDefaults allocates four classes and inserts no spec.
+        assert_eq!(AirportClass::get_class_count(), 4);
+        assert_eq!(AirportClass::get_ui_class_count(), 0);
+        let mut first = StandIn {
+            class_index: 1,
+            views: 0,
+        };
+        let mut second = StandIn {
+            class_index: 1,
+            views: 0,
+        };
+        // SAFETY: Both specs are live through the test.
+        unsafe {
+            AirportClass::assign((&raw mut first).cast());
+            AirportClass::assign((&raw mut second).cast());
+        }
+        assert_eq!(*SET_INDEX.lock().unwrap(), [0, 1]);
+        let class = AirportClass::get(AirportClassID(1));
+        assert_eq!(class.get_spec_count(), 2);
+        assert_eq!(class.get_ui_spec_count(), 2);
+        assert_eq!(class.get_spec(1), (&raw const second).cast());
+        assert_eq!(class.get_spec(2), ptr::null());
+        assert_eq!(AirportClass::get_ui_class_count(), 1);
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
+    }
+
+    /// The object eligibility of a stand-in: its views, every climate, and no flags.
+    #[allow(unsafe_code)]
+    unsafe extern "C" fn eligibility(
+        spec: *const crate::objects::Spec,
+    ) -> crate::objects::Eligibility {
+        crate::objects::Eligibility {
+            flags: 0,
+            climate: u8::MAX,
+            // SAFETY: Every spec the test passes is a live `StandIn`.
+            views: unsafe { (*spec.cast::<StandIn>()).views },
+        }
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn temperate() -> u8 {
+        0
+    }
+
+    /// `ObjectClass::IsUIAvailable` is `GetSpec(index)->IsEverAvailable()`: `Assign` inserts
+    /// both specs into their class, and counts for the user only the one that will be
+    /// available, here the one with views in a game that is not being generated.
+    #[test]
+    #[allow(unsafe_code)] // Live stand-in specs that only the class and eligibility leaves receive.
+    fn object_assign_counts_only_an_ever_available_spec_for_the_ui() {
+        if crate::services_assert::isolate_test_check(
+            "newgrf_class::tests::object_assign_counts_only_an_ever_available_spec_for_the_ui",
+            record_assertion,
+        ) {
+            return;
+        }
+        let mut shared = crate::test_tables::SHARED;
+        shared.clear_square_services.generating_world = no;
+        let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
+        let mut town = crate::test_tables::TOWN_LEAVES;
+        town.shared = shared;
+        town.climate = temperate;
+        town.environment.editor = no;
+        let resolver = crate::objects::ResolverServices {
+            shared: ptr::null(),
+            views: crate::test_tables::unreachable1,
+            eligibility,
+            introduction: crate::test_tables::unreachable1,
+            lifetime: crate::test_tables::unreachable1,
+            town_scope: crate::test_tables::unreachable3,
+            base_scope: crate::test_tables::unreachable3,
+            evaluate: crate::test_tables::unreachable6,
+        };
+        let mut objects = crate::test_tables::OBJECTS;
+        objects.town = Box::leak(Box::new(town));
+        objects.resolver = Box::leak(Box::new(resolver));
+        let objects: &'static crate::objects::ObjectServices = Box::leak(Box::new(objects));
+        // SAFETY: The table lives for the process; `ObjectClass::InsertDefaults` reads none
+        // of its leaves.
+        unsafe { ObjectClass::reset(services(objects)) };
+        let mut shown = StandIn {
+            class_index: 1,
+            views: 1,
+        };
+        let mut hidden = StandIn {
+            class_index: 1,
+            views: 0,
+        };
+        // SAFETY: Both specs are live through the test.
+        unsafe {
+            ObjectClass::assign((&raw mut hidden).cast());
+            ObjectClass::assign((&raw mut shown).cast());
+        }
+        assert_eq!(*SET_INDEX.lock().unwrap(), [0, 1]);
+        let class = ObjectClass::get(ObjectClassID(1));
+        assert_eq!(class.get_spec_count(), 2);
+        assert_eq!(class.get_ui_spec_count(), 1);
+        assert_eq!(class.get_spec(1), (&raw const shown).cast());
+        assert_eq!(ObjectClass::get_ui_class_count(), 1);
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
     }
 }

@@ -21,7 +21,7 @@ use crate::direction_type::Direction;
 use crate::newgrf::GRFFileRef;
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::ChangeInfoResult;
-use crate::override_manager::{self, Manager};
+use crate::override_manager::{self, OverrideManagerBase};
 use crate::{animated_tile::AirportSpec as TileSpec, station_cmd::AirportSpec};
 use std::ffi::c_void;
 /// `AirportTileTable`: Tile-offset / `AirportTileID` pair.
@@ -211,8 +211,7 @@ unsafe fn airport_change_info(
                             grffile.as_ptr().cast_mut().cast(),
                         );
                         /* override the default airport */
-                        override_manager::add(
-                            override_manager::airport(),
+                        (*override_manager::airport_mngr()).add(
                             id as u16,
                             grffile.grfid(),
                             u32::from(subs_id),
@@ -251,11 +250,8 @@ unsafe fn airport_change_info(
                                 let local_tile_id = buf.word()?;
 
                                 /* Read the ID from the _airporttile_mngr. */
-                                let tempid = override_manager::get(
-                                    override_manager::airport_tile(),
-                                    local_tile_id,
-                                    grffile.grfid(),
-                                );
+                                let tempid = (*override_manager::airporttile_mngr())
+                                    .get_id(local_tile_id, grffile.grfid());
 
                                 if tempid == INVALID_AIRPORTTILE {
                                     grf_msg!(
@@ -419,7 +415,7 @@ unsafe fn airport_tiles_change_info(
                         );
                         // pre-reserve the tile slot
                         override_manager::airport_tile_add_entity_id(
-                            override_manager::airport_tile(),
+                            override_manager::airporttile_mngr(),
                             id as u16,
                             grffile.grfid(),
                             u16::from(subs_id),
@@ -442,8 +438,7 @@ unsafe fn airport_tiles_change_info(
                         continue;
                     }
 
-                    override_manager::add(
-                        override_manager::airport_tile(),
+                    (*override_manager::airporttile_mngr()).add(
                         id as u16,
                         grffile.grfid(),
                         u32::from(override_id),
@@ -532,7 +527,7 @@ pub unsafe fn reset_airports(s: *const Services) {
         for id in u16::from(NEW_AIRPORT_OFFSET)..NUM_AIRPORTS {
             (s.airport_clear)(id);
         }
-        override_manager::reset_override(override_manager::airport());
+        (*override_manager::airport_mngr()).reset_override();
     }
 }
 /// `AirportTileSpec::ResetAirportTiles`: this function initializes the tile array of
@@ -548,17 +543,17 @@ pub unsafe fn reset_airport_tiles(s: *const Services) {
         }
 
         /* Reset any overrides that have been set. */
-        override_manager::reset_override(override_manager::airport_tile());
+        (*override_manager::airporttile_mngr()).reset_override();
     }
 }
 macro_rules! publisher {
     ($(#[$doc:meta])* $entry:ident, $spec:ty, $add_entity_id:path, $specs:ident, $publish:ident, $base:ident, $full:literal) => {
         $(#[$doc])*
-        unsafe fn $entry(manager: *mut Manager, spec: *mut $spec, s: *const Services) {
+        unsafe fn $entry(manager: *mut OverrideManagerBase, spec: *mut $spec, s: *const Services) {
             let s = unsafe { &*s };
             let substitute = s.shared().specs().$specs().substitute();
             let identity = (substitute.identity)(spec);
-            let (invalid, offset) = unsafe { ((*manager).invalid, (*manager).offset) };
+            let (invalid, offset) = unsafe { ((*manager).invalid_id(), (*manager).max_offset()) };
             // SetEntitySpec narrows AddEntityID before comparing with the wide invalid ID.
             let id = unsafe {
                 $add_entity_id(manager, identity.local, identity.grfid, identity.substitute)
@@ -576,8 +571,8 @@ macro_rules! publisher {
                 // Resolve the original slot before inspecting its override entry.
                 let overridden = unsafe { (s.$base)(i as _) };
                 let matched = unsafe {
-                    (&(*manager).entities)[usize::from(i)] == identity.local
-                        && (&(*manager).grfids)[usize::from(i)] == identity.grfid
+                    (*manager).entity_overrides(i) == identity.local
+                        && (*manager).grfid_overrides(i) == identity.grfid
                 };
                 if !matched {
                     continue;
@@ -585,8 +580,8 @@ macro_rules! publisher {
                 unsafe {
                     (substitute.set_override)(overridden, u16::from(id));
                     (substitute.set_enabled)(overridden, false);
-                    (&mut (*manager).entities)[usize::from(i)] = invalid;
-                    (&mut (*manager).grfids)[usize::from(i)] = 0;
+                    (*manager).set_entity_overrides(i, invalid);
+                    (*manager).set_grfid_overrides(i, 0);
                 }
             }
         }
@@ -630,7 +625,7 @@ pub unsafe fn finalise_airports_array(s: &Services) {
             let spec = unsafe { (s.airport_get)(file, id) };
             if !spec.is_null() && (s.shared().specs().airport().substitute().enabled)(spec) {
                 unsafe {
-                    airport_set_entity_spec(override_manager::airport(), spec, s);
+                    airport_set_entity_spec(override_manager::airport_mngr(), spec, s);
                 }
             }
         }
@@ -639,7 +634,7 @@ pub unsafe fn finalise_airports_array(s: &Services) {
             let spec = unsafe { (s.tile_get)(file, id) };
             if !spec.is_null() && (s.shared().specs().airport_tile().substitute().enabled)(spec) {
                 unsafe {
-                    airport_tile_set_entity_spec(override_manager::airport_tile(), spec, s);
+                    airport_tile_set_entity_spec(override_manager::airporttile_mngr(), spec, s);
                 }
             }
         }
@@ -660,7 +655,7 @@ pub unsafe fn bind_airport_specs(s: *const Services) {
         let spec = unsafe { (s.airport_base)(id) };
         if (s.shared().specs().airport().substitute().enabled)(spec) {
             unsafe {
-                crate::newgrf_class::airport::assign(spec);
+                crate::newgrf_airport::AirportClass::assign(spec);
             }
         }
     }

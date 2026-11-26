@@ -84,7 +84,8 @@ impl PropertyID {
     pub const PROP_AIRCRAFT_RANGE: Self = Self(0x1f);
 }
 
-// Raw values for the files no pass has finished; #734's closure removes them.
+// Raw values for the files no pass has finished (`engine_capabilities.rs`,
+// `engine_loading/properties.rs`); #734's closure removes them.
 pub const PROP_VEHICLE_LOAD_AMOUNT: u8 = PropertyID::PROP_VEHICLE_LOAD_AMOUNT.0;
 pub const PROP_TRAIN_SPEED: u8 = PropertyID::PROP_TRAIN_SPEED.0;
 pub const PROP_TRAIN_POWER: u8 = PropertyID::PROP_TRAIN_POWER.0;

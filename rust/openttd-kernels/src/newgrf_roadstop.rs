@@ -13,6 +13,9 @@
     clippy::cast_sign_loss
 )]
 use crate::cargo_type::NUM_CARGO;
+use crate::game_state::GameState;
+use crate::newgrf_class::{ClassSpec, Registry};
+use crate::newgrf_specs::{SpecServices, Specs};
 use crate::station_type::{
     ROAD_WAYPOINT, SRT_CARGO_TAKEN, SRT_NEW_CARGO, STATION_BUS, STATION_TRUCK,
 };
@@ -799,36 +802,46 @@ pub const ROADSTOP_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
 /// Waypoint road-stop class label.
 pub const ROADSTOP_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
 
-/// `RoadStopClass::InsertDefaults`.
-pub(crate) unsafe fn insert_defaults() {
-    use crate::newgrf_class::index;
-    use crate::newgrf_class::roadstop::{allocate, get, insert};
-    /* Set up initial data */
-    unsafe {
-        (*get(allocate(
-            ROADSTOP_CLASS_LABEL_DEFAULT,
-            RoadStopClassID::ROADSTOP_CLASS_MAX,
-        )))
-        .name = STR_STATION_CLASS_DFLT.0;
-        insert(
-            index(get(allocate(
-                ROADSTOP_CLASS_LABEL_DEFAULT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            ))),
-            std::ptr::null_mut(),
-        );
-        (*get(allocate(
-            ROADSTOP_CLASS_LABEL_WAYPOINT,
-            RoadStopClassID::ROADSTOP_CLASS_MAX,
-        )))
-        .name = STR_STATION_CLASS_WAYP.0;
-        insert(
-            index(get(allocate(
-                ROADSTOP_CLASS_LABEL_WAYPOINT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            ))),
-            std::ptr::null_mut(),
-        );
+/// `RoadStopClass`: the class registry of the road stop specs.
+pub(crate) type RoadStopClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::RoadSpec>;
+
+static ROADSTOP_REGISTRY: GameState<Registry<crate::station_cmd::RoadSpec>> =
+    GameState::new(Registry::new());
+static ROADSTOP_SERVICES: GameState<
+    *const crate::newgrf_class::Services<crate::station_cmd::RoadSpec>,
+> = GameState::new(std::ptr::null());
+impl ClassSpec for crate::station_cmd::RoadSpec {
+    type Index = crate::newgrf_roadstop::RoadStopClassID;
+    type Triggers = u16;
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers> = Specs::road_stop;
+    fn registry() -> *mut Registry<Self> {
+        ROADSTOP_REGISTRY.get()
+    }
+    fn services_slot() -> &'static GameState<*const crate::newgrf_class::Services<Self>> {
+        &ROADSTOP_SERVICES
+    }
+    /// `RoadStopClass::IsUIAvailable`.
+    fn is_ui_available(_class: crate::newgrf_class::ClassRef<Self>, _index: u32) -> bool {
+        true
+    }
+    /// `RoadStopClass::InsertDefaults`.
+    fn insert_defaults() {
+        const MAX: RoadStopClassID = RoadStopClassID::ROADSTOP_CLASS_MAX;
+        /* Set up initial data */
+        RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_DEFAULT, MAX))
+            .set_name(STR_STATION_CLASS_DFLT);
+        // SAFETY: A null spec is inserted with no store.
+        unsafe {
+            RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_DEFAULT, MAX))
+                .insert(std::ptr::null_mut());
+        }
+        RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, MAX))
+            .set_name(STR_STATION_CLASS_WAYP);
+        // SAFETY: As above.
+        unsafe {
+            RoadStopClass::get(RoadStopClass::allocate(ROADSTOP_CLASS_LABEL_WAYPOINT, MAX))
+                .insert(std::ptr::null_mut());
+        }
     }
 }
 

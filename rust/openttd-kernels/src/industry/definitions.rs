@@ -11,7 +11,7 @@ use crate::industry_type::{
 };
 use crate::newgrf::{CargoLabelChoice, GRFFile};
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
-use crate::override_manager::{self, Mapping};
+use crate::override_manager::{self, OverrideManagerBase};
 use crate::table::strings::STR_NEWGRF_INVALID_INDUSTRYTYPE;
 /// Native inputs: the original tables.
 #[repr(C)]
@@ -36,17 +36,22 @@ impl Services {
     reason = "IndustryOverrideManager::AddEntityID keeps the original's implicit C++ integer conversions"
 )]
 pub unsafe fn add_entity_id(
-    manager: *mut override_manager::Manager,
+    manager: *mut OverrideManagerBase,
     grf_local_id: u16,
     grfid: u32,
     substitute_id: u16,
 ) -> u16 {
-    let (max_offset, max_entities, invalid_id) =
-        unsafe { ((*manager).offset, (*manager).maximum, (*manager).invalid) };
+    let (max_offset, max_entities, invalid_id) = unsafe {
+        (
+            (*manager).max_offset(),
+            (*manager).max_entities(),
+            (*manager).invalid_id(),
+        )
+    };
     // This entity hasn't been defined before, so give it an ID now.
     for id in 0..max_entities {
         // Skip overridden industries
-        if id < max_offset && unsafe { (&(*manager).entities)[usize::from(id)] } != invalid_id {
+        if id < max_offset && unsafe { (*manager).entity_overrides(id) } != invalid_id {
             continue;
         }
         // Get the real live industry. The original narrows the slot to IndustryType for
@@ -57,42 +62,19 @@ pub unsafe fn add_entity_id(
         // And it must not already be used by a grf (grffile == nullptr).
         // So reserve this slot here, as it is the chosen one
         if !enabled && !has_file {
-            let map = unsafe { &mut (&mut (*manager).mappings)[usize::from(id)] };
-            if map.entity_id == 0 && map.grfid == 0 {
+            let map = unsafe { (*manager).mappings(id) };
+            if unsafe { (*map).entity_id } == 0 && unsafe { (*map).grfid } == 0 {
                 // winning slot, mark it as been used
-                *map = Mapping {
-                    grfid,
-                    entity_id: grf_local_id,
-                    substitute_id,
-                };
+                unsafe {
+                    (*map).entity_id = grf_local_id;
+                    (*map).grfid = grfid;
+                    (*map).substitute_id = substitute_id;
+                }
                 return id;
             }
         }
     }
     invalid_id
-}
-/// `IndustryTileOverrideManager::AddEntityID` (`OverrideManagerBase::AddEntityID` with the
-/// tile manager's `CheckValidNewID`) over the given manager.
-pub unsafe fn allocate_tile_for(
-    manager: *mut override_manager::Manager,
-    local: u16,
-    grfid: u32,
-    substitute: u16,
-) -> u16 {
-    // IndustryTileOverrideManager::CheckValidNewID excludes the water-check marker.
-    unsafe {
-        override_manager::add_entity_id_with_check(
-            manager,
-            local,
-            grfid,
-            substitute,
-            crate::newgrf_commons::industry_tile_check_valid_new_id,
-        )
-    }
-}
-/// `_industile_mngr.AddEntityID`.
-pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
-    unsafe { allocate_tile_for(override_manager::tile(), local, grfid, substitute) }
 }
 
 /// `IndustryOverrideManager::SetEntitySpec`: method to install the new industry data in its
@@ -101,14 +83,13 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
     clippy::cast_possible_truncation,
     reason = "IndustryOverrideManager::SetEntitySpec keeps the original's implicit C++ integer conversions"
 )]
-pub unsafe fn publish(manager: *mut override_manager::Manager, inds: *mut IndustrySpec) {
+pub unsafe fn publish(manager: *mut OverrideManagerBase, inds: *mut IndustrySpec) {
     let props = unsafe { (*inds).grf_prop };
-    let invalid_id = unsafe { (*manager).invalid };
+    let invalid_id = unsafe { (*manager).invalid_id() };
     // First step : We need to find if this industry is already specified in the savegame data.
     // The original narrows GetID and AddEntityID to IndustryType before testing it.
-    let mut ind_id = IndustryType(unsafe {
-        override_manager::industry_id_for(manager, props.local_id, props.grfid)
-    } as u8);
+    let mut ind_id =
+        IndustryType(unsafe { (*manager).industry_get_id(props.local_id, props.grfid) } as u8);
     if u16::from(ind_id.0) == invalid_id {
         // Not found.
         // Or it has already been overridden, so you've lost your place.
@@ -135,11 +116,16 @@ pub unsafe fn publish(manager: *mut override_manager::Manager, inds: *mut Indust
     }
 }
 /// `IndustryTileOverrideManager::SetEntitySpec`.
-pub unsafe fn publish_tile(manager: *mut override_manager::Manager, its: *mut IndustryTileSpec) {
+pub unsafe fn publish_tile(manager: *mut OverrideManagerBase, its: *mut IndustryTileSpec) {
     let props = unsafe { (*its).grf_prop };
-    let (max_offset, invalid_id) = unsafe { ((*manager).offset, (*manager).invalid) };
+    let (max_offset, invalid_id) = unsafe { ((*manager).max_offset(), (*manager).invalid_id()) };
     let indt_id = IndustryGfx(unsafe {
-        allocate_tile_for(manager, props.local_id, props.grfid, props.subst_id)
+        override_manager::industry_tile_add_entity_id(
+            manager,
+            props.local_id,
+            props.grfid,
+            props.subst_id,
+        )
     });
     if indt_id.0 == invalid_id {
         grf_msg!(
@@ -154,8 +140,8 @@ pub unsafe fn publish_tile(manager: *mut override_manager::Manager, its: *mut In
     // Now add the overrides.
     for i in 0..max_offset {
         let matched = unsafe {
-            (&(*manager).entities)[usize::from(i)] == props.local_id
-                && (&(*manager).grfids)[usize::from(i)] == props.grfid
+            (*manager).entity_overrides(i) == props.local_id
+                && (*manager).grfid_overrides(i) == props.grfid
         };
         if !matched {
             continue;
@@ -164,8 +150,8 @@ pub unsafe fn publish_tile(manager: *mut override_manager::Manager, its: *mut In
         unsafe {
             (*overridden_its).grf_prop.override_id = indt_id.0;
             (*overridden_its).enabled = false;
-            (&mut (*manager).entities)[usize::from(i)] = invalid_id;
-            (&mut (*manager).grfids)[usize::from(i)] = 0;
+            (*manager).set_entity_overrides(i, invalid_id);
+            (*manager).set_grfid_overrides(i, 0);
         }
     }
 }
@@ -198,7 +184,7 @@ pub unsafe fn finalise(s: &Services) {
                 continue;
             };
             if unsafe { (*spec).enabled } {
-                unsafe { publish(override_manager::industry(), spec) };
+                unsafe { publish(override_manager::industry_mngr(), spec) };
             }
             // A null or disabled spec is skipped.
         }
@@ -207,7 +193,7 @@ pub unsafe fn finalise(s: &Services) {
             if let Some(spec) = (unsafe { industrytype::file_specs(file) }.tiles[i].as_deref_mut())
                 .map(std::ptr::from_mut)
             {
-                unsafe { publish_tile(override_manager::tile(), spec) };
+                unsafe { publish_tile(override_manager::industile_mngr(), spec) };
             }
         }
         // Won't be used again
@@ -260,8 +246,8 @@ pub(crate) unsafe fn reset(climate: crate::landscape_type::LandscapeType, s: &Se
     unsafe {
         industrytype::reset(s.shared, climate, s.origin, s.origin_tiles);
         /* Reset any overrides that have been set. */
-        override_manager::reset_override(override_manager::tile());
-        override_manager::reset_override(override_manager::industry());
+        (*override_manager::industile_mngr()).reset_override();
+        (*override_manager::industry_mngr()).reset_override();
     }
 }
 crate::abi::layouts! {

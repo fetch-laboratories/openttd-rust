@@ -242,7 +242,7 @@ unsafe fn read_industry_layouts(
                 bytes_read = bytes_read.wrapping_add(2);
                 // Read the ID from the _industile_mngr.
                 let tempid = IndustryGfx(unsafe {
-                    override_manager::get(override_manager::tile(), local_tile_id, c.grfid)
+                    (*override_manager::industile_mngr()).get_id(local_tile_id, c.grfid)
                 });
                 if tempid == IndustryGfx::INVALID_INDUSTRYTILE {
                     grf_msg!(
@@ -361,7 +361,12 @@ unsafe fn industrytiles_change_info(
                     tsp = file_tile(c.file, id);
                     // pre-reserve the tile slot
                     unsafe {
-                        super::allocate_tile(id as u16, c.grfid, u16::from(subs_id));
+                        override_manager::industry_tile_add_entity_id(
+                            override_manager::industile_mngr(),
+                            id as u16,
+                            c.grfid,
+                            u16::from(subs_id),
+                        );
                     }
                 }
             }
@@ -379,12 +384,7 @@ unsafe fn industrytiles_change_info(
                     continue;
                 }
                 unsafe {
-                    override_manager::add(
-                        override_manager::tile(),
-                        id as u16,
-                        c.grfid,
-                        u32::from(ovrid),
-                    );
+                    (*override_manager::industile_mngr()).add(id as u16, c.grfid, u32::from(ovrid));
                 }
             }
             // Tile acceptance
@@ -559,12 +559,7 @@ unsafe fn industries_change_info(
                 }
                 unsafe {
                     (*indsp).grf_prop.override_id = u16::from(ovrid);
-                    override_manager::add(
-                        override_manager::industry(),
-                        id as u16,
-                        c.grfid,
-                        u32::from(ovrid),
-                    );
+                    (*override_manager::industry_mngr()).add(id as u16, c.grfid, u32::from(ovrid));
                 }
             }
             // Set industry layout(s)

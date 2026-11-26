@@ -13,7 +13,6 @@ struct OpenTTDGRFClassIdentity { uint32_t grfid; uint16_t local_id; };
 template <typename T> struct OpenTTDGRFClassServices {
 	uint16_t (*class_index)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(class_index);
 	void (*set_index)(T *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_index);
-	OpenTTDGRFClassIdentity (*identity)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	const OpenTTDObjectServices *object;
 	const OpenTTDSharedServices *shared;
 };
@@ -85,9 +84,7 @@ uint32_t openttd_rust_airport_class_count();
 uint32_t openttd_rust_airport_class_ui_count();
 AirportSpec * const * openttd_rust_airport_class_specs(uint16_t);
 uint32_t openttd_rust_airport_class_spec_count(uint16_t);
-uint32_t openttd_rust_airport_class_ui_spec_count(uint16_t);
 const AirportSpec * openttd_rust_airport_class_spec(uint16_t, uint32_t);
-const AirportSpec * openttd_rust_airport_class_by_grf(uint32_t, uint16_t);
 }
 template <> struct RustGRFClassOps<AirportSpec> {
 	static constexpr auto reset = openttd_rust_airport_class_reset;
@@ -97,9 +94,7 @@ template <> struct RustGRFClassOps<AirportSpec> {
 	static constexpr auto ui_count = openttd_rust_airport_class_ui_count;
 	static constexpr auto specs = openttd_rust_airport_class_specs;
 	static constexpr auto spec_count = openttd_rust_airport_class_spec_count;
-	static constexpr auto ui_spec_count = openttd_rust_airport_class_ui_spec_count;
 	static constexpr auto spec = openttd_rust_airport_class_spec;
-	static constexpr auto by_grf = openttd_rust_airport_class_by_grf;
 };
 extern "C" {
 void openttd_rust_object_class_reset(const OpenTTDGRFClassServices<ObjectSpec> *);

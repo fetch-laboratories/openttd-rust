@@ -1593,10 +1593,7 @@ impl<'a> House<'a> {
                 // The specs for this type of house are not available any more, so
                 // replace it with the substitute original house type.
                 (self.h.set_type)(t.0, unsafe {
-                    crate::override_manager::openttd_rust_override_substitute(
-                        crate::override_manager::house(),
-                        house_id,
-                    )
+                    (*crate::override_manager::house_mngr()).get_substitute_id(house_id)
                 });
             }
         }
