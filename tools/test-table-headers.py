@@ -65,6 +65,9 @@ class TableHeaderTests(unittest.TestCase):
             '#in\\\nclude "rust/shared_services_table.h"\n',
             '# /* note */ include "rust/shared_services_table.h"\n',
             "/* a */ #include <rust/shared_services_table.h> // b\n",
+            "#include <rust//shared_services_table.h>\n",
+            'const char *s = R"x(/*)x";\n#include "rust/shared_services_table.h"\n',
+            'const char *s = R"(\n/*\n)";\n#include "rust/shared_services_table.h"\n',
         ):
             with self.subTest(text=text):
                 self.assertEqual(len(self.hits(tree({"src/map_func.h": text}))), 1)
@@ -75,6 +78,7 @@ class TableHeaderTests(unittest.TestCase):
             '// #include "rust/shared_services_table.h"\n',
             '// note \\\n#include "rust/shared_services_table.h"\n',
             'const char *s = "/*";\n#include "rust/services_ffi.h"\nconst char *t = "*/";\n',
+            'const char *s = R"(\n#include "rust/shared_services_table.h"\n)";\n',
         ):
             with self.subTest(text=text):
                 self.assertEqual(self.hits(tree({"src/map_func.h": text})), [])

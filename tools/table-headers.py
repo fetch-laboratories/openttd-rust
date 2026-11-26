@@ -24,17 +24,30 @@ SEARCH_PATH = (PurePosixPath("src"), PurePosixPath("src/rust"), GENERATED)
 TABLE_RECORDS = frozenset({"abi-record-setting_addresses.h"})
 INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*([<"])([^>"\n]+)[>"]', re.M)
 HEADER_SUFFIXES = (".h", ".hpp")
-# Translation phases 2 and 3: a comment becomes one space; literals are kept whole, so a
-# quoted header name or a string holding "//" or "/*" is not taken for a comment.
+# Translation phases 2 and 3: a comment becomes one space. Header names after `#include`,
+# raw strings and other literals are kept whole, so "//" or "/*" inside one is not taken
+# for a comment.
 LEXEME = re.compile(
-    r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', re.S
+    r"^[ \t]*#[ \t]*include[ \t]*<[^>\n]*>"
+    r"|//[^\n]*|/\*.*?\*/"
+    r'|\b(?:u8|u|U|L)?R"(?P<delimiter>[^()\\\s]{0,16})\(.*?\)(?P=delimiter)"'
+    r'|"(?:\\.|[^"\\\n])*"'
+    r"|'(?:\\.|[^'\\\n])*'",
+    re.S | re.M,
 )
 
 
 def directives(text: str) -> str:
     """The text as the preprocessor reads directives: splices joined, comments spaces."""
     joined = text.replace("\\\n", "")
-    return LEXEME.sub(lambda m: " " if m.group(0)[0] == "/" else m.group(0), joined)
+    return LEXEME.sub(lexeme, joined)
+
+
+def lexeme(match: re.Match[str]) -> str:
+    """A comment becomes a space and a raw string an empty one; anything else stays."""
+    if match.group(0)[0] == "/":
+        return " "
+    return '""' if match.group("delimiter") is not None else match.group(0)
 
 
 def normal(path: PurePosixPath) -> PurePosixPath:
