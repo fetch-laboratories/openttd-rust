@@ -234,11 +234,10 @@ pub(super) unsafe fn next(s: &Services, v: *mut ()) -> *mut () {
 }
 unsafe fn truncate(s: &Services, v: *mut (), cap: u16) {
     let owner = unsafe { vehicle_ref(v, s.common.vehicles) }.cargo(s.common.vehicles.newgrf());
-    if unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(owner) } > u32::from(cap) {
-        let amount = unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(owner) }
-            .wrapping_sub(u32::from(cap));
+    if unsafe { (*owner).total_count() } > u32::from(cap) {
+        let amount = unsafe { (*owner).total_count() }.wrapping_sub(u32::from(cap));
         unsafe {
-            crate::cargo_storage::truncate_vehicle(owner, *s.cargo, amount);
+            crate::cargo_storage::VehicleCargoList::truncate(owner, s.cargo, amount);
         }
     }
 }

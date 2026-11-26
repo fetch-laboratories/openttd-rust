@@ -33,9 +33,6 @@ struct CargoPayment : CargoPaymentPool::PoolItem<&_cargo_payment_pool> {
 	void AfterLoad();
 	CargoPayment(Vehicle *front);
 	~CargoPayment();
-
-	Money PayTransfer(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile);
-	void PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile);
 };
 
 #endif /* ECONOMY_BASE_H */

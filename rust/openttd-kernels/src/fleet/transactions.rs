@@ -123,17 +123,10 @@ fn previous_unit(w: &Services, v: *mut ()) -> *mut () {
 unsafe fn transfer_cargo(w: &Services, old: *mut (), new: *mut (), chain: bool) {
     let old = record(w, old);
     let new = record(w, new);
-    let build = (w.build_services)();
-    let changed = unsafe {
-        crate::cargo_storage::cargo_capacity(
-            build.rail.cargo_capacity,
-            Some(old),
-            Some(new),
-            1,
-            u8::from(chain),
-        )
-    };
-    if changed != 0 {
+    // SAFETY: The live consists and their lists; `ConsistChanged` runs after the transfer.
+    let changed =
+        unsafe { crate::cargo_storage::transfer_cargo(old, new, chain, w.vehicles.newgrf()) };
+    if changed {
         let refit = (w.refit_services)();
         crate::train::consist_changed(
             refit.train,
@@ -991,15 +984,11 @@ unsafe fn replace_chain(
                     }
                 }
                 if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-                    // SAFETY: canonical capacity services and live consist; the owner
-                    // completes each native shell read before mutating cargo storage.
+                    // SAFETY: The live consist and its lists.
                     unsafe {
-                        crate::cargo_storage::cargo_capacity(
-                            (w.build_services)().rail.cargo_capacity,
+                        crate::cargo_storage::check_cargo_capacity(
                             Some(crate::fleet::record(gw, new_head)),
-                            None,
-                            0,
-                            0,
+                            w.vehicles.newgrf(),
                         );
                     }
                 }

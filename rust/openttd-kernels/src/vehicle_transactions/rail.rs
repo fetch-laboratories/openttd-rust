@@ -40,7 +40,6 @@ type R = *mut OpenTTDVehicle;
 
 #[repr(C)]
 pub struct Services {
-    pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
     pub train_if_valid: extern "C" fn(u32) -> *mut (),
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
@@ -1147,20 +1146,15 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         x.count_vehicle(dst_head, 1);
     }
     if !flags.test(DoCommandFlag::NoCargoCapacityCheck) {
+        let newgrf = x.c.vehicles.newgrf();
         unsafe {
-            crate::cargo_storage::cargo_capacity(
-                s.cargo_capacity,
+            crate::cargo_storage::check_cargo_capacity(
                 ptr::NonNull::new(src_head).map(VehicleRef),
-                None,
-                0,
-                0,
+                newgrf,
             );
-            crate::cargo_storage::cargo_capacity(
-                s.cargo_capacity,
+            crate::cargo_storage::check_cargo_capacity(
                 ptr::NonNull::new(dst_head).map(VehicleRef),
-                None,
-                0,
-                0,
+                newgrf,
             );
         }
     }
@@ -1316,7 +1310,7 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
+        train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
         invalidate_grf, unit, use_unit, release_unit, company_dirty, depot_changed,
     };
 }

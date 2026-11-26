@@ -515,8 +515,14 @@ pub unsafe extern "C" fn openttd_test_station_prepare(
     front: VehicleRef,
     world: *const crate::station_service::World,
     loading: *const crate::station_service::Loading,
+    links: *const crate::station_service::Links,
 ) {
-    crate::station_service::prepare_unload(front, unsafe { &*world }, unsafe { &*loading });
+    crate::station_service::prepare_unload(
+        front,
+        unsafe { &*world },
+        unsafe { &*loading },
+        unsafe { &*links },
+    );
 }
 /// `Station::GetPrimaryRoadStop(const RoadVehicle *)`.
 #[unsafe(no_mangle)]

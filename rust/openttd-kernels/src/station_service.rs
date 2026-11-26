@@ -17,6 +17,7 @@
 use crate::base_station_base::xy;
 use crate::bitmath_func::{clr_bit64, gb, has_bit, has_bit64, set_bit64};
 use crate::cargo_payment::NativePayment;
+use crate::cargo_storage::{StationCargoList, VehicleCargoList};
 use crate::cargo_type::{CargoArray, CargoType, CargoTypes, NUM_CARGO};
 use crate::cargopacket::MoveToAction;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
@@ -401,7 +402,7 @@ pub struct StationExclusivity {
 }
 #[repr(C)]
 pub struct CargoCapacity {
-    pub(crate) owner: *const crate::cargo_storage::List,
+    pub(crate) owner: *const crate::cargo_storage::VehicleCargoList,
     pub(crate) cargo: u8,
 }
 #[repr(C)]
@@ -434,12 +435,6 @@ pub struct OrderDestination {
     pub(crate) nearest_depot: bool,
 }
 #[repr(C)]
-pub struct TruncatedSource {
-    pub(crate) amount: u32,
-    pub(crate) source: u16,
-    pub(crate) present: bool,
-}
-#[repr(C)]
 pub struct World {
     pub(crate) graphs: &'static live::Services,
     pub(crate) station: extern "C" fn(u16) -> LoadingStation,
@@ -462,15 +457,12 @@ pub struct World {
     pub(crate) rating_redraw: extern "C" fn(*mut BaseStation, bool),
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
 
-    pub(crate) append_packet:
-        extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
+    pub(crate) append_packet: extern "C" fn(*mut BaseStation, u8, u32, crate::source_type::Source),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
 
     /// `Station::MarkTilesDirty(cargo_change)`.
     pub(crate) mark_tiles: extern "C" fn(*mut BaseStation, bool),
     pub(crate) cargo_registry: *const crate::cargo_registry::Services,
-    pub(crate) with_truncation: extern "C" fn(*mut BaseStation, u8, u32, *mut c_void, Scope),
-    pub(crate) truncate_next: extern "C" fn(*mut c_void) -> TruncatedSource,
     pub(crate) shared: *const crate::services::Services,
 }
 impl World {
@@ -494,19 +486,6 @@ impl World {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
         unsafe { (*self.shared).settings().select_goods.read() }
     }
-}
-// Native iterator/container frames live on the C++ caller's stack. This private
-// callback context is synchronous and does not retain aliases into a game owner.
-pub(crate) type Scope = extern "C" fn(*mut c_void, *mut c_void);
-extern "C" fn scoped<F: FnMut(*mut c_void)>(context: *mut c_void, frame: *mut c_void) {
-    // SAFETY: with_* invokes this callback exactly once, before the stack context
-    // ends; only the callback accesses its private closure during the invocation.
-    unsafe {
-        (&mut *context.cast::<F>())(frame);
-    }
-}
-pub(crate) fn scope_context<F: FnMut(*mut c_void)>(body: &mut F) -> (*mut c_void, Scope) {
-    (std::ptr::from_mut(body).cast(), scoped::<F>)
 }
 // Field-sized operations avoid owner borrows while C++ aliases are live. A copied
 // observation is used only up to the next original write/observation point.
@@ -595,28 +574,40 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_mask(state: *mut Servic
     unsafe { acceptance_mask(state) }.0
 }
 /// `TruncateCargo`: truncate the cargo by a specific amount.
-unsafe fn truncate_cargo(st: *mut BaseStation, cargo: CargoType, amount: u32, w: &World) {
+unsafe fn truncate_cargo(
+    st: *mut BaseStation,
+    cargo: CargoType,
+    amount: u32,
+    w: &World,
+    l: &Links,
+) {
     /* If truncating also punish the source stations' ratings to
      * decrease the flow of incoming cargo. */
-    let mut body = |map| {
-        loop {
-            let observed = (w.truncate_next)(map);
-            if !observed.present {
-                break;
-            }
-            let source_station = (w.get)(observed.source);
-            if source_station.is_null() {
-                continue;
-            }
-            let source_ge = unsafe { cp((w.owner)(source_station), cargo) };
-            unsafe {
-                (&raw mut (*source_ge).max_waiting_cargo)
-                    .write((*source_ge).max_waiting_cargo.max(observed.amount));
-            }
+    let list = l.station_cargo(st, cargo);
+    if list.is_null() {
+        return;
+    }
+    let mut waiting_per_source = crate::cargo_storage::StationCargoAmountMap::new();
+    // SAFETY: The goods entry's live list and the immutable storage table.
+    unsafe {
+        crate::cargo_storage::StationCargoList::truncate(
+            list.cast_mut(),
+            l.storage(),
+            amount,
+            Some(&mut waiting_per_source),
+        );
+    }
+    for (&source, &waiting) in &waiting_per_source {
+        let source_station = (w.get)(source.0);
+        if source_station.is_null() {
+            continue;
         }
-    };
-    let (context, callback) = scope_context(&mut body);
-    (w.with_truncation)(st, cargo.0, amount, context, callback);
+        let source_ge = unsafe { cp((w.owner)(source_station), cargo) };
+        unsafe {
+            (&raw mut (*source_ge).max_waiting_cargo)
+                .write((*source_ge).max_waiting_cargo.max(waiting));
+        }
+    }
 }
 /// Original `ShowRejectOrAcceptNews`: add news item for when a station changes which cargoes
 /// it accepts. `cargoes` is the bit mask of cargo types to list; `reject` is true iff the
@@ -760,7 +751,7 @@ fn byte_inc_sat(p: *mut u8) {
 }
 /// `UpdateStationRating`: periodic update of a station's rating.
 #[allow(clippy::too_many_lines)]
-unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
+unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
     const WAITING_CARGO_THRESHOLD: u32 = 1 << 12;
     const WAITING_CARGO_CUT_FACTOR: u32 = 1 << 6;
     const MAX_WAITING_CARGO: u32 = 1 << 15;
@@ -794,7 +785,7 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
                 status.reset(GoodsState::Rating);
                 set_goods_status(ge, status);
                 (&raw mut (*ge).last_speed).write(0);
-                truncate_cargo(st, cargo, u32::MAX, w);
+                truncate_cargo(st, cargo, u32::MAX, w, l);
             }
             waiting_changed = true;
             continue;
@@ -956,7 +947,7 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
                  * next rating calculation. */
                 unsafe {
                     (&raw mut (*ge).max_waiting_cargo).write(0);
-                    truncate_cargo(st, cargo, available - waiting, w);
+                    truncate_cargo(st, cargo, available - waiting, w, l);
                 }
             } else {
                 /* If the average number per next hop is low, be more forgiving. */
@@ -992,7 +983,7 @@ unsafe fn update_station_waiting(
     st: *mut BaseStation,
     cargo: CargoType,
     mut amount: u32,
-    source: crate::cargo_storage::Source,
+    source: crate::source_type::Source,
     w: &World,
     visits: &Visits,
 ) -> u32 {
@@ -1083,7 +1074,7 @@ fn can_move_goods_to_station(
 pub(crate) unsafe fn move_goods_to_station(
     cargo: CargoType,
     mut amount: u32,
-    source: crate::cargo_storage::Source,
+    source: crate::source_type::Source,
     all_stations: *const crate::station::StationList,
     exclusivity: Owner,
     world: *const World,
@@ -1198,6 +1189,9 @@ pub struct Links {
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) goods_entry:
         extern "C" fn(*mut BaseStation, u8) -> *const crate::station_base::GoodsEntry,
+    /// `&st->goods[cargo].GetOrCreateData().cargo`.
+    pub(crate) get_or_create_data_cargo:
+        extern "C" fn(*mut Station, u8) -> *mut crate::cargo_storage::StationCargoList,
     pub(crate) station_resolver: *const crate::newgrf_station::Services,
     pub(crate) vehicle_resolver: *const crate::newgrf_vehicle::Services,
 }
@@ -1209,7 +1203,7 @@ impl Links {
         &self,
         st: *mut BaseStation,
         cargo: CargoType,
-    ) -> *const crate::cargo_storage::List {
+    ) -> *const crate::cargo_storage::StationCargoList {
         unsafe { ((*self.station_resolver).cargo_owner)(st, cargo.0) }
     }
 }
@@ -1226,10 +1220,18 @@ pub(crate) unsafe fn reroute_cargo(
     let storage = l.storage();
     let ge = (l.goods_entry)(st, cargo.0);
     /* Reroute cargo in station. */
-    let list = l.station_cargo(st, cargo);
+    let list = l.station_cargo(st, cargo).cast_mut();
     if !list.is_null() {
         unsafe {
-            crate::cargo_storage::reroute_station(list.cast_mut(), storage, ge, avoid.0, avoid2.0);
+            crate::cargo_storage::StationCargoList::reroute(
+                list,
+                storage,
+                u32::MAX,
+                list,
+                avoid,
+                avoid2,
+                ge,
+            );
         }
     }
     /* Reroute cargo staged to be transferred. */
@@ -1242,12 +1244,15 @@ pub(crate) unsafe fn reroute_cargo(
         while let Some(vehicle) = u {
             if (l.cargo_type)(vehicle) == cargo.0 {
                 unsafe {
-                    crate::cargo_storage::reroute_vehicle(
-                        vehicle.cargo(&*l.vehicle_resolver),
+                    let cargo = vehicle.cargo(&*l.vehicle_resolver);
+                    crate::cargo_storage::VehicleCargoList::reroute(
+                        cargo,
                         storage,
+                        u32::MAX,
+                        cargo,
+                        avoid,
+                        avoid2,
                         ge,
-                        avoid.0,
-                        avoid2.0,
                     );
                 }
             }
@@ -1430,7 +1435,7 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
     }
 }
 /// `StationHandleSmallTick`: called for every station each tick.
-unsafe fn station_handle_small_tick(st: *mut BaseStation, w: &World) {
+unsafe fn station_handle_small_tick(st: *mut BaseStation, w: &World, l: &Links) {
     if StationFacilities((w.facilities)(st)).test(StationFacility::Waypoint) || !w.in_use(st) {
         return;
     }
@@ -1443,7 +1448,7 @@ unsafe fn station_handle_small_tick(st: *mut BaseStation, w: &World) {
         (&raw mut (*state).fields.delete_ctr).write(b);
     }
     if b == 0 {
-        unsafe { update_station_rating(st, w) };
+        unsafe { update_station_rating(st, w, l) };
     }
 }
 /// `StationHandleBigTick`: called for each station once every 250 ticks. Not all stations
@@ -1484,7 +1489,7 @@ pub(crate) unsafe fn on_tick_station(w: &World, l: &Links, visits: &Visits) {
     while id < (w.pool_size)() {
         let st = (w.get)(id as u16);
         if !st.is_null() {
-            unsafe { station_handle_small_tick(st, w) };
+            unsafe { station_handle_small_tick(st, w, l) };
             // SAFETY: the immutable shared table outlives this synchronous entry.
             let counter = (unsafe { &*w.shared }.tick_counter)().wrapping_add(id as u64);
             /* Clean up the link graph about once a week. */
@@ -1532,15 +1537,6 @@ pub struct Loading {
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
     pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
     pub(crate) set_current_company: extern "C" fn(u8),
-    pub(crate) with_next_stations: extern "C" fn(VehicleRef, *mut c_void, Scope),
-    pub(crate) stage: extern "C" fn(*mut Station, VehicleRef, u8, *mut c_void, *mut NativePayment),
-    pub(crate) return_cargo: extern "C" fn(*mut Station, VehicleRef, u32),
-    pub(crate) unload_cargo:
-        extern "C" fn(*mut Station, VehicleRef, u32, *mut NativePayment) -> u32,
-    pub(crate) load_cargo: extern "C" fn(*mut Station, VehicleRef, u32, *mut c_void) -> u32,
-    pub(crate) reserve_cargo: extern "C" fn(*mut Station, VehicleRef, u32, *mut c_void),
-    pub(crate) has_cargo_for: extern "C" fn(*mut Station, u8, *mut c_void) -> bool,
-    pub(crate) station_cargo_total: extern "C" fn(*mut Station, u8) -> u32,
     pub(crate) get_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) create_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) delete_payment: extern "C" fn(*mut NativePayment),
@@ -1551,50 +1547,71 @@ pub struct Loading {
 /// counts and reassignments run here on the owner the native cargo observation names, not
 /// through native wrappers. The owner is stable for the vehicle's lifetime.
 #[derive(Clone, Copy)]
-struct VehicleCargo(*mut crate::cargo_storage::List);
+struct VehicleCargo(*mut crate::cargo_storage::VehicleCargoList);
 impl Loading {
     /// `v->cargo`.
     fn cargo_list(&self, v: VehicleRef) -> VehicleCargo {
         VehicleCargo((self.cargo_capacity)(v).owner.cast_mut())
+    }
+    /// The cargo-list services for in-place list operations.
+    fn storage(&self) -> &crate::cargo_storage::Services {
+        // SAFETY: The table names the immutable process-lifetime storage table.
+        unsafe { &*self.cargo }
     }
 }
 impl VehicleCargo {
     /// `StoredCount()`.
     fn stored_count(self) -> u32 {
         // SAFETY: The live vehicle's list; the count read ends before any callback.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_stored(self.0) }
+        unsafe { (*self.0).stored_count() }
     }
     /// `UnloadCount()`.
     fn unload_count(self) -> u32 {
         // SAFETY: As `stored_count`.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_unload(self.0) }
+        unsafe { (*self.0).unload_count() }
     }
     /// `TotalCount()`.
     fn total_count(self) -> u32 {
         // SAFETY: As `stored_count`.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(self.0) }
+        unsafe { (*self.0).total_count() }
     }
     /// `RemainingCount()`.
     fn remaining_count(self) -> u32 {
         // SAFETY: As `stored_count`.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_remaining(self.0) }
+        unsafe { (*self.0).remaining_count() }
     }
     /// `ReservedCount()`.
     fn reserved_count(self) -> u32 {
         // SAFETY: As `stored_count`.
-        unsafe { crate::cargo_storage::openttd_rust_cargo_list_reserved(self.0) }
+        unsafe { (*self.0).reserved_count() }
     }
     /// `ActionCount(action)`.
     fn action_count(self, action: MoveToAction) -> u32 {
         // SAFETY: As `stored_count`.
-        unsafe { crate::cargo_storage::action_count(self.0, action) }
+        unsafe { (*self.0).action_count(action) }
     }
     /// `Reassign<from, to>(amount)`.
     fn reassign(self, l: &Loading, from: MoveToAction, to: MoveToAction, amount: u32) {
         // SAFETY: The live vehicle's list and the immutable cargo services; no Rust
         // borrow of the list spans the reassignment.
-        unsafe { crate::cargo_storage::reassign(self.0, *l.cargo, from, to, amount) };
+        unsafe {
+            crate::cargo_storage::VehicleCargoList::reassign(self.0, l.storage(), from, to, amount)
+        };
     }
+}
+/// `front->GetNextStoppingStation(next_station)`: the next station(s) the vehicle may stop at.
+fn get_next_stopping_station(front: VehicleRef, l: &Loading) -> Vec<StationID> {
+    let mut next_station = Vec::new();
+    // SAFETY: The static base services outlive this synchronous call.
+    let vehicle = unsafe { &*l.vehicle };
+    crate::orders::get_next_stopping_station(
+        front,
+        &mut |station| {
+            next_station.push(station);
+        },
+        vehicle.orders(),
+    );
+    next_station
 }
 /// `v->orders != nullptr`: the vehicle's order list is assigned.
 fn has_orders(v: VehicleRef) -> bool {
@@ -1655,10 +1672,10 @@ fn reserve_consist(
     u: VehicleRef,
     control: &LoadingControl,
     mut consist_capleft: Option<&mut CargoArray>,
-    next_station: *mut c_void,
-    w: &World,
-    l: &Loading,
+    next_station: &[StationID],
+    c: &LoadingContext<'_>,
 ) {
+    let (w, l) = (c.w, c.l);
     /* If there is a cargo payment not all vehicles of the consist have tried to do the refit.
      * In that case, only reserve if it's a fixed refit and the equivalent of "articulated chain"
      * a vehicle belongs to already has the right cargo. */
@@ -1686,9 +1703,10 @@ fn reserve_consist(
             // `ReserveCargoAction`.
             iterate_vehicle_parts(v, |part| {
                 let cap = u32::from(part.cargo_cap());
-                let remaining = l.cargo_list(part).remaining_count();
+                let cargo = l.cargo_list(part);
+                let remaining = cargo.remaining_count();
                 if cap > remaining && may_load_under_exclusive_rights(st, part, w) {
-                    (l.reserve_cargo)(st.native, part, cap - remaining, next_station);
+                    c.reserve(st, part, cargo, cap - remaining, next_station);
                 }
                 true
             });
@@ -1828,12 +1846,41 @@ struct LoadingContext<'a> {
     refit: &'a RefitContext,
     visits: &'a Visits,
 }
+impl LoadingContext<'_> {
+    /// `&st->goods[cargo].GetOrCreateData().cargo`.
+    fn station_cargo(&self, st: LoadingStation, cargo: CargoType) -> *mut StationCargoList {
+        (self.visits.links.get_or_create_data_cargo)(st.native, cargo.0)
+    }
+    /// `st->goods[v->cargo_type].GetOrCreateData().cargo.Reserve(max_move, &v->cargo,
+    /// next_station, v->GetCargoTile())`.
+    fn reserve(
+        &self,
+        st: LoadingStation,
+        v: VehicleRef,
+        cargo: VehicleCargo,
+        max_move: u32,
+        next_station: &[StationID],
+    ) {
+        let list = self.station_cargo(st, CargoType((self.l.cargo_type)(v)));
+        // SAFETY: The station's and the vehicle's live lists and the immutable storage table.
+        unsafe {
+            StationCargoList::reserve(
+                list,
+                self.l.storage(),
+                max_move,
+                cargo.0,
+                next_station,
+                v.get_cargo_tile(),
+            );
+        }
+    }
+}
 /// `HandleStationRefit`: refit a vehicle in a station.
 fn handle_station_refit(
     v: VehicleRef,
     consist_capleft: &mut CargoArray,
     st: LoadingStation,
-    next_station: *mut c_void,
+    next_station: &[StationID],
     mut new_cargo_type: CargoType,
     c: &LoadingContext<'_>,
 ) {
@@ -1865,7 +1912,9 @@ fn handle_station_refit(
             .filter(|&bit| has_bit64(refit_mask, bit))
             .map(CargoType)
         {
-            if !(l.has_cargo_for)(st.native, cargo_type.0, next_station) {
+            let list = c.visits.links.station_cargo(st.base, cargo_type);
+            // SAFETY: The goods entry's live list, null without data; the read ends at once.
+            if list.is_null() || !unsafe { (*list).has_cargo_for(next_station) } {
                 continue;
             }
             /* Try to find out if auto-refitting would succeed. In case the refit is allowed,
@@ -1903,7 +1952,19 @@ fn handle_station_refit(
          * misrouting it. */
         // `ReturnCargoAction`.
         iterate_vehicle_parts(v_start, |part| {
-            (l.return_cargo)(st.native, part, u32::MAX);
+            let list = c.station_cargo(st, CargoType((l.cargo_type)(part)));
+            // SAFETY: The vehicle's and the station's live lists and the immutable storage
+            // table.
+            unsafe {
+                VehicleCargoList::return_(
+                    l.cargo_list(part).0,
+                    l.storage(),
+                    u32::MAX,
+                    list,
+                    StationID::INVALID,
+                    part.get_cargo_tile(),
+                );
+            }
             true
         });
         c.refit.run(
@@ -1923,9 +1984,10 @@ fn handle_station_refit(
         let part_cargo = l.cargo_list(part);
         if do_reserve {
             let remaining = part_cargo.remaining_count();
-            (l.reserve_cargo)(
-                st.native,
+            c.reserve(
+                st,
                 part,
+                part_cargo,
                 u32::from(part.cargo_cap()).wrapping_sub(remaining),
                 next_station,
             );
@@ -1939,7 +2001,7 @@ fn handle_station_refit(
     (l.set_current_company)(cur_company);
 }
 /// `PrepareUnload`: prepare the vehicle to be unloaded.
-pub(crate) fn prepare_unload(front_v: VehicleRef, w: &World, l: &Loading) {
+pub(crate) fn prepare_unload(front_v: VehicleRef, w: &World, l: &Loading, links: &Links) {
     let curr_station = (w.station)(front_v.last_station_visited().0);
     unsafe {
         loading_vehicles_push_back(curr_station.state, front_v.shell().cast());
@@ -1951,31 +2013,43 @@ pub(crate) fn prepare_unload(front_v: VehicleRef, w: &World, l: &Loading) {
     /* One CargoPayment per vehicle and the vehicle limit equals the
      * limit in number of CargoPayments. Can't go wrong. */
     let payment = (l.create_payment)(front_v);
-    let mut body = |next_station| {
-        if !has_orders(front_v)
-            || OrderUnloadType((l.unload_type)(front_v)) != OrderUnloadType::NoUnload
-        {
-            let mut current = Some(front_v);
-            while let Some(v) = current {
-                let cargo = l.cargo_list(v);
-                if u32::from(v.cargo_cap()) > 0 && cargo.total_count() > 0 {
-                    (l.stage)(
-                        curr_station.native,
-                        v,
-                        (l.unload_type)(front_v),
-                        next_station,
-                        payment,
+    let next_station = get_next_stopping_station(front_v, l);
+    if !has_orders(front_v)
+        || OrderUnloadType((l.unload_type)(front_v)) != OrderUnloadType::NoUnload
+    {
+        let mut current = Some(front_v);
+        while let Some(v) = current {
+            let observed = (l.cargo_capacity)(v);
+            let cargo_type = CargoType(observed.cargo);
+            let ge = (links.goods_entry)(curr_station.base, cargo_type.0);
+            let cargo = VehicleCargo(observed.owner.cast_mut());
+            if u32::from(v.cargo_cap()) > 0 && cargo.total_count() > 0 {
+                // SAFETY: The station's live Rust-owned goods fields, the vehicle's live list
+                // and the payment created above.
+                unsafe {
+                    VehicleCargoList::stage(
+                        cargo.0,
+                        l.storage(),
+                        &crate::cargo_storage::StageArgs {
+                            accepted: goods_status(cp(curr_station.state, cargo_type))
+                                .test(GoodsState::Acceptance),
+                            current_station: front_v.last_station_visited(),
+                            next_station: &next_station,
+                            unload_type: OrderUnloadType((l.unload_type)(front_v)),
+                            ge,
+                            cargo: cargo_type,
+                            payment,
+                            current_tile: v.get_cargo_tile(),
+                        },
                     );
-                    if cargo.unload_count() > 0 {
-                        (l.set_cargo_unloading)(v, true);
-                    }
                 }
-                current = v.next();
+                if cargo.unload_count() > 0 {
+                    (l.set_cargo_unloading)(v, true);
+                }
             }
+            current = v.next();
         }
-    };
-    let (context, callback) = scope_context(&mut body);
-    (l.with_next_stations)(front_v, context, callback);
+    }
 }
 /// `UpdateLoadUnloadTicks`: update the vehicle's `load_unload_ticks`, the time it will wait
 /// until it tries to load or unload again. Adjust for overhang of trains and set it at least
@@ -2019,413 +2093,439 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
     // SAFETY: The immutable shared vehicle table outlives this entry.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)(front.last_station_visited().0);
-    let mut body = |next_station| {
-        let control = (l.control)(front);
-        let use_autorefit =
-            control.refit && CargoType(control.refit_cargo) == CargoType::CARGO_AUTO_REFIT;
-        let mut consist_capleft: CargoArray = [0; NUM_CARGO as usize];
-        if if control.improved && use_autorefit {
-            (l.get_payment)(front).is_null()
-        } else {
-            control.full_load
-        } {
-            if control.full_load {
-                crate::witness::hit(crate::witness::STATION_FULL_LOAD_RESERVE);
-            }
-            reserve_consist(
-                st,
-                front,
-                &control,
-                if use_autorefit && control.ticks != 0 {
-                    Some(&mut consist_capleft)
-                } else {
-                    None
-                },
-                next_station,
-                w,
-                l,
-            );
+    let next_station = get_next_stopping_station(front, l);
+    let next_station = next_station.as_slice();
+    let control = (l.control)(front);
+    let use_autorefit =
+        control.refit && CargoType(control.refit_cargo) == CargoType::CARGO_AUTO_REFIT;
+    let mut consist_capleft: CargoArray = [0; NUM_CARGO as usize];
+    if if control.improved && use_autorefit {
+        (l.get_payment)(front).is_null()
+    } else {
+        control.full_load
+    } {
+        if control.full_load {
+            crate::witness::hit(crate::witness::STATION_FULL_LOAD_RESERVE);
         }
-        /* We have not waited enough time till the next round of loading/unloading */
-        if control.ticks != 0 {
-            return;
-        }
-        if front.vehicle_type() == VehicleType::TRAIN && {
-            let tile = front.tile().0;
-            let shared = unsafe { &*w.shared };
-            (shared.tile_type)(tile) != crate::tile_type::MP_STATION
-                || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
-        } {
-            /* The train reversed in the station. Take the "easy" way
-             * out and let the train just leave as it always did. */
-            (l.set_loading_finished)(front, true);
-            (l.set_load_ticks)(front, 1);
-            return;
-        }
-        let state = st.state;
-        let mut new_load_unload_ticks = 0_i32;
-        let mut dirty_vehicle = false;
-        let mut dirty_station = false;
-        let mut completely_emptied = true;
-        let mut anything_unloaded = false;
-        let mut anything_loaded = false;
-        let mut full_load_amount = 0_u64;
-        let mut cargo_not_full = 0_u64;
-        let mut cargo_full = 0_u64;
-        let mut reservation_left = 0_u64;
-        front.set_cur_speed(0);
-        let payment = (l.get_payment)(front);
-        let mut artic_part = 0_u32; // Articulated part we are currently trying to load. (not counting parts without capacity)
-        let mut current = Some(front);
-        while let Some(v) = current {
-            if v == front || !v.previous().unwrap().has_articulated_part() {
-                artic_part = 0;
-            }
-            if v.cargo_cap() == 0 {
-                current = v.next();
-                continue;
-            }
-            let part = (l.part)(v);
-            artic_part = artic_part.wrapping_add(1);
-            let v_cargo = l.cargo_list(v);
-            let mut cargo = CargoType(part.cargo);
-            let mut ge = unsafe { cp(state, cargo) };
-            if part.unloading && OrderUnloadType(control.unload_type) != OrderUnloadType::NoUnload {
-                let cargo_count = v_cargo.unload_count();
-                let mut amount_unloaded = if control.gradual {
-                    if cargo_count > 0 {
-                        crate::witness::hit(crate::witness::STATION_GRADUAL_UNLOAD);
-                    }
-                    cargo_count.min(get_load_amount(v, control.gradual, l, unsafe {
-                        &*w.shared
-                    }))
-                } else {
-                    cargo_count
-                };
-                if !unsafe { goods_status(ge) }.test(GoodsState::Acceptance)
-                    && v_cargo.action_count(MoveToAction::MTA_DELIVER) > 0
-                {
-                    crate::witness::hit(crate::witness::STATION_REJECTED_DELIVERY);
-                    /* The station does not accept our goods anymore. */
-                    let unload_type = OrderUnloadType(control.unload_type);
-                    if unload_type == OrderUnloadType::Transfer
-                        || unload_type == OrderUnloadType::Unload
-                    {
-                        /* Transfer instead of delivering. */
-                        v_cargo.reassign(
-                            l,
-                            MoveToAction::MTA_DELIVER,
-                            MoveToAction::MTA_TRANSFER,
-                            v_cargo.action_count(MoveToAction::MTA_DELIVER),
-                        );
-                    } else {
-                        let new_remaining = v_cargo
-                            .remaining_count()
-                            .wrapping_add(v_cargo.action_count(MoveToAction::MTA_DELIVER));
-                        let cargo_cap = u32::from(v.cargo_cap());
-                        if cargo_cap < new_remaining {
-                            /* Return some of the reserved cargo to not overload the vehicle. */
-                            (l.return_cargo)(st.native, v, new_remaining - cargo_cap);
-                        }
-                        /* Keep instead of delivering. This may lead to no cargo being unloaded, so ...*/
-                        v_cargo.reassign(
-                            l,
-                            MoveToAction::MTA_DELIVER,
-                            MoveToAction::MTA_KEEP,
-                            v_cargo.action_count(MoveToAction::MTA_DELIVER),
-                        );
-                        /* ... say we unloaded something, otherwise we'll think we didn't unload
-                         * something and we didn't load something, so we must be finished
-                         * at this station. Setting the unloaded means that we will get a
-                         * retry for loading in the next cycle. */
-                        anything_unloaded = true;
-                    }
-                }
-                if v_cargo.action_count(MoveToAction::MTA_TRANSFER) > 0 {
-                    /* Mark the station dirty if we transfer, but not if we only deliver. */
-                    dirty_station = true;
-                    if !goods_entry::has_rating(unsafe { goods_status(ge) }) {
-                        /* Upon transferring cargo, make sure the station has a rating. Fake a pickup for the
-                         * first unload to prevent the cargo from quickly decaying after the initial drop. */
-                        unsafe {
-                            (&raw mut (*ge).time_since_pickup).write(0);
-                            let mut status = goods_status(ge);
-                            status.set(GoodsState::Rating);
-                            set_goods_status(ge, status);
-                        }
-                    }
-                }
-                crate::witness::hit(crate::witness::STATION_UNLOAD_CARGO);
-                if map.types.assertions() {
-                    map.check(!payment.is_null());
-                }
-                amount_unloaded = (l.unload_cargo)(st.native, v, amount_unloaded, payment);
-                let remaining = v_cargo.unload_count() > 0;
-                if amount_unloaded > 0 {
-                    dirty_vehicle = true;
-                    anything_unloaded = true;
-                    new_load_unload_ticks =
-                        new_load_unload_ticks.wrapping_add(amount_unloaded as i32);
-                    /* Deliver goods to the station */
-                    unsafe {
-                        (&raw mut (*state).fields.time_since_unload).write(0);
-                    }
-                }
-                if control.gradual && remaining {
-                    completely_emptied = false;
-                } else {
-                    /* We have finished unloading (cargo count == 0) */
-                    (l.set_cargo_unloading)(v, false);
-                }
-                current = v.next();
-                continue;
-            }
-            /* Do not pick up goods when we have no-load set or loading is stopped. */
-            if OrderLoadType(control.load_type) == OrderLoadType::NoLoad || control.stop {
-                current = v.next();
-                continue;
-            }
-            /* This order has a refit, if this is the first vehicle part carrying cargo and the whole vehicle is empty, try refitting. */
-            if control.refit && artic_part == 1 {
-                handle_station_refit(
-                    v,
-                    &mut consist_capleft,
-                    st,
-                    next_station,
-                    CargoType(control.refit_cargo),
-                    c,
-                );
-                cargo = CargoType((l.cargo_type)(v));
-                ge = unsafe { cp(state, cargo) };
-            }
-            /* As we're loading here the following link can carry the full capacity of the vehicle. */
-            v.set_refit_cap(v.cargo_cap());
-            /* update stats */
-            let t = match front.vehicle_type() {
-                VehicleType::TRAIN | VehicleType::SHIP => i32::from(front.cached_max_speed()),
-                VehicleType::ROAD => i32::from(front.cached_max_speed()) / 2,
-                VehicleType::AIRCRAFT => {
-                    // Convert to old units.
-                    crate::aircraft::speed_old_units(u32::from(front.cached_max_speed())) as i32
-                }
-                _ => unreachable!("original NOT_REACHED vehicle type"),
-            };
-            /* if last speed is 0, we treat that as if no vehicle has ever visited the station. */
-            unsafe {
-                (&raw mut (*ge).last_speed).write(clamp_to_u8(i64::from(t)));
-            }
-            let resolver = unsafe { &*(vehicle.newgrf)() };
-            let age = crate::timer_game_common::calendar_year()
-                .0
-                .wrapping_sub(unsafe { (resolver.build_year)(front.0.as_ptr()) });
-            unsafe {
-                (&raw mut (*ge).last_age).write(clamp_to_u8(i64::from(age)));
-            }
-            if map.types.assertions() {
-                map.check(u32::from(v.cargo_cap()) >= v_cargo.stored_count());
-            }
-            /* Capacity available for loading more cargo. */
-            let mut cap_left = u32::from(v.cargo_cap()).wrapping_sub(v_cargo.stored_count());
-            if cap_left > 0 {
-                /* If vehicle can load cargo, reset time_since_pickup. */
-                unsafe {
-                    (&raw mut (*ge).time_since_pickup).write(0);
-                }
-                /* If there's goods waiting at the station, and the vehicle
-                 * has capacity for it, load it on the vehicle. */
-                if (v_cargo.action_count(MoveToAction::MTA_LOAD) > 0
-                    || (w.available)(st.base, cargo.0) > 0)
-                    && may_load_under_exclusive_rights(st, v, w)
-                {
-                    if v_cargo.stored_count() == 0 {
-                        unsafe {
-                            crate::newgrf_vehicle::trigger(
-                                vehicle,
-                                v,
-                                crate::newgrf_vehicle::Trigger::NewCargo,
-                            );
-                        };
-                    }
-                    if control.gradual {
-                        cap_left = cap_left.min(get_load_amount(v, control.gradual, l, unsafe {
-                            &*w.shared
-                        }));
-                    }
-                    let loaded = (l.load_cargo)(st.native, v, cap_left, next_station);
-                    if v_cargo.action_count(MoveToAction::MTA_LOAD) > 0 {
-                        /* Remember if there are reservations left so that we don't stop
-                         * loading before they're loaded. */
-                        set_bit64(&mut reservation_left, cargo.0);
-                    }
-                    /* Store whether the maximum possible load amount was loaded or not.*/
-                    if loaded == cap_left {
-                        set_bit64(&mut full_load_amount, cargo.0);
-                    } else {
-                        clr_bit64(&mut full_load_amount, cargo.0);
-                    }
-                    /* TODO: Regarding this, when we do gradual loading, we
-                     * should first unload all vehicles and then start
-                     * loading them. Since this will cause
-                     * VEHICLE_TRIGGER_EMPTY to be called at the time when
-                     * the whole vehicle chain is really totally empty, the
-                     * completely_emptied assignment can then be safely
-                     * removed; that's how TTDPatch behaves too. --pasky */
-                    if loaded > 0 {
-                        completely_emptied = false;
-                        anything_loaded = true;
-                        unsafe {
-                            (&raw mut (*state).fields.time_since_load).write(0);
-                            (&raw mut (*state).fields.last_vehicle_type).write(v.vehicle_type().0);
-                        }
-                        if (l.station_cargo_total)(st.native, cargo.0) == 0 {
-                            crate::animated_tile::cargo_event(
-                                st.base,
-                                cargo.0,
-                                crate::station_type::SAT_CARGO_TAKEN,
-                                crate::station_type::AAT_CARGO_TAKEN,
-                                crate::station_type::SRT_CARGO_TAKEN,
-                            );
-                        }
-                        new_load_unload_ticks = new_load_unload_ticks.wrapping_add(loaded as i32);
-                        dirty_vehicle = true;
-                        dirty_station = true;
-                    }
-                }
-            }
-            if v_cargo.stored_count() >= u32::from(v.cargo_cap()) {
-                set_bit64(&mut cargo_full, cargo.0);
+        reserve_consist(
+            st,
+            front,
+            &control,
+            if use_autorefit && control.ticks != 0 {
+                Some(&mut consist_capleft)
             } else {
-                set_bit64(&mut cargo_not_full, cargo.0);
+                None
+            },
+            next_station,
+            c,
+        );
+    }
+    /* We have not waited enough time till the next round of loading/unloading */
+    if control.ticks != 0 {
+        return;
+    }
+    if front.vehicle_type() == VehicleType::TRAIN && {
+        let tile = front.tile().0;
+        let shared = unsafe { &*w.shared };
+        (shared.tile_type)(tile) != crate::tile_type::MP_STATION
+            || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
+    } {
+        /* The train reversed in the station. Take the "easy" way
+         * out and let the train just leave as it always did. */
+        (l.set_loading_finished)(front, true);
+        (l.set_load_ticks)(front, 1);
+        return;
+    }
+    let state = st.state;
+    let mut new_load_unload_ticks = 0_i32;
+    let mut dirty_vehicle = false;
+    let mut dirty_station = false;
+    let mut completely_emptied = true;
+    let mut anything_unloaded = false;
+    let mut anything_loaded = false;
+    let mut full_load_amount = 0_u64;
+    let mut cargo_not_full = 0_u64;
+    let mut cargo_full = 0_u64;
+    let mut reservation_left = 0_u64;
+    front.set_cur_speed(0);
+    let payment = (l.get_payment)(front);
+    let mut artic_part = 0_u32; // Articulated part we are currently trying to load. (not counting parts without capacity)
+    let mut current = Some(front);
+    while let Some(v) = current {
+        if v == front || !v.previous().unwrap().has_articulated_part() {
+            artic_part = 0;
+        }
+        if v.cargo_cap() == 0 {
+            current = v.next();
+            continue;
+        }
+        let part = (l.part)(v);
+        artic_part = artic_part.wrapping_add(1);
+        let v_cargo = l.cargo_list(v);
+        let mut cargo = CargoType(part.cargo);
+        let mut ge = unsafe { cp(state, cargo) };
+        if part.unloading && OrderUnloadType(control.unload_type) != OrderUnloadType::NoUnload {
+            let cargo_count = v_cargo.unload_count();
+            let mut amount_unloaded = if control.gradual {
+                if cargo_count > 0 {
+                    crate::witness::hit(crate::witness::STATION_GRADUAL_UNLOAD);
+                }
+                cargo_count.min(get_load_amount(v, control.gradual, l, unsafe {
+                    &*w.shared
+                }))
+            } else {
+                cargo_count
+            };
+            if !unsafe { goods_status(ge) }.test(GoodsState::Acceptance)
+                && v_cargo.action_count(MoveToAction::MTA_DELIVER) > 0
+            {
+                crate::witness::hit(crate::witness::STATION_REJECTED_DELIVERY);
+                /* The station does not accept our goods anymore. */
+                let unload_type = OrderUnloadType(control.unload_type);
+                if unload_type == OrderUnloadType::Transfer
+                    || unload_type == OrderUnloadType::Unload
+                {
+                    /* Transfer instead of delivering. */
+                    v_cargo.reassign(
+                        l,
+                        MoveToAction::MTA_DELIVER,
+                        MoveToAction::MTA_TRANSFER,
+                        v_cargo.action_count(MoveToAction::MTA_DELIVER),
+                    );
+                } else {
+                    let new_remaining = v_cargo
+                        .remaining_count()
+                        .wrapping_add(v_cargo.action_count(MoveToAction::MTA_DELIVER));
+                    let cargo_cap = u32::from(v.cargo_cap());
+                    if cargo_cap < new_remaining {
+                        /* Return some of the reserved cargo to not overload the vehicle. */
+                        let list = c.station_cargo(st, cargo);
+                        // SAFETY: The vehicle's and the station's live lists.
+                        unsafe {
+                            VehicleCargoList::return_(
+                                v_cargo.0,
+                                l.storage(),
+                                new_remaining - cargo_cap,
+                                list,
+                                StationID::INVALID,
+                                v.get_cargo_tile(),
+                            );
+                        }
+                    }
+                    /* Keep instead of delivering. This may lead to no cargo being unloaded, so ...*/
+                    v_cargo.reassign(
+                        l,
+                        MoveToAction::MTA_DELIVER,
+                        MoveToAction::MTA_KEEP,
+                        v_cargo.action_count(MoveToAction::MTA_DELIVER),
+                    );
+                    /* ... say we unloaded something, otherwise we'll think we didn't unload
+                     * something and we didn't load something, so we must be finished
+                     * at this station. Setting the unloaded means that we will get a
+                     * retry for loading in the next cycle. */
+                    anything_unloaded = true;
+                }
+            }
+            if v_cargo.action_count(MoveToAction::MTA_TRANSFER) > 0 {
+                /* Mark the station dirty if we transfer, but not if we only deliver. */
+                dirty_station = true;
+                if !goods_entry::has_rating(unsafe { goods_status(ge) }) {
+                    /* Upon transferring cargo, make sure the station has a rating. Fake a pickup for the
+                     * first unload to prevent the cargo from quickly decaying after the initial drop. */
+                    unsafe {
+                        (&raw mut (*ge).time_since_pickup).write(0);
+                        let mut status = goods_status(ge);
+                        status.set(GoodsState::Rating);
+                        set_goods_status(ge, status);
+                    }
+                }
+            }
+            crate::witness::hit(crate::witness::STATION_UNLOAD_CARGO);
+            if map.types.assertions() {
+                map.check(!payment.is_null());
+            }
+            let list = c.station_cargo(st, cargo);
+            // SAFETY: The vehicle's and the station's live lists and the vehicle's payment.
+            amount_unloaded = unsafe {
+                VehicleCargoList::unload(
+                    v_cargo.0,
+                    l.storage(),
+                    amount_unloaded,
+                    list,
+                    cargo,
+                    payment,
+                    v.get_cargo_tile(),
+                )
+            };
+            let remaining = v_cargo.unload_count() > 0;
+            if amount_unloaded > 0 {
+                dirty_vehicle = true;
+                anything_unloaded = true;
+                new_load_unload_ticks = new_load_unload_ticks.wrapping_add(amount_unloaded as i32);
+                /* Deliver goods to the station */
+                unsafe {
+                    (&raw mut (*state).fields.time_since_unload).write(0);
+                }
+            }
+            if control.gradual && remaining {
+                completely_emptied = false;
+            } else {
+                /* We have finished unloading (cargo count == 0) */
+                (l.set_cargo_unloading)(v, false);
             }
             current = v.next();
+            continue;
         }
-        if anything_loaded || anything_unloaded {
-            if front.vehicle_type() == VehicleType::TRAIN {
-                crate::animated_tile::rail_event(
-                    st.base,
-                    front.tile().0,
-                    crate::station_type::SAT_VEHICLE_LOADS,
-                    crate::station_type::SRT_VEHICLE_LOADS,
-                );
-            } else if front.vehicle_type() == VehicleType::ROAD {
-                crate::animated_tile::road_event(
-                    st.base,
-                    front.tile().0,
-                    crate::station_type::SAT_VEHICLE_LOADS,
-                    crate::station_type::SRT_VEHICLE_LOADS,
-                );
+        /* Do not pick up goods when we have no-load set or loading is stopped. */
+        if OrderLoadType(control.load_type) == OrderLoadType::NoLoad || control.stop {
+            current = v.next();
+            continue;
+        }
+        /* This order has a refit, if this is the first vehicle part carrying cargo and the whole vehicle is empty, try refitting. */
+        if control.refit && artic_part == 1 {
+            handle_station_refit(
+                v,
+                &mut consist_capleft,
+                st,
+                next_station,
+                CargoType(control.refit_cargo),
+                c,
+            );
+            cargo = CargoType((l.cargo_type)(v));
+            ge = unsafe { cp(state, cargo) };
+        }
+        /* As we're loading here the following link can carry the full capacity of the vehicle. */
+        v.set_refit_cap(v.cargo_cap());
+        /* update stats */
+        let t = match front.vehicle_type() {
+            VehicleType::TRAIN | VehicleType::SHIP => i32::from(front.cached_max_speed()),
+            VehicleType::ROAD => i32::from(front.cached_max_speed()) / 2,
+            VehicleType::AIRCRAFT => {
+                // Convert to old units.
+                crate::aircraft::speed_old_units(u32::from(front.cached_max_speed())) as i32
             }
+            _ => unreachable!("original NOT_REACHED vehicle type"),
+        };
+        /* if last speed is 0, we treat that as if no vehicle has ever visited the station. */
+        unsafe {
+            (&raw mut (*ge).last_speed).write(clamp_to_u8(i64::from(t)));
         }
-        /* Only set completely_emptied, if we just unloaded all remaining cargo */
-        completely_emptied &= anything_unloaded;
-        if !anything_unloaded {
-            (l.delete_payment)(payment);
+        let resolver = unsafe { &*(vehicle.newgrf)() };
+        let age = crate::timer_game_common::calendar_year()
+            .0
+            .wrapping_sub(unsafe { (resolver.build_year)(front.0.as_ptr()) });
+        unsafe {
+            (&raw mut (*ge).last_age).write(clamp_to_u8(i64::from(age)));
         }
-        (l.set_stop)(front, false);
-        if anything_loaded || anything_unloaded {
-            if control.gradual {
-                /* The time it takes to load one 'slice' of cargo or passengers depends
-                 * on the vehicle type - the values here are those found in TTDPatch */
-                const GRADUAL_LOADING_WAIT_TIME: [i32; 4] = [40, 20, 10, 20];
-                new_load_unload_ticks =
-                    GRADUAL_LOADING_WAIT_TIME[usize::from(front.vehicle_type().0)];
+        if map.types.assertions() {
+            map.check(u32::from(v.cargo_cap()) >= v_cargo.stored_count());
+        }
+        /* Capacity available for loading more cargo. */
+        let mut cap_left = u32::from(v.cargo_cap()).wrapping_sub(v_cargo.stored_count());
+        if cap_left > 0 {
+            /* If vehicle can load cargo, reset time_since_pickup. */
+            unsafe {
+                (&raw mut (*ge).time_since_pickup).write(0);
             }
-            /* We loaded less cargo than possible for all cargo types and it's not full
-             * load and we're not supposed to wait any longer: stop loading. */
-            if !anything_unloaded
-                && full_load_amount == 0
-                && reservation_left == 0
-                && !control.full_load
-                && {
-                    let observed = (l.wait_observation)(front);
-                    front.current_order_time()
-                        >= i32::from(observed.wait)
-                            .wrapping_sub(observed.lateness)
-                            .max(0)
-                }
+            /* If there's goods waiting at the station, and the vehicle
+             * has capacity for it, load it on the vehicle. */
+            if (v_cargo.action_count(MoveToAction::MTA_LOAD) > 0
+                || (w.available)(st.base, cargo.0) > 0)
+                && may_load_under_exclusive_rights(st, v, w)
             {
-                (l.set_stop)(front, true);
-            }
-            update_load_unload_ticks(front, st, new_load_unload_ticks, w, l);
-        } else {
-            update_load_unload_ticks(front, st, 20, w, l); // We need the ticks for link refreshing.
-            let mut finished_loading = true;
-            if control.full_load {
-                if OrderLoadType(control.load_type) == OrderLoadType::FullLoadAny {
-                    /* if the aircraft carries passengers and is NOT full, then
-                     * continue loading, no matter how much mail is in */
-                    if (front.vehicle_type() == VehicleType::AIRCRAFT
-                        && (l.passenger_cargo)(front)
-                        && u32::from(front.cargo_cap()) > l.cargo_list(front).stored_count())
-                        || (cargo_not_full != 0 && (cargo_full & !cargo_not_full) == 0)
-                    // There are still non-full cargoes
-                    {
-                        finished_loading = false;
+                if v_cargo.stored_count() == 0 {
+                    unsafe {
+                        crate::newgrf_vehicle::trigger(
+                            vehicle,
+                            v,
+                            crate::newgrf_vehicle::Trigger::NewCargo,
+                        );
+                    };
+                }
+                if control.gradual {
+                    cap_left = cap_left.min(get_load_amount(v, control.gradual, l, unsafe {
+                        &*w.shared
+                    }));
+                }
+                let list = c.station_cargo(st, cargo);
+                // SAFETY: The station's and the vehicle's live lists.
+                let loaded = unsafe {
+                    StationCargoList::load(
+                        list,
+                        l.storage(),
+                        cap_left,
+                        v_cargo.0,
+                        next_station,
+                        v.get_cargo_tile(),
+                    )
+                };
+                if v_cargo.action_count(MoveToAction::MTA_LOAD) > 0 {
+                    /* Remember if there are reservations left so that we don't stop
+                     * loading before they're loaded. */
+                    set_bit64(&mut reservation_left, cargo.0);
+                }
+                /* Store whether the maximum possible load amount was loaded or not.*/
+                if loaded == cap_left {
+                    set_bit64(&mut full_load_amount, cargo.0);
+                } else {
+                    clr_bit64(&mut full_load_amount, cargo.0);
+                }
+                /* TODO: Regarding this, when we do gradual loading, we
+                 * should first unload all vehicles and then start
+                 * loading them. Since this will cause
+                 * VEHICLE_TRIGGER_EMPTY to be called at the time when
+                 * the whole vehicle chain is really totally empty, the
+                 * completely_emptied assignment can then be safely
+                 * removed; that's how TTDPatch behaves too. --pasky */
+                if loaded > 0 {
+                    completely_emptied = false;
+                    anything_loaded = true;
+                    unsafe {
+                        (&raw mut (*state).fields.time_since_load).write(0);
+                        (&raw mut (*state).fields.last_vehicle_type).write(v.vehicle_type().0);
                     }
-                } else if cargo_not_full != 0 {
+                    // SAFETY: The list the load used, which is live; the read ends at once.
+                    if unsafe { (*list).total_count() } == 0 {
+                        crate::animated_tile::cargo_event(
+                            st.base,
+                            cargo.0,
+                            crate::station_type::SAT_CARGO_TAKEN,
+                            crate::station_type::AAT_CARGO_TAKEN,
+                            crate::station_type::SRT_CARGO_TAKEN,
+                        );
+                    }
+                    new_load_unload_ticks = new_load_unload_ticks.wrapping_add(loaded as i32);
+                    dirty_vehicle = true;
+                    dirty_station = true;
+                }
+            }
+        }
+        if v_cargo.stored_count() >= u32::from(v.cargo_cap()) {
+            set_bit64(&mut cargo_full, cargo.0);
+        } else {
+            set_bit64(&mut cargo_not_full, cargo.0);
+        }
+        current = v.next();
+    }
+    if anything_loaded || anything_unloaded {
+        if front.vehicle_type() == VehicleType::TRAIN {
+            crate::animated_tile::rail_event(
+                st.base,
+                front.tile().0,
+                crate::station_type::SAT_VEHICLE_LOADS,
+                crate::station_type::SRT_VEHICLE_LOADS,
+            );
+        } else if front.vehicle_type() == VehicleType::ROAD {
+            crate::animated_tile::road_event(
+                st.base,
+                front.tile().0,
+                crate::station_type::SAT_VEHICLE_LOADS,
+                crate::station_type::SRT_VEHICLE_LOADS,
+            );
+        }
+    }
+    /* Only set completely_emptied, if we just unloaded all remaining cargo */
+    completely_emptied &= anything_unloaded;
+    if !anything_unloaded {
+        (l.delete_payment)(payment);
+    }
+    (l.set_stop)(front, false);
+    if anything_loaded || anything_unloaded {
+        if control.gradual {
+            /* The time it takes to load one 'slice' of cargo or passengers depends
+             * on the vehicle type - the values here are those found in TTDPatch */
+            const GRADUAL_LOADING_WAIT_TIME: [i32; 4] = [40, 20, 10, 20];
+            new_load_unload_ticks = GRADUAL_LOADING_WAIT_TIME[usize::from(front.vehicle_type().0)];
+        }
+        /* We loaded less cargo than possible for all cargo types and it's not full
+         * load and we're not supposed to wait any longer: stop loading. */
+        if !anything_unloaded
+            && full_load_amount == 0
+            && reservation_left == 0
+            && !control.full_load
+            && {
+                let observed = (l.wait_observation)(front);
+                front.current_order_time()
+                    >= i32::from(observed.wait)
+                        .wrapping_sub(observed.lateness)
+                        .max(0)
+            }
+        {
+            (l.set_stop)(front, true);
+        }
+        update_load_unload_ticks(front, st, new_load_unload_ticks, w, l);
+    } else {
+        update_load_unload_ticks(front, st, 20, w, l); // We need the ticks for link refreshing.
+        let mut finished_loading = true;
+        if control.full_load {
+            if OrderLoadType(control.load_type) == OrderLoadType::FullLoadAny {
+                /* if the aircraft carries passengers and is NOT full, then
+                 * continue loading, no matter how much mail is in */
+                if (front.vehicle_type() == VehicleType::AIRCRAFT
+                    && (l.passenger_cargo)(front)
+                    && u32::from(front.cargo_cap()) > l.cargo_list(front).stored_count())
+                    || (cargo_not_full != 0 && (cargo_full & !cargo_not_full) == 0)
+                // There are still non-full cargoes
+                {
                     finished_loading = false;
                 }
-                /* Refresh next hop stats if we're full loading to make the links
-                 * known to the distribution algorithm and allow cargo to be sent
-                 * along them. Otherwise the vehicle could wait for cargo
-                 * indefinitely if it hasn't visited the other links yet, or if the
-                 * links die while it's loading. */
-                if !finished_loading {
-                    refresh_links(front, true, true, c.visits);
-                }
+            } else if cargo_not_full != 0 {
+                finished_loading = false;
             }
-            (l.set_loading_finished)(front, finished_loading);
+            /* Refresh next hop stats if we're full loading to make the links
+             * known to the distribution algorithm and allow cargo to be sent
+             * along them. Otherwise the vehicle could wait for cargo
+             * indefinitely if it hasn't visited the other links yet, or if the
+             * links die while it's loading. */
+            if !finished_loading {
+                refresh_links(front, true, true, c.visits);
+            }
         }
-        /* Calculate the loading indicator fill percent and display
-         * In the Game Menu do not display indicators
-         * If _settings_client.gui.loading_indicators == 2, show indicators (bool can be promoted to int as 0 or 1 - results in 2 > 0,1 )
-         * if _settings_client.gui.loading_indicators == 1, _local_company must be the owner or must be a spectator to show ind., so 1 > 0
-         * if _settings_client.gui.loading_indicators == 0, do not display indicators ... 0 is never greater than anything
-         */
-        if (l.indicator)(front) {
-            let mut percent_up_down = STR_NULL;
-            let percent =
-                crate::vehicle::visits::percent_filled(front, Some(&mut percent_up_down), c.visits);
-            (l.show_indicator)(front, percent, percent_up_down.0);
-        }
-        if completely_emptied {
-            /* Make sure the vehicle is marked dirty, since we need to update the NewGRF
-             * properties such as weight, power and TE whenever the trigger runs. */
-            dirty_vehicle = true;
-            unsafe {
-                crate::newgrf_vehicle::trigger(
-                    vehicle,
-                    front,
-                    crate::newgrf_vehicle::Trigger::Empty,
-                );
-            };
-        }
-        if dirty_vehicle {
-            set_window_dirty(
-                get_window_class_for_vehicle_type(front.vehicle_type()),
-                WindowNumber::from(front.owner()),
-            );
-            let vehicles = unsafe { &*l.vehicle };
-            // SAFETY: The vehicle table's NewGRF table is immutable and process-wide; the
-            // front record is live.
-            let index = VehicleID(unsafe { ((*(vehicles.newgrf)()).id)(front.0.as_ptr()) });
-            set_window_dirty(WindowClass::WC_VEHICLE_DETAILS, WindowNumber::from(index));
-            (unsafe { &*vehicles.maintenance }.mark_dirty)(front);
-        }
-        if dirty_station {
-            (w.mark_tiles)(st.base, true);
-            set_window_dirty(
-                WindowClass::WC_STATION_VIEW,
-                WindowNumber::from(StationID((w.graphs.station_id)(st.base))),
-            );
-            set_window_dirty(
-                WindowClass::WC_STATION_LIST,
-                WindowNumber::from(CompanyID((w.station_owner)(st.base))),
-            );
-        }
-    };
-    let (context, callback) = scope_context(&mut body);
-    (l.with_next_stations)(front, context, callback);
+        (l.set_loading_finished)(front, finished_loading);
+    }
+    /* Calculate the loading indicator fill percent and display
+     * In the Game Menu do not display indicators
+     * If _settings_client.gui.loading_indicators == 2, show indicators (bool can be promoted to int as 0 or 1 - results in 2 > 0,1 )
+     * if _settings_client.gui.loading_indicators == 1, _local_company must be the owner or must be a spectator to show ind., so 1 > 0
+     * if _settings_client.gui.loading_indicators == 0, do not display indicators ... 0 is never greater than anything
+     */
+    if (l.indicator)(front) {
+        let mut percent_up_down = STR_NULL;
+        let percent =
+            crate::vehicle::visits::percent_filled(front, Some(&mut percent_up_down), c.visits);
+        (l.show_indicator)(front, percent, percent_up_down.0);
+    }
+    if completely_emptied {
+        /* Make sure the vehicle is marked dirty, since we need to update the NewGRF
+         * properties such as weight, power and TE whenever the trigger runs. */
+        dirty_vehicle = true;
+        unsafe {
+            crate::newgrf_vehicle::trigger(vehicle, front, crate::newgrf_vehicle::Trigger::Empty);
+        };
+    }
+    if dirty_vehicle {
+        set_window_dirty(
+            get_window_class_for_vehicle_type(front.vehicle_type()),
+            WindowNumber::from(front.owner()),
+        );
+        let vehicles = unsafe { &*l.vehicle };
+        // SAFETY: The vehicle table's NewGRF table is immutable and process-wide; the
+        // front record is live.
+        let index = VehicleID(unsafe { ((*(vehicles.newgrf)()).id)(front.0.as_ptr()) });
+        set_window_dirty(WindowClass::WC_VEHICLE_DETAILS, WindowNumber::from(index));
+        (unsafe { &*vehicles.maintenance }.mark_dirty)(front);
+    }
+    if dirty_station {
+        (w.mark_tiles)(st.base, true);
+        set_window_dirty(
+            WindowClass::WC_STATION_VIEW,
+            WindowNumber::from(StationID((w.graphs.station_id)(st.base))),
+        );
+        set_window_dirty(
+            WindowClass::WC_STATION_LIST,
+            WindowNumber::from(CompanyID((w.station_owner)(st.base))),
+        );
+    }
 }
 /// `LoadUnloadStation`: load/unload the vehicles in this station according to the order
 /// they entered.
@@ -2575,11 +2675,6 @@ crate::abi::layouts! {
         kind,
         nearest_depot,
     };
-    "OpenTTDTruncatedSource" ["probe"] => TruncatedSource {
-        amount,
-        source,
-        present,
-    };
     "OpenTTDLoadingControl" ["probe"] => LoadingControl {
         ticks,
         unload_type,
@@ -2638,8 +2733,6 @@ crate::abi::layouts! {
 
         mark_tiles,
         cargo_registry,
-        with_truncation,
-        truncate_next,
         shared,
     };
     "OpenTTDStationLinks" ["probe"] => Links {
@@ -2653,7 +2746,7 @@ crate::abi::layouts! {
         next_shared,
         stopped_in_depot,
         cargo_type,
-        goods_entry, station_resolver, vehicle_resolver,
+        goods_entry, get_or_create_data_cargo, station_resolver, vehicle_resolver,
     };
     "OpenTTDStationLoading" ["probe"] => Loading {
         control,
@@ -2676,14 +2769,6 @@ crate::abi::layouts! {
         indicator,
         show_indicator,
         set_current_company,
-        with_next_stations,
-        stage,
-        return_cargo,
-        unload_cargo,
-        load_cargo,
-        reserve_cargo,
-        has_cargo_for,
-        station_cargo_total,
         get_payment,
         create_payment,
         delete_payment,

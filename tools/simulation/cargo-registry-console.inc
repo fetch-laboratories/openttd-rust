@@ -154,7 +154,12 @@ static void CargoProfitFixture()
 	auto *payment = new CargoPayment(front);
 	TileIndex destination = TileXY((TileX(station->xy) + 17) % Map::SizeX(), TileY(station->xy));
 	observer.SetRegister(0x102, -1);
+#ifdef WITH_RUST
+	/* CargoPayment::PayFinalDelivery, whose body is Rust's. */
+	openttd_rust_cargo_payment_final(CargoStorageServices(), payment, cargo, packet, 31, destination.base());
+#else
 	payment->PayFinalDelivery(cargo, packet, 31, destination);
+#endif
 	CARGO_REQUIRE(payment->route_profit == income && payment->visual_profit == income && observer.GetRegister(0x102) == CBID_CARGO_PROFIT_CALC);
 	fmt::print(stderr, "CARGO delivery {} {} {} {} {} {}\n", payment->route_profit.base(), payment->visual_profit.base(), observer.GetRegister(0x100), observer.GetRegister(0x102), _random.state[0], _random.state[1]);
 	payment->route_profit = payment->visual_profit = payment->visual_transfer = 0; delete payment; delete packet;

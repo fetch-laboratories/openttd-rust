@@ -279,7 +279,9 @@ static const OpenTTDCargoServices _cargo_services = {
 	.feeder_payment_share = RustFeederPaymentShare,
 };
 
-static OpenTTDCargoDelivery *GetCargoDeliveryState()
+const OpenTTDCargoServices &GetRustCargoServices() noexcept { return _cargo_services; }
+
+OpenTTDCargoDelivery *GetCargoDeliveryState() noexcept
 {
 	static const std::unique_ptr<OpenTTDCargoDelivery, decltype(&openttd_rust_cargo_delivery_destroy)> state(openttd_rust_cargo_delivery_new(), openttd_rust_cargo_delivery_destroy);
 	return state.get();
@@ -298,16 +300,6 @@ void CargoPayment::AfterLoad()
 {
 	this->GetFront()->cargo_payment = this;
 	openttd_rust_cargo_payment_afterload(this->rust_state);
-}
-void CargoPayment::PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
-{
-	assert(int(count) > 0);
-	Source source = cp->GetSource();
-	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source, &GetRustCargoMonitorServices());
-}
-Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
-{
-	return openttd_rust_cargo_payment_transfer(this->rust_state, &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit());
 }
 
 static_assert(to_underlying(VehicleCallbackMask::LoadAmount) == 2);
@@ -394,53 +386,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		}
 	},
 	.set_current_company = GetRustCompanyFinanceServices().set_current_company,
-	.with_next_stations = [](OpenTTDVehicle *handle, void *context, OpenTTDStationScope body) noexcept {
-		std::vector<StationID> next;
-		VehicleOf(handle)->GetNextStoppingStation(next);
-		body(context, &next);
-	},
-	.stage = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint8_t unload, void *next_stations, OpenTTDNativeCargoPayment *payment) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
-		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
-		v->cargo.Stage(ge.status.Test(GoodsEntry::State::Acceptance), st->index, next, static_cast<OrderUnloadType>(unload), &ge, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
-	},
-	.return_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
-		v->cargo.Return(amount, &ge.GetOrCreateData().cargo, StationID::Invalid(), v->GetCargoTile());
-	},
-	.unload_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, OpenTTDNativeCargoPayment *payment) noexcept -> uint32_t {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
-		return v->cargo.Unload(amount, &ge.GetOrCreateData().cargo, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
-	},
-	.load_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> uint32_t {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
-		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
-		return ge.GetOrCreateData().cargo.Load(amount, &v->cargo, next, v->GetCargoTile());
-	},
-	.reserve_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
-		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
-		ge.GetOrCreateData().cargo.Reserve(amount, &v->cargo, next, v->GetCargoTile());
-	},
-	.has_cargo_for = [](OpenTTDStation *station, uint8_t cargo, void *next_stations) noexcept -> bool {
-		GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
-		return ge.HasData() && ge.GetData().cargo.HasCargoFor(*static_cast<std::vector<StationID> *>(next_stations));
-	},
-	.station_cargo_total = [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t {
-		return static_cast<Station *>(station)->goods[cargo].GetData().cargo.TotalCount();
-	},
-
-
 	.get_payment = [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * {
 		return VehicleOf(handle)->cargo_payment;
 	},

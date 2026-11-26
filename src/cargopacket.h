@@ -50,27 +50,17 @@ public:
 	explicit CargoPacket(const OpenTTDCargoPacket &fields);
 	~CargoPacket();
 	OpenTTDCargoPacket *RustOwner() const { return this->state; }
-	void Merge(CargoPacket *cp);
-	void SetNextHop(StationID next) { this->state->next_hop = next.base(); }
 	void UpdateLoadingTile(TileIndex tile);
-	void UpdateUnloadingTile(TileIndex tile);
-	void AddFeederShare(Money share) { openttd_rust_cargo_packet_feeder(this->state, share.base()); }
 	uint16_t Count() const { return this->state->count; }
-	Money GetFeederShare() const { return this->state->feeder_share; }
-	Money GetFeederShare(uint count) const { return openttd_rust_cargo_packet_share(this->state, count); }
 	uint16_t GetPeriodsInTransit() const { return this->state->periods_in_transit; }
 	Source GetSource() const { return {this->state->source_id, static_cast<SourceType>(this->state->source_type)}; }
 	StationID GetFirstStation() const { return StationID(this->state->first_station); }
-	StationID GetNextHop() const { return StationID(this->state->next_hop); }
-	uint GetDistance(TileIndex tile) const;
 	static void InvalidateAllFrom(Source src);
-	static void InvalidateAllFrom(StationID station);
 	static void AfterLoad();
 };
 
 typedef std::list<CargoPacket *> CargoPacketList;
 typedef MultiMap<StationID, CargoPacket *> StationCargoPacketMap;
-typedef std::map<StationID, uint> StationCargoAmountMap;
 class VehicleCargoList;
 
 /** Read exports are call-local; unresolved load references are imported outside Rust. */
@@ -102,37 +92,23 @@ class VehicleCargoList : public CargoList<VehicleCargoList, CargoPacketList> {
 public:
 	StationID GetFirstStation() const;
 	Money GetFeederShare() const { return openttd_rust_cargo_list_feeder(this->state); }
-	uint ActionCount(MoveToAction action) const { return openttd_rust_cargo_list_action_count(this->state, action); }
 	uint StoredCount() const { return openttd_rust_cargo_list_stored(this->state); }
 	uint TotalCount() const { return openttd_rust_cargo_list_count(this->state); }
-	uint ReservedCount() const { return this->ActionCount(MTA_LOAD); }
-	uint UnloadCount() const { return openttd_rust_cargo_list_unload(this->state); }
-	uint RemainingCount() const { return openttd_rust_cargo_list_remaining(this->state); }
 	void Append(CargoPacket *cp, MoveToAction action = MTA_KEEP);
-	bool Stage(bool accepted, StationID station, std::span<const StationID> next, OrderUnloadType unload, const GoodsEntry *ge, CargoType cargo, CargoPayment *payment, TileIndex tile);
 	void KeepAll();
-	uint Return(uint amount, StationCargoList *dest, StationID next, TileIndex tile);
-	uint Unload(uint amount, StationCargoList *dest, CargoType cargo, CargoPayment *payment, TileIndex tile);
-	uint Shift(uint amount, VehicleCargoList *dest);
 	uint Truncate(uint amount = UINT_MAX);
-	uint Reroute(uint amount, VehicleCargoList *dest, StationID avoid, StationID avoid2, const GoodsEntry *ge);
 };
 
 class StationCargoList : public CargoList<StationCargoList, StationCargoPacketMap> {
 public:
-	static void InvalidateAllFrom(Source src);
 	void Append(CargoPacket *cp, StationID next);
-	bool HasCargoFor(std::span<const StationID> next) const;
 	StationID GetFirstStation() const;
 	size_t MapSize() const { return openttd_rust_cargo_list_key_count(this->state); }
 	uint AvailableCount() const { return openttd_rust_cargo_list_count(this->state); }
 	uint ReservedCount() const { return openttd_rust_cargo_list_reserved(this->state); }
 	void SetReservedCount(uint count) { openttd_rust_cargo_list_set_reserved(this->state, count); }
 	uint TotalCount() const { return openttd_rust_cargo_list_station_total(this->state); }
-	uint Reserve(uint amount, VehicleCargoList *dest, std::span<const StationID> next, TileIndex tile);
-	uint Load(uint amount, VehicleCargoList *dest, std::span<const StationID> next, TileIndex tile);
-	uint Truncate(uint amount = UINT_MAX, StationCargoAmountMap *origins = nullptr);
-	uint Reroute(uint amount, StationCargoList *dest, StationID avoid, StationID avoid2, const GoodsEntry *ge);
+	uint Truncate(uint amount = UINT_MAX);
 };
 
 #endif /* CARGOPACKET_H */

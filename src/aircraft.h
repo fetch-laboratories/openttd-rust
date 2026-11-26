@@ -112,7 +112,6 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 
 	uint Crash(bool flooded = false) override;
 	TileIndex GetOrderStationLocation(StationID station) override;
-	TileIndex GetCargoTile() const override { return this->First()->GetTile(); }
 	ClosestDepot FindClosestDepot() override;
 
 	/**

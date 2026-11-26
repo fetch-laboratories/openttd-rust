@@ -67,17 +67,11 @@ struct OpenTTDLoadingPart {
 	uint8_t cargo;
 	bool unloading;
 };
-using OpenTTDStationScope = void (*)(void *, void *) noexcept;
 enum OrderType : uint8_t;
 struct OpenTTDOrderDestination {
 	uint16_t destination;
 	OrderType kind;
 	bool nearest_depot;
-};
-struct OpenTTDTruncatedSource {
-	uint32_t amount;
-	uint16_t source;
-	bool present;
 };
 /* Station lookup identities and canonical owner, resolved together before
  * next-station discovery. No borrowed station fields cross a callback. */
@@ -113,8 +107,6 @@ struct OpenTTDStationServices {
 
 	void (*mark_tiles)(OpenTTDBaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(mark_tiles);
 	const OpenTTDCargoRegistryServices *cargo_registry;
-	void (*with_truncation)(OpenTTDBaseStation *, uint8_t, uint32_t, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_truncation);
-	OpenTTDTruncatedSource (*truncate_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_next);
 	const OpenTTDSharedServices *shared;
 };
 
@@ -133,6 +125,7 @@ struct OpenTTDStationLinks {
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const GoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
+	OpenTTDCargoList *(*get_or_create_data_cargo)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(get_or_create_data_cargo);
 	const OpenTTDStationResolverServices *station_resolver;
 	const OpenTTDVehicleResolverServices *vehicle_resolver;
 };
@@ -159,14 +152,6 @@ struct OpenTTDStationLoading {
 	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);
 	void (*show_indicator)(OpenTTDVehicle *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_indicator);
 	void (*set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
-	void (*with_next_stations)(OpenTTDVehicle *, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_next_stations);
-	void (*stage)(OpenTTDStation *, OpenTTDVehicle *, uint8_t, void *, OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(stage);
-	void (*return_cargo)(OpenTTDStation *, OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(return_cargo);
-	uint32_t (*unload_cargo)(OpenTTDStation *, OpenTTDVehicle *, uint32_t, OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(unload_cargo);
-	uint32_t (*load_cargo)(OpenTTDStation *, OpenTTDVehicle *, uint32_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(load_cargo);
-	void (*reserve_cargo)(OpenTTDStation *, OpenTTDVehicle *, uint32_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(reserve_cargo);
-	bool (*has_cargo_for)(OpenTTDStation *, uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(has_cargo_for);
-	uint32_t (*station_cargo_total)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo_total);
 	OpenTTDNativeCargoPayment * (*get_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(get_payment);
 	OpenTTDNativeCargoPayment * (*create_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(create_payment);
 	void (*delete_payment)(OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(delete_payment);

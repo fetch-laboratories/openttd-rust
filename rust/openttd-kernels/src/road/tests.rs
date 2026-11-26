@@ -740,11 +740,32 @@ mod controller {
     extern "C" fn create_payment(_: VehicleRef) -> *mut crate::cargo_payment::NativePayment {
         std::ptr::dangling_mut()
     }
-    extern "C" fn with_next_stations(
-        _: VehicleRef,
-        _: *mut std::ffi::c_void,
-        _: crate::station_service::Scope,
-    ) {
+    /// `GetNextStoppingStation` reads the record's order list, which the fixture leaves unset.
+    extern "C" fn order_leaves() -> *const crate::orders::Leaves {
+        thread_local! {
+            static LEAVES: &'static crate::orders::Leaves =
+                Box::leak(Box::new(crate::test_tables::ORDERS));
+        }
+        LEAVES.with(|leaves| std::ptr::from_ref(*leaves))
+    }
+    /// `PrepareUnload`'s part reads: the fixture's part carries no cargo.
+    extern "C" fn cargo_capacity(v: VehicleRef) -> crate::station_service::CargoCapacity {
+        assert_eq!(v.0.as_ptr(), RECORD.get().cast());
+        thread_local! {
+            static EMPTY: *mut crate::cargo_storage::CargoList =
+                crate::cargo_storage::openttd_rust_cargo_list_new(1);
+        }
+        crate::station_service::CargoCapacity {
+            owner: crate::cargo_storage::VehicleCargoList::of(EMPTY.with(|list| *list)),
+            cargo: 0,
+        }
+    }
+    extern "C" fn goods_entry(
+        st: *mut crate::station::BaseStation,
+        cargo: u8,
+    ) -> *const crate::station_base::GoodsEntry {
+        assert_eq!((st, cargo), (STATION_HANDLE.base(), 0));
+        std::ptr::null()
     }
     /// No last loading station (`INVALID_STATION`): no link statistics.
     extern "C" fn last_loading_station(v: VehicleRef) -> u16 {
@@ -925,13 +946,18 @@ mod controller {
                 crate::test_tables::unreachable1,
                 crate::test_tables::unreachable1,
             ))),
+            goods_entry,
             ..crate::test_tables::STATION_LINKS
         }));
         let loading = Box::leak(Box::new(crate::station_service::Loading {
             set_loading_finished,
             set_load_ticks,
-            with_next_stations,
             create_payment,
+            cargo_capacity,
+            vehicle: Box::leak(Box::new(crate::vehicle::VehicleServices {
+                orders: order_leaves,
+                ..crate::test_tables::VEHICLE
+            })),
             ..crate::test_tables::STATION_LOADING
         }));
         thread_local! {

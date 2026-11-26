@@ -764,8 +764,6 @@ public:
 	 */
 	virtual TileIndex GetOrderStationLocation([[maybe_unused]] StationID station) { return INVALID_TILE; }
 
-	virtual TileIndex GetCargoTile() const { return this->GetTile(); }
-
 	/**
 	 * Find the closest depot for this vehicle and tell us the location,
 	 * DestinationID and whether we should reverse.

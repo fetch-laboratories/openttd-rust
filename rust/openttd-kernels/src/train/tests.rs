@@ -1059,10 +1059,6 @@ mod bodies {
                     ..crate::test_tables::VEHICLE_COMMON
                 }));
                 let rail = Box::leak(Box::new(crate::vehicle_transactions::rail::Services {
-                    cargo_capacity: Box::leak(Box::new(crate::cargo_storage::CapacityServices {
-                        read: crate::test_tables::unreachable2,
-                        cargo: std::ptr::null(),
-                    })),
                     train_if_valid,
                     new_wagon: crate::test_tables::unreachable2,
                     new_engine: crate::test_tables::unreachable2,

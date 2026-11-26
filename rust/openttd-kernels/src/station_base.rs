@@ -162,28 +162,6 @@ pub(crate) unsafe fn goods_get_via(
     };
     flow.get_via_excluded(excluded, excluded2, random_range)
 }
-/// Temporary raw adapter for `cargo_storage.rs`; delegates to [`goods_get_via`].
-/// # Safety
-/// As [`goods_get_via`].
-pub(crate) unsafe fn goods_get_via_raw(
-    flows: *mut crate::cargo_flow::FlowStatMap,
-    source: u16,
-    excluded: u16,
-    excluded2: u16,
-    random_range: impl FnMut(u32) -> u32,
-) -> u16 {
-    unsafe {
-        goods_get_via(
-            flows,
-            StationID(source),
-            StationID(excluded),
-            StationID(excluded2),
-            random_range,
-        )
-    }
-    .0
-}
-
 /// `Station::TileBelongsToRailStation` and its `Waypoint` override: whether
 /// `tile` is a rail station (or rail waypoint) tile of station `index`.
 pub(crate) fn tile_belongs_to_rail_station(

@@ -19,6 +19,9 @@ pub struct Source {
     pub kind: u8,
 }
 impl Source {
+    /// Invalid/unknown index of source.
+    #[allow(non_upper_case_globals, reason = "the original's `Source::Invalid`")]
+    pub const Invalid: u16 = 0xFFFF;
     /// `SourceType::Industry`.
     pub const INDUSTRY: u8 = SourceType::Industry.0;
     /// `SourceType::Town`.
@@ -41,10 +44,14 @@ impl Source {
             kind: Self::INDUSTRY,
         }
     }
+    /// `Source::MakeInvalid`.
+    pub const fn make_invalid(&mut self) {
+        self.id = Self::Invalid;
+    }
     /// `Source::IsValid`.
     #[must_use]
     pub const fn is_valid(self) -> bool {
-        self.id != u16::MAX
+        self.id != Self::Invalid
     }
     /// `Source::GetNewsReference`: get the `NewsReference` for a subsidy Source.
     #[must_use]

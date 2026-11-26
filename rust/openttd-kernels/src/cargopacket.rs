@@ -43,7 +43,7 @@ impl MoveToAction {
 }
 
 /// The existing cargo packet record, with vocabulary from `cargopacket.h`.
-pub(crate) use crate::cargo_storage::Packet as CargoPacket;
+pub(crate) use crate::cargo_storage::CargoPacket;
 impl CargoPacket {
     /// Maximum number of items in one cargo packet.
     pub const MAX_COUNT: u16 = u16::MAX;

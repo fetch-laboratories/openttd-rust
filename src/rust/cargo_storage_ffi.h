@@ -27,46 +27,39 @@ struct OpenTTDCargoListFields {
 	uint32_t count, reserved_count, action_counts[4];
 };
 /* Handles are opaque owners; C++ pool shells keep IDs and allocation order, and list nodes hold
- * pool-shell handles. Payment callbacks may reenter packet and list getters; raw owner accesses end
- * before them, and metadata writes keep their source order. Save/load writes packet fields in place;
+ * pool-shell handles. Payments run in Rust and may reenter packet and list getters; raw owner accesses
+ * end before them, and metadata writes keep their source order. Save/load writes packet fields in place;
  * list import never dereferences unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call.
  * Handles are live and serially accessed, create/destroy match once, and callbacks retain no arguments;
- * next-hop storage stays live and stable for the call, with snapshot output confined to local exports. */
+ * snapshot output is confined to local exports. */
+struct CargoPacket;
+struct GoodsEntry;
+struct OpenTTDCargoDelivery;
+struct OpenTTDCargoMonitorServices;
+struct OpenTTDCargoPayment;
+struct OpenTTDCargoServices;
 struct OpenTTDSharedServices;
+struct CargoPayment;
 struct OpenTTDCargoStorageServices {
 	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	void *(*create)(const OpenTTDCargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(create);
-	OpenTTDCargoPacket *(*packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
-	void (*destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
-	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pay);
-	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(origin);
-	OpenTTDCargoFlowMap *(*flow_map)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);
+	OpenTTDCargoDelivery *(*cargo_delivery_state)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_delivery_state);
+	CargoPacket *(*create)(const OpenTTDCargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(create);
+	void (*destroy)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
+	OpenTTDCargoFlowMap *(*flow_map)(const GoodsEntry *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);
+	const OpenTTDCargoMonitorServices *monitors;
+	OpenTTDCargoPacket *(*packet)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
+	CargoPacket *(*packet_next)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
+	const OpenTTDCargoServices *payment;
+	OpenTTDCargoPayment *(*payment_state)(CargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(payment_state);
 	const OpenTTDSharedServices *shared;
-	void *(*packet_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
 };
-struct OpenTTDVehicle;
-/** A shell's cargo list and cargo type; capacity and links are read from its record. */
-struct OpenTTDCargoCapacityVehicle {
-	OpenTTDCargoList *list;
-	uint8_t cargo;
-};
-struct OpenTTDCargoCapacityServices {
-	void (*read)(void *, OpenTTDCargoCapacityVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(read);
-	const OpenTTDCargoStorageServices *cargo;
-};
-const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
-/* capacity mode 0 spreads/shrinks, mode 1 transfers. Return 1 requires the native
- * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {
 void openttd_rust_cargo_invalidate(const OpenTTDCargoStorageServices *, uint16_t, uint8_t);
 /* Null initializes original packet defaults; non-null is Split's copy constructor and asserts count != 0. */
 OpenTTDCargoPacket *openttd_rust_cargo_packet_new(const OpenTTDCargoPacket *);
 void openttd_rust_cargo_packet_destroy(OpenTTDCargoPacket *);
-void openttd_rust_cargo_packet_tile(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t, uint8_t);
-void openttd_rust_cargo_packet_feeder(OpenTTDCargoPacket *, int64_t);
-int64_t openttd_rust_cargo_packet_share(const OpenTTDCargoPacket *, uint32_t);
+void openttd_rust_cargo_packet_update_loading_tile(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t);
 uint32_t openttd_rust_cargo_packet_distance(const OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t);
-void openttd_rust_cargo_packet_merge(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, void *);
 OpenTTDCargoList *openttd_rust_cargo_list_new(uint8_t);
 void openttd_rust_cargo_list_destroy(OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 void openttd_rust_cargo_list_clear(OpenTTDCargoList *);
@@ -80,17 +73,17 @@ uint32_t openttd_rust_cargo_list_periods(const OpenTTDCargoList *);
 int64_t openttd_rust_cargo_list_feeder(const OpenTTDCargoList *);
 uint32_t openttd_rust_cargo_list_action_count(const OpenTTDCargoList *, uint8_t);
 uint32_t openttd_rust_cargo_list_stored(const OpenTTDCargoList *);
-uint32_t openttd_rust_cargo_list_unload(const OpenTTDCargoList *);
-uint32_t openttd_rust_cargo_list_remaining(const OpenTTDCargoList *);
 size_t openttd_rust_cargo_list_key_count(const OpenTTDCargoList *);
-void openttd_rust_cargo_list_snapshot(const OpenTTDCargoList *, void *, void (*)(void *, uint16_t, void *) noexcept);
-void openttd_rust_cargo_list_insert(OpenTTDCargoList *, uint16_t, void *);
+void openttd_rust_cargo_list_snapshot(const OpenTTDCargoList *, void *, void (*)(void *, uint16_t, CargoPacket *) noexcept);
+void openttd_rust_cargo_list_insert(OpenTTDCargoList *, uint16_t, CargoPacket *);
 void openttd_rust_cargo_list_rebuild(OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
-void openttd_rust_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, void *, uint16_t);
 uint16_t openttd_rust_cargo_list_first(const OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
-uint8_t openttd_rust_cargo_list_has(const OpenTTDCargoList *, const uint16_t *, size_t);
 void openttd_rust_cargo_list_keep(OpenTTDCargoList *);
-uint8_t openttd_rust_cargo_list_stage(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint16_t, const uint16_t *, size_t, uint8_t, const void *, uint8_t, void *, uint32_t);
-uint32_t openttd_rust_cargo_list_move(OpenTTDCargoList *, OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint32_t, uint16_t, uint16_t, const uint16_t *, size_t, const void *, uint8_t, void *, uint32_t);
+void openttd_rust_vehicle_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, CargoPacket *, uint8_t);
+void openttd_rust_station_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, CargoPacket *, uint16_t);
+uint32_t openttd_rust_vehicle_cargo_list_truncate(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint32_t);
+uint32_t openttd_rust_station_cargo_list_truncate(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint32_t);
+/* For the orders console only: StationCargoList::Reserve over `length` station IDs. */
+uint32_t openttd_rust_station_cargo_list_reserve(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint32_t, OpenTTDCargoList *, const uint16_t *, size_t, uint32_t);
 }
 #endif /* RUST_CARGO_STORAGE_FFI_H */

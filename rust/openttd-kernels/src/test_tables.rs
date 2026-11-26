@@ -1542,14 +1542,16 @@ pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::S
 /// `crate::cargo_storage::Services` with every entry unreachable.
 pub(crate) const CARGO_STORAGE: crate::cargo_storage::Services = crate::cargo_storage::Services {
     can_allocate: unreachable0,
+    cargo_delivery_state: unreachable0,
     create: unreachable1,
-    packet: unreachable1,
     destroy: unreachable1,
-    pay: unreachable6,
-    origin: unreachable4,
     flow_map: unreachable1,
-    shared: ptr::null(),
+    monitors: ptr::null(),
+    packet: unreachable1,
     packet_next: unreachable1,
+    payment: ptr::null(),
+    payment_state: unreachable1,
+    shared: ptr::null(),
 };
 
 /// `crate::signs_cmd::Services` with every entry unreachable.
@@ -2036,8 +2038,6 @@ pub(crate) const STATION_WORLD: crate::station_service::World = crate::station_s
     station_list_invalidation: unreachable2,
     mark_tiles: unreachable2,
     cargo_registry: ptr::null(),
-    with_truncation: unreachable5,
-    truncate_next: unreachable1,
     shared: ptr::null(),
 };
 
@@ -2065,14 +2065,6 @@ pub(crate) const STATION_LOADING: crate::station_service::Loading =
         indicator: unreachable1,
         show_indicator: unreachable3,
         set_current_company: unreachable1,
-        with_next_stations: unreachable3,
-        stage: unreachable5,
-        return_cargo: unreachable3,
-        unload_cargo: unreachable4,
-        load_cargo: unreachable4,
-        reserve_cargo: unreachable4,
-        has_cargo_for: unreachable3,
-        station_cargo_total: unreachable2,
         get_payment: unreachable1,
         create_payment: unreachable1,
         delete_payment: unreachable1,
@@ -2092,6 +2084,7 @@ pub(crate) const STATION_LINKS: crate::station_service::Links = crate::station_s
     stopped_in_depot: unreachable1,
     cargo_type: unreachable1,
     goods_entry: unreachable2,
+    get_or_create_data_cargo: unreachable2,
     station_resolver: ptr::null(),
     vehicle_resolver: ptr::null(),
 };
@@ -2176,7 +2169,6 @@ pub(crate) const VISITS: crate::vehicle::visits::Services = crate::vehicle::visi
     set_trip_occupancy: unreachable2,
     shared: &SHARED,
     station: &STATION_WORLD,
-    station_cargo: unreachable2,
 };
 
 /// `crate::engine::Services` with every entry unreachable.

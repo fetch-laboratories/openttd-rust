@@ -928,10 +928,12 @@ impl<'a> World<'a> {
                 let owner = self.owner(tile);
                 if flags & DoCommandFlag::EXECUTE != 0 {
                     (self.s.set_hq)(owner, INVALID_TILE);
-                    crate::cargo_storage::openttd_rust_cargo_invalidate(
-                        self.s.cargo,
-                        u16::from(owner),
-                        SOURCE_HEADQUARTERS,
+                    crate::cargo_storage::CargoPacket::invalidate_all_from_source(
+                        &*self.s.cargo,
+                        crate::source_type::Source {
+                            id: u16::from(owner),
+                            kind: SOURCE_HEADQUARTERS,
+                        },
                     );
                 }
                 out.set(
@@ -1574,9 +1576,9 @@ impl World<'_> {
             let mut deliver = |cargo: u8, amount: u32| {
                 let c = catchment.get_or_init(|| crate::station::Ctx::from_shared(self.shared));
                 let list = std::ptr::from_ref(stations.get_stations(c));
-                let source = crate::cargo_storage::Source {
+                let source = crate::source_type::Source {
                     id: u16::from(self.owner(tile)),
-                    source_type: crate::source_type::Source::HEADQUARTERS,
+                    kind: crate::source_type::Source::HEADQUARTERS,
                 };
                 // The call-local finder's set outlives the delivery and no
                 // service can reach it.

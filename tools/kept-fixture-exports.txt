@@ -3,6 +3,11 @@
 # Each leaves with its fixture: export | fixture | issue that retires the fixture.
 openttd_rust_cargo_build_inverse | tools/simulation/cargo-registry-console.inc | #634
 openttd_rust_cargo_finalise | tools/simulation/cargo-registry-console.inc | #634
+openttd_rust_cargo_list_action_count | tools/simulation/orders-console.cpp | #906
+openttd_rust_cargo_packet_distance | tools/simulation/subsidies-console.inc | #635
+openttd_rust_cargo_payment_final | tools/simulation/cargo-registry-console.inc | #634
+openttd_rust_cargo_payment_final | tools/simulation/cargomonitor-console.inc | #573
+openttd_rust_cargo_payment_final | tools/simulation/subsidies-console.inc | #635
 openttd_rust_effect_run | src/tests/effect_protocol.hpp | #656
 openttd_rust_generic_reset | tools/simulation/landscape-console.hpp | #565
 openttd_rust_leave_unbunching | tools/simulation/orders-console.cpp | #906
@@ -10,6 +15,7 @@ openttd_rust_road_economy_day | tools/migration/windows-abi/road.inc | #736
 openttd_rust_road_yapf_choose | src/tests/road_yapf.cpp | #725
 openttd_rust_road_yapf_depot | src/tests/road_yapf.cpp | #725
 openttd_rust_ship_path_clear | src/tests/ship_yapf_protocol.hpp | #725
+openttd_rust_station_cargo_list_reserve | tools/simulation/orders-console.cpp | #906
 openttd_rust_train_reservation_check_next | src/tests/train.cpp | #725
 openttd_rust_visual_show | tools/simulation/fleet-console.cpp | #656
 openttd_rust_visual_update | tools/simulation/fleet-console.cpp | #656

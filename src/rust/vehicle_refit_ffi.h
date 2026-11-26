@@ -73,7 +73,6 @@ struct OpenTTDVehicleConstructServices {
 	void (*service_flags)(void *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(service_flags);
 };
 struct OpenTTDRailConstructionServices {
-	const OpenTTDCargoCapacityServices *cargo_capacity;
 	Train *(*train_if_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_if_valid);
 	void *(*new_wagon)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_wagon);
 	void *(*new_engine)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);

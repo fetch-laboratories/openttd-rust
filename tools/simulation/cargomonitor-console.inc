@@ -43,7 +43,12 @@ static void MonitorDeliver(const MonitorSite &site, CargoType cargo, Source src,
 	if (!CargoPacket::CanAllocateItem() || !CargoPayment::CanAllocateItem()) FixtureAbort(__LINE__);
 	CargoPacket *cp = new CargoPacket(site.st->index, UINT16_MAX, src); cp->UpdateLoadingTile(site.st->xy);
 	CargoPayment *payment = new CargoPayment(site.front);
+#ifdef WITH_RUST
+	/* CargoPayment::PayFinalDelivery, whose body is Rust's. */
+	for (uint n = 0; n < repeat; ++n) openttd_rust_cargo_payment_final(CargoStorageServices(), payment, cargo, cp, count, site.st->xy.base());
+#else
 	for (uint n = 0; n < repeat; ++n) payment->PayFinalDelivery(cargo, cp, count, site.st->xy);
+#endif
 	payment->route_profit = payment->visual_profit = payment->visual_transfer = 0; delete payment; delete cp;
 }
 static bool MonitorScenario(std::span<std::string_view> args)

@@ -106,7 +106,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.road_badge = [](RoadType rt) noexcept { return RustSpecBadgeView(GetRoadTypeInfo(rt)); },
 		.aircraft_leaves = []() noexcept { return &GetRustAircraftLeaves(); },
 		.ground = []() noexcept { return &GetRustGroundPhysicsServices(); },
-		.cargo_services = []() noexcept { return GetRustCargoCapacityServices().cargo; },
+		.cargo_services = []() noexcept { return CargoStorageServices(); },
 	};
 	return services;
 }

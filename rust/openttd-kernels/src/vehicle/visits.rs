@@ -80,8 +80,6 @@ pub struct Services {
     pub set_trip_occupancy: extern "C" fn(VehicleRef, i8),
     pub shared: &'static SharedServices,
     pub station: &'static World,
-    /// `&st->goods[cargo].GetOrCreateData().cargo`.
-    pub station_cargo: extern "C" fn(*mut Station, u8) -> *mut crate::cargo_storage::List,
 }
 impl Services {
     pub(crate) fn vehicles(&self) -> &VehicleServices {
@@ -220,21 +218,11 @@ pub(crate) fn increase_stats(s: &Services, a: IncreaseStats) {
     }
 }
 
-/// `v->cargo`: the vehicle's cargo list, through the resolver's scalar binding.
-#[allow(unsafe_code)]
-fn cargo_list(
-    v: VehicleRef,
-    r: &crate::newgrf_vehicle::Services,
-) -> *mut crate::cargo_storage::List {
-    // SAFETY: The resolver slot reads the live record's shell.
-    unsafe { (r.cargo_owner)(v.0.as_ptr()) }.cast_mut()
-}
-
 /// `v->cargo.StoredCount()`.
 #[allow(unsafe_code)]
 fn stored_count(v: VehicleRef, r: &crate::newgrf_vehicle::Services) -> u32 {
     // SAFETY: The live vehicle's list; the read ends at once.
-    unsafe { crate::cargo_storage::stored_count(cargo_list(v, r)) }
+    unsafe { (*v.cargo(r)).stored_count() }
 }
 
 /// `IncreaseStats(Station *, const Vehicle *, StationID, uint32_t)`: increase capacity for
@@ -814,26 +802,26 @@ pub(crate) fn cancel_reservation(
     let r = s.resolver();
     let mut part = Some(front);
     while let Some(v) = part {
-        let cargo = cargo_list(v, r);
+        let cargo = v.cargo(r);
         // SAFETY: The live vehicle's list; each call ends before the next.
-        if unsafe { crate::cargo_storage::action_count(cargo, MoveToAction::MTA_LOAD) } > 0 {
+        if unsafe { (*cargo).action_count(MoveToAction::MTA_LOAD) } > 0 {
             witness::hit(witness::VISITS_RESERVATION);
             debug!(misc, 1, "cancelling cargo reservation");
-            let dest = (s.station_cargo)(st, v.cargo_type(r).0);
+            let dest = (s.links.get_or_create_data_cargo)(st, v.cargo_type(r).0);
             // SAFETY: The vehicle's and the station's live lists and the static cargo table.
             unsafe {
-                crate::cargo_storage::vehicle_return(
+                crate::cargo_storage::VehicleCargoList::return_(
                     cargo,
-                    dest,
-                    *s.refit.cargo,
+                    s.refit.cargo,
                     u32::MAX,
+                    dest,
                     next,
                     v.tile(),
                 );
             }
         }
         // SAFETY: As above.
-        unsafe { crate::cargo_storage::keep_all(cargo) };
+        unsafe { (*cargo).keep_all() };
         part = v.next();
     }
 }
@@ -963,7 +951,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
         );
     }
 
-    prepare_unload(v, s.station, s.loading);
+    prepare_unload(v, s.station, s.loading, s.links);
 
     let index = WindowNumber::from(v.index(s.resolver()));
     set_window_dirty(
@@ -1434,7 +1422,6 @@ crate::abi::layouts! {
         set_trip_occupancy,
         shared,
         station,
-        station_cargo,
     };
 }
 

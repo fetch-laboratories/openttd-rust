@@ -762,9 +762,9 @@ impl<'a> House<'a> {
             .get_or_init(|| crate::station::Ctx::from_shared(self.s));
         let mut finder = stations.finder.borrow_mut();
         let list = std::ptr::from_ref(finder.get_stations(c));
-        let source = crate::cargo_storage::Source {
+        let source = crate::source_type::Source {
             id: town.id.0,
-            source_type: crate::source_type::Source::TOWN,
+            kind: crate::source_type::Source::TOWN,
         };
         // SAFETY: The call-local finder's set outlives the delivery and no
         // service can reach it.

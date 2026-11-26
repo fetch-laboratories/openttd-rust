@@ -31,16 +31,6 @@
     "rust/openttd-kernels/src/cargo_payment.rs | fn deliver_goods | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       10
     ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn action::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_list_stage | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      12,
-      12
-    ],
     "rust/openttd-kernels/src/cargomonitor.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
