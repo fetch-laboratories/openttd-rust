@@ -215,12 +215,13 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     (s.check)(u16::from(kind) < crate::airport::NUM_AIRPORTS);
     let mut spec = (s.base_spec)(u16::from(kind));
     if kind >= NEW_AIRPORT_OFFSET && !(s.shared().specs().airport().substitute().enabled)(spec) {
-        if unsafe { (*crate::override_manager::airport_mngr()).get_grfid(u16::from(kind)) } == 0 {
+        let airport_mngr = crate::override_manager::airport_mngr();
+        // SAFETY: `_airport_mngr` is the live registered manager.
+        if unsafe { (*airport_mngr).get_grfid(u16::from(kind)) } == 0 {
             return spec;
         }
-        let substitute = unsafe {
-            (*crate::override_manager::airport_mngr()).get_substitute_id(u16::from(kind))
-        } as u8;
+        // SAFETY: As above.
+        let substitute = unsafe { (*airport_mngr).get_substitute_id(u16::from(kind)) } as u8;
         if u16::from(substitute) == AT_INVALID {
             return spec;
         }
@@ -678,21 +679,20 @@ impl ClassSpec for crate::station_cmd::AirportSpec {
         &AIRPORT_SERVICES
     }
     /// `AirportClass::IsUIAvailable`.
-    fn is_ui_available(_class: &AirportClass, _index: u32) -> bool {
+    fn is_ui_available(_class: crate::newgrf_class::ClassRef<Self>, _index: u32) -> bool {
         true
     }
-    /// `AirportClass::InsertDefaults`.
+    /// `AirportClass::InsertDefaults`: reset the airport classes to their default state, the
+    /// four default classes with their names, for the standard airports.
     fn insert_defaults() {
         let max = AirportClassID::APC_MAX;
-        unsafe {
-            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"SMAL"), max))).name =
-                STR_AIRPORT_CLASS_SMALL;
-            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"LARG"), max))).name =
-                STR_AIRPORT_CLASS_LARGE;
-            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HUB_"), max))).name =
-                STR_AIRPORT_CLASS_HUB;
-            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))).name =
-                STR_AIRPORT_CLASS_HELIPORTS;
-        }
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"SMAL"), max))
+            .set_name(STR_AIRPORT_CLASS_SMALL);
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"LARG"), max))
+            .set_name(STR_AIRPORT_CLASS_LARGE);
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HUB_"), max))
+            .set_name(STR_AIRPORT_CLASS_HUB);
+        AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))
+            .set_name(STR_AIRPORT_CLASS_HELIPORTS);
     }
 }
