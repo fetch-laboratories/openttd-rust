@@ -237,8 +237,7 @@ pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
         if key.grfid == 0 {
             continue;
         }
-        let spec =
-            unsafe { crate::newgrf_station::StationClass::get_by_grf(key.grfid, key.local_id) };
+        let spec = crate::newgrf_station::StationClass::get_by_grf(key.grfid, key.local_id);
         unsafe {
             (s.rebind)(st, i, spec);
         }
@@ -249,8 +248,7 @@ pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
         if key.grfid == 0 {
             continue;
         }
-        let spec =
-            unsafe { crate::newgrf_roadstop::RoadStopClass::get_by_grf(key.grfid, key.local_id) };
+        let spec = crate::newgrf_roadstop::RoadStopClass::get_by_grf(key.grfid, key.local_id);
         unsafe {
             (road.rebind)(st, i, spec);
         }
