@@ -50,6 +50,7 @@ PULL = {
     "mergeable": True,
     "merge_commit_sha": MERGE,
     "body": "Agent: /implementation | Model: m | Reasoning effort: high",
+    "created_at": "2026-11-11T00:00:00Z",
 }
 
 
@@ -2792,7 +2793,7 @@ class RequestTests(unittest.TestCase):
             profile="native",
             bootstrap=False,
             unstamped=None,
-            again=None,
+            diagnose=None,
             head=None,
             wait=False,
         )
@@ -2883,7 +2884,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=False,
                     unstamped=None,
-                    again=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -2946,7 +2947,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
-                    again=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3007,7 +3008,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
-                    again=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3040,7 +3041,7 @@ class RequestTests(unittest.TestCase):
                 profile="full",
                 bootstrap=False,
                 unstamped=None,
-                again=None,
+                diagnose=None,
                 head=None,
                 wait=False,
                 request_file=Path(directory) / "request.json",
@@ -3283,7 +3284,7 @@ class RequestPathTests(unittest.TestCase):
                 "profile": "native",
                 "bootstrap": False,
                 "unstamped": None,
-                "again": None,
+                "diagnose": None,
                 "head": None,
                 "wait": False,
                 "request_file": None,
@@ -4317,6 +4318,8 @@ class EnqueueWorld:
     )
     recorded: ci_log.Run | None = None
     recorded_jobs: list[dict[str, str]] = field(default_factory=list)
+    # The run `request --diagnose 3` names.
+    named: ci_log.Run | None = None
     retry: str | None = None
     entry: dict[str, object] | None = None
     armed: dict[str, object] | None = None
@@ -4387,6 +4390,7 @@ class EnqueueTests(unittest.TestCase):
             f"compare/rust-migration...{HEAD}": compare,
             f"compare/{HEAD}...rust-migration": {"files": world.base_files},
             "actions/runs/9": world.recorded,
+            "actions/runs/3": world.named,
         }
         listings: dict[str, object] = {
             "event=workflow_dispatch": [
@@ -4488,79 +4492,197 @@ class EnqueueTests(unittest.TestCase):
                     self.enqueue(**options)
                 self.assertEqual(self.calls, [])
 
+    # A merge-group run as GitHub returns it by ID: the failed Full a request names.
+    FAILED_FULL = dict(
+        EJECTED,
+        id=3,
+        event="merge_group",
+        path=".github/workflows/ci-request.yml",
+        display_title="CI full queue refs/heads/gh-readonly-queue/x",
+    )
+
     def first_native(
-        self, options: Mapping[str, object], again: str | None = None
+        self, options: Mapping[str, object], diagnose: str | None = None
     ) -> str:
         """Run request's one-native-run check on an EnqueueWorld of `options`;
         return what it logged."""
         world = EnqueueWorld(**cast(dict[str, Any], dict(options)))
 
         def check() -> str:
-            pull = dict(PULL, created_at="2026-11-11T00:00:00Z")
-            ci.require_first_native("example/fork", 170, pull, HEAD, again)
+            ci.require_first_native(
+                "example/fork", 170, "2026-11-11T00:00:00Z", HEAD, diagnose
+            )
             return self.overrides.read_text() if self.overrides.exists() else ""
 
         return self.within(world, check)
 
-    def test_a_second_native_run_is_refused_while_the_newest_is_green(self) -> None:
+    def test_a_second_native_run_needs_the_failed_full_it_diagnoses(self) -> None:
         """The rule of workflow.md's checks, which only the doc held (#896)."""
         green = self.REQUESTED
         earlier = dict(green, id=1, display_title=f"CI native PR 170 x-{BASE}")
         later = dict(green, id=7, created_at="2026-11-12T05:00:00Z")
         rust = dict(later, display_title=f"CI rust PR 170 r-{HEAD}")
-        commits = [BASE, HEAD]
-        full = dict(green, display_title=f"CI full PR 170 f-{HEAD}")
+        platform = dict(later, display_title=f"CI platform PR 170 p-{HEAD}")
         workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
         for label, options in (
             ("green at the head", {}),
-            ("green on an earlier commit", {"requested": earlier, "commits": commits}),
-            ("a green Full", {"requested": full}),
-            ("a later green rust run", {"dispatched": [green, rust]}),
-            # A removal before the green run is what that run diagnosed.
             (
-                "removed before the green run",
-                {"queue": [dict(self.EJECTED, created_at="2026-11-12T01:00:00Z")]},
+                "green on an earlier commit",
+                {"requested": earlier, "commits": [BASE, HEAD]},
             ),
-            ("a merged group", {"queue": [dict(self.EJECTED, conclusion="success")]}),
+            ("a later green rust run", {"dispatched": [green, rust]}),
+            # A later run of any profile, red or still going, reopens nothing.
+            (
+                "a red native since",
+                {"dispatched": [green, dict(later, conclusion="failure")]},
+            ),
+            (
+                "a red platform run since",
+                {"dispatched": [green, dict(platform, conclusion="failure")]},
+            ),
+            (
+                "a platform run still going",
+                {
+                    "dispatched": [
+                        green,
+                        dict(platform, status="in_progress", conclusion=None),
+                    ]
+                },
+            ),
+            # A removal the request does not name waives nothing.
+            ("removed by the queue since", {"queue": [self.EJECTED]}),
             # A workflow change's passing run is already at its head.
             ("workflow files, green at the head", {"files": workflow}),
         ):
             with self.subTest(label):
                 with self.assertRaisesRegex(
-                    ValueError, r"one `native` run.*runs/2.*ci\.py enqueue 170"
+                    ValueError,
+                    r"one `native` run.*runs/2.*enqueue 170.*--diagnose RUN",
                 ):
                     self.first_native(options)
 
-    def test_native_runs_again_for_a_red_run_a_removal_or_a_reason(self) -> None:
+    def test_native_runs_again_only_where_the_rule_allows(self) -> None:
         green = self.REQUESTED
-        red = dict(green, id=7, conclusion="failure", created_at="2026-11-12T05:00:00Z")
-        running = dict(red, status="in_progress", conclusion=None)
+        red = dict(green, conclusion="failure")
         rust = dict(green, display_title=f"CI rust PR 170 r-{HEAD}")
         earlier = dict(green, display_title=f"CI native PR 170 x-{BASE}")
+        # A checker-only Full runs Quick alone, so no green Full is a native run.
+        full = dict(earlier, display_title=f"CI full PR 170 f-{BASE}")
         workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
         for label, options in (
             ("no run yet", {"requested": None}),
+            ("only a red native", {"requested": red}),
             ("only a green rust run", {"requested": rust}),
-            ("a red run since", {"dispatched": [green, red]}),
-            ("a run still going", {"dispatched": [green, running]}),
-            ("removed by the queue since", {"queue": [self.EJECTED]}),
+            (
+                "a green Full on an earlier commit",
+                {"requested": full, "commits": [BASE, HEAD]},
+            ),
             # enqueue needs a workflow change's passing run at its head.
             (
                 "workflow files, green on an earlier commit",
-                {
-                    "requested": earlier,
-                    "commits": [BASE, HEAD],
-                    "files": workflow,
-                },
+                {"requested": earlier, "commits": [BASE, HEAD], "files": workflow},
             ),
         ):
             with self.subTest(label):
                 self.assertEqual(self.first_native(options), "")
-        (entry,) = self.first_native({}, again="flaky shard").splitlines()
+        (entry,) = self.first_native(
+            {"named": self.FAILED_FULL}, diagnose="3"
+        ).splitlines()
         self.assertEqual(
             {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
-            {"kind": "again", "reason": "flaky shard"},
+            {"kind": "diagnose", "reason": self.EJECTED["html_url"]},
         )
+        url = "https://github.com/example/fork/actions/runs/3"
+        self.assertIn(url, self.first_native({"named": self.FAILED_FULL}, url))
+
+    def test_diagnose_names_a_failed_full_of_this_pr(self) -> None:
+        failed = self.FAILED_FULL
+        requested = dict(
+            failed,
+            event="workflow_dispatch",
+            head_branch="rust-migration",
+            display_title=f"CI full PR 170 f-{HEAD}",
+        )
+        for label, named in (
+            ("a requested Full", requested),
+            ("a bootstrap Full", dict(requested, event="pull_request")),
+            ("a cancelled group", dict(failed, conclusion="cancelled")),
+        ):
+            with self.subTest(label):
+                self.assertTrue(self.first_native({"named": named}, "3"))
+        other = "gh-readonly-queue/rust-migration/pr-171-" + BASE
+        for label, named, message in (
+            ("a green Full", dict(failed, conclusion="success"), "did not fail"),
+            (
+                "a Full still going",
+                dict(failed, status="in_progress", conclusion=None),
+                "did not fail",
+            ),
+            ("another PR's group", dict(failed, head_branch=other), "not a Full of"),
+            (
+                "another PR's request",
+                dict(requested, display_title=f"CI full PR 171 f-{HEAD}"),
+                "not a Full of",
+            ),
+            (
+                "a failed native",
+                dict(requested, display_title=f"CI native PR 170 n-{HEAD}"),
+                "not a Full of",
+            ),
+            (
+                "another workflow",
+                dict(failed, path=".github/workflows/ci-build.yml"),
+                "not a Full of",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.first_native({"named": named}, "3")
+        with self.assertRaisesRegex(ValueError, "run ID or URL"):
+            self.first_native({}, "the queue's run")
+
+    def request_native(
+        self, diagnose: str | None, **options: object
+    ) -> tuple[list[str], list[tuple[str, ...]]]:
+        """Run `request --profile native` itself on an EnqueueWorld of `options`;
+        return the request records it wrote and its gh writes."""
+        world = EnqueueWorld(**cast(dict[str, Any], options))
+        args = argparse.Namespace(
+            repo="example/fork",
+            pr=170,
+            profile="native",
+            bootstrap=False,
+            unstamped=None,
+            diagnose=diagnose,
+            head=HEAD,
+            wait=False,
+            request_file=None,
+        )
+        records: list[str] = []
+
+        def request() -> str:
+            try:
+                ci.request(args)
+            finally:
+                records.extend(path.name for path in ci.REQUESTS.glob("*.json"))
+            return ""
+
+        self.within(world, request)
+        return records, self.calls
+
+    def test_request_refuses_before_any_record_or_dispatch(self) -> None:
+        """The check is the request command's own, not only a function beside it."""
+        with self.assertRaisesRegex(ValueError, "one `native` run"):
+            self.request_native(None)
+        self.assertEqual(self.calls, [])
+        # The refusal wrote no request record either.
+        records, calls = self.request_native(None, requested=None)
+        self.assertEqual(len(records), 1)
+        self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+        self.assertIn("profile=native", calls[0])
+        records, calls = self.request_native("3", named=self.FAILED_FULL)
+        self.assertEqual(len(records), 1)
+        self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
         entry = {"state": "AWAITING_CHECKS", "position": 2}

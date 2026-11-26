@@ -504,7 +504,9 @@ def requestable(repository: str, args: argparse.Namespace) -> tuple[dict, str] |
     head = expected_head(pull, expected)
     require_stamp(args.pr, head, args.unstamped)
     if args.profile == "native":
-        require_first_native(repository, args.pr, pull, head, args.again)
+        require_first_native(
+            repository, args.pr, pull["created_at"], head, args.diagnose
+        )
     if (
         args.profile == "full"
         and not args.bootstrap
@@ -1613,48 +1615,76 @@ def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
     return newest
 
 
-# The profiles whose green run is the PR's one `native` run: each runs every job
-# `native` runs.
-NATIVE_RUNS = ("native", "full", "full bootstrap")
+def failed_full(repository: str, pr: int, named: str) -> ci_log.Run:
+    """The failed Full of PR `pr` that `named`, a run ID or URL, names: a
+    merge-group, requested or bootstrap run of the request workflow that failed
+    or was cancelled."""
+    match = RUN_URL.fullmatch(named)
+    if not match and not named.isdigit():
+        raise ValueError(f"--diagnose takes a run ID or URL, not {named!r}")
+    run = cast(
+        ci_log.Run, api(repository, f"actions/runs/{match[2] if match else named}")
+    )
+    queued = (run.get("head_branch") or "").startswith(
+        f"gh-readonly-queue/{PROTECTED_REF}/pr-{pr}-"
+    )
+    title = (run.get("display_title") or "").split()
+    full = (
+        queued
+        if run.get("event") == "merge_group"
+        else title[1:4]
+        == [
+            "full",
+            "PR",
+            str(pr),
+        ]
+    )
+    if run.get("path") != f".github/workflows/{WORKFLOW}" or not full:
+        raise ValueError(f"{run['html_url']} is not a Full of PR #{pr}")
+    if run["conclusion"] not in REMOVED:
+        raise ValueError(
+            f"{run['html_url']} did not fail: {run['status']}/{run['conclusion']}"
+        )
+    return run
 
 
 def require_first_native(
-    repository: str, pr: int, pull: dict, head: str, again: str | None
+    repository: str, pr: int, opened: str, head: str, diagnose: str | None
 ) -> None:
-    """A PR has one `native` run (workflow.md, checks): refuse another while its
-    newest requested run is green and a `native` or Full is among its green runs.
+    """A PR has one `native` run (workflow.md, checks): once one has passed on
+    the PR's commits, another needs --diagnose RUN, naming the failed Full it
+    diagnoses.
 
     A paid run that repeats a green one was a quarter of each day's CI spend
-    before the rule (#896). Three cases still request: the queue removed the PR
-    after that green run, which is the failed Full to diagnose; the PR changes
-    workflow definitions, whose passing run must be at its head; and --again
-    REASON, logged, for a case this cannot see."""
-    runs = read_pr_runs(repository, pr, pull["created_at"], head).runs
+    before the rule (#896). A green Full does not count: a checker-only Full
+    runs Quick alone. One case runs again unnamed: a PR that changes workflow
+    definitions, whose passing run `enqueue` needs at its head."""
+    runs = read_pr_runs(repository, pr, opened, head).runs
     passed = [
         tested
         for tested in runs
-        if tested.profile in NATIVE_RUNS and tested.run["conclusion"] == "success"
+        if tested.profile == "native" and tested.run["conclusion"] == "success"
     ]
-    if not passed or runs[-1].run["conclusion"] != "success":
+    if not passed:
         return
     green = passed[-1]
-    if any(
-        run["conclusion"] in REMOVED and run["created_at"] > green.run["created_at"]
-        for run in queue_runs(repository, pr)
-    ):
-        return
     if green.commit != head and changes_definitions(repository, pr):
         return
-    if again:
-        log = preflight_stamp.log_override("again", f"PR #{pr}", head, again)
-        print(f"PR #{pr} runs `native` again past its green run; logged in {log}")
+    if diagnose:
+        failed = failed_full(repository, pr, diagnose)
+        log = preflight_stamp.log_override(
+            "diagnose", f"PR #{pr}", head, failed["html_url"]
+        )
+        print(
+            f"PR #{pr} runs `native` again to diagnose {failed['html_url']}; "
+            f"logged in {log}"
+        )
         return
     raise ValueError(
-        f"PR #{pr} has had its one `native` run: {green.profile} passed at "
-        f"{green.commit} ({green.run['html_url']}). A review fix or a base update "
-        f"queues on Quick validation: run ci.py enqueue {pr}, and the queue's Full "
-        "runs every job `native` runs. For a failed Full this command does not see, "
-        "pass --again REASON"
+        f"PR #{pr} has had its one `native` run: it passed at {green.commit} "
+        f"({green.run['html_url']}). A review fix or a base update queues on Quick "
+        f"validation: run ci.py enqueue {pr}, and the queue's Full runs every job "
+        "`native` runs. To diagnose a failed Full, name it: --diagnose RUN"
     )
 
 
@@ -2405,10 +2435,11 @@ def request_parser(commands: argparse._SubParsersAction) -> None:
         help="request a head without a preflight stamp, such as a seeded control; logged",
     )
     submit.add_argument(
-        "--again",
-        metavar="REASON",
-        help="request native for a PR whose newest requested run is green, to "
-        "diagnose a failed Full the command does not see; logged",
+        "--diagnose",
+        metavar="RUN_ID|RUN_URL",
+        help="request native for a PR that has had its one green native run, to "
+        "diagnose this failed Full of the PR (a merge-group, requested or "
+        "bootstrap run); logged",
     )
 
 
