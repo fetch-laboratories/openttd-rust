@@ -14,7 +14,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn add_to_shared | allow unsafe_code",
-    "source_contract": "`Vehicle::AddToShared` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::AddToShared` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -26,7 +26,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn base_station_owner | allow unsafe_code",
-    "source_contract": "`BaseStation::owner` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseStation::owner` (src/base_station_base.h)",
     "tool": "rust"
   },
   {
@@ -38,7 +38,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn begin_loading | allow clippy::too_many_lines",
-    "source_contract": "`Vehicle::BeginLoading` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::BeginLoading` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -50,7 +50,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn check_aircraft_order_distance | allow unsafe_code",
-    "source_contract": "`CheckAircraftOrderDistance` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CheckAircraftOrderDistance` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -62,7 +62,7 @@
     "retirement_condition": "Retires when the view lifetime is general enough for the method path.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn check_for_valid_orders | allow clippy::redundant_closure_for_method_calls",
-    "source_contract": "`CheckForValidOrders` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CheckForValidOrders` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -74,7 +74,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn check_orders | allow unsafe_code",
-    "source_contract": "`CheckOrders` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CheckOrders` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -86,7 +86,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn cmd_change_timetable | allow clippy::too_many_lines",
-    "source_contract": "`CmdChangeTimetable` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdChangeTimetable` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -98,7 +98,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn cmd_clone_order | allow clippy::too_many_lines",
-    "source_contract": "`CmdCloneOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdCloneOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -110,7 +110,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn cmd_clone_order | allow unsafe_code",
-    "source_contract": "`CmdCloneOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdCloneOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -122,7 +122,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn cmd_insert_order | allow clippy::too_many_lines",
-    "source_contract": "`CmdInsertOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdInsertOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -134,7 +134,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn cmd_insert_order | allow unsafe_code",
-    "source_contract": "`CmdInsertOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdInsertOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -146,7 +146,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn cmd_modify_order | allow clippy::too_many_lines",
-    "source_contract": "`CmdModifyOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdModifyOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -158,7 +158,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn command_do | allow unsafe_code",
-    "source_contract": "`Command<cmd>::Do(flags, args)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Command<cmd>::Do` (src/command_func.h)",
     "tool": "rust"
   },
   {
@@ -170,7 +170,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn consist | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Vehicle (BaseConsist)` (src/base_consist.h)",
     "tool": "rust"
   },
   {
@@ -182,7 +182,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn copy_consist_properties_from_backup | allow unsafe_code",
-    "source_contract": "`v->CopyConsistPropertiesFrom(ob)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseConsist::CopyConsistPropertiesFrom` (src/base_consist.cpp)",
     "tool": "rust"
   },
   {
@@ -194,7 +194,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn copy_consist_properties_to_backup | allow unsafe_code",
-    "source_contract": "`ob->CopyConsistPropertiesFrom(v)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseConsist::CopyConsistPropertiesFrom` (src/base_consist.cpp)",
     "tool": "rust"
   },
   {
@@ -206,7 +206,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn current_order | allow unsafe_code",
-    "source_contract": "`v->current_order` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::current_order` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -218,7 +218,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn get_vehicle_cannot_use_station_reason | allow unsafe_code",
-    "source_contract": "`GetVehicleCannotUseStationReason(v, Station::Get(st))` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`GetVehicleCannotUseStationReason(v, Station::Get(st))` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -230,7 +230,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn insert_order | allow unsafe_code",
-    "source_contract": "`InsertOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`InsertOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -242,7 +242,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn invalidate_vehicle_order | allow unsafe_code",
-    "source_contract": "`InvalidateVehicleOrder(v, data)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`InvalidateVehicleOrder(v, data)` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -254,7 +254,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn next_backup | allow unsafe_code",
-    "source_contract": "`OrderBackup::Iterate()` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::Iterate` (src/core/pool_type.hpp)",
     "tool": "rust"
   },
   {
@@ -266,7 +266,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn next_shared | allow unsafe_code",
-    "source_contract": "`Vehicle::NextShared` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::NextShared` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -278,7 +278,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_add_shared | allow unsafe_code",
-    "source_contract": "`Vehicle::AddToShared` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::AddToShared` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -290,7 +290,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_clear_user | allow unsafe_code",
-    "source_contract": "`OrderBackup::ResetOfUser` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::ResetOfUser` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -302,7 +302,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_create | allow unsafe_code",
-    "source_contract": "`OrderBackup::Backup` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::Backup` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -314,7 +314,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_group_clear | allow unsafe_code",
-    "source_contract": "`OrderBackup::ClearGroup` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::ClearGroup` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -326,7 +326,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_reset | allow unsafe_code",
-    "source_contract": "`OrderBackup::ResetUser` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::ResetUser` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -338,7 +338,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_restore | allow unsafe_code",
-    "source_contract": "`OrderBackup::Restore` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::Restore` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -350,7 +350,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_tile_clear | allow unsafe_code",
-    "source_contract": "`OrderBackup::Reset` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::Reset` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -362,7 +362,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_backup_vehicle_clear | allow unsafe_code",
-    "source_contract": "`OrderBackup::ClearVehicle` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::ClearVehicle` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -374,7 +374,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_capture_backup | allow unsafe_code",
-    "source_contract": "`OrderBackup(v, user)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup(v, user)` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -386,7 +386,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_clear_backup | allow unsafe_code",
-    "source_contract": "`CmdClearOrderBackup` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdClearOrderBackup` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -398,7 +398,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_clone | allow unsafe_code",
-    "source_contract": "`CmdCloneOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdCloneOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -410,7 +410,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_delete | allow unsafe_code",
-    "source_contract": "`CmdDeleteOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdDeleteOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -422,7 +422,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_insert | allow unsafe_code",
-    "source_contract": "`CmdInsertOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdInsertOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -434,7 +434,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_modify | allow unsafe_code",
-    "source_contract": "`CmdModifyOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdModifyOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -446,7 +446,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_move | allow unsafe_code",
-    "source_contract": "`CmdMoveOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdMoveOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -458,7 +458,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_refit | allow unsafe_code",
-    "source_contract": "`CmdOrderRefit` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdOrderRefit` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -470,7 +470,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_command_skip | allow unsafe_code",
-    "source_contract": "`CmdSkipToOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdSkipToOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -482,7 +482,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_consist_copy | allow unsafe_code",
-    "source_contract": "`BaseConsist::CopyConsistPropertiesFrom` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseConsist::CopyConsistPropertiesFrom` (src/base_consist.cpp)",
     "tool": "rust"
   },
   {
@@ -494,7 +494,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_consist_delete | allow unsafe_code",
-    "source_contract": "`BaseConsist` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseConsist` (src/base_consist.h)",
     "tool": "rust"
   },
   {
@@ -506,7 +506,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_consist_new | allow unsafe_code",
-    "source_contract": "`BaseConsist` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseConsist` (src/base_consist.h)",
     "tool": "rust"
   },
   {
@@ -518,7 +518,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_consist_reset | allow unsafe_code",
-    "source_contract": "`BaseConsist::ResetDepotUnbunching` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`BaseConsist::ResetDepotUnbunching` (src/base_consist.cpp)",
     "tool": "rust"
   },
   {
@@ -530,7 +530,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_delete_implicit | allow unsafe_code",
-    "source_contract": "`Vehicle::DeleteUnreachedImplicitOrders` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::DeleteUnreachedImplicitOrders` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -542,7 +542,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_delete_vehicle_orders | allow unsafe_code",
-    "source_contract": "`DeleteVehicleOrders` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`DeleteVehicleOrders` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -554,7 +554,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_increment_implicit | allow unsafe_code",
-    "source_contract": "`Vehicle::IncrementImplicitOrderIndex` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::IncrementImplicitOrderIndex` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -566,7 +566,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_increment_real | allow unsafe_code",
-    "source_contract": "`Vehicle::IncrementRealOrderIndex` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::IncrementRealOrderIndex` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -578,7 +578,19 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_insert_order | allow unsafe_code",
-    "source_contract": "`InsertOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`InsertOrder` (src/order_cmd.cpp)",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "orders::openttd_rust_leave_unbunching",
+    "reason": "Plan #1060 decision 1: the `#[unsafe(no_mangle)]` export the C++ facade calls with its native records, scoped to the one item.",
+    "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
+    "retiring_owner": "#734",
+    "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_leave_unbunching | allow unsafe_code",
+    "source_contract": "`Vehicle::LeaveUnbunchingDepot` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -590,7 +602,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_list_complete | allow unsafe_code",
-    "source_contract": "`OrderList::IsCompleteTimetable` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList::IsCompleteTimetable` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -602,7 +614,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_list_free | allow unsafe_code",
-    "source_contract": "`OrderList::FreeChain` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList::FreeChain` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -614,7 +626,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_list_init | allow unsafe_code",
-    "source_contract": "`OrderList::Initialize` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList::Initialize` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -626,7 +638,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_list_insert | allow unsafe_code",
-    "source_contract": "`OrderList::InsertOrderAt` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList::InsertOrderAt` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -638,7 +650,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_list_recalculate | allow unsafe_code",
-    "source_contract": "`OrderList::RecalculateTimetableDuration` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList::RecalculateTimetableDuration` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -650,7 +662,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_list_stopping | allow unsafe_code",
-    "source_contract": "`OrderList::GetNextStoppingStation` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList::GetNextStoppingStation` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -662,7 +674,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_assign | allow unsafe_code",
-    "source_contract": "`Order::AssignOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::AssignOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -674,7 +686,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_conditional | allow unsafe_code",
-    "source_contract": "`Order::MakeConditional` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeConditional` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -686,7 +698,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_convert | allow unsafe_code",
-    "source_contract": "`Order::MapOldOrder` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MapOldOrder` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -698,7 +710,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_depot | allow unsafe_code",
-    "source_contract": "`Order::MakeGoToDepot` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeGoToDepot` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -710,7 +722,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_distance | allow unsafe_code",
-    "source_contract": "`GetOrderDistance` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`GetOrderDistance` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -722,7 +734,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_dummy | allow unsafe_code",
-    "source_contract": "`Order::MakeDummy` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeDummy` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -734,7 +746,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_equals | allow unsafe_code",
-    "source_contract": "`Order::Equals` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::Equals` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -746,7 +758,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_free | allow unsafe_code",
-    "source_contract": "`Order::Free` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::Free` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -758,7 +770,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_implicit | allow unsafe_code",
-    "source_contract": "`Order::MakeImplicit` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeImplicit` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -770,7 +782,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_loading | allow unsafe_code",
-    "source_contract": "`Order::MakeLoading` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeLoading` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -782,7 +794,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_location | allow unsafe_code",
-    "source_contract": "`Order::GetLocation` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::GetLocation` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -794,7 +806,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_refit | allow unsafe_code",
-    "source_contract": "`Order::SetRefit` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::SetRefit` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -806,7 +818,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_station | allow unsafe_code",
-    "source_contract": "`Order::MakeGoToStation` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeGoToStation` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -818,7 +830,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_assign | allow unsafe_code",
-    "source_contract": "`std::vector::assign` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -830,7 +842,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_data | allow unsafe_code",
-    "source_contract": "`std::vector::data` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -842,7 +854,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_delete | allow unsafe_code",
-    "source_contract": "`std::vector<Order>` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -854,7 +866,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_erase | allow unsafe_code",
-    "source_contract": "`std::vector::erase` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -866,7 +878,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_insert | allow unsafe_code",
-    "source_contract": "`std::vector::emplace` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -878,7 +890,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_new | allow unsafe_code",
-    "source_contract": "`std::vector<Order>` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -890,7 +902,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_resize | allow unsafe_code",
-    "source_contract": "`std::vector::resize` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -902,7 +914,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_vector_size | allow unsafe_code",
-    "source_contract": "`std::vector::size` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -914,7 +926,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_waypoint | allow unsafe_code",
-    "source_contract": "`Order::MakeGoToWaypoint` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Order::MakeGoToWaypoint` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -926,7 +938,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_orderbackup_delete | allow unsafe_code",
-    "source_contract": "`OrderBackup` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -938,7 +950,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_orderbackup_new | allow unsafe_code",
-    "source_contract": "`OrderBackup` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -950,7 +962,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_orderlist_delete | allow unsafe_code",
-    "source_contract": "`OrderList` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -962,7 +974,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_orderlist_new | allow unsafe_code",
-    "source_contract": "`OrderList` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderList` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -974,7 +986,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_orders_start_date | allow unsafe_code",
-    "source_contract": "`GetDateFromStartTick` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`GetDateFromStartTick` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -986,7 +998,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_orders_start_tick | allow unsafe_code",
-    "source_contract": "`GetStartTickFromDate` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`GetStartTickFromDate` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -998,7 +1010,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_process_orders | allow unsafe_code",
-    "source_contract": "`ProcessOrders` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`ProcessOrders` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1010,7 +1022,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_remove_destination | allow unsafe_code",
-    "source_contract": "`RemoveOrderFromAllVehicles` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`RemoveOrderFromAllVehicles` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1022,7 +1034,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_timetable_autofill | allow unsafe_code",
-    "source_contract": "`CmdAutofillTimetable` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdAutofillTimetable` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1034,7 +1046,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_timetable_bulk | allow unsafe_code",
-    "source_contract": "`CmdBulkChangeTimetable` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdBulkChangeTimetable` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1046,7 +1058,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_timetable_change | allow unsafe_code",
-    "source_contract": "`CmdChangeTimetable` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdChangeTimetable` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1058,7 +1070,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_timetable_on_time | allow unsafe_code",
-    "source_contract": "`CmdSetVehicleOnTime` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdSetVehicleOnTime` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1070,7 +1082,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_timetable_start | allow unsafe_code",
-    "source_contract": "`CmdSetTimetableStart` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdSetTimetableStart` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1082,7 +1094,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_update_real | allow unsafe_code",
-    "source_contract": "`Vehicle::UpdateRealOrderIndex` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::UpdateRealOrderIndex` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1094,7 +1106,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_vehicle_orders_delete | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Vehicle::current_order, Vehicle::orders and the shared-list links` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1106,7 +1118,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_vehicle_orders_new | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Vehicle::current_order, Vehicle::orders and the shared-list links` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1118,7 +1130,7 @@
     "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_wait_unbunching | allow unsafe_code",
-    "source_contract": "`Vehicle::IsWaitingForUnbunching` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::IsWaitingForUnbunching` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -1130,7 +1142,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_arg | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Order` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1142,7 +1154,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_backup_backup | allow unsafe_code",
-    "source_contract": "`OrderBackup::Backup` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::Backup` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -1154,7 +1166,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_backup_construct | allow unsafe_code",
-    "source_contract": "`OrderBackup::OrderBackup(v, user)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::OrderBackup(v, user)` (src/order_backup.h)",
     "tool": "rust"
   },
   {
@@ -1166,7 +1178,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_backup_do_restore | allow unsafe_code",
-    "source_contract": "`OrderBackup::DoRestore` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::DoRestore` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -1178,7 +1190,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_backup_reset | allow unsafe_code",
-    "source_contract": "`OrderBackup::Reset` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::Reset` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -1190,7 +1202,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_backup_reset_user | allow unsafe_code",
-    "source_contract": "`OrderBackup::ResetUser` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`OrderBackup::ResetUser` (src/order_backup.cpp)",
     "tool": "rust"
   },
   {
@@ -1202,7 +1214,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn order_mut | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Order` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1214,7 +1226,19 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn previous_shared | allow unsafe_code",
-    "source_contract": "`Vehicle::PreviousShared` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::PreviousShared` (src/vehicle_base.h)",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "orders::previous_shared_of",
+    "reason": "Plan #1060 decisions 1 and 2: field-sized reads and writes of the live native order, list, consist and vehicle records, or calls of the C++ leaf slots, under the module's lifetime contract, scoped to the item instead of the module.",
+    "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
+    "retiring_owner": "#906",
+    "site": "rust/openttd-kernels/src/orders.rs | fn previous_shared_of | allow unsafe_code",
+    "source_contract": "`Vehicle::PreviousShared` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1226,7 +1250,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn record | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Vehicle` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1238,7 +1262,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn remove_from_shared | allow unsafe_code",
-    "source_contract": "`Vehicle::RemoveFromShared` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::RemoveFromShared` (src/vehicle.cpp)",
     "tool": "rust"
   },
   {
@@ -1250,7 +1274,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn reverse_train_direction | allow unsafe_code",
-    "source_contract": "`Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(DoCommandFlag::Execute, v->index, false)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`CmdReverseTrainDirection` (src/train_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1262,7 +1286,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn set_order_list | allow unsafe_code",
-    "source_contract": "`v->orders = list` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::orders` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1274,7 +1298,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn ship_station_tile | allow unsafe_code",
-    "source_contract": "`Station::Get(st)->ship_station.tile` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Station::ship_station` (src/station_base.h)",
     "tool": "rust"
   },
   {
@@ -1286,7 +1310,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn update_order_dest | allow clippy::too_many_lines",
-    "source_contract": "`UpdateOrderDest` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`UpdateOrderDest` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1298,7 +1322,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn update_order_dest | allow unsafe_code",
-    "source_contract": "`UpdateOrderDest` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`UpdateOrderDest` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1310,7 +1334,7 @@
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn update_vehicle_timetable | allow clippy::too_many_lines",
-    "source_contract": "`UpdateVehicleTimetable` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`UpdateVehicleTimetable` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1322,7 +1346,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn vehicle_orders | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Vehicle::current_order, Vehicle::orders and the shared-list links` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1334,7 +1358,7 @@
     "retirement_condition": "Retires if the original renames them.",
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/orders.rs | fn vehicle_timetable_sorter | allow clippy::many_single_char_names",
-    "source_contract": "`VehicleTimetableSorter` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`VehicleTimetableSorter` (src/timetable_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1346,7 +1370,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl ConsistRef | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`BaseConsist` (src/base_consist.h)",
     "tool": "rust"
   },
   {
@@ -1358,7 +1382,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Drop for Vector > fn drop | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1370,7 +1394,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Leaves > fn maintenance_groups | allow unsafe_code",
-    "source_contract": "`Vehicle::group_id` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`Vehicle::group_id` (src/vehicle_base.h)",
     "tool": "rust"
   },
   {
@@ -1382,7 +1406,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Leaves | allow unsafe_code",
-    "source_contract": "`Leaves` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`the native tables of OrderList, OrderBackup and Vehicle` (src/order_cmd.cpp)",
     "tool": "rust"
   },
   {
@@ -1394,7 +1418,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl OrderBackupRef | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`OrderBackup` (src/order_backup.h)",
     "tool": "rust"
   },
   {
@@ -1406,7 +1430,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl OrderListRef | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`OrderList` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1418,7 +1442,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl OrderRef | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Order` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1430,7 +1454,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl OrderView<'_> | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`Order` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1442,7 +1466,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn assign | allow unsafe_code",
-    "source_contract": "`assign(first, first + length)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1454,7 +1478,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn erase | allow unsafe_code",
-    "source_contract": "`std::vector::erase(begin + index)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1466,7 +1490,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn insert | allow unsafe_code",
-    "source_contract": "`std::vector::emplace(begin + index, order)` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1478,7 +1502,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn reserve | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1490,7 +1514,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn resize | allow unsafe_code",
-    "source_contract": "src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1502,7 +1526,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn rotate | allow unsafe_code",
-    "source_contract": "`std::rotate` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1514,7 +1538,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | impl Vector > fn take | allow unsafe_code",
-    "source_contract": "`std::move` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "source_contract": "`std::vector<Order> (OrderList::orders)` (src/order_base.h)",
     "tool": "rust"
   },
   {
@@ -1527,30 +1551,6 @@
     "retiring_owner": "#734",
     "site": "rust/openttd-kernels/src/vehicle/visits.rs | impl Refresher > fn refresh_stats | allow clippy::too_many_lines",
     "source_contract": "`LinkRefresher::RefreshStats` (src/linkgraph/refresh.cpp)",
-    "tool": "rust"
-  },
-  {
-    "after": 1,
-    "before": 0,
-    "kind": "suppression",
-    "operation": "orders::openttd_rust_leave_unbunching",
-    "reason": "Plan #1060 decision 1: the `#[unsafe(no_mangle)]` export the C++ facade calls with its native records, scoped to the one item.",
-    "retirement_condition": "Retires when the last C++ caller of the export moves to Rust.",
-    "retiring_owner": "#734",
-    "site": "rust/openttd-kernels/src/orders.rs | fn openttd_rust_leave_unbunching | allow unsafe_code",
-    "source_contract": "`Vehicle::LeaveUnbunchingDepot` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
-    "tool": "rust"
-  },
-  {
-    "after": 1,
-    "before": 0,
-    "kind": "suppression",
-    "operation": "orders::previous_shared_of",
-    "reason": "Plan #1060 decisions 1 and 2: field-sized reads and writes of the live native order, list, consist and vehicle records, or calls of the C++ leaf slots, under the module's lifetime contract, scoped to the item instead of the module.",
-    "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
-    "retiring_owner": "#906",
-    "site": "rust/openttd-kernels/src/orders.rs | fn previous_shared_of | allow unsafe_code",
-    "source_contract": "`v->PreviousShared()` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
     "tool": "rust"
   },
   {
