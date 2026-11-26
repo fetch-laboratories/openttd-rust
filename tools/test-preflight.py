@@ -1052,6 +1052,8 @@ class PushTests(unittest.TestCase):
                 "https://github.com/push/dest.git",
                 "git@github.com:push/dest.git",
                 "ssh://git@github.com/push/dest",
+                "ssh://git@ssh.github.com:443/push/dest.git",
+                "https://GitHub.com/push/dest.git",
             ):
                 with self.subTest(url=url):
                     _, _, reader, _ = self.hook_push(

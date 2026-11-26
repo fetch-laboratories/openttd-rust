@@ -1221,39 +1221,46 @@ query($owner: String!, $name: String!, $branch: String!) {
 
 
 def branch_queue(repository: str, branch: str) -> BranchQueue:
-    """The merge queue of a protected branch. GraphQL answers `mergeQueue: null`
-    for a branch with no queue; for the branch asked about that means the read
-    missed, so it raises QueueUnread rather than report an empty queue."""
+    """The merge queue of a protected branch on github.com. GraphQL answers
+    `mergeQueue: null` for a branch with no queue; for the branch asked about
+    that means the read missed, so it raises QueueUnread rather than report an
+    empty queue, as it does for any other null or missing field."""
     owner, name = repository.split("/", 1)
+    # github.com whatever GH_HOST says: the hook asks only for github.com pushes.
+    # -f keeps each variable a string; -F would send a name like 2048 as an Int.
     answer = json.loads(
         gh(
             "api",
             "graphql",
+            "--hostname",
+            "github.com",
             "-f",
             f"query={BASE_QUEUE}",
-            "-F",
+            "-f",
             f"owner={owner}",
-            "-F",
+            "-f",
             f"name={name}",
-            "-F",
+            "-f",
             f"branch={branch}",
         )
     )
-    queue = ((answer.get("data") or {}).get("repository") or {}).get("mergeQueue")
-    if queue is None:
-        raise QueueUnread(f"no merge queue reads for {repository} {branch}")
-    entries = queue["entries"]
-    return BranchQueue(
-        tuple(
-            QueueMember(
-                state=node["state"],
-                position=node["position"],
-                number=node["pullRequest"]["number"],
-            )
-            for node in entries["nodes"]
-        ),
-        int(entries["totalCount"]),
-    )
+    unread = QueueUnread(f"no merge queue reads for {repository} {branch}")
+    try:
+        entries = answer["data"]["repository"]["mergeQueue"]["entries"]
+        return BranchQueue(
+            tuple(
+                QueueMember(
+                    state=str(node["state"]),
+                    position=int(node["position"]),
+                    number=int(node["pullRequest"]["number"]),
+                )
+                for node in entries["nodes"]
+            ),
+            int(entries["totalCount"]),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        # A null anywhere on the path, a missing queue included, is a missed read.
+        raise unread from error
 
 
 def queue_runs(repository: str, pr: int) -> list[QueueRun]:

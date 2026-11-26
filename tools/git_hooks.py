@@ -121,10 +121,14 @@ def git_merge_base(base: str, sha: str) -> str:
     return preflight_stamp.git("merge-base", base, sha)
 
 
-# The forms of a GitHub push URL: https (with any credential), scp-like ssh, ssh://.
+# The forms of a GitHub push URL: https (with any credential), scp-like ssh, and
+# ssh://, including GitHub's SSH over port 443 at ssh.github.com. Host names
+# ignore case.
 GITHUB_URL = re.compile(
-    r"(?:https://(?:[^@/]+@)?github\.com/|ssh://(?:[^@/]+@)?github\.com(?::\d+)?/"
-    r"|[^@/:]+@github\.com:)([\w.-]+)/([\w.-]+?)(?:\.git)?/?"
+    r"(?:https://(?:[^@/]+@)?github\.com(?::443)?/"
+    r"|ssh://(?:[^@/]+@)?(?:ssh\.)?github\.com(?::\d+)?/"
+    r"|[^@/:]+@(?:ssh\.)?github\.com:)([\w.-]+)/([\w.-]+?)(?:\.git)?/?",
+    re.IGNORECASE,
 )
 
 
