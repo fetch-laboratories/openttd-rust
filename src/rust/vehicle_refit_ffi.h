@@ -15,6 +15,7 @@ struct OpenTTDEngineCapabilitiesServices;
 #include "road_ffi.h"
 #include "aircraft_ffi.h"
 struct OpenTTDEngine;
+enum RoadType : uint8_t;
 #include "ship_control_ffi.h"
 #include "cargo_storage_ffi.h"
 struct OpenTTDVehicleRefitCapacity { uint32_t total; uint16_t mail; uint32_t cargo[64]; };

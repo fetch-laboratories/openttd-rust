@@ -15,6 +15,7 @@
  * services, including nested commands, vehicle updates and town policy reentry.
  * No Rust panic or native exception unwinds over FFI; environmental failures abort.
  * Tile/pool shells, packed map, CommandCost and ordered affected list stay native. */
+struct OpenTTDVehicle;
 struct OpenTTDRoadConvertFrame;
 struct OpenTTDRoadCommandScratch;
 struct OpenTTDRoadCommandServices;
