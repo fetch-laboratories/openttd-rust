@@ -45,6 +45,7 @@ impl VehicleListIdentifier {
     #[must_use]
     pub fn to_window_number(&self) -> crate::window_type::WindowNumber {
         use crate::services_assert::assert_with;
+        const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
         let c: u8 = if self.company == crate::company_type::Owner::NONE {
             0xF
         } else {
@@ -54,7 +55,6 @@ impl VehicleListIdentifier {
         assert_with(|| self.vtype.0 < (1 << 2));
         assert_with(|| self.index < (1 << 20));
         assert_with(|| self.list_type < VehicleListType::VLT_END);
-        const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
 
         // `c << 28 | type << 23 | vtype << 26 | index` in `uint`, as the `int` window number.
         #[allow(

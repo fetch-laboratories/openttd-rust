@@ -874,7 +874,7 @@ impl OrderView<'_> {
     pub(crate) fn destination(self) -> DestinationID {
         DestinationID(read_field!(self.0, dest))
     }
-    /// The raw `dest`, for the NewGRF variable that returns it as an integer.
+    /// The raw `dest`, for the `NewGRF` variable that returns it as an integer.
     #[inline]
     pub(crate) fn destination_raw(self) -> u16 {
         self.destination().0
@@ -1126,8 +1126,8 @@ impl OrderView<'_> {
     }
     /// `Order::CanLeaveWithCargo`: a vehicle can leave the current station with cargo if:
     /// 1. it can load cargo here OR
-    /// 2a. it could leave the last station with cargo AND
-    /// 2b. it doesn't have to unload all cargo here.
+    /// 2. (a) it could leave the last station with cargo AND
+    ///    (b) it doesn't have to unload all cargo here.
     pub(crate) fn can_leave_with_cargo(self, has_cargo: bool) -> bool {
         self.load_type() != OrderLoadType::NoLoad
             || (has_cargo
@@ -1424,6 +1424,7 @@ impl OrderListRef {
         // `(cur + 1) % GetNumOrders()` in `int`, narrowed to `VehicleOrderID`.
         #[allow(
             clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
             reason = "the original's static_cast"
         )]
         VehicleOrderID(((i32::from(cur.0) + 1) % i32::from(self.get_num_orders().0)) as u8)
@@ -2455,6 +2456,7 @@ pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
 
 /// The order part of `Vehicle::BeginLoading`: prepare everything to begin the loading when
 /// arriving at a station.
+#[allow(clippy::too_many_lines, reason = "one function per original body")]
 pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
     if v.current_order().is_type(OrderType::OT_GOTO_STATION)
@@ -2567,14 +2569,13 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                             let next = get_order(v, c.cur_implicit_order_index(), s);
 
                             /* Wrapped around. */
-                            order = match next {
-                                Some(next) => next.view(),
-                                None => {
-                                    c.set_cur_implicit_order_index(VehicleOrderID(0));
-                                    let first = get_order(v, c.cur_implicit_order_index(), s);
-                                    assert_with(|| first.is_some());
-                                    first.unwrap().view()
-                                }
+                            order = if let Some(next) = next {
+                                next.view()
+                            } else {
+                                c.set_cur_implicit_order_index(VehicleOrderID(0));
+                                let first = get_order(v, c.cur_implicit_order_index(), s);
+                                assert_with(|| first.is_some());
+                                first.unwrap().view()
                             };
                         }
                     }
@@ -3007,13 +3008,12 @@ fn check_aircraft_order_distance(v_new: VehicleRef, v_order: VehicleRef, s: &Lea
     let mut cur = VehicleOrderID(0);
     while cur < orderlist.get_num_orders() {
         match orderlist.order(usize::from(cur.0)).view().kind() {
-            OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_DEPOT | OrderType::OT_GOTO_WAYPOINT => {
-                /* If we don't have a next order, we've reached the end and must check the first order instead. */
+            /* If we don't have a next order, we've reached the end and must check the first order instead. */
+            OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_DEPOT | OrderType::OT_GOTO_WAYPOINT
                 if get_order_distance(cur, orderlist.get_next(cur), v_order, 0, s)
-                    > read_field!(aircraft, cached_max_range_sqr)
-                {
-                    return false;
-                }
+                    > read_field!(aircraft, cached_max_range_sqr) =>
+            {
+                return false;
             }
             _ => {}
         }
@@ -3050,7 +3050,7 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
     }
 
     /* Only check every 20 days, so that we don't flood the message log */
-    if v.owner() == CompanyID((s.shared().local_company)()) && v.day_counter() % 20 == 0 {
+    if v.owner() == CompanyID((s.shared().local_company)()) && v.day_counter().is_multiple_of(20) {
         let mut message = StringID::INVALID_STRING_ID;
 
         /* Check the order list */
@@ -3173,9 +3173,10 @@ pub(crate) fn remove_order_from_all_vehicles(
         };
 
         /* Clear the order from the order-list */
-        let mut id = VehicleOrderID(0);
-        while id < get_num_orders(v, s) {
-            let mut next_id = VehicleOrderID(id.0.wrapping_add(1));
+        let mut next_id = VehicleOrderID(0);
+        while next_id < get_num_orders(v, s) {
+            let id = next_id;
+            next_id = VehicleOrderID(id.0.wrapping_add(1));
             let list = order_list(v, s).unwrap_or(list);
             let order = list.get_order_at(id).unwrap();
             let mut ot = order.view().kind();
@@ -3185,11 +3186,9 @@ pub(crate) fn remove_order_from_all_vehicles(
                     .depot_action_flags()
                     .test(OrderDepotActionFlag::NearestDepot)
             {
-                id = next_id;
                 continue;
             }
             if ot == OrderType::OT_GOTO_DEPOT && hangar && !is_aircraft {
-                id = next_id;
                 continue; // Not an aircraft? Can't have a hangar order.
             }
             if ot == OrderType::OT_IMPLICIT
@@ -3204,7 +3203,6 @@ pub(crate) fn remove_order_from_all_vehicles(
                 if order.view().is_type(OrderType::OT_IMPLICIT) {
                     delete_order(v, id, s);
                     next_id = id;
-                    id = next_id;
                     continue;
                 }
 
@@ -3237,7 +3235,6 @@ pub(crate) fn remove_order_from_all_vehicles(
                     w = next_shared(shared, s);
                 }
             }
-            id = next_id;
         }
     }
 
@@ -3246,6 +3243,10 @@ pub(crate) fn remove_order_from_all_vehicles(
 
 /// `CheckForValidOrders`: check if a vehicle has any valid orders. False if there are no
 /// valid orders; conditional orders are not considered valid destination orders.
+#[allow(
+    clippy::redundant_closure_for_method_calls,
+    reason = "the view's lifetime is per call"
+)]
 fn check_for_valid_orders(v: VehicleRef, s: &Leaves) -> bool {
     any_order(v, s, |order| order.is_goto_order())
 }
@@ -3352,6 +3353,7 @@ pub(crate) fn process_conditional_order(
 /// with conditional orders, which prevents infinite loops; `pbs_look_ahead` whether we are
 /// forecasting orders for pbs reservations in advance, in which case the order indices must
 /// not be modified. Returns true if the order was a new (non-implicit) order.
+#[allow(clippy::too_many_lines, reason = "one function per original body")]
 pub(crate) fn update_order_dest(
     v: VehicleRef,
     order: OrderView<'_>,
@@ -3437,12 +3439,7 @@ pub(crate) fn update_order_dest(
                     increment_real_order_index(v, s);
                 }
             } else {
-                if v.vehicle_type() != VehicleType::VEH_AIRCRAFT {
-                    crate::vehicle_base::set_dest_tile(
-                        v,
-                        TileIndex((s.depot_get)(order.destination().0)),
-                    );
-                } else {
+                if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
                     let a = v.aircraft_state();
                     let destination = v.current_order().destination();
                     #[allow(unsafe_code)]
@@ -3452,6 +3449,11 @@ pub(crate) fn update_order_dest(
                         let tile = get_order_station_location(v, destination.to_station_id(), s);
                         crate::vehicle_base::set_dest_tile(v, tile);
                     }
+                } else {
+                    crate::vehicle_base::set_dest_tile(
+                        v,
+                        TileIndex((s.depot_get)(order.destination().0)),
+                    );
                 }
                 return true;
             }
@@ -3468,7 +3470,10 @@ pub(crate) fn update_order_dest(
         OrderType::OT_CONDITIONAL => {
             assert_with(|| !pbs_look_ahead);
             let next_order = process_conditional_order(order, v, s);
-            if next_order != VehicleOrderID::INVALID_VEH_ORDER_ID {
+            if next_order == VehicleOrderID::INVALID_VEH_ORDER_ID {
+                update_vehicle_timetable(v, true, s);
+                increment_real_order_index(v, s);
+            } else {
                 let con = consist(v);
                 /* Jump to next_order. cur_implicit_order_index becomes exactly that order,
                  * cur_real_order_index might come after next_order. */
@@ -3490,9 +3495,6 @@ pub(crate) fn update_order_dest(
                 if is_ground_vehicle(v) {
                     assign_suppress_implicit_orders(v, true);
                 }
-            } else {
-                update_vehicle_timetable(v, true, s);
-                increment_real_order_index(v, s);
             }
         }
 
@@ -3579,10 +3581,8 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
 
         OrderType::OT_LOADING => return false,
 
-        OrderType::OT_LEAVESTATION => {
-            if v.vehicle_type() != VehicleType::VEH_AIRCRAFT {
-                return false;
-            }
+        OrderType::OT_LEAVESTATION if v.vehicle_type() != VehicleType::VEH_AIRCRAFT => {
+            return false;
         }
 
         _ => {}
@@ -3634,8 +3634,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
     /* If no order, do nothing. */
     let order = match order {
         Some(order)
-            if !(v.vehicle_type() == VehicleType::VEH_AIRCRAFT
-                && !check_for_valid_orders(v, s)) =>
+            if v.vehicle_type() != VehicleType::VEH_AIRCRAFT || check_for_valid_orders(v, s) =>
         {
             order
         }
@@ -5239,6 +5238,7 @@ pub(crate) struct CmdChangeTimetable {
 }
 
 /// `CmdChangeTimetable`: change timetable data of an order.
+#[allow(clippy::too_many_lines, reason = "one function per original body")]
 pub(crate) fn cmd_change_timetable(
     s: &Leaves,
     cost: Cost<'_>,
@@ -5353,17 +5353,17 @@ pub(crate) fn cmd_change_timetable(
                 }
             }
 
-            ModifyTimetableFlags::MTF_TRAVEL_SPEED => {
-                if max_speed != i32::from(order.view().max_speed()) {
-                    change_timetable(
-                        v,
-                        order_number,
-                        max_speed as u16,
-                        ModifyTimetableFlags::MTF_TRAVEL_SPEED,
-                        max_speed != i32::from(u16::MAX),
-                        s,
-                    );
-                }
+            ModifyTimetableFlags::MTF_TRAVEL_SPEED
+                if max_speed != i32::from(order.view().max_speed()) =>
+            {
+                change_timetable(
+                    v,
+                    order_number,
+                    max_speed as u16,
+                    ModifyTimetableFlags::MTF_TRAVEL_SPEED,
+                    max_speed != i32::from(u16::MAX),
+                    s,
+                );
             }
 
             _ => {}
@@ -5528,6 +5528,7 @@ pub(crate) fn cmd_set_vehicle_on_time(
 
 /// `VehicleTimetableSorter`: order vehicles based on their timetable. The vehicles will be
 /// sorted in order they would reach the first station. True where `a` sorts before `b`.
+#[allow(clippy::many_single_char_names, reason = "the original's names")]
 fn vehicle_timetable_sorter(a: VehicleRef, b: VehicleRef, s: &Leaves) -> bool {
     let mut a_order = consist(a).cur_real_order_index();
     let mut b_order = consist(b).cur_real_order_index();
@@ -5616,7 +5617,7 @@ pub(crate) fn cmd_set_timetable_start(
     );
 
     /* Don't let a timetable start at an invalid date. */
-    if start_date < 0 || start_date > crate::timer_game_common::MAX_DATE {
+    if !(0..=crate::timer_game_common::MAX_DATE).contains(&start_date) {
         return cmd_error(cost);
     }
 
@@ -5788,6 +5789,7 @@ pub(crate) fn cmd_autofill_timetable(
 
 /// `UpdateVehicleTimetable`: update the timetable for the vehicle. `travelling` says whether
 /// we just travelled or waited at a station.
+#[allow(clippy::too_many_lines, reason = "one function per original body")]
 pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leaves) {
     let c = consist(v);
     let time_taken = c.current_order_time();
@@ -7012,3 +7014,7 @@ crate::abi::layouts! {
         station_commands,
     };
 }
+
+#[cfg(test)]
+#[allow(unsafe_code)] // The tests build and read the fixture's native owners in place.
+mod tests;

@@ -541,6 +541,7 @@ impl Refresher {
     }
 
     /// `LinkRefresher::RefreshStats`: refresh link stats for the given pair of orders.
+    #[allow(clippy::too_many_lines, reason = "one function per original body")]
     fn refresh_stats(&self, cur: VehicleOrderID, next: VehicleOrderID, s: &Services) {
         let o = s.orders();
         let v = self.vehicle;
