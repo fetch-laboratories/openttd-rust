@@ -24,6 +24,15 @@ SEARCH_PATH = (PurePosixPath("src"), PurePosixPath("src/rust"), GENERATED)
 TABLE_RECORDS = frozenset({"abi-record-setting_addresses.h"})
 INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*([<"])([^>"\n]+)[>"]', re.M)
 HEADER_SUFFIXES = (".h", ".hpp")
+# Translation phases 2 and 3: a comment becomes one space; literals are kept whole, so a
+# quoted header name or a string holding "//" or "/*" is not taken for a comment.
+LEXEME = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', re.S)
+
+
+def directives(text: str) -> str:
+    """The text as the preprocessor reads directives: splices joined, comments spaces."""
+    joined = text.replace("\\\n", "")
+    return LEXEME.sub(lambda m: " " if m.group(0)[0] == "/" else m.group(0), joined)
 
 
 def normal(path: PurePosixPath) -> PurePosixPath:
@@ -67,7 +76,7 @@ def includes(
     files: Mapping[PurePosixPath, str], path: PurePosixPath
 ) -> list[PurePosixPath]:
     found = []
-    for form, name in INCLUDE.findall(files.get(path, "")):
+    for form, name in INCLUDE.findall(directives(files.get(path, ""))):
         target = resolve(files, path, form, name.strip())
         if target is not None:
             found.append(target)

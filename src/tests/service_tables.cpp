@@ -104,9 +104,5 @@ TEST_CASE("Rust ABI - setting callback records")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-settings.inc"
-}
-TEST_CASE("Rust ABI - setting address records")
-{
-	ABI_LAYOUT_CHECK;
 #include "abi-layout-setting_addresses.inc"
 }
