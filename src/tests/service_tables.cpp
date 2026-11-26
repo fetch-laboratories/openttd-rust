@@ -4,11 +4,13 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../rust/debug_ffi.h"
 #include "../rust/services_ffi.h"
+#include "../rust/shared_services_table.h"
 #include "../rust/service_table_check.hpp"
 #include "../company_type.h"
 #include "../newgrf_text_type.h"
 #include "abi-visit-OpenTTDRandomServices.hpp"
 #include "../settings_type.h"
+#include "abi-record-setting_addresses.h"
 #include "../rust/settings_table_ffi.h"
 #include "abi_layout.hpp"
 static_assert(!OPENTTD_SERVICE_RETURN_TYPE<CompanyID>);
@@ -102,4 +104,9 @@ TEST_CASE("Rust ABI - setting callback records")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-settings.inc"
+}
+TEST_CASE("Rust ABI - setting address records")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-setting_addresses.inc"
 }

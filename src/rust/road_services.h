@@ -29,7 +29,7 @@ static const OpenTTDRoadCommandContext *OPENTTD_RUST_CALL RoadSvcBuildRoadContex
 
 static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.build_road_context = RoadSvcBuildRoadContext,
-	.ground = &_rust_ground_services<RoadVehicle>,
+	.ground = &_rust_ground_services,
 	.shared = &_rust_shared_services,
 	.vehicle = &_rust_vehicle_services,
 };

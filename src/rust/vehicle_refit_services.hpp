@@ -24,7 +24,7 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.road = &GetRustRoadLeaves(),
 		.aircraft = &GetRustAircraftLeaves(),
 		.ship = &GetRustShipServices(),
-		.road_ground = &GetRustGroundServices<RoadVehicle>(),
+		.road_ground = &_rust_ground_services,
 		.engine = RustEngineByID,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_kind = VehicleRefitCargoKind,

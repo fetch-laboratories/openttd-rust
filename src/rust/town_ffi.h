@@ -15,6 +15,7 @@
 #include <cstdint>
 #include "command_cost_ffi.h"
 #include <cstddef>
+struct OpenTTDTownHandle;
 struct OpenTTDTownState;
 struct Town;
 struct CargoSpec;

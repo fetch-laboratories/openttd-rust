@@ -4,6 +4,7 @@
 #define RUST_SESSION_FFI_H
 #include "world_generation_ffi.h"
 #include "vehicle_ffi.h"
+#include "vehicle_scheduler_table.h"
 #include "linkgraph_schedule_ffi.h"
 #include "../fios.h"
 #include "../saveload/saveload.h"

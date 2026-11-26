@@ -13,6 +13,8 @@
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "shared_services_table.h"
+#include "abi-record-setting_addresses.h"
 #include "pbs_ffi.h"
 #include "movement_ffi.h"
 #include "services_bridge.h"

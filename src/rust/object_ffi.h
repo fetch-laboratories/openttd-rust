@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
+struct OpenTTDTownHandle;
 struct OpenTTDObjectHiddenArea { size_t index; uint32_t first_tile; };
 struct OpenTTDObjectPrice { uint32_t factor; int32_t shift; };
 #include "services_ffi.h"

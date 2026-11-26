@@ -11,6 +11,9 @@
 #include "../../src/rust/newgrf_storage_ffi.h"
 #include "../../src/rust/engine_capabilities_ffi.h"
 #include "../../src/rust/newgrf_vehicle_ffi.h"
+#include "../../src/rust/shared_services_table.h"
+#include "../../src/rust/vehicle_services_table.h"
+#include "abi-record-setting_addresses.h"
 #include "../../src/newgrf_storage.h"
 /* Narrow owner fixtures enter the production state loop. Unrelated phases use
  * empty typed worlds; each fixture replaces only its observed native services. */

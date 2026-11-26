@@ -22,6 +22,7 @@
 #include "rust/depot_ffi.h"
 #include "rust/rail_command_ffi.h"
 #include "rust/services_ffi.h"
+#include "rust/shared_services_table.h"
 #include "rust/station_command_ffi.h"
 #include "rust/vehicle_refit_ffi.h"
 
