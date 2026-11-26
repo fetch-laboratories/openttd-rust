@@ -100,13 +100,14 @@ fn shared(native_assert: extern "C" fn(bool)) -> Services {
         ..crate::services::fixture(std::ptr::null_mut(), random)
     }
 }
-/// A ship record with a fresh owner on its `ship` link, on `tile`.
+/// A ship record with a fresh owner on its `ship` link and a fresh consist, on `tile`.
 #[allow(unsafe_code)]
 fn ship(tile: u32) -> Ship {
     let record = VehicleRecord::new(std::ptr::null_mut(), VehicleType::VEH_SHIP);
     // SAFETY: The test's fresh record.
     unsafe {
         (*record).ship = openttd_rust_ship_state_new();
+        (*record).consist = crate::orders::openttd_rust_consist_new();
         (*record).tile = TileIndex(tile);
     }
     Ship::from_vehicle(VehicleRef::of(record))
@@ -299,4 +300,33 @@ fn depot_search_statics_are_reused_across_serialized_game_threads() {
     assert_eq!(search.patches_to_search.capacity(), capacity);
     // SAFETY: This test's slot access; no other test uses it.
     unsafe { *DEPOT_SEARCH.get() = None };
+}
+
+/// `Ship::Tick` (`ship_cmd.cpp`) opens `PFE_GL_SHIPS` around the controller: a stopped ship's
+/// controller counts its tick inside the scope and returns before its orders.
+#[test]
+fn tick_times_the_controller() {
+    use crate::framerate_type::{
+        PerformanceElement,
+        testing::{Effect, take},
+    };
+    extern "C" fn holds(okay: bool) {
+        assert!(okay);
+    }
+    let s = shared(holds);
+    let leaves = crate::test_tables::SHIP_LEAVES;
+    let v = ship(0);
+    v.v.set_vehstatus(VehStates::from_element(VehState::Stopped));
+    let t = Tables::new(&leaves, &s);
+    take();
+    assert!(tick(&t, v));
+    assert_eq!(
+        take(),
+        [
+            Effect::AccumulatorBegin(PerformanceElement::PFE_GL_SHIPS),
+            Effect::AccumulatorEnd(PerformanceElement::PFE_GL_SHIPS),
+        ]
+    );
+    assert_eq!((v.v.tick_counter(), v.v.running_ticks()), (1, 0));
+    free(v);
 }

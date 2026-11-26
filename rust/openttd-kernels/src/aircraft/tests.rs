@@ -308,3 +308,39 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
         assert_eq!(take(), expected, "owner {owner}");
     }
 }
+
+/// `Aircraft::Tick` (`aircraft_cmd.cpp`): a normal aircraft opens `PFE_GL_AIRCRAFT` around
+/// its tick, here a stopped one whose event handlers return at once; a shadow returns first,
+/// opening none and leaving its tick counter.
+#[test]
+fn tick_times_a_normal_aircraft_only() {
+    use crate::framerate_type::{
+        PerformanceElement,
+        testing::{Effect, take},
+    };
+    use crate::vehicle_base::{VehState, VehStates};
+    let leaves = leaves(crate::test_tables::VEHICLE);
+    // SAFETY: The leaked tables outlive the test.
+    let w = unsafe { World::<false>::new(&raw const leaves) };
+    let v = aircraft();
+    // SAFETY: The test's fresh record; the consist lives for the test.
+    unsafe { (*v.base().0.as_ptr()).consist = crate::orders::openttd_rust_consist_new() };
+    v.base().set_subtype(super::AIR_AIRCRAFT);
+    v.base()
+        .set_vehstatus(VehStates::from_element(VehState::Stopped));
+    take();
+    assert!(w.tick(v));
+    assert_eq!(
+        take(),
+        [
+            Effect::AccumulatorBegin(PerformanceElement::PFE_GL_AIRCRAFT),
+            Effect::AccumulatorEnd(PerformanceElement::PFE_GL_AIRCRAFT),
+        ]
+    );
+    assert_eq!(v.base().tick_counter(), 1);
+    let shadow = aircraft();
+    shadow.base().set_subtype(super::AIR_SHADOW);
+    assert!(w.tick(shadow));
+    assert_eq!(take(), []);
+    assert_eq!(shadow.base().tick_counter(), 0);
+}

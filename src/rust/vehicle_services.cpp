@@ -242,11 +242,9 @@ extern "C" uint64_t openttd_orders_remaining_years(void *ctx) noexcept
 
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleServices.hpp"
-#include "abi-visit-OpenTTDVehicleSchedulerServices.hpp"
 #include "abi-visit-OpenTTDVehicleMaintenanceServices.hpp"
 bool CheckAbi_vehicle_services()
 {
 	return AbiServicesComplete(GetRustVehicleServices()) &&
-		AbiServicesComplete(GetRustVehicleSchedulerServices()) &&
 		AbiServicesComplete(_rust_vehicle_maintenance_services);
 }

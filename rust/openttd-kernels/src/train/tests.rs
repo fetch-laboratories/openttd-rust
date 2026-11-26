@@ -251,6 +251,56 @@ mod bodies {
         f.game().consist_changed(f.train(), CCF_ARRANGE);
     }
 
+    /// `Train::Tick` (`train_cmd.cpp`) counts the tick of every part, then opens
+    /// `PFE_GL_TRAINS` for a front engine only: here a stopped one, whose two
+    /// `TrainLocoHandler` calls return at the stop test. A wagon opens none.
+    #[test]
+    fn tick_times_a_front_engine_after_its_tick_count() {
+        use crate::framerate_type::{
+            PerformanceElement as E,
+            testing::{Effect, observe, take},
+        };
+        thread_local! {
+            static RECORD: Cell<*mut crate::vehicle_base::VehicleRecord> =
+                const { Cell::new(std::ptr::null_mut()) };
+            static AT_BEGIN: Cell<Option<u8>> = const { Cell::new(None) };
+        }
+        fn at_begin(effect: Effect) {
+            if let Effect::AccumulatorBegin(_) = effect {
+                // SAFETY: The fixture's live record.
+                AT_BEGIN.set(Some(unsafe { (*RECORD.get()).tick_counter }));
+            }
+        }
+        let f = Fixture::new(LOCAL, FRONT_ENGINE, &SHARED, &VEHICLE);
+        // SAFETY: The fixture's fresh record; the consist lives for the test.
+        unsafe {
+            (*f.record).consist = crate::orders::openttd_rust_consist_new();
+            (*f.record).vehstatus = crate::vehicle_base::VehStates::from_element(VehState::Stopped);
+        }
+        RECORD.set(f.record);
+        take();
+        observe(Some(at_begin));
+        assert!(f.game().tick(f.train()));
+        observe(None);
+        assert_eq!(
+            take(),
+            [
+                Effect::AccumulatorBegin(E::PFE_GL_TRAINS),
+                Effect::AccumulatorEnd(E::PFE_GL_TRAINS),
+            ]
+        );
+        assert_eq!(
+            AT_BEGIN.get(),
+            Some(1),
+            "the scope opens after the tick count"
+        );
+        let wagon = Fixture::new(LOCAL, 0, &SHARED, &VEHICLE);
+        assert!(wagon.game().tick(wagon.train()));
+        assert_eq!(take(), []);
+        // SAFETY: The wagon fixture's live record.
+        assert_eq!(unsafe { (*wagon.record).tick_counter }, 1);
+    }
+
     /// `Train::UpdateSpeed` switches on the acceleration model with `default: NOT_REACHED()`:
     /// a model other than `AM_ORIGINAL` and `AM_REALISTIC` takes the native unreachable path.
     #[test]
