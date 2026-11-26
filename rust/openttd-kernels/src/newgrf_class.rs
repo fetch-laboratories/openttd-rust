@@ -47,7 +47,7 @@ pub(crate) struct Registry<T> {
     members: Vec<ClassMembers<T>>,
 }
 impl<T> Registry<T> {
-    const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             classes: Vec::new(),
             members: Vec::new(),
@@ -118,7 +118,7 @@ pub(crate) trait ClassSpec: Sized + 'static {
         unsafe { Self::services_slot().table() }
     }
     /// The spec's leaves in the shared spec tables.
-    fn spec_services(specs: &Specs) -> &SpecServices<Self, Self::Triggers>;
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers>;
     /// `NewGRFClass::IsUIAvailable`: check whether the spec will be available to the user at
     /// some point in time.
     fn is_ui_available(class: &NewGRFClass<Self>, index: u32) -> bool;
@@ -305,7 +305,7 @@ impl<T: ClassSpec> NewGRFClass<T> {
     #[allow(unsafe_code)]
     pub(crate) fn get_by_grf(grfid: u32, local_id: u16) -> *const T {
         // SAFETY: The class table names the process-lifetime shared table.
-        let leaves = T::spec_services(unsafe { &*T::services().shared }.specs());
+        let leaves = (T::SPEC_SERVICES)(unsafe { &*T::services().shared }.specs());
         // SAFETY: The module's serialization contract; the spec leaves are native field reads
         // that do not reenter the registry.
         let registry = unsafe { &*T::registry() };
@@ -378,29 +378,6 @@ pub(crate) unsafe fn set_class_name<T: ClassSpec>(spec: *const T, name: StringID
     unsafe { (*NewGRFClass::<T>::get(class_index)).name = name };
 }
 
-static STATION_REGISTRY: GameState<Registry<crate::station_cmd::RailSpec>> =
-    GameState::new(Registry::new());
-static STATION_SERVICES: GameState<*const Services<crate::station_cmd::RailSpec>> =
-    GameState::new(ptr::null());
-impl ClassSpec for crate::station_cmd::RailSpec {
-    type Index = crate::newgrf_station::StationClassID;
-    type Triggers = u16;
-    fn registry() -> *mut Registry<Self> {
-        STATION_REGISTRY.get()
-    }
-    fn services_slot() -> &'static GameState<*const Services<Self>> {
-        &STATION_SERVICES
-    }
-    fn spec_services(specs: &Specs) -> &SpecServices<Self, Self::Triggers> {
-        specs.station()
-    }
-    fn is_ui_available(class: &NewGRFClass<Self>, index: u32) -> bool {
-        crate::newgrf_station::is_ui_available(class, index)
-    }
-    fn insert_defaults() {
-        crate::newgrf_station::insert_defaults();
-    }
-}
 /// `NewGRFClass::Reset`.
 /// # Safety
 /// `s` is the process-lifetime class table.
@@ -503,29 +480,6 @@ pub extern "C" fn openttd_rust_station_class_by_grf(
     NewGRFClass::get_by_grf(grfid, local_id)
 }
 
-static ROADSTOP_REGISTRY: GameState<Registry<crate::station_cmd::RoadSpec>> =
-    GameState::new(Registry::new());
-static ROADSTOP_SERVICES: GameState<*const Services<crate::station_cmd::RoadSpec>> =
-    GameState::new(ptr::null());
-impl ClassSpec for crate::station_cmd::RoadSpec {
-    type Index = crate::newgrf_roadstop::RoadStopClassID;
-    type Triggers = u16;
-    fn registry() -> *mut Registry<Self> {
-        ROADSTOP_REGISTRY.get()
-    }
-    fn services_slot() -> &'static GameState<*const Services<Self>> {
-        &ROADSTOP_SERVICES
-    }
-    fn spec_services(specs: &Specs) -> &SpecServices<Self, Self::Triggers> {
-        specs.road_stop()
-    }
-    fn is_ui_available(class: &NewGRFClass<Self>, index: u32) -> bool {
-        crate::newgrf_roadstop::is_ui_available(class, index)
-    }
-    fn insert_defaults() {
-        crate::newgrf_roadstop::insert_defaults();
-    }
-}
 /// `NewGRFClass::Reset`.
 /// # Safety
 /// `s` is the process-lifetime class table.
@@ -628,29 +582,6 @@ pub extern "C" fn openttd_rust_roadstop_class_by_grf(
     NewGRFClass::get_by_grf(grfid, local_id)
 }
 
-static AIRPORT_REGISTRY: GameState<Registry<crate::station_cmd::AirportSpec>> =
-    GameState::new(Registry::new());
-static AIRPORT_SERVICES: GameState<*const Services<crate::station_cmd::AirportSpec>> =
-    GameState::new(ptr::null());
-impl ClassSpec for crate::station_cmd::AirportSpec {
-    type Index = crate::newgrf_airport::AirportClassID;
-    type Triggers = u8;
-    fn registry() -> *mut Registry<Self> {
-        AIRPORT_REGISTRY.get()
-    }
-    fn services_slot() -> &'static GameState<*const Services<Self>> {
-        &AIRPORT_SERVICES
-    }
-    fn spec_services(specs: &Specs) -> &SpecServices<Self, Self::Triggers> {
-        specs.airport()
-    }
-    fn is_ui_available(class: &NewGRFClass<Self>, index: u32) -> bool {
-        crate::newgrf_airport::is_ui_available(class, index)
-    }
-    fn insert_defaults() {
-        crate::newgrf_airport::insert_defaults();
-    }
-}
 /// `NewGRFClass::Reset`.
 /// # Safety
 /// `s` is the process-lifetime class table.
@@ -730,28 +661,6 @@ pub extern "C" fn openttd_rust_airport_class_by_grf(
     NewGRFClass::get_by_grf(grfid, local_id)
 }
 
-static OBJECT_REGISTRY: GameState<Registry<crate::objects::Spec>> = GameState::new(Registry::new());
-static OBJECT_SERVICES: GameState<*const Services<crate::objects::Spec>> =
-    GameState::new(ptr::null());
-impl ClassSpec for crate::objects::Spec {
-    type Index = crate::newgrf_object::ObjectClassID;
-    type Triggers = u16;
-    fn registry() -> *mut Registry<Self> {
-        OBJECT_REGISTRY.get()
-    }
-    fn services_slot() -> &'static GameState<*const Services<Self>> {
-        &OBJECT_SERVICES
-    }
-    fn spec_services(specs: &Specs) -> &SpecServices<Self, Self::Triggers> {
-        specs.object()
-    }
-    fn is_ui_available(class: &NewGRFClass<Self>, index: u32) -> bool {
-        crate::newgrf_object::is_ui_available(class, index)
-    }
-    fn insert_defaults() {
-        crate::newgrf_object::insert_defaults();
-    }
-}
 /// `NewGRFClass::Reset`.
 /// # Safety
 /// `s` is the process-lifetime class table.

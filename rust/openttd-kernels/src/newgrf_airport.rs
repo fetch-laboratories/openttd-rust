@@ -23,6 +23,8 @@ pub struct TtdpAirportType(pub u8);
 use crate::airport::{AT_INVALID, INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AIRPORTTILE_OFFSET};
 use crate::debug::debug;
 use crate::game_state::GameState;
+use crate::newgrf_class::{ClassSpec, Registry};
+use crate::newgrf_specs::{SpecServices, Specs};
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 use crate::table::strings::{
     STR_AIRPORT_CLASS_HELIPORTS, STR_AIRPORT_CLASS_HUB, STR_AIRPORT_CLASS_LARGE,
@@ -660,22 +662,37 @@ impl AirportClassID {
 /// `AirportClass`: the class registry of the airport specs.
 pub(crate) type AirportClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::AirportSpec>;
 
-/// `AirportClass::InsertDefaults`.
-pub(crate) fn insert_defaults() {
-    let max = AirportClassID::APC_MAX;
-    unsafe {
-        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"SMAL"), max))).name =
-            STR_AIRPORT_CLASS_SMALL;
-        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"LARG"), max))).name =
-            STR_AIRPORT_CLASS_LARGE;
-        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HUB_"), max))).name =
-            STR_AIRPORT_CLASS_HUB;
-        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))).name =
-            STR_AIRPORT_CLASS_HELIPORTS;
+static AIRPORT_REGISTRY: GameState<Registry<crate::station_cmd::AirportSpec>> =
+    GameState::new(Registry::new());
+static AIRPORT_SERVICES: GameState<
+    *const crate::newgrf_class::Services<crate::station_cmd::AirportSpec>,
+> = GameState::new(std::ptr::null());
+impl ClassSpec for crate::station_cmd::AirportSpec {
+    type Index = crate::newgrf_airport::AirportClassID;
+    type Triggers = u8;
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers> = Specs::airport;
+    fn registry() -> *mut Registry<Self> {
+        AIRPORT_REGISTRY.get()
     }
-}
-
-/// `AirportClass::IsUIAvailable`.
-pub(crate) fn is_ui_available(_class: &AirportClass, _index: u32) -> bool {
-    true
+    fn services_slot() -> &'static GameState<*const crate::newgrf_class::Services<Self>> {
+        &AIRPORT_SERVICES
+    }
+    /// `AirportClass::IsUIAvailable`.
+    fn is_ui_available(_class: &AirportClass, _index: u32) -> bool {
+        true
+    }
+    /// `AirportClass::InsertDefaults`.
+    fn insert_defaults() {
+        let max = AirportClassID::APC_MAX;
+        unsafe {
+            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"SMAL"), max))).name =
+                STR_AIRPORT_CLASS_SMALL;
+            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"LARG"), max))).name =
+                STR_AIRPORT_CLASS_LARGE;
+            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HUB_"), max))).name =
+                STR_AIRPORT_CLASS_HUB;
+            (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))).name =
+                STR_AIRPORT_CLASS_HELIPORTS;
+        }
+    }
 }

@@ -17,7 +17,9 @@ use crate::debug::debug;
 use crate::direction_type::Direction;
 use crate::direction_type::{AXIS_X, AXIS_Y, Axis, INVALID_AXIS, INVALID_DIAGDIR};
 use crate::game_state::GameState;
+use crate::newgrf_class::{ClassSpec, Registry};
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
+use crate::newgrf_specs::{SpecServices, Specs};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
 use crate::station_type::SRT_CARGO_TAKEN;
 use crate::table::strings::{STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP};
@@ -1203,36 +1205,51 @@ pub const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
 /// `StationClass`: the class registry of the station specs.
 pub(crate) type StationClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::RailSpec>;
 
-/// `StationClass::InsertDefaults`.
-pub(crate) fn insert_defaults() {
-    /* Set up initial data */
-    unsafe {
-        (*StationClass::get(StationClass::allocate(
-            STATION_CLASS_LABEL_DEFAULT,
-            StationClassID::STAT_CLASS_MAX,
-        )))
-        .name = STR_STATION_CLASS_DFLT;
-        (*StationClass::get(StationClass::allocate(
-            STATION_CLASS_LABEL_DEFAULT,
-            StationClassID::STAT_CLASS_MAX,
-        )))
-        .insert(std::ptr::null_mut());
-        (*StationClass::get(StationClass::allocate(
-            STATION_CLASS_LABEL_WAYPOINT,
-            StationClassID::STAT_CLASS_MAX,
-        )))
-        .name = STR_STATION_CLASS_WAYP;
-        (*StationClass::get(StationClass::allocate(
-            STATION_CLASS_LABEL_WAYPOINT,
-            StationClassID::STAT_CLASS_MAX,
-        )))
-        .insert(std::ptr::null_mut());
+static STATION_REGISTRY: GameState<Registry<crate::station_cmd::RailSpec>> =
+    GameState::new(Registry::new());
+static STATION_SERVICES: GameState<
+    *const crate::newgrf_class::Services<crate::station_cmd::RailSpec>,
+> = GameState::new(std::ptr::null());
+impl ClassSpec for crate::station_cmd::RailSpec {
+    type Index = crate::newgrf_station::StationClassID;
+    type Triggers = u16;
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers> = Specs::station;
+    fn registry() -> *mut Registry<Self> {
+        STATION_REGISTRY.get()
     }
-}
-
-/// `StationClass::IsUIAvailable`.
-pub(crate) fn is_ui_available(_class: &StationClass, _index: u32) -> bool {
-    true
+    fn services_slot() -> &'static GameState<*const crate::newgrf_class::Services<Self>> {
+        &STATION_SERVICES
+    }
+    /// `StationClass::IsUIAvailable`.
+    fn is_ui_available(_class: &StationClass, _index: u32) -> bool {
+        true
+    }
+    /// `StationClass::InsertDefaults`.
+    fn insert_defaults() {
+        /* Set up initial data */
+        unsafe {
+            (*StationClass::get(StationClass::allocate(
+                STATION_CLASS_LABEL_DEFAULT,
+                StationClassID::STAT_CLASS_MAX,
+            )))
+            .name = STR_STATION_CLASS_DFLT;
+            (*StationClass::get(StationClass::allocate(
+                STATION_CLASS_LABEL_DEFAULT,
+                StationClassID::STAT_CLASS_MAX,
+            )))
+            .insert(std::ptr::null_mut());
+            (*StationClass::get(StationClass::allocate(
+                STATION_CLASS_LABEL_WAYPOINT,
+                StationClassID::STAT_CLASS_MAX,
+            )))
+            .name = STR_STATION_CLASS_WAYP;
+            (*StationClass::get(StationClass::allocate(
+                STATION_CLASS_LABEL_WAYPOINT,
+                StationClassID::STAT_CLASS_MAX,
+            )))
+            .insert(std::ptr::null_mut());
+        }
+    }
 }
 
 /// Native station specification flag bit position.

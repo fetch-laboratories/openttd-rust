@@ -7,6 +7,9 @@
 
 //! Shared definitions from `newgrf_object.h`, and the default classes of `newgrf_object.cpp`.
 
+use crate::game_state::GameState;
+use crate::newgrf_class::{ClassSpec, Registry};
+use crate::newgrf_specs::{SpecServices, Specs};
 use crate::table::strings::{STR_OBJECT_CLASS_LTHS, STR_OBJECT_CLASS_TRNS};
 
 /// Native `ObjectFlag`: various object behaviours, retaining every underlying `u8`
@@ -73,24 +76,34 @@ impl ObjectClassID {
 /// `ObjectClass`: the class registry of the object specs.
 pub(crate) type ObjectClass = crate::newgrf_class::NewGRFClass<crate::objects::Spec>;
 
-/// `ObjectClass::InsertDefaults`.
-#[allow(unsafe_code)]
-pub(crate) fn insert_defaults() {
-    let max = ObjectClassID::OBJECT_CLASS_MAX;
-    unsafe {
-        (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"LTHS"), max))).name =
-            STR_OBJECT_CLASS_LTHS;
-        (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"TRNS"), max))).name =
-            STR_OBJECT_CLASS_TRNS;
+static OBJECT_REGISTRY: GameState<Registry<crate::objects::Spec>> = GameState::new(Registry::new());
+static OBJECT_SERVICES: GameState<*const crate::newgrf_class::Services<crate::objects::Spec>> =
+    GameState::new(std::ptr::null());
+impl ClassSpec for crate::objects::Spec {
+    type Index = crate::newgrf_object::ObjectClassID;
+    type Triggers = u16;
+    const SPEC_SERVICES: fn(&Specs) -> &SpecServices<Self, Self::Triggers> = Specs::object;
+    fn registry() -> *mut Registry<Self> {
+        OBJECT_REGISTRY.get()
     }
-}
-
-/// `ObjectClass::IsUIAvailable`.
-#[allow(unsafe_code)]
-pub(crate) fn is_ui_available(class: &ObjectClass, index: u32) -> bool {
-    // SAFETY: Only the object instantiation's table names the object table.
-    crate::objects::ever_available(
-        unsafe { &*<crate::objects::Spec as crate::newgrf_class::ClassSpec>::services().object },
-        class.get_spec(index),
-    )
+    fn services_slot() -> &'static GameState<*const crate::newgrf_class::Services<Self>> {
+        &OBJECT_SERVICES
+    }
+    /// `ObjectClass::IsUIAvailable`.
+    #[allow(unsafe_code)]
+    fn is_ui_available(class: &ObjectClass, index: u32) -> bool {
+        // SAFETY: Only the object instantiation's table names the object table.
+        crate::objects::ever_available(unsafe { &*Self::services().object }, class.get_spec(index))
+    }
+    /// `ObjectClass::InsertDefaults`.
+    #[allow(unsafe_code)]
+    fn insert_defaults() {
+        let max = ObjectClassID::OBJECT_CLASS_MAX;
+        unsafe {
+            (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"LTHS"), max))).name =
+                STR_OBJECT_CLASS_LTHS;
+            (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"TRNS"), max))).name =
+                STR_OBJECT_CLASS_TRNS;
+        }
+    }
 }
