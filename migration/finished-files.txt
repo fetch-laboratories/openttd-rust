@@ -16,8 +16,10 @@ rust/openttd-kernels/src/bitmath_func.rs
 rust/openttd-kernels/src/builder.rs
 rust/openttd-kernels/src/byte_strings.rs
 rust/openttd-kernels/src/cargo_flow.rs
+rust/openttd-kernels/src/cargo_payment.rs
 rust/openttd-kernels/src/cargo_registry.rs
 rust/openttd-kernels/src/cargo_storage.rs
+rust/openttd-kernels/src/cargomonitor.rs
 rust/openttd-kernels/src/cargopacket.rs
 rust/openttd-kernels/src/cargotype.rs
 rust/openttd-kernels/src/clear_map.rs
