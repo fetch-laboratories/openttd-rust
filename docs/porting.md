@@ -48,11 +48,11 @@
 
 While C++ stores a record, Rust reaches it through a raw pointer or a pool ID, and what makes the access valid is the original's own precondition: the pointer or ID names a live record, the game-state mutex is held, the map is allocated. Rust cannot check it without a check [fidelity](#fidelity) forbids, and the original's callers meet it as they always have.
 
-- The module or type states those preconditions once ([comments](#comments)), and each `unsafe` block's `SAFETY` line cites that contract.
-- A function whose only precondition is one the original has is a safe `fn`, whatever safe Rust could pass it, in game code and test code alike. That safe code could breach it is not a finding, and moving `unsafe` out to its callers is not a remedy.
-- `unsafe fn` and its `# Safety` section are for an obligation Rust adds beyond the original: a reference or borrow that must end before a callback or must not alias a raw pointer, a slice or table whose lifetime the caller keeps, a null the original checks for, a layout or transmute. A safe function that leaves such an obligation to its callers, a call site that breaks one, and a contract or `SAFETY` line that misstates what the code relies on are findings.
-- A call that passes a pointer or ID where the original's call could not pass a dead one is a [fidelity](#fidelity) finding.
-- An existing `unsafe fn` whose only precondition is the original's may stay; a pass converts neither form.
+- A module or type states once what its pointers and IDs rely on ([comments](#comments)): in game code the original's preconditions, in a test module what its fixtures build. Each `unsafe` block's `SAFETY` line cites that contract.
+- A function whose callers meet that contract by doing what the original's callers do, or by using the test module's fixtures, is a safe `fn`. That other safe code could breach the contract is not a finding, and moving `unsafe` out to the callers is not a remedy.
+- `unsafe fn` and its `# Safety` section are for an obligation Rust adds that a game caller must take care to meet: a reference or borrow that must end before a callback or must not alias a raw pointer, a slice or table whose lifetime the caller keeps, a null the original checks for, a layout or transmute.
+- Findings are a call site in the tree that breaks a contract or such an obligation, a safe game function that leaves such an obligation to its callers, and a contract or `SAFETY` line that misstates what the code relies on. A call that passes a pointer or ID where the original's call could not pass a dead one is a [fidelity](#fidelity) finding.
+- An existing `unsafe fn` whose only precondition is the contract may stay; a pass converts neither form.
 
 ### Design faults
 
