@@ -133,10 +133,15 @@ pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
     value.wrapping_shr(start as u32) & (1_u32.wrapping_shl(count as u32).wrapping_sub(1))
 }
 
-/// `GB<uint16_t>`: fetch `count` bits at `start` of a 16-bit field, in its own width.
-/// Preconditions: `1 <= count <= 16` and `start + count <= 16`.
+/// `GB<uint16_t>`: fetch `count` bits at `start` of a 16-bit field. The original computes
+/// its mask in the promoted `int` width, so a full 16-bit field keeps every bit; the result
+/// fits the field. Preconditions: `1 <= count <= 16` and `start + count <= 16`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GB of a uint16_t field yields at most 16 significant bits"
+)]
 pub const fn gb_u16(value: u16, start: u8, count: u8) -> u16 {
-    value.wrapping_shr(start as u32) & (1_u16.wrapping_shl(count as u32).wrapping_sub(1))
+    gb(value as u32, start, count) as u16
 }
 
 /// `GB<uint8_t>`: fetch `count` bits at `start` of a byte field, in its own width.
@@ -318,5 +323,13 @@ mod tests {
         assert!(super::has_at_most_one_bit(0));
         assert!(super::has_at_most_one_bit(0b100));
         assert!(!super::has_at_most_one_bit(0b1100));
+    }
+
+    /// `GB<uint16_t>` masks in the promoted width: a full-width read returns the field.
+    #[test]
+    fn gb_u16_keeps_a_full_width_field() {
+        assert_eq!(super::gb_u16(0xA55A, 0, 16), 0xA55A);
+        assert_eq!(super::gb_u16(0xA55A, 4, 8), 0x55);
+        assert_eq!(super::gb_u16(0xA55A, 12, 4), 0xA);
     }
 }
