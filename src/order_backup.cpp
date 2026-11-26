@@ -19,6 +19,7 @@
 #include "order_cmd.h"
 #include "group_cmd.h"
 #include "vehicle_func.h"
+#include "rust/vehicle_services.h"
 
 #include "table/strings.h"
 

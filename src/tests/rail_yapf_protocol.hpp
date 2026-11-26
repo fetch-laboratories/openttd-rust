@@ -121,7 +121,7 @@ inline OpenTTDTestRailYapf Run(uint32_t limit, uint32_t curve = 29, bool cache =
 	map.record.ground = &ground;
 	map.record.x_pos = 32 * 16; map.record.y_pos = 32 * 16;
 	map.record.dest_tile = start - goal; map.record.cached_max_speed = 100;
-	map.order_state.current.max_speed = 100;
+	map.order_state.current_order.max_speed = 100;
 	map.state->track = TRACK_BIT_X;
 	map.record.vehstatus = 1;
 	map.record.direction = 1; // DIR_NE: TRACK_X runs as TRACKDIR_X_NE.

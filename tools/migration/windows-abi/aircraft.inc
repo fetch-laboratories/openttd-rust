@@ -201,7 +201,7 @@ static void AircraftPhaseBoundary()
 	 * read. Their mutation yields exactly one move; a stale snapshot yields none. */
 
 	p.record.subtype = 2;
-	p.order_owner->vehicle->current = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];
+	p.order_owner->vehicle->current_order = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];
 	p.vehicle.state->state = 14; p.vehicle.state->targetairport = 7;
 	leaves.station = [](uint16_t station) noexcept { CHECK(station == 7); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{0}; }; leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; }; leaves.airport_width = leaves.airport_height = [](const OpenTTDStation *) noexcept { return uint8_t{8}; };
