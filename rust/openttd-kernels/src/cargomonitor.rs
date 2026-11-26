@@ -7,8 +7,10 @@
 
 //! `cargomonitor.h` and `cargomonitor.cpp`: the cargo transport monitoring.
 //!
-//! The two maps are process-wide statics, serialised by the game-state mutex. No reference into
-//! either map is alive across a leaf or the walk over a station's nearby industries. The `next`
+//! The two maps are process-wide statics, serialised by the game-state mutex. Each operation
+//! takes the one borrow of its map and ends it before it returns; none calls a leaf or another
+//! operation while it holds the borrow, and none is alive across the walk over a station's nearby
+//! industries. The `next`
 //! exports, which the save code calls with uninitialised storage, write only their two output
 //! scalars.
 use crate::bitmath_func::{gb, has_bit, sb, set_bit};
@@ -20,15 +22,15 @@ use crate::overflowsafe_type::add_u32;
 use crate::source_type::{Source, SourceType};
 use crate::station_service::LoadingStation;
 use crate::town_type::TownID;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, btree_map::Entry};
 use std::ops::Bound::{Excluded, Unbounded};
 
 /// Unique number for a company / cargo type / (town or industry).
 /// Encoding is as follows:
 /// - bits 0-15 town or industry number
 /// - bit 16 is set if it is an industry number (else it is a town number).
-/// - bits 19-23 Cargo type.
-/// - bits 24-31 %Company number.
+/// - bits 19-24 Cargo type.
+/// - bits 25-28 %Company number.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CargoMonitorID(pub u32);
@@ -40,20 +42,6 @@ type CargoMonitorMap = BTreeMap<CargoMonitorID, i32>;
 static CARGO_PICKUPS: GameState<CargoMonitorMap> = GameState::new(BTreeMap::new());
 /// Map of monitored deliveries to the amount since last query/activation.
 static CARGO_DELIVERIES: GameState<CargoMonitorMap> = GameState::new(BTreeMap::new());
-
-/// Run `operation` on the map `map` holds; the operation calls no leaf.
-#[allow(
-    unsafe_code,
-    reason = "borrows a process-wide map under the module's contract"
-)]
-fn monitor_map<R>(
-    map: &GameState<CargoMonitorMap>,
-    operation: impl FnOnce(&mut CargoMonitorMap) -> R,
-) -> R {
-    // SAFETY: The game-state mutex serialises every access, and the borrow ends with the
-    // operation, before any leaf or the industry walk.
-    operation(unsafe { &mut *map.get() })
-}
 
 /* Constants for encoding and extracting cargo monitors. */
 /// Start bit of the town or industry number.
@@ -194,16 +182,21 @@ pub fn decode_monitor_town(num: CargoMonitorID) -> TownID {
 /// `ClearCargoMonitoring`: helper method for `ClearCargoPickupMonitoring` and
 /// `ClearCargoDeliveryMonitoring`. Clears all monitors of `cargo_monitor_map` that belong to the
 /// specified company or all if `INVALID_OWNER` is specified as company.
+#[allow(
+    unsafe_code,
+    reason = "borrows a process-wide map under the module's contract"
+)]
 fn clear_cargo_monitoring(cargo_monitor_map: &GameState<CargoMonitorMap>, company: CompanyID) {
-    monitor_map(cargo_monitor_map, |cargo_monitor_map| {
-        if company == Owner::INVALID {
-            cargo_monitor_map.clear();
-            return;
-        }
+    // SAFETY: The game-state mutex serialises every access; this borrow is the map's only one
+    // and ends with the function, which calls no leaf.
+    let cargo_monitor_map = unsafe { &mut *cargo_monitor_map.get() };
+    if company == Owner::INVALID {
+        cargo_monitor_map.clear();
+        return;
+    }
 
-        // The loop's increment is /* nothing */: each entry is erased or stepped over once.
-        cargo_monitor_map.retain(|&key, _| decode_monitor_company(key) != company);
-    });
+    // The loop's increment is /* nothing */: each entry is erased or stepped over once.
+    cargo_monitor_map.retain(|&key, _| decode_monitor_company(key) != company);
 }
 
 /// `ClearCargoPickupMonitoring`: clear all pick-up cargo monitors for `company`, or if
@@ -222,26 +215,33 @@ pub(crate) fn clear_cargo_delivery_monitoring(company: CompanyID) {
 /// monitoring map to search (and reset for the queried entry), `monitor` the cargo monitor to
 /// query/reset; with `keep_monitoring` monitoring continues after the call. Returns the amount
 /// collected since last query/activation for the monitored combination.
+#[allow(
+    unsafe_code,
+    reason = "borrows a process-wide map under the module's contract"
+)]
 fn get_amount(
     monitor_map: &GameState<CargoMonitorMap>,
     monitor: CargoMonitorID,
     keep_monitoring: bool,
 ) -> i32 {
-    self::monitor_map(monitor_map, |monitor_map| {
-        if let Some(iter) = monitor_map.get_mut(&monitor) {
-            let result = *iter;
-            *iter = 0;
-            if !keep_monitoring {
-                monitor_map.remove(&monitor);
-            }
-            result
-        } else {
+    // SAFETY: As `clear_cargo_monitoring`.
+    let monitor_map = unsafe { &mut *monitor_map.get() };
+    match monitor_map.entry(monitor) {
+        Entry::Vacant(iter) => {
             if keep_monitoring {
-                monitor_map.insert(monitor, 0);
+                iter.insert(0);
             }
             0
         }
-    })
+        Entry::Occupied(mut iter) => {
+            let result = *iter.get();
+            *iter.get_mut() = 0;
+            if !keep_monitoring {
+                iter.remove();
+            }
+            result
+        }
+    }
 }
 
 /// `GetDeliveryAmount`: get the amount of cargo delivered for the given cargo monitor since
@@ -259,12 +259,15 @@ pub(crate) fn get_pickup_amount(monitor: CargoMonitorID, keep_monitoring: bool) 
 }
 
 /// `iter->second += amount` on the entry of `num` in `map`, if it is monitored.
+#[allow(
+    unsafe_code,
+    reason = "borrows a process-wide map under the module's contract"
+)]
 fn add_amount(map: &GameState<CargoMonitorMap>, num: CargoMonitorID, amount: u32) {
-    monitor_map(map, |map| {
-        if let Some(iter) = map.get_mut(&num) {
-            add_u32(iter, amount);
-        }
-    });
+    // SAFETY: As `clear_cargo_monitoring`.
+    if let Some(iter) = unsafe { &mut *map.get() }.get_mut(&num) {
+        add_u32(iter, amount);
+    }
 }
 
 /// `AddCargoDelivery`: cargo was delivered to its final destination, update the pickup and
@@ -410,18 +413,17 @@ unsafe fn next(
     key: *mut u32,
     amount: *mut u32,
 ) -> bool {
-    let entry = monitor_map(map, |map| {
-        let entry = if first {
-            map.first_key_value()
-        } else {
-            // SAFETY: The caller's previous key; the save code's storage is uninitialised only
-            // on the first call.
-            let after = CargoMonitorID(unsafe { key.read() });
-            map.range((Excluded(after), Unbounded)).next()
-        };
-        entry.map(|(&number, &value)| (number, value))
-    });
-    let Some((number, value)) = entry else {
+    // SAFETY: As `clear_cargo_monitoring`; the borrow ends with the lookup.
+    let map = unsafe { &*map.get() };
+    let entry = if first {
+        map.first_key_value()
+    } else {
+        // SAFETY: The caller's previous key; the save code's storage is uninitialised only on
+        // the first call.
+        let after = CargoMonitorID(unsafe { key.read() });
+        map.range((Excluded(after), Unbounded)).next()
+    };
+    let Some((&number, &value)) = entry else {
         return false;
     };
     // SAFETY: The caller's writable output scalars, written without a reference.
@@ -468,11 +470,15 @@ pub unsafe extern "C" fn openttd_rust_monitor_next_delivery_abi(
     reason = "the chunk's `uint32_t` amount stored as `OverflowSafeInt32`"
 )]
 #[unsafe(no_mangle)]
-#[allow(unsafe_code, reason = "the exported symbol")]
+#[allow(
+    unsafe_code,
+    reason = "the exported symbol and a borrow of the process-wide map"
+)]
 pub extern "C" fn openttd_rust_monitor_insert_pickup(key: u32, amount: u32) {
-    monitor_map(&CARGO_PICKUPS, |map| {
-        map.entry(CargoMonitorID(key)).or_insert(amount as i32);
-    });
+    // SAFETY: As `clear_cargo_monitoring`.
+    unsafe { &mut *CARGO_PICKUPS.get() }
+        .entry(CargoMonitorID(key))
+        .or_insert(amount as i32);
 }
 /// The load code's `_cargo_deliveries.insert(storage)`: a duplicate key keeps the first amount.
 #[allow(
@@ -480,9 +486,13 @@ pub extern "C" fn openttd_rust_monitor_insert_pickup(key: u32, amount: u32) {
     reason = "the chunk's `uint32_t` amount stored as `OverflowSafeInt32`"
 )]
 #[unsafe(no_mangle)]
-#[allow(unsafe_code, reason = "the exported symbol")]
+#[allow(
+    unsafe_code,
+    reason = "the exported symbol and a borrow of the process-wide map"
+)]
 pub extern "C" fn openttd_rust_monitor_insert_delivery(key: u32, amount: u32) {
-    monitor_map(&CARGO_DELIVERIES, |map| {
-        map.entry(CargoMonitorID(key)).or_insert(amount as i32);
-    });
+    // SAFETY: As `clear_cargo_monitoring`.
+    unsafe { &mut *CARGO_DELIVERIES.get() }
+        .entry(CargoMonitorID(key))
+        .or_insert(amount as i32);
 }

@@ -13,8 +13,9 @@
 //! in place between Rust calls, and the world records the services read. A payment or packet
 //! pointer names a live record. A payment's front is a live vehicle from the constructor to the
 //! destructor, and unresolved between loading and `AfterLoad`. The game-state mutex serialises
-//! every access, and no reference to a payment, the delivery destinations or a station's list
-//! is alive across a callback, a leaf or a delivery.
+//! every access. No reference to a payment or a station's list is alive across a callback, a
+//! leaf or a delivery, and each borrow of the delivery destinations is the list's only one and
+//! ends with the statement that takes it.
 use crate::bitmath_func::{gb, has_bit};
 use crate::cargo_type::CargoType;
 use crate::company_type::{CompanyID, Owner};
@@ -85,21 +86,12 @@ type SmallIndustryList = Vec<*mut Industry>;
 static CARGO_DELIVERY_DESTINATIONS: crate::game_state::GameState<SmallIndustryList> =
     crate::game_state::GameState::new(Vec::new());
 
-/// `_cargo_delivery_destinations`, for one operation that ends before any callback.
-#[allow(
-    unsafe_code,
-    reason = "borrows the process-wide list under the module's contract"
-)]
-fn cargo_delivery_destinations() -> &'static mut SmallIndustryList {
-    // SAFETY: The game-state mutex serialises every access, and each caller ends the borrow
-    // before a callback.
-    unsafe { &mut *CARGO_DELIVERY_DESTINATIONS.get() }
-}
-
 /// Whether `_cargo_delivery_destinations` is empty.
 #[cfg(test)]
+#[allow(unsafe_code, reason = "reads the process-wide list")]
 pub(crate) fn cargo_delivery_destinations_is_empty() -> bool {
-    cargo_delivery_destinations().is_empty()
+    // SAFETY: The test's serialised thread; no other borrow of the list is alive.
+    unsafe { (&*CARGO_DELIVERY_DESTINATIONS.get()).is_empty() }
 }
 
 /// `BigMulS`: multiply two integer values and shift the results to right. The result of `a`
@@ -284,7 +276,9 @@ fn deliver_goods_to_industry(
             }
 
             /* Insert the industry into _cargo_delivery_destinations, if not yet contained */
-            crate::container_func::include(cargo_delivery_destinations(), &ind);
+            // SAFETY: The game-state mutex serialises every access; this borrow of the list is
+            // its only one and ends with the statement.
+            crate::container_func::include(&mut *CARGO_DELIVERY_DESTINATIONS.get(), &ind);
 
             let amount = crate::industry::accept_delivery(owner, it, num_pieces, || {
                 crate::timer_game_common::economy_date()
@@ -443,7 +437,12 @@ pub(crate) fn trigger_industry_production_of_deliveries(s: &Services) {
     /* Call the production machinery of industries */
     // The list is read again at each step: the production callbacks run between them.
     let mut index = 0;
-    while let Some(&iid) = cargo_delivery_destinations().get(index) {
+    loop {
+        // SAFETY: The list's only borrow, which ends with the read.
+        let Some(iid) = (unsafe { (&*CARGO_DELIVERY_DESTINATIONS.get()).get(index).copied() })
+        else {
+            break;
+        };
         // SAFETY: A live industry of the list; no borrow of the list is alive across the call.
         unsafe {
             crate::industry::trigger_industry_production(
@@ -457,7 +456,8 @@ pub(crate) fn trigger_industry_production_of_deliveries(s: &Services) {
         }
         index += 1;
     }
-    cargo_delivery_destinations().clear();
+    // SAFETY: As above.
+    unsafe { (&mut *CARGO_DELIVERY_DESTINATIONS.get()).clear() };
 }
 
 impl CargoPayment {

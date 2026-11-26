@@ -1295,7 +1295,8 @@ impl crate::vehicle::VehicleRef {
         }
     }
     /// `Vehicle::GetExpenseType`: the expense type of the vehicle, a running cost or, for
-    /// `income`, its revenue. Each vehicle type overrides it; the base answers `EXPENSES_OTHER`.
+    /// `income`, its revenue. `Train`, `RoadVehicle`, `Ship` and `Aircraft` override it; the
+    /// base, which effect and disaster vehicles use, answers `EXPENSES_OTHER`.
     pub(crate) fn get_expense_type(self, income: bool) -> ExpensesType {
         match self.vehicle_type() {
             // `Train::GetExpenseType`.

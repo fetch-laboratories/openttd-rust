@@ -4,18 +4,6 @@
   "tool": "rust",
   "before": 0,
   "after": 1,
-  "site": "rust/openttd-kernels/src/cargo_payment.rs | fn cargo_delivery_destinations | allow unsafe_code",
-  "operation": "cargo_payment::cargo_delivery_destinations",
-  "source_contract": "`_cargo_delivery_destinations` (economy.cpp), the static list of industries cargo was brought to.",
-  "reason": "Borrows the process-wide list, which the game-state mutex serialises, for one operation that ends before any callback.",
-  "retiring_owner": "#734",
-  "retirement_condition": "Retires when the game state the mutex serialises is a Rust-owned record whose borrows are checked, which #734's closure sweep places."
- },
- {
-  "kind": "suppression",
-  "tool": "rust",
-  "before": 0,
-  "after": 1,
   "site": "rust/openttd-kernels/src/cargo_payment.rs | fn deliver_goods | allow unsafe_code",
   "operation": "cargo_payment::deliver_goods",
   "source_contract": "`DeliverGoods` (economy.cpp).",
@@ -268,18 +256,6 @@
   "tool": "rust",
   "before": 0,
   "after": 1,
-  "site": "rust/openttd-kernels/src/cargomonitor.rs | fn monitor_map | allow unsafe_code",
-  "operation": "cargomonitor::monitor_map",
-  "source_contract": "`_cargo_pickups` and `_cargo_deliveries` (cargomonitor.cpp).",
-  "reason": "Borrows a process-wide map, which the game-state mutex serialises, for one operation that ends before any leaf.",
-  "retiring_owner": "#734",
-  "retirement_condition": "Retires when the game state the mutex serialises is a Rust-owned record whose borrows are checked, which #734's closure sweep places."
- },
- {
-  "kind": "suppression",
-  "tool": "rust",
-  "before": 0,
-  "after": 1,
   "site": "rust/openttd-kernels/src/cargomonitor.rs | fn next | allow unsafe_code",
   "operation": "cargomonitor::next",
   "source_contract": "The save code's iteration of `_cargo_pickups` and `_cargo_deliveries` (cargomonitor_sl.cpp).",
@@ -477,5 +453,53 @@
   "existing_alternatives": "Keeping the `feeder_payment_share` callback slot, a reader written for one call site that the pass's plan deletes.",
   "retiring_owner": "#734",
   "retirement_condition": "Retires when the settings port (phase 4) moves `_settings_game` to a Rust-owned record the address catalog is no longer needed for."
+ },
+ {
+  "kind": "suppression",
+  "tool": "rust",
+  "before": 0,
+  "after": 1,
+  "site": "rust/openttd-kernels/src/cargomonitor.rs | fn clear_cargo_monitoring | allow unsafe_code",
+  "operation": "cargomonitor::clear_cargo_monitoring",
+  "source_contract": "`ClearCargoMonitoring` (cargomonitor.cpp).",
+  "reason": "Takes the one borrow of a process-wide map, which the game-state mutex serialises, and ends it before returning; the body calls no leaf.",
+  "retiring_owner": "#734",
+  "retirement_condition": "Retires when the game state the mutex serialises is a Rust-owned record whose borrows are checked, which #734's closure sweep places."
+ },
+ {
+  "kind": "suppression",
+  "tool": "rust",
+  "before": 0,
+  "after": 1,
+  "site": "rust/openttd-kernels/src/cargomonitor.rs | fn get_amount | allow unsafe_code",
+  "operation": "cargomonitor::get_amount",
+  "source_contract": "`GetAmount` (cargomonitor.cpp).",
+  "reason": "Takes the one borrow of a process-wide map, which the game-state mutex serialises, and ends it before returning; the body calls no leaf.",
+  "retiring_owner": "#734",
+  "retirement_condition": "Retires when the game state the mutex serialises is a Rust-owned record whose borrows are checked, which #734's closure sweep places."
+ },
+ {
+  "kind": "suppression",
+  "tool": "rust",
+  "before": 0,
+  "after": 1,
+  "site": "rust/openttd-kernels/src/cargomonitor.rs | fn add_amount | allow unsafe_code",
+  "operation": "cargomonitor::add_amount",
+  "source_contract": "`AddCargoDelivery`'s `iter->second += amount` (cargomonitor.cpp).",
+  "reason": "Takes the one borrow of a process-wide map, which the game-state mutex serialises, and ends it before returning; the body calls no leaf.",
+  "retiring_owner": "#734",
+  "retirement_condition": "Retires when the game state the mutex serialises is a Rust-owned record whose borrows are checked, which #734's closure sweep places."
+ },
+ {
+  "kind": "suppression",
+  "tool": "rust",
+  "before": 0,
+  "after": 1,
+  "site": "rust/openttd-kernels/src/cargo_payment.rs | fn cargo_delivery_destinations_is_empty | allow unsafe_code",
+  "operation": "cargo_payment::cargo_delivery_destinations_is_empty",
+  "source_contract": "A test reader of `_cargo_delivery_destinations`; no original body.",
+  "reason": "Reads the process-wide list on the test's thread, with no other borrow alive.",
+  "retiring_owner": "#734",
+  "retirement_condition": "Retires when the game state the mutex serialises is a Rust-owned record whose borrows are checked, which #734's closure sweep places."
  }
 ]

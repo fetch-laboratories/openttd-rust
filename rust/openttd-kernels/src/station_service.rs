@@ -758,8 +758,11 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
     let mut waiting_changed = false;
     byte_inc_sat(unsafe { &raw mut (*state).fields.time_since_load });
     byte_inc_sat(unsafe { &raw mut (*state).fields.time_since_unload });
+    // `CargoSpec::Iterate()`: each slot's spec, tested with `IsValid`.
+    let registry = unsafe { &*w.cargo_registry };
     for cargo in (0..NUM_CARGO).map(CargoType) {
-        if !(w.cargo_valid)(cargo.0) {
+        let cs = crate::cargotype::cargo_spec_get(registry, cargo);
+        if !cs.is_valid() {
             continue;
         }
         let ge = unsafe { cp(state, cargo) };
@@ -804,7 +807,6 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
          * StationID::Invalid() is the only destination.
          */
         let waiting_avg = waiting / num_dests.wrapping_add(1);
-        let cs = crate::cargotype::cargo_spec_get(unsafe { &*w.cargo_registry }, cargo);
         if (w.rating_cheat)() {
             unsafe {
                 (&raw mut (*ge).rating).write(MAX_STATION_RATING);
