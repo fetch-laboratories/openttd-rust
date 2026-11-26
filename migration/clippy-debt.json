@@ -28,12 +28,6 @@
     "rust/openttd-kernels/src/byte_strings.rs | fn case_operation::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_payment.rs | fn deliver_goods | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      10
-    ],
-    "rust/openttd-kernels/src/cargomonitor.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
     "rust/openttd-kernels/src/depot_map.rs | impl crate : : map_func : : World < ' _ >::fn depot::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
@@ -191,23 +185,6 @@
     ],
     "rust/openttd-kernels/src/objects.rs | impl World < ' _ >::fn do_build | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
-    ],
-    "rust/openttd-kernels/src/orders.rs | fn openttd_rust_timetable_change | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/orders.rs | impl Control::fn modify_command | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/orders.rs | impl Game::fn change_timetable | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/orders.rs | impl Game::fn conditional | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
     ],
     "rust/openttd-kernels/src/packet.rs | fn crypt | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
