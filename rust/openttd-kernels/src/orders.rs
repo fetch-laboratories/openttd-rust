@@ -1948,10 +1948,11 @@ fn last_order_in(list: Option<OrderListRef>) -> Option<OrderRef> {
     list.get_order_at(list.get_last_order())
 }
 
-/// `FirstShared()` of the vehicle `v` whose resolved list is `list`.
+/// `FirstShared()` of the vehicle `v` whose resolved list is `list`. With no list the
+/// original returns the stored `first` link as it is, null included.
 fn first_shared_in(list: Option<OrderListRef>, v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
     match list {
-        None => Some(v.first()),
+        None => v.first_link(),
         Some(list) => list.get_first_shared_vehicle(s),
     }
 }
