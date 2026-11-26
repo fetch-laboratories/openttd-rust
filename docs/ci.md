@@ -101,7 +101,7 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 | `MIGRATION_CCACHE` | Nothing: no workflow or tool reads it | `true` | no effect |
 
 - Values read from `gh variable list`; check it before relying on a value.
-- Profile runner sizes with `blacksmith jobs list|steps|stats`, `jobs aggregate` and `jobs diagnose rightsize`. Use an org token, not a person's `~/.blacksmith/credentials`.
+- Read spend with `blacksmith usage` and profile runner sizes with `blacksmith jobs list|steps|stats`, `jobs aggregate` and `jobs diagnose rightsize`. On this host the CLI is logged in as the user: use it as it is, for reads only, and ask the user for nothing. Never copy `~/.blacksmith/credentials` to another machine; an agent that runs elsewhere needs an org token, which only an org admin can mint (`blacksmith org-token create`).
 
 ## Caches
 
