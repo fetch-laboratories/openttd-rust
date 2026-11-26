@@ -3662,14 +3662,18 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
     let may_reverse = v.current_order().is_type(OrderType::OT_NOTHING);
 
     /* Check if we've reached a 'via' destination. */
-    let map = crate::map_func::World::new(s.shared());
     if ((v.current_order().is_type(OrderType::OT_GOTO_STATION)
         && v.current_order()
             .non_stop()
             .test(OrderNonStopFlag::NoDestination))
         || v.current_order().is_type(OrderType::OT_GOTO_WAYPOINT))
-        && map.is_tile_type(v.tile(), crate::tile_type::TileType::MP_STATION)
-        && v.current_order().destination().to_station_id() == map.get_station_index(v.tile())
+        && {
+            // One map view for the two tile reads, built only where the original reads them.
+            let map = crate::map_func::World::new(s.shared());
+            map.is_tile_type(v.tile(), crate::tile_type::TileType::MP_STATION)
+                && v.current_order().destination().to_station_id()
+                    == map.get_station_index(v.tile())
+        }
     {
         delete_unreached_implicit_orders(v, s);
         /* We set the last visited station here because we do not want
