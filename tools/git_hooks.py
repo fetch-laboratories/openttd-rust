@@ -18,6 +18,10 @@ stamp with
     PREFLIGHT_CHECKPOINT="what is incomplete" git push ...
 
 which is logged. It still runs the fast tier. A ready PR always needs the stamp.
+Before any of that, a push that updates rust-migration on GitHub is refused
+while that branch's merge queue holds an entry, naming the queued PRs: a push to
+the base rebuilds every queued merge group. A failed read of the queue refuses
+the push too.
 
 pre-commit: the pinned checker's diff rules on the staged change.
 
@@ -36,6 +40,7 @@ import time
 import unicodedata
 from pathlib import Path
 
+import ci
 import preflight
 import preflight_stamp
 import vcs
@@ -116,7 +121,50 @@ def git_merge_base(base: str, sha: str) -> str:
     return preflight_stamp.git("merge-base", base, sha)
 
 
-def pre_push(lines: list[str]) -> int:
+# The forms of a GitHub push URL: https (with any credential), scp-like ssh, and
+# ssh://, including GitHub's SSH over port 443 at ssh.github.com. Host names
+# ignore case, and any explicit port (such as :443 or Git's :0443) still names
+# github.com, so it reads the queue rather than skip it.
+GITHUB_URL = re.compile(
+    r"(?:https://(?:[^@/]+@)?github\.com(?::\d+)?/"
+    r"|ssh://(?:[^@/]+@)?(?:ssh\.)?github\.com(?::\d+)?/"
+    r"|[^@/:]+@(?:ssh\.)?github\.com:)([\w.-]+)/([\w.-]+?)(?:\.git)?/?",
+    re.IGNORECASE,
+)
+
+
+def push_repository(url: str | None) -> str | None:
+    """OWNER/NAME of the GitHub repository a push goes to, or None for a
+    destination that is not on GitHub, such as a path, which has no queue."""
+    match = GITHUB_URL.fullmatch(url or "")
+    return f"{match[1]}/{match[2]}" if match else None
+
+
+def queue_refusal(updates: list[list[str]], url: str | None) -> str:
+    """The refusal of a push that updates the base while its merge queue holds
+    an entry, or an empty string. A push without the base reads no queue."""
+    if not any(update[2] == f"refs/heads/{BASE_BRANCH}" for update in updates):
+        return ""
+    repository = push_repository(url)
+    if repository is None:
+        return ""
+    queue = ci.branch_queue(repository, BASE_BRANCH)
+    if not queue.total:
+        return ""
+    named = ", ".join(
+        f"#{entry['number']} {ci.entry_text(entry)}" for entry in queue.entries
+    )
+    if more := queue.total - len(queue.entries):
+        named += f" and {more} more"
+    return (
+        f"{BASE_BRANCH}: the merge queue holds {queue.total} "
+        f"{'PR' if queue.total == 1 else 'PRs'} ({named}), and a push to the base "
+        "rebuilds every queued merge group. Hold the commit locally and push when "
+        "the queue is empty"
+    )
+
+
+def pre_push(lines: list[str], url: str | None = None) -> int:
     # Git exports these to hooks; every command here names its worktree by cwd.
     for name in preflight.REPOSITORY_VARIABLES:
         os.environ.pop(name, None)
@@ -129,6 +177,9 @@ def pre_push(lines: list[str]) -> int:
     if not updates:
         return 0
     try:
+        if refusal := queue_refusal(updates, url):
+            print(f"push refused: {refusal}", file=sys.stderr)
+            return 1
         base = preflight.revision(preflight.PROTECTED)
         env = preflight.environment()
         logs = (
@@ -140,7 +191,13 @@ def pre_push(lines: list[str]) -> int:
             for _local, sha, remote_ref, _remote in updates
             if (refusal := check_push(remote_ref, sha, base, env, logs))
         ]
-    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        subprocess.CalledProcessError,
+        ci.QueueUnread,
+    ) as error:
         refusals = [f"pre-push check could not run: {error}"]
     for refusal in refusals:
         print(f"push refused: {refusal}", file=sys.stderr)
@@ -329,7 +386,9 @@ def install(hooks: Path, force: bool) -> int:
 def main(argv: list[str]) -> int:
     command = argv[1] if len(argv) > 1 else ""
     if command == "pre-push":
-        return pre_push(sys.stdin.read().splitlines())
+        # Git passes the remote's name and the URL the push goes to.
+        url = argv[3] if len(argv) > 3 else None
+        return pre_push(sys.stdin.read().splitlines(), url)
     if command == "pre-commit":
         return pre_commit()
     if command == "commit-msg" and len(argv) == 3:

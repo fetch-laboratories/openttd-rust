@@ -419,20 +419,6 @@ inline bool HasSignalOnTrackdir(Tile tile, Trackdir trackdir)
 }
 
 /**
- * Gets the state of the signal along the given trackdir.
- *
- * Along meaning if you are currently driving on the given trackdir, this is
- * the signal that is facing us (for which we stop when it's red).
- */
-inline SignalState GetSignalStateByTrackdir(Tile tile, Trackdir trackdir)
-{
-	assert(IsValidTrackdir(trackdir));
-	assert(HasSignalOnTrack(tile, TrackdirToTrack(trackdir)));
-	return GetSignalStates(tile) & SignalAlongTrackdir(trackdir) ?
-		SIGNAL_STATE_GREEN : SIGNAL_STATE_RED;
-}
-
-/**
  * Sets the state of the signal along the given trackdir.
  */
 inline void SetSignalStateByTrackdir(Tile tile, Trackdir trackdir, SignalState state)

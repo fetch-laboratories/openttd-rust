@@ -24,7 +24,8 @@ one that stands uncalled is a row in tools/uncalled-free-function-baseline.txt,
 which follows the member baseline's rules. Two kinds are exempt: the
 `CheckAbi_*` service-table completeness checks, which src/tests/service_tables.cpp
 calls by token pasting where the scan cannot see the name, and the entries the
-platform calls by name.
+platform calls by name. The functions in GENERATED_CALLERS count as called
+from the comparison adapters that compile pinned original bodies calling them.
 
 An export whose only C++ user is a native fixture that #736's classification keeps
 is not an orphan; it leaves with that fixture (docs/porting.md, callees and shared
@@ -54,6 +55,18 @@ UNCALLED_FREE = "tools/uncalled-free-function-baseline.txt"
 ENTRY_POINTS = {"WinMain", "em_openttd_add_server"}
 # src/tests/service_tables.cpp calls each CheckAbi_<unit> by token pasting.
 ABI_CHECK = re.compile(r"CheckAbi_\w+")
+# Called from pinned original bodies that a comparison adapter extracts at run time
+# and compiles against the candidate's headers, where no tracked file holds the
+# call: tools/simulation/rails.py writes pbs-original.hpp (the four track helpers)
+# and tools/simulation/signals.py writes road-cleanup-original.hpp
+# (MirrorRoadBits). The scan counts each as called from its generator.
+GENERATED_CALLERS = {
+    "TrackBitsToTrackdirBits": "tools/simulation/rails.py",
+    "TrackToTrackdirBits": "tools/simulation/rails.py",
+    "FindFirstTrackdir": "tools/simulation/rails.py",
+    "TrackOverlapsTracks": "tools/simulation/rails.py",
+    "MirrorRoadBits": "tools/simulation/signals.py",
+}
 KEPT_FIXTURES = "tools/kept-fixture-exports.txt"
 # Neither defines functions this fork calls by name: vendored code, and the
 # script API, whose Squirrel bindings are generated.
@@ -279,6 +292,9 @@ def uncalled_free_functions(
     }
     defined = free_function_sites(sources)
     used = free_uses(sources, set(defined))
+    for name, generator in GENERATED_CALLERS.items():
+        if name in defined:
+            used.setdefault(name, set()).add(generator)
     production = {
         name
         for name, paths in used.items()

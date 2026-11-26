@@ -10,7 +10,7 @@
 
   Check the whole diff, both paths of a rename included. Everything else goes through a PR that passes CI. A file joins the list once nothing in a build, test or check reads it. The list is `inert` in `tools/preflight_stamp.py` and in the three workflows that share its rule, and the push filter of `ci-build.yml` and `rust-migration.yml`; `tools/test-ci.py` holds them to one rule.
 - Commit a docs-only change directly to `rust-migration`, one commit per change, and push it when done. These pushes use administrative bypass of branch protection, which covers docs-only pushes and nothing else.
-- Push to `rust-migration` only while the merge queue is empty; hold the commit locally until then. Any push to the base rebuilds every queued PR's merge group and starts its Full run again, and after a queue removal the requeue check refuses a head that is behind by any commit that changes more than docs-only files. `gh pr list --search "is:queued"` lists the queue.
+- Push to `rust-migration` only while the merge queue is empty; hold the commit locally until then. Any push to the base rebuilds every queued PR's merge group and starts its Full run again, and after a queue removal the requeue check refuses a head that is behind by any commit that changes more than docs-only files. The pre-push hook reads the queue and refuses such a push while it holds an entry, naming the queued PRs.
 
 ## Records
 

@@ -3665,6 +3665,7 @@ class RetryTests(unittest.TestCase):
             ("variable", "list", "--repo", "x/y"),
             ("repo", "view", "--json", "nameWithOwner"),
             queue,
+            ("api", "graphql", "-f", f"query={ci.BASE_QUEUE}", "-F", "branch=b"),
         ):
             with self.subTest(read=read[:2]):
                 answer, calls, _ = self.run_gh(1, *read)
@@ -3672,6 +3673,56 @@ class RetryTests(unittest.TestCase):
                 _, calls, error = self.run_gh(5, *read)
                 self.assertEqual(len(calls), ci.READ_ATTEMPTS)
                 self.assertIsNotNone(error)
+
+    def branch_queue(self, queue: object) -> tuple[ci.BranchQueue, tuple[str, ...]]:
+        answer = json.dumps({"data": {"repository": {"mergeQueue": queue}}})
+        with patch.object(ci, "gh", return_value=answer) as gh:
+            read = ci.branch_queue("owner/name", "rust-migration")
+        (arguments,) = (call.args for call in gh.call_args_list)
+        return read, arguments
+
+    def test_an_empty_base_queue_reads_as_empty(self) -> None:
+        read, arguments = self.branch_queue({"entries": {"totalCount": 0, "nodes": []}})
+        self.assertEqual(read, ci.BranchQueue((), 0))
+        self.assertTrue(ci.read_only(arguments))
+        self.assertEqual(arguments[2:4], ("--hostname", "github.com"))
+        for value in ("owner=owner", "name=name", "branch=rust-migration"):
+            # -f: a name such as 2048 must stay a String, not become an Int.
+            self.assertEqual(arguments[arguments.index(value) - 1], "-f")
+
+    def test_a_queued_base_names_each_pr_and_counts_past_the_page(self) -> None:
+        nodes = [
+            {"state": "QUEUED", "position": 1, "pullRequest": {"number": 1066}},
+            {"state": "AWAITING_CHECKS", "position": 2, "pullRequest": {"number": 7}},
+        ]
+        read, _ = self.branch_queue({"entries": {"totalCount": 14, "nodes": nodes}})
+        self.assertEqual(read.total, 14)
+        self.assertEqual(
+            read.entries,
+            (
+                {"state": "QUEUED", "position": 1, "number": 1066},
+                {"state": "AWAITING_CHECKS", "position": 2, "number": 7},
+            ),
+        )
+        self.assertEqual(
+            ci.entry_text(read.entries[1]), "queued awaiting_checks at position 2"
+        )
+
+    def test_a_missing_base_queue_is_a_failed_read(self) -> None:
+        node = {"state": "QUEUED", "position": 1, "pullRequest": None}
+        for queue in (
+            None,
+            {"entries": None},
+            {"entries": {"totalCount": 1, "nodes": None}},
+            {"entries": {"totalCount": 1, "nodes": [None]}},
+            {"entries": {"totalCount": 1, "nodes": [node]}},
+            {"entries": {"totalCount": None, "nodes": []}},
+        ):
+            with (
+                self.subTest(queue=queue),
+                self.assertRaisesRegex(ci.QueueUnread, "owner/name rust-migration"),
+            ):
+                self.branch_queue(queue)
 
     def test_an_ordinary_number_is_no_gateway_error(self) -> None:
         for text, expected in (
