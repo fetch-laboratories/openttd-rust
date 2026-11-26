@@ -4320,9 +4320,10 @@ class EnqueueWorld:
     recorded_jobs: list[dict[str, str]] = field(default_factory=list)
     # The run `request --diagnose 3` names.
     named: ci_log.Run | None = None
-    # The jobs of run 8 and the annotation each of its jobs carries.
-    jobs: list[dict[str, Any]] = field(default_factory=list)
-    annotation: str = ""
+    # The jobs of run 8, or the error GitHub answers for them, and the annotation
+    # of each job that has one, by job ID.
+    jobs: list[ci_log.Job] | subprocess.CalledProcessError = field(default_factory=list)
+    annotations: dict[int, str] = field(default_factory=dict)
     retry: str | None = None
     entry: dict[str, object] | None = None
     armed: dict[str, object] | None = None
@@ -4394,8 +4395,10 @@ class EnqueueTests(unittest.TestCase):
             f"compare/{HEAD}...rust-migration": {"files": world.base_files},
             "actions/runs/9": world.recorded,
             "actions/runs/3": world.named,
-            "/annotations": [{"message": world.annotation}],
+            "/annotations": [],
         }
+        for job, message in world.annotations.items():
+            answers[f"check-runs/{job}/annotations"] = [{"message": message}]
         listings: dict[str, object] = {
             "event=workflow_dispatch": [
                 {"workflow_runs": page}
@@ -4403,7 +4406,9 @@ class EnqueueTests(unittest.TestCase):
             ],
             "event=pull_request": [{"workflow_runs": world.labeled}],
             "pulls/170/files": [world.files],
-            "actions/runs/8/jobs": [{"jobs": world.jobs}],
+            "actions/runs/8/jobs": world.jobs
+            if isinstance(world.jobs, subprocess.CalledProcessError)
+            else [{"jobs": world.jobs}],
         }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
@@ -4416,6 +4421,8 @@ class EnqueueTests(unittest.TestCase):
         def gh(*args: str) -> str:
             if args[:2] == ("api", "--paginate"):
                 (pages,) = [v for key, v in listings.items() if key in args[-1]]
+                if isinstance(pages, subprocess.CalledProcessError):
+                    raise pages
                 return json.dumps(pages)
             calls.append(args)
             state = {
@@ -4525,7 +4532,8 @@ class EnqueueTests(unittest.TestCase):
         """The rule of workflow.md's checks, which only the doc held (#896)."""
         green = self.REQUESTED
         earlier = dict(green, id=1, display_title=f"CI native PR 170 x-{BASE}")
-        later = dict(green, id=7, created_at="2026-11-12T05:00:00Z")
+        # Run 8 is the one whose jobs the recorded answers hold.
+        later = dict(green, id=8, created_at="2026-11-12T05:00:00Z")
         rust = dict(later, display_title=f"CI rust PR 170 r-{HEAD}")
         platform = dict(later, display_title=f"CI platform PR 170 p-{HEAD}")
         workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
@@ -4556,13 +4564,18 @@ class EnqueueTests(unittest.TestCase):
             ),
             # A removal the request does not name waives nothing.
             ("removed by the queue since", {"queue": [self.EJECTED]}),
-            # A workflow change's passing run is already at its head.
+            # A workflow change queues on its bootstrap Full at the head, so it
+            # needs no second native either.
             ("workflow files, green at the head", {"files": workflow}),
+            (
+                "workflow files, green on an earlier commit",
+                {"requested": earlier, "commits": [BASE, HEAD], "files": workflow},
+            ),
         ):
             with self.subTest(label):
                 with self.assertRaisesRegex(
                     ValueError,
-                    r"one `native` run.*runs/2.*enqueue 170.*--diagnose RUN",
+                    r"one `native` run.*runs/[12].*enqueue 170.*--diagnose RUN",
                 ):
                     self.first_native(options)
 
@@ -4573,7 +4586,6 @@ class EnqueueTests(unittest.TestCase):
         earlier = dict(green, display_title=f"CI native PR 170 x-{BASE}")
         # A checker-only Full runs Quick alone, so no green Full is a native run.
         full = dict(earlier, display_title=f"CI full PR 170 f-{BASE}")
-        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
         for label, options in (
             ("no run yet", {"requested": None}),
             ("only a red native", {"requested": red}),
@@ -4581,11 +4593,6 @@ class EnqueueTests(unittest.TestCase):
             (
                 "a green Full on an earlier commit",
                 {"requested": full, "commits": [BASE, HEAD]},
-            ),
-            # enqueue needs a workflow change's passing run at its head.
-            (
-                "workflow files, green on an earlier commit",
-                {"requested": earlier, "commits": [BASE, HEAD], "files": workflow},
             ),
         ):
             with self.subTest(label):
@@ -4645,12 +4652,23 @@ class EnqueueTests(unittest.TestCase):
                     self.first_native({"named": named}, "3")
         with self.assertRaisesRegex(ValueError, "run ID or URL"):
             self.first_native({}, "the queue's run")
+        # A URL names this repository's run, and no attempt or job of it.
+        run = "actions/runs/3"
+        for url in (
+            f"https://github.com/another/fork/{run}",
+            f"https://github.com/example/fork/{run}/attempts/7",
+            f"https://github.com/example/fork/{run}/job/9",
+        ):
+            with self.subTest(url):
+                with self.assertRaisesRegex(ValueError, "a run of example/fork"):
+                    self.first_native({"named": failed}, url)
 
     def request_native(
         self, diagnose: str | None, **options: object
-    ) -> tuple[list[str], list[tuple[str, ...]]]:
+    ) -> tuple[list[str], list[tuple[str, ...]], str]:
         """Run `request --profile native` itself on an EnqueueWorld of `options`;
-        return the request records it wrote and its gh writes."""
+        return the request records it wrote, its gh writes and what it logged,
+        whether or not it refused."""
         world = EnqueueWorld(**cast(dict[str, Any], options))
         args = argparse.Namespace(
             repo="example/fork",
@@ -4664,35 +4682,47 @@ class EnqueueTests(unittest.TestCase):
             request_file=None,
         )
         records: list[str] = []
+        logged: list[str] = []
 
         def request() -> str:
             try:
                 ci.request(args)
-            finally:
-                records.extend(path.name for path in ci.REQUESTS.glob("*.json"))
+            except ValueError as refusal:
+                self.refusal = str(refusal)
+            records.extend(path.name for path in ci.REQUESTS.glob("*.json"))
+            if self.overrides.exists():
+                logged.append(self.overrides.read_text())
             return ""
 
+        self.refusal = ""
         self.within(world, request)
-        return records, self.calls
+        return records, self.calls, "".join(logged)
 
     def test_request_refuses_before_any_record_or_dispatch(self) -> None:
         """The check is the request command's own, not only a function beside it."""
-        with self.assertRaisesRegex(ValueError, "one `native` run"):
-            self.request_native(None)
-        self.assertEqual(self.calls, [])
-        # The refusal wrote no request record either.
-        records, calls = self.request_native(None, requested=None)
-        self.assertEqual(len(records), 1)
+        records, calls, logged = self.request_native(None)
+        self.assertIn("one `native` run", self.refusal)
+        self.assertEqual((records, calls, logged), ([], [], ""))
+        # With no green native yet, the same request dispatches and logs nothing.
+        records, calls, logged = self.request_native(None, requested=None)
+        self.assertEqual((self.refusal, len(records), logged), ("", 1, ""))
         self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
         self.assertIn("profile=native", calls[0])
-        records, calls = self.request_native("3", named=self.FAILED_FULL)
-        self.assertEqual(len(records), 1)
+        # A named failed Full dispatches too, and the log names that run.
+        records, calls, logged = self.request_native("3", named=self.FAILED_FULL)
+        self.assertEqual((self.refusal, len(records)), ("", 1))
         self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+        (entry,) = logged.splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "diagnose", "reason": self.EJECTED["html_url"]},
+        )
 
     def test_a_platform_run_without_a_macos_runner_is_passed_over(self) -> None:
         """No macOS job runs on a paid runner (ADR 0009): a platform run whose
-        only failures are macOS jobs GitHub never started leaves the PR to queue
-        on the run before it, and every other failure still refuses."""
+        only failures are macOS jobs GitHub never started, and the jobs that fail
+        with them, leaves the PR to queue on the run before it. Every other
+        failure still refuses."""
         platform = dict(
             self.REQUESTED,
             id=8,
@@ -4701,21 +4731,41 @@ class EnqueueTests(unittest.TestCase):
             created_at="2026-11-12T05:00:00Z",
             html_url="https://github.com/example/fork/actions/runs/8",
         )
-        unstarted = {
-            "id": 81,
-            "name": "platform / Mac OS (arm64 - Release) / CI",
-            "conclusion": "cancelled",
-            "runner_id": 0,
-            "steps": [],
-        }
-        complete = {"id": 82, "name": "platform / complete", "conclusion": "failure"}
-        windows = {
-            "id": 83,
-            "name": "platform / Windows (x64) / CI",
-            "conclusion": "failure",
-        }
+
+        def job(
+            job_id: int, name: str, conclusion: str, ran: bool = True
+        ) -> ci_log.Job:
+            return {
+                "id": job_id,
+                "run_id": 8,
+                "name": f"platform / {name}",
+                "status": "completed",
+                "conclusion": conclusion,
+                "html_url": f"https://github.com/example/fork/actions/runs/8/job/{job_id}",
+                "runner_id": 7 if ran else 0,
+                "steps": [{"name": "Build", "number": 1, "conclusion": conclusion}]
+                if ran
+                else [],
+            }
+
+        release = "Mac OS (arm64 - Release) / CI"
+        unstarted = job(81, release, "cancelled", ran=False)
+        debug = job(84, "Mac OS (arm64 - Debug) / CI", "success")
+        # As in cadence run 45689219061: the cancellation's annotation fails both
+        # annotation checks, and completion needs macOS.
+        downstream = [
+            job(85, "Check macos annotations", "failure"),
+            job(86, "Check Annotations", "failure"),
+            job(82, "complete", "failure"),
+        ]
+        windows = job(83, "Windows (x64) / CI", "failure")
+        linux = job(87, "Check linux annotations", "failure")
         capacity = "The job was not acquired by Runner of type hosted even after multiple attempts"
-        runs = [self.REQUESTED, platform]
+        usual: dict[str, object] = {
+            "dispatched": [self.REQUESTED, platform],
+            "jobs": [unstarted, debug, *downstream],
+            "annotations": {81: capacity},
+        }
         entry = {"state": "QUEUED", "position": 1}
         for label, options in (
             ("the run failed", {}),
@@ -4728,54 +4778,86 @@ class EnqueueTests(unittest.TestCase):
                     ]
                 },
             ),
+            ("no macOS job started", {"jobs": [unstarted, *downstream]}),
         ):
             with self.subTest(label):
-                reported, _ = self.enqueue(
-                    **{
-                        "dispatched": runs,
-                        "jobs": [unstarted, complete],
-                        "annotation": capacity,
-                        "entry": entry,
-                        **options,
-                    }
-                )
+                reported, _ = self.enqueue(**{**usual, "entry": entry, **options})
                 self.assertTrue(reported.startswith("queued"))
-        started = dict(unstarted, runner_id=7, steps=[{"name": "Build"}])
+        started = job(81, release, "cancelled")
         for label, options, message in (
             (
                 "cancelled by hand",
-                {"annotation": "The run was canceled by @someone."},
+                {"annotations": {81: "The run was canceled by @someone."}},
                 "runs/8",
             ),
             (
                 "macOS started and was cancelled",
-                {"jobs": [started, complete]},
+                {"jobs": [started, debug, *downstream]},
                 "runs/8",
             ),
             (
                 "macOS failed",
-                {"jobs": [dict(started, conclusion="failure"), complete]},
+                {"jobs": [job(81, release, "failure"), debug, *downstream]},
                 "runs/8",
             ),
             (
                 "another build failed too",
-                {"jobs": [unstarted, windows, complete]},
+                {"jobs": [unstarted, debug, windows, *downstream]},
                 "runs/8",
             ),
-            ("only the completion job failed", {"jobs": [complete]}, "runs/8"),
+            (
+                "another platform's annotations failed too",
+                {"jobs": [unstarted, debug, linux, *downstream]},
+                "runs/8",
+            ),
+            # The macOS job that ran has an annotation of its own, so the checks
+            # did not fail for the cancellation alone.
+            (
+                "the macOS job that ran has a warning",
+                {"annotations": {81: capacity, 84: "unused variable"}},
+                "runs/8",
+            ),
+            ("only downstream jobs failed", {"jobs": [debug, *downstream]}, "runs/8"),
             # With no run before it, the PR still has no requested run to read.
             ("no run before it", {"dispatched": [platform]}, "no requested run"),
+            # A jobs read GitHub fails blocks the queue and names what it lacked.
+            (
+                "GitHub did not return the jobs",
+                {"jobs": subprocess.CalledProcessError(1, "gh")},
+                "did not return: the jobs of platform run 8",
+            ),
         ):
             with self.subTest(label):
                 with self.assertRaisesRegex(ValueError, message):
-                    self.enqueue(
-                        **{
-                            "dispatched": runs,
-                            "jobs": [unstarted, complete],
-                            "annotation": capacity,
-                            **options,
-                        }
-                    )
+                    self.enqueue(**{**usual, **options})
+
+    def test_a_failed_jobs_read_keeps_the_runs_it_read(self) -> None:
+        """`state` shows the PR's runs while its enqueue checks say blocked."""
+        platform: ci_log.Run = {
+            **self.REQUESTED,
+            "id": 8,
+            "display_title": f"CI platform PR 170 p-{HEAD}",
+            "conclusion": "failure",
+        }
+        world = EnqueueWorld(
+            dispatched=[self.REQUESTED, platform],
+            jobs=subprocess.CalledProcessError(1, "gh"),
+        )
+        seen: list[ci.PrRuns] = []
+
+        def read() -> str:
+            seen.append(
+                ci.read_pr_runs("example/fork", 170, "2026-11-11T00:00:00Z", HEAD)
+            )
+            return ""
+
+        self.within(world, read)
+        (runs,) = seen
+        self.assertEqual(
+            [tested.profile for tested in runs.runs], ["native", "platform"]
+        )
+        self.assertEqual(runs.unread, ["the jobs of platform run 8"])
+        self.assertEqual(len(runs.gated()), 2)
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
         entry = {"state": "AWAITING_CHECKS", "position": 2}

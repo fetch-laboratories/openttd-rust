@@ -1430,6 +1430,13 @@ class PrRuns:
     commits: list[str]
     runs: list[TestedRun]
     unread: list[str] = field(default_factory=list)
+    # How many of the newest runs only lacked a macOS runner: `enqueue` passes
+    # over them and reads the run before.
+    untested: int = 0
+
+    def gated(self) -> list[TestedRun]:
+        """The runs up to the one `enqueue` reads."""
+        return self.runs[: len(self.runs) - self.untested]
 
 
 def recorded_runs(
@@ -1553,53 +1560,86 @@ def requeue_gate(repository: str, pr: int, head: str, retry: str | None) -> None
     print(f"Queueing PR #{pr} again unchanged after {url}; logged in {log}")
 
 
-def read_pr_runs(repository: str, pr: int, opened: str, head: str) -> PrRuns:
-    return pr_requested_runs(repository, pr, opened, pr_commits(repository, head))
-
-
 MACOS_JOB = "Mac OS"
 # GitHub's failure annotation on a job no hosted runner ever took; a cancel by
 # hand also leaves no runner and no step, but says who cancelled.
 UNACQUIRED = "was not acquired by Runner of type hosted"
-# The job of a platform run that fails whenever one of its builds did not pass.
-PLATFORM_COMPLETE = "platform / complete"
+# The jobs of a platform run that fail because a macOS job did not run: that
+# job's annotation fails both annotation checks, and completion needs macOS.
+MACOS_DOWNSTREAM = (
+    "platform / Check macos annotations",
+    "platform / Check Annotations",
+    "platform / complete",
+)
+
+
+class Annotation(TypedDict):
+    """A check-run annotation, with the field these tools read."""
+
+    message: str | None
+
+
+def annotations(repository: str, job: ci_log.Job) -> list[Annotation]:
+    return cast(
+        list[Annotation], api(repository, f"check-runs/{job['id']}/annotations")
+    )
 
 
 def capacity_cancelled(repository: str, job: ci_log.Job) -> bool:
     """A macOS job GitHub cancelled because no hosted runner took it. A job
     cancelled after a runner started it, or cancelled by hand, does not count."""
     if not (
-        MACOS_JOB in job["name"]
-        and job["conclusion"] == "cancelled"
+        job["conclusion"] == "cancelled"
         and not job.get("runner_id")
         and not job.get("steps")
     ):
         return False
-    notes = cast(list, api(repository, f"check-runs/{job['id']}/annotations"))
-    return any(UNACQUIRED in (note.get("message") or "") for note in notes)
+    return any(
+        UNACQUIRED in (note.get("message") or "")
+        for note in annotations(repository, job)
+    )
 
 
 def untested_for_capacity(repository: str, tested: TestedRun) -> bool:
-    """Whether a `platform` run failed only because GitHub had no macOS runner: no
-    job failed but macOS jobs no hosted runner took and the completion job that
-    needs them. No macOS job runs on a paid runner (ADR 0009), so such a run
-    tested nothing the gate reads, and the gate reads the run before it
-    (root-workflow.md, CI administration)."""
+    """Whether a `platform` run failed only because GitHub had no macOS runner.
+
+    Its failed jobs are macOS jobs no hosted runner took and the jobs that fail
+    with them, and every macOS job that did run passed with no annotation, so
+    the annotation checks failed for the cancellation alone. No macOS job runs
+    on a paid runner (ADR 0009), so such a run tested nothing the gate reads,
+    and the gate reads the run before it (root-workflow.md, CI administration)."""
     run = tested.run
     if tested.profile != "platform" or run["conclusion"] not in REMOVED:
         return False
-    failed = failed_jobs(repository, run["id"])
-    others = [job for job in failed if job["name"] != PLATFORM_COMPLETE]
-    return bool(others) and all(capacity_cancelled(repository, job) for job in others)
+    jobs = run_jobs(repository, run["id"])
+    macos = [job for job in jobs if MACOS_JOB in job["name"]]
+    unstarted = [job for job in macos if capacity_cancelled(repository, job)]
+    ran = [job for job in macos if job not in unstarted]
+    failed = [job for job in jobs if job["conclusion"] in JOB_FAILED]
+    return (
+        bool(unstarted)
+        and all(job in unstarted or job["name"] in MACOS_DOWNSTREAM for job in failed)
+        and all(
+            job["conclusion"] == "success" and not annotations(repository, job)
+            for job in ran
+        )
+    )
 
 
-def gate_runs(repository: str, runs: list[TestedRun]) -> list[TestedRun]:
-    """`runs` up to the one `enqueue` reads: without the newest `platform` runs
-    that only lacked a macOS runner."""
-    runs = list(runs)
-    while runs and untested_for_capacity(repository, runs[-1]):
-        runs.pop()
-    return runs
+def read_pr_runs(repository: str, pr: int, opened: str, head: str) -> PrRuns:
+    """The PR's runs, with the one read of which newest runs only lacked a macOS
+    runner. Where GitHub does not return a run's jobs, the read names them as
+    unread, which blocks `enqueue` and leaves `state` its other facts."""
+    read = pr_requested_runs(repository, pr, opened, pr_commits(repository, head))
+    try:
+        while read.untested < len(read.runs) and untested_for_capacity(
+            repository, read.runs[-1 - read.untested]
+        ):
+            read.untested += 1
+    except subprocess.CalledProcessError:
+        newest = read.runs[-1 - read.untested]
+        read.unread.append(f"the jobs of {newest.profile} run {newest.run['id']}")
+    return read
 
 
 def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
@@ -1613,7 +1653,7 @@ def gate_run(repository: str, pr: int, head: str, read: PrRuns) -> TestedRun:
             f"PR #{pr}'s request records name runs GitHub did not return: "
             + ", ".join(read.unread)
         )
-    runs = gate_runs(repository, read.runs)
+    runs = read.gated()
     if not runs:
         raise ValueError(
             f"PR #{pr} has no requested run on its commits up to {head}; "
@@ -1655,6 +1695,10 @@ def failed_full(repository: str, pr: int, named: str) -> ci_log.Run:
     match = RUN_URL.fullmatch(named)
     if not match and not named.isdigit():
         raise ValueError(f"--diagnose takes a run ID or URL, not {named!r}")
+    if match and (match[1] != repository or match[3] or match[4]):
+        raise ValueError(
+            f"--diagnose takes a run of {repository}, with no attempt or job: {named}"
+        )
     run = cast(
         ci_log.Run, api(repository, f"actions/runs/{match[2] if match else named}")
     )
@@ -1690,8 +1734,8 @@ def require_first_native(
 
     A paid run that repeats a green one was a quarter of each day's CI spend
     before the rule (#896). A green Full does not count: a checker-only Full
-    runs Quick alone. One case runs again unnamed: a PR that changes workflow
-    definitions, whose passing run `enqueue` needs at its head."""
+    runs Quick alone. A workflow change needs no exception: the bootstrap Full
+    it queues on is its passing run at the head."""
     runs = read_pr_runs(repository, pr, opened, head).runs
     passed = [
         tested
@@ -1701,8 +1745,6 @@ def require_first_native(
     if not passed:
         return
     green = passed[-1]
-    if green.commit != head and changes_definitions(repository, pr):
-        return
     if diagnose:
         failed = failed_full(repository, pr, diagnose)
         log = preflight_stamp.log_override(
@@ -2005,9 +2047,7 @@ def pull_state(repository: str, pr: int) -> PullState:
         mergeable=mergeable_word(pull),
         quick=run_fact(quick) if quick else None,
         requests=requests_at_head(shown.runs, head),
-        newest_request=newest_on_commits(
-            gate_runs(repository, shown.runs), shown.commits
-        ),
+        newest_request=newest_on_commits(shown.gated(), shown.commits),
         queue=queue_fact(repository, pr),
         reports=reports,
         enqueue_checks=enqueue_assessment(repository, pr, pull, read),
