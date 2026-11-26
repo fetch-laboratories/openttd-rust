@@ -417,9 +417,6 @@ inline TrackdirBits DiagdirReachesTrackdirs(DiagDirection diagdir)
  */
 inline TrackBits DiagdirReachesTracks(DiagDirection diagdir) { return TrackdirBitsToTrackBits(DiagdirReachesTrackdirs(diagdir)); }
 
-/* Note that there is no direct table for this function (there used to be),
- * but it uses two simpler tables to achieve the result */
-
 /**
  * Maps a trackdir to all trackdirs that make 90 deg turns with it.
  *

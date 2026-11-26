@@ -1203,9 +1203,9 @@ def queue_state(repository: str, pr: int) -> QueueState:
     return answer["data"]["repository"]["pullRequest"]
 
 
-# The queue of a branch, whatever PR is asking. A merge group holds at most five
-# entries (the ruleset's max_entries_to_build), but the queue may hold more, so
-# totalCount and not the page says whether it is empty.
+# The queue of a branch, whatever PR is asking. The queue may hold more entries
+# than the page of ten asked for, so totalCount and not the page says whether it
+# is empty.
 BASE_QUEUE = """
 query($owner: String!, $name: String!, $branch: String!) {
   repository(owner: $owner, name: $name) {

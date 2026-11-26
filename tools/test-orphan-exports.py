@@ -382,17 +382,27 @@ class OrphanTests(unittest.TestCase):
 
     def test_generated_callers_count_as_called_from_their_generator(self) -> None:
         """An adapter's extracted original body calls these; no tracked file does."""
-        files = {
-            "src/track_func.h": "inline TrackBits TrackOverlapsTracks(TrackBits tracks)\n{\n"
-            "\treturn tracks;\n}\n"
-            "inline Track Dead(TrackBits tracks)\n{\n\treturn TRACK_X;\n}\n",
-            "src/main.cpp": "int main() {}\n",
-        }
-        uncalled, test_only, _ = ORPHANS.uncalled_free_functions(files)
-        self.assertEqual(uncalled, {"Dead": "src/track_func.h:5"})
-        self.assertEqual(test_only, {"TrackOverlapsTracks": "src/track_func.h:1"})
+        kept = sorted(ORPHANS.GENERATED_CALLERS)
         self.assertEqual(
-            ORPHANS.GENERATED_CALLERS["MirrorRoadBits"], "tools/simulation/signals.py"
+            kept,
+            [
+                "FindFirstTrackdir",
+                "MirrorRoadBits",
+                "TrackBitsToTrackdirBits",
+                "TrackOverlapsTracks",
+                "TrackToTrackdirBits",
+            ],
+        )
+        header = "".join(
+            f"inline int {name}(int v)\n{{\n\treturn v;\n}}\n" for name in kept
+        )
+        header += "inline int Dead(int v)\n{\n\treturn v;\n}\n"
+        files = {"src/helpers.h": header, "src/main.cpp": "int main() {}\n"}
+        uncalled, test_only, _ = ORPHANS.uncalled_free_functions(files)
+        self.assertEqual(uncalled, {"Dead": f"src/helpers.h:{4 * len(kept) + 1}"})
+        self.assertEqual(
+            test_only,
+            {name: f"src/helpers.h:{4 * i + 1}" for i, name in enumerate(kept)},
         )
 
     def test_the_gate_exempts_abi_checks_and_platform_entries(self) -> None:
