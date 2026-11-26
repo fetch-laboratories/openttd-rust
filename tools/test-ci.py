@@ -4488,10 +4488,12 @@ class EnqueueTests(unittest.TestCase):
                     self.enqueue(**options)
                 self.assertEqual(self.calls, [])
 
-    def first_native(self, again: str | None = None, **options: object) -> str:
+    def first_native(
+        self, options: Mapping[str, object], again: str | None = None
+    ) -> str:
         """Run request's one-native-run check on an EnqueueWorld of `options`;
         return what it logged."""
-        world = EnqueueWorld(**cast(dict[str, Any], options))
+        world = EnqueueWorld(**cast(dict[str, Any], dict(options)))
 
         def check() -> str:
             pull = dict(PULL, created_at="2026-11-11T00:00:00Z")
@@ -4527,7 +4529,7 @@ class EnqueueTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, r"one `native` run.*runs/2.*ci\.py enqueue 170"
                 ):
-                    self.first_native(**options)
+                    self.first_native(options)
 
     def test_native_runs_again_for_a_red_run_a_removal_or_a_reason(self) -> None:
         green = self.REQUESTED
@@ -4553,8 +4555,8 @@ class EnqueueTests(unittest.TestCase):
             ),
         ):
             with self.subTest(label):
-                self.assertEqual(self.first_native(**options), "")
-        (entry,) = self.first_native(again="flaky shard").splitlines()
+                self.assertEqual(self.first_native(options), "")
+        (entry,) = self.first_native({}, again="flaky shard").splitlines()
         self.assertEqual(
             {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
             {"kind": "again", "reason": "flaky shard"},
