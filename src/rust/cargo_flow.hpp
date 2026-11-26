@@ -50,13 +50,11 @@ public:
 		const_iterator begin() const { return {this->state, openttd_rust_flow_shares_begin(this->state)}; }
 		const_iterator end() const { return {this->state, {0, 0, 0}}; }
 		size_t size() const { return std::distance(this->begin(), this->end()); }
-		bool empty() const { return this->begin() == this->end(); }
 	};
 private:
 	SharesView view;
 	FlowStat(OpenTTDCargoFlow *state, bool owned) : state(state), owned(owned), view(state) {}
 public:
-	FlowStat() : FlowStat(nullptr, false) { NOT_REACHED(); }
 	FlowStat(StationID st, uint flow, bool restricted = false) : FlowStat(openttd_rust_flow_new(st.base(), flow, restricted), true) {}
 	FlowStat(const FlowStat &other) = delete;
 	FlowStat(FlowStat &&other) noexcept : FlowStat(other.state, other.owned) { other.owned = false; }
