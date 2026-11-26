@@ -165,6 +165,7 @@ int main()
 		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();
 		f.record.orders = range_orders->vehicle.get();
+		f.record.consist = &range_orders->consist;
 		openttd_test_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
 		openttd_rust_occupancy_update(nullptr, &f.record, true);
