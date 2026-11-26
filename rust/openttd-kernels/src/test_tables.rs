@@ -1528,9 +1528,9 @@ pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::S
     registry: ptr::null(),
     resolver: ptr::null(),
     shared: ptr::null(),
+    station_town: unreachable1,
     stations: ptr::null(),
     subsidies: unreachable0,
-    town: unreachable1,
     vehicles: ptr::null(),
 };
 

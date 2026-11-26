@@ -41,15 +41,18 @@ static CARGO_PICKUPS: GameState<CargoMonitorMap> = GameState::new(BTreeMap::new(
 /// Map of monitored deliveries to the amount since last query/activation.
 static CARGO_DELIVERIES: GameState<CargoMonitorMap> = GameState::new(BTreeMap::new());
 
-/// The map `map` holds, for one operation that ends before any leaf.
+/// Run `operation` on the map `map` holds; the operation calls no leaf.
 #[allow(
     unsafe_code,
     reason = "borrows a process-wide map under the module's contract"
 )]
-fn monitor_map(map: &GameState<CargoMonitorMap>) -> &mut CargoMonitorMap {
-    // SAFETY: The game-state mutex serialises every access, and each caller ends the borrow
-    // before a leaf or the industry walk.
-    unsafe { &mut *map.get() }
+fn monitor_map<R>(
+    map: &GameState<CargoMonitorMap>,
+    operation: impl FnOnce(&mut CargoMonitorMap) -> R,
+) -> R {
+    // SAFETY: The game-state mutex serialises every access, and the borrow ends with the
+    // operation, before any leaf or the industry walk.
+    operation(unsafe { &mut *map.get() })
 }
 
 /* Constants for encoding and extracting cargo monitors. */
@@ -192,14 +195,15 @@ pub fn decode_monitor_town(num: CargoMonitorID) -> TownID {
 /// `ClearCargoDeliveryMonitoring`. Clears all monitors of `cargo_monitor_map` that belong to the
 /// specified company or all if `INVALID_OWNER` is specified as company.
 fn clear_cargo_monitoring(cargo_monitor_map: &GameState<CargoMonitorMap>, company: CompanyID) {
-    let cargo_monitor_map = monitor_map(cargo_monitor_map);
-    if company == Owner::INVALID {
-        cargo_monitor_map.clear();
-        return;
-    }
+    monitor_map(cargo_monitor_map, |cargo_monitor_map| {
+        if company == Owner::INVALID {
+            cargo_monitor_map.clear();
+            return;
+        }
 
-    // The loop's increment is /* nothing */: each entry is erased or stepped over once.
-    cargo_monitor_map.retain(|&key, _| decode_monitor_company(key) != company);
+        // The loop's increment is /* nothing */: each entry is erased or stepped over once.
+        cargo_monitor_map.retain(|&key, _| decode_monitor_company(key) != company);
+    });
 }
 
 /// `ClearCargoPickupMonitoring`: clear all pick-up cargo monitors for `company`, or if
@@ -223,20 +227,21 @@ fn get_amount(
     monitor: CargoMonitorID,
     keep_monitoring: bool,
 ) -> i32 {
-    let monitor_map = self::monitor_map(monitor_map);
-    if let Some(iter) = monitor_map.get_mut(&monitor) {
-        let result = *iter;
-        *iter = 0;
-        if !keep_monitoring {
-            monitor_map.remove(&monitor);
+    self::monitor_map(monitor_map, |monitor_map| {
+        if let Some(iter) = monitor_map.get_mut(&monitor) {
+            let result = *iter;
+            *iter = 0;
+            if !keep_monitoring {
+                monitor_map.remove(&monitor);
+            }
+            result
+        } else {
+            if keep_monitoring {
+                monitor_map.insert(monitor, 0);
+            }
+            0
         }
-        result
-    } else {
-        if keep_monitoring {
-            monitor_map.insert(monitor, 0);
-        }
-        0
-    }
+    })
 }
 
 /// `GetDeliveryAmount`: get the amount of cargo delivered for the given cargo monitor since
@@ -255,9 +260,11 @@ pub(crate) fn get_pickup_amount(monitor: CargoMonitorID, keep_monitoring: bool) 
 
 /// `iter->second += amount` on the entry of `num` in `map`, if it is monitored.
 fn add_amount(map: &GameState<CargoMonitorMap>, num: CargoMonitorID, amount: u32) {
-    if let Some(iter) = monitor_map(map).get_mut(&num) {
-        add_u32(iter, amount);
-    }
+    monitor_map(map, |map| {
+        if let Some(iter) = map.get_mut(&num) {
+            add_u32(iter, amount);
+        }
+    });
 }
 
 /// `AddCargoDelivery`: cargo was delivered to its final destination, update the pickup and
@@ -302,7 +309,8 @@ pub(crate) fn add_cargo_delivery(
 
     /* Town delivery. */
     // SAFETY: The payment table names the immutable process-lifetime resolver table.
-    let town = crate::industry::resolver::town_index((s.town)(st.native), unsafe { &*s.resolver });
+    let town =
+        crate::industry::resolver::town_index((s.station_town)(st.native), unsafe { &*s.resolver });
     let num = encode_cargo_town_monitor(company, cargo_type, town);
     add_amount(&CARGO_DELIVERIES, num, amount);
 
@@ -402,16 +410,18 @@ unsafe fn next(
     key: *mut u32,
     amount: *mut u32,
 ) -> bool {
-    let map = monitor_map(map);
-    let entry = if first {
-        map.first_key_value()
-    } else {
-        // SAFETY: The caller's previous key; the save code's storage is uninitialised only on
-        // the first call.
-        let after = CargoMonitorID(unsafe { key.read() });
-        map.range((Excluded(after), Unbounded)).next()
-    };
-    let Some((&number, &value)) = entry else {
+    let entry = monitor_map(map, |map| {
+        let entry = if first {
+            map.first_key_value()
+        } else {
+            // SAFETY: The caller's previous key; the save code's storage is uninitialised only
+            // on the first call.
+            let after = CargoMonitorID(unsafe { key.read() });
+            map.range((Excluded(after), Unbounded)).next()
+        };
+        entry.map(|(&number, &value)| (number, value))
+    });
+    let Some((number, value)) = entry else {
         return false;
     };
     // SAFETY: The caller's writable output scalars, written without a reference.
@@ -460,9 +470,9 @@ pub unsafe extern "C" fn openttd_rust_monitor_next_delivery_abi(
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol")]
 pub extern "C" fn openttd_rust_monitor_insert_pickup(key: u32, amount: u32) {
-    monitor_map(&CARGO_PICKUPS)
-        .entry(CargoMonitorID(key))
-        .or_insert(amount as i32);
+    monitor_map(&CARGO_PICKUPS, |map| {
+        map.entry(CargoMonitorID(key)).or_insert(amount as i32);
+    });
 }
 /// The load code's `_cargo_deliveries.insert(storage)`: a duplicate key keeps the first amount.
 #[allow(
@@ -472,7 +482,7 @@ pub extern "C" fn openttd_rust_monitor_insert_pickup(key: u32, amount: u32) {
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol")]
 pub extern "C" fn openttd_rust_monitor_insert_delivery(key: u32, amount: u32) {
-    monitor_map(&CARGO_DELIVERIES)
-        .entry(CargoMonitorID(key))
-        .or_insert(amount as i32);
+    monitor_map(&CARGO_DELIVERIES, |map| {
+        map.entry(CargoMonitorID(key)).or_insert(amount as i32);
+    });
 }

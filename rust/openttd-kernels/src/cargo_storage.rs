@@ -3557,9 +3557,9 @@ pub(crate) mod tests {
                 registry,
                 resolver,
                 shared,
+                station_town,
                 stations,
                 subsidies,
-                town: station_town,
                 ..crate::test_tables::CARGO
             }));
             let front = crate::vehicle_base::openttd_rust_vehicle_record_new(

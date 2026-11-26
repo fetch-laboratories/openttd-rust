@@ -61,11 +61,11 @@ pub struct Services {
     pub(crate) registry: *const crate::cargo_registry::Services,
     pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
     pub(crate) shared: *const crate::services::Services,
+    /// `BaseStation::town`.
+    pub(crate) station_town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
     /// The station table, for `Station::Get`.
     pub(crate) stations: *const crate::station_service::World,
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
-    /// `BaseStation::town`.
-    pub(crate) town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
 }
 
@@ -128,6 +128,11 @@ pub(crate) fn get_transported_goods_income(
     transit_periods: u16,
     cargo_type: CargoType,
 ) -> i64 {
+    const MIN_TIME_FACTOR: i32 = 31;
+    const MAX_TIME_FACTOR: i32 = 255;
+    const TIME_FACTOR_FRAC_BITS: u8 = 4;
+    const TIME_FACTOR_FRAC: i32 = 1 << TIME_FACTOR_FRAC_BITS;
+
     // SAFETY: The table names the immutable process-lifetime registry table.
     let cs = crate::cargotype::cargo_spec_get(unsafe { &*s.registry }, cargo_type);
     if !cs.is_valid() {
@@ -164,11 +169,6 @@ pub(crate) fn get_transported_goods_income(
             return cs.current_payment().saturating_mul(i64::from(factor)) / 8192;
         }
     }
-
-    const MIN_TIME_FACTOR: i32 = 31;
-    const MAX_TIME_FACTOR: i32 = 255;
-    const TIME_FACTOR_FRAC_BITS: u8 = 4;
-    const TIME_FACTOR_FRAC: i32 = 1 << TIME_FACTOR_FRAC_BITS;
 
     let [periods1, periods2] = cs.transit_periods().map(i32::from);
     let transit_periods = i32::from(transit_periods);
@@ -310,6 +310,7 @@ fn deliver_goods_to_industry(
 }
 
 /// `DeliverGoods`' parameters.
+#[derive(Clone, Copy)]
 struct DeliverGoods {
     /// Amount of cargo delivered.
     num_pieces: i32,
@@ -391,7 +392,7 @@ fn deliver_goods(ctx: &FinalDelivery<'_>, args: DeliverGoods) -> i64 {
 
     /* Increase town's counter for town effects */
     let cs = crate::cargotype::cargo_spec_get(registry, cargo_type);
-    let town = (ctx.shared.town_owner)((s.town)(st.native));
+    let town = (ctx.shared.town_owner)((s.station_town)(st.native));
     // SAFETY: The station's live town.
     unsafe { crate::town::add_received(town, cs.town_acceptance_effect(), accepted_total) };
 
@@ -792,9 +793,9 @@ crate::abi::layouts! {
         registry,
         resolver,
         shared,
+        station_town,
         stations,
         subsidies,
-        town,
         vehicles,
     };
 }

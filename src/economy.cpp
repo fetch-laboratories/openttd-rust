@@ -265,9 +265,9 @@ static const OpenTTDCargoServices _cargo_services = {
 	.registry = &GetRustCargoRegistryServices(),
 	.resolver = &GetIndustryResolverServices(),
 	.shared = &GetRustSharedServices(),
+	.station_town = RustStationStationTown<const Station>,
 	.stations = &GetRustStationServices(),
 	.subsidies = RustSubsidyServices,
-	.town = RustStationStationTown<const Station>,
 	.vehicles = &GetRustVehicleServices(),
 };
 

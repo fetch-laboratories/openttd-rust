@@ -52,9 +52,9 @@ struct OpenTTDCargoServices {
 	const OpenTTDCargoRegistryServices *registry;
 	const OpenTTDIndustryResolverServices *resolver;
 	const OpenTTDSharedServices *shared;
+	const OpenTTDTownHandle *(OPENTTD_RUST_CALL *station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	const OpenTTDStationServices *stations;
 	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
-	const OpenTTDTownHandle *(OPENTTD_RUST_CALL *town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(town);
 	const OpenTTDVehicleServices *vehicles;
 };
 const OpenTTDCargoServices &GetRustCargoServices() noexcept;
