@@ -2205,7 +2205,10 @@ class PolicyTests(unittest.TestCase):
             contexts: dict[str, Any] = {
                 "inputs": {"checkout-ref": checkout, "profile": profile},
                 "github": {"event_name": event},
-                "needs": {"policy": {"outputs": {"heavy": heavy, "covered": covered}}},
+                "needs": {
+                    "policy": {"outputs": {"heavy": heavy, "covered": covered}},
+                    "windows-saved": {"result": "skipped", "outputs": {}},
+                },
             }
             with self.subTest(profile=profile, event=event, covered=covered):
                 for name, axis, expected in (
@@ -2357,7 +2360,10 @@ class PolicyTests(unittest.TestCase):
             runs_covered = evaluate(
                 build[name]["if"],
                 inputs={"checkout-ref": "", "profile": ""},
-                needs={"policy": {"result": "success", "outputs": outputs}},
+                needs={
+                    "policy": {"result": "success", "outputs": outputs},
+                    "windows-saved": {"result": "skipped", "outputs": {}},
+                },
                 github={"event_name": "push"},
             )
             self.assertTrue(runs_covered, name)
@@ -2375,6 +2381,132 @@ class PolicyTests(unittest.TestCase):
                     needs={"policy": {"outputs": {"covered": covered}}},
                 )
                 self.assertEqual(result, expected)
+
+    def test_a_covered_push_refreshes_no_cache_the_queue_saved(self) -> None:
+        """With CI_QUEUE_SAVES_CACHES the queue's run saves the paid jobs' compiler
+        caches under the commit the queue pushes, and that push finds them (#896)."""
+        protected = "refs/heads/rust-migration"
+        native = workflow("rust-migration.yml")["jobs"]
+        build = workflow("ci-build.yml")["jobs"]
+        for jobs, lookup, name in (
+            (native, "saved", "build"),
+            (build, "windows-saved", "windows"),
+        ):
+            # The lookup runs only for a covered protected push, with the variable set.
+            for covered, variable, event, ref, expected in (
+                ("true", "true", "push", protected, True),
+                ("true", "", "push", protected, False),
+                ("", "true", "push", protected, False),
+                ("true", "true", "pull_request", protected, lookup == "saved"),
+            ):
+                looks = evaluate(
+                    jobs[lookup]["if"],
+                    needs={"policy": {"outputs": {"covered": covered}}},
+                    vars={"CI_QUEUE_SAVES_CACHES": variable},
+                    github={"event_name": event, "ref": ref},
+                )
+                self.assertEqual(looks, expected, (lookup, covered, variable, event))
+            self.assertEqual(jobs[lookup]["needs"], "policy")
+            self.assertIn(lookup, jobs[name]["needs"])
+            step = jobs[lookup]["steps"][0]
+            self.assertIs(step["with"]["lookup-only"], True)
+            hit = "${{ steps.marker.outputs.cache-hit }}"
+            self.assertEqual(jobs[lookup]["outputs"], {"hit": hit})
+            # A marker found skips the paid job; a miss, or no lookup, runs it.
+            for found, result, expected in (
+                ("true", "success", False),
+                ("false", "success", True),
+                ("", "success", True),
+                ("", "skipped", True),
+                ("", "failure", True),
+            ):
+                needs = {
+                    "policy": {"outputs": {"heavy": "false", "covered": "true"}},
+                    lookup: {"result": result, "outputs": {"hit": found}},
+                }
+                runs_job = evaluate(
+                    jobs[name]["if"],
+                    inputs={"checkout-ref": "", "profile": ""},
+                    needs=needs,
+                    github={"event_name": "push"},
+                )
+                self.assertEqual(runs_job, expected, (name, found, result))
+        # Policy only runs for an event of the workflow's own, so the native lookup
+        # needs no event of its own; a queue or requested run skips both.
+        self.assertEqual(native["policy"]["if"], "inputs.checkout-ref == ''")
+
+        # The saver's marker key is the lookup's, at the commit the queue pushes.
+        action = yaml.safe_load(
+            (ROOT / ".github/actions/native-cache/action.yml").read_text()
+        )
+        saves = [
+            step["with"]
+            for step in action["runs"]["steps"]
+            if step.get("uses") == "actions/cache/save@v4"
+        ]
+        marker = native["saved"]["steps"][0]["with"]
+        self.assertEqual(
+            saves[-1], {"path": marker["path"], "key": marker["key"]}, "native marker"
+        )
+        windows = {
+            step["name"]: step
+            for step in job("ci-windows.yml", "windows")["steps"]
+            if "name" in step
+        }
+        marker = build["windows-saved"]["steps"][0]["with"]
+        saved = windows["Save the compiler cache marker"]["with"]
+        self.assertEqual(saved["path"], marker["path"])
+        for arch, checkout, sha in (("x64", "group", "group"), ("x64", "", "pushed")):
+            key = evaluate(
+                saved["key"],
+                interpolate=True,
+                inputs={"arch": arch, "checkout-ref": checkout},
+                github={"sha": sha},
+            )
+            looked = evaluate(marker["key"], interpolate=True, github={"sha": sha})
+            self.assertEqual(key, looked)
+
+        # Only a protected push or, with the variable, the queue's run saves.
+        save = native["build"]["steps"]
+        (native_save,) = [
+            step["if"] for step in save if step.get("with", {}).get("save") == "true"
+        ]
+        for name, condition, steps in (
+            ("native", native_save, {}),
+            (
+                "windows",
+                windows["Save compiler cache"]["if"],
+                {"compiler-cache": {"outputs": {"cache-hit": ""}}},
+            ),
+            ("windows trim", windows["Trim compiler cache"]["if"], {}),
+        ):
+            for event, ref, checkout, variable, expected in (
+                ("push", protected, "", "", True),
+                ("merge_group", "refs/heads/gh-readonly-queue/x", "group", "true", True),
+                ("merge_group", "refs/heads/gh-readonly-queue/x", "group", "", False),
+                ("workflow_dispatch", protected, "merge", "true", False),
+                ("pull_request", "refs/pull/1/merge", "", "true", False),
+            ):
+                saves_cache = evaluate(
+                    condition,
+                    inputs={"checkout-ref": checkout},
+                    github={"event_name": event, "ref": ref},
+                    vars={"CI_QUEUE_SAVES_CACHES": variable},
+                    steps=steps,
+                )
+                self.assertEqual(bool(saves_cache), expected, (name, event, variable))
+        for name in ("Mark the compiler cache saved", "Save the compiler cache marker"):
+            for event, variable, expected in (
+                ("merge_group", "true", True),
+                ("merge_group", "", False),
+                ("push", "true", False),
+            ):
+                marks = evaluate(
+                    windows[name]["if"],
+                    github={"event_name": event},
+                    vars={"CI_QUEUE_SAVES_CACHES": variable},
+                )
+                self.assertEqual(marks, expected, (name, event, variable))
 
     def test_cache_refresh_skips_exactly_the_test_and_evidence_steps(self) -> None:
         windows = {
@@ -2472,6 +2604,8 @@ class PolicyTests(unittest.TestCase):
                         }
                     }
                     needs["build"] = {"result": "success"}
+                    for lookup in ("saved", "windows-saved"):
+                        needs[lookup] = {"result": "skipped", "outputs": {}}
                     with self.subTest(filename=filename, job=name, cancelled=cancelled):
                         result = evaluate(
                             jobs[name]["if"],
