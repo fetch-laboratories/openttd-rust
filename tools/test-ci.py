@@ -8,12 +8,9 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
-import sys
 import tempfile
 import threading
-import time
 import unittest
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
@@ -53,6 +50,7 @@ PULL = {
     "mergeable": True,
     "merge_commit_sha": MERGE,
     "body": "Agent: /implementation | Model: m | Reasoning effort: high",
+    "created_at": "2026-11-11T00:00:00Z",
 }
 
 
@@ -2782,6 +2780,10 @@ class RequestTests(unittest.TestCase):
         stamp = patch.object(ci, "require_stamp")
         self.stamp = stamp.start()
         self.addCleanup(stamp.stop)
+        # The one-native-run rule has its own tests, on enqueue's recorded answers.
+        first = patch.object(ci, "require_first_native")
+        first.start()
+        self.addCleanup(first.stop)
 
     def test_request_and_ready_need_a_stamp_before_any_change(self) -> None:
         self.stamp.side_effect = ValueError("no preflight stamp")
@@ -2791,6 +2793,7 @@ class RequestTests(unittest.TestCase):
             profile="native",
             bootstrap=False,
             unstamped=None,
+            diagnose=None,
             head=None,
             wait=False,
         )
@@ -2881,6 +2884,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=False,
                     unstamped=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -2943,6 +2947,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3003,6 +3008,7 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    diagnose=None,
                     head=None,
                     wait=False,
                     request_file=Path(directory) / "request.json",
@@ -3035,6 +3041,7 @@ class RequestTests(unittest.TestCase):
                 profile="full",
                 bootstrap=False,
                 unstamped=None,
+                diagnose=None,
                 head=None,
                 wait=False,
                 request_file=Path(directory) / "request.json",
@@ -3253,6 +3260,10 @@ class RequestPathTests(unittest.TestCase):
         stamp = patch.object(ci, "require_stamp")
         self.stamp = stamp.start()
         self.addCleanup(stamp.stop)
+        # The one-native-run rule has its own tests, on enqueue's recorded answers.
+        first = patch.object(ci, "require_first_native")
+        first.start()
+        self.addCleanup(first.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.directory = Path(directory.name)
@@ -3273,6 +3284,7 @@ class RequestPathTests(unittest.TestCase):
                 "profile": "native",
                 "bootstrap": False,
                 "unstamped": None,
+                "diagnose": None,
                 "head": None,
                 "wait": False,
                 "request_file": None,
@@ -4306,6 +4318,12 @@ class EnqueueWorld:
     )
     recorded: ci_log.Run | None = None
     recorded_jobs: list[dict[str, str]] = field(default_factory=list)
+    # The run `request --diagnose 3` names.
+    named: ci_log.Run | None = None
+    # The jobs of run 8, or the error GitHub answers for them, and the annotation
+    # of each job that has one, by job ID.
+    jobs: list[ci_log.Job] | subprocess.CalledProcessError = field(default_factory=list)
+    annotations: dict[int, str] = field(default_factory=dict)
     retry: str | None = None
     entry: dict[str, object] | None = None
     armed: dict[str, object] | None = None
@@ -4343,6 +4361,11 @@ class EnqueueTests(unittest.TestCase):
     def enqueue(self, **options: object) -> tuple[str, list[tuple[str, ...]]]:
         """Run enqueue against an EnqueueWorld of `options`."""
         world = EnqueueWorld(**cast(dict[str, Any], options))
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
+        return self.within(world, lambda: ci.enqueue(args)), self.calls
+
+    def within(self, world: EnqueueWorld, command: Callable[[], str]) -> str:
+        """Run `command` against `world`'s recorded answers."""
         requested = world.requested
         dispatched = world.dispatched
         if dispatched is None:
@@ -4371,7 +4394,11 @@ class EnqueueTests(unittest.TestCase):
             f"compare/rust-migration...{HEAD}": compare,
             f"compare/{HEAD}...rust-migration": {"files": world.base_files},
             "actions/runs/9": world.recorded,
+            "actions/runs/3": world.named,
+            "/annotations": [],
         }
+        for job, message in world.annotations.items():
+            answers[f"check-runs/{job}/annotations"] = [{"message": message}]
         listings: dict[str, object] = {
             "event=workflow_dispatch": [
                 {"workflow_runs": page}
@@ -4379,6 +4406,9 @@ class EnqueueTests(unittest.TestCase):
             ],
             "event=pull_request": [{"workflow_runs": world.labeled}],
             "pulls/170/files": [world.files],
+            "actions/runs/8/jobs": world.jobs
+            if isinstance(world.jobs, subprocess.CalledProcessError)
+            else [{"jobs": world.jobs}],
         }
         calls: list[tuple[str, ...]] = []
         self.calls = calls
@@ -4391,6 +4421,8 @@ class EnqueueTests(unittest.TestCase):
         def gh(*args: str) -> str:
             if args[:2] == ("api", "--paginate"):
                 (pages,) = [v for key, v in listings.items() if key in args[-1]]
+                if isinstance(pages, subprocess.CalledProcessError):
+                    raise pages
                 return json.dumps(pages)
             calls.append(args)
             state = {
@@ -4399,7 +4431,6 @@ class EnqueueTests(unittest.TestCase):
             }
             return json.dumps({"data": {"repository": {"pullRequest": state}}})
 
-        args = argparse.Namespace(repo="example/fork", pr=170, retry=world.retry)
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "api", side_effect=api),
@@ -4421,7 +4452,8 @@ class EnqueueTests(unittest.TestCase):
                 record = {"pr": 170, "head": HEAD, "run_id": 9}
                 (Path(directory) / "old.json").write_text(json.dumps(record))
             self.stamp = stamp
-            return ci.enqueue(args), calls
+            self.overrides = Path(directory) / "overrides.log"
+            return command()
 
     def test_red_quick_or_requested_run_refuses_before_queueing(self) -> None:
         red = dict(self.QUICK, conclusion="failure")
@@ -4471,6 +4503,361 @@ class EnqueueTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     self.enqueue(**options)
                 self.assertEqual(self.calls, [])
+
+    # A merge-group run as GitHub returns it by ID: the failed Full a request names.
+    FAILED_FULL = dict(
+        EJECTED,
+        id=3,
+        event="merge_group",
+        path=".github/workflows/ci-request.yml",
+        display_title="CI full queue refs/heads/gh-readonly-queue/x",
+    )
+
+    def first_native(
+        self, options: Mapping[str, object], diagnose: str | None = None
+    ) -> str:
+        """Run request's one-native-run check on an EnqueueWorld of `options`;
+        return what it logged."""
+        world = EnqueueWorld(**cast(dict[str, Any], dict(options)))
+
+        def check() -> str:
+            ci.require_first_native(
+                "example/fork", 170, "2026-11-11T00:00:00Z", HEAD, diagnose
+            )
+            return self.overrides.read_text() if self.overrides.exists() else ""
+
+        return self.within(world, check)
+
+    def test_a_second_native_run_needs_the_failed_full_it_diagnoses(self) -> None:
+        """The rule of workflow.md's checks, which only the doc held (#896)."""
+        green = self.REQUESTED
+        earlier = dict(green, id=1, display_title=f"CI native PR 170 x-{BASE}")
+        # Run 8 is the one whose jobs the recorded answers hold.
+        later = dict(green, id=8, created_at="2026-11-12T05:00:00Z")
+        rust = dict(later, display_title=f"CI rust PR 170 r-{HEAD}")
+        platform = dict(later, display_title=f"CI platform PR 170 p-{HEAD}")
+        workflow = [{"filename": ".github/workflows/ci-quick.yml"}]
+        for label, options in (
+            ("green at the head", {}),
+            (
+                "green on an earlier commit",
+                {"requested": earlier, "commits": [BASE, HEAD]},
+            ),
+            ("a later green rust run", {"dispatched": [green, rust]}),
+            # A later run of any profile, red or still going, reopens nothing.
+            (
+                "a red native since",
+                {"dispatched": [green, dict(later, conclusion="failure")]},
+            ),
+            (
+                "a red platform run since",
+                {"dispatched": [green, dict(platform, conclusion="failure")]},
+            ),
+            (
+                "a platform run still going",
+                {
+                    "dispatched": [
+                        green,
+                        dict(platform, status="in_progress", conclusion=None),
+                    ]
+                },
+            ),
+            # A removal the request does not name waives nothing.
+            ("removed by the queue since", {"queue": [self.EJECTED]}),
+            # A workflow change queues on its bootstrap Full at the head, so it
+            # needs no second native either.
+            ("workflow files, green at the head", {"files": workflow}),
+            (
+                "workflow files, green on an earlier commit",
+                {"requested": earlier, "commits": [BASE, HEAD], "files": workflow},
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"one `native` run.*runs/[12].*enqueue 170.*--diagnose RUN",
+                ):
+                    self.first_native(options)
+
+    def test_native_runs_again_only_where_the_rule_allows(self) -> None:
+        green = self.REQUESTED
+        red = dict(green, conclusion="failure")
+        rust = dict(green, display_title=f"CI rust PR 170 r-{HEAD}")
+        earlier = dict(green, display_title=f"CI native PR 170 x-{BASE}")
+        # A checker-only Full runs Quick alone, so no green Full is a native run.
+        full = dict(earlier, display_title=f"CI full PR 170 f-{BASE}")
+        for label, options in (
+            ("no run yet", {"requested": None}),
+            ("only a red native", {"requested": red}),
+            ("only a green rust run", {"requested": rust}),
+            (
+                "a green Full on an earlier commit",
+                {"requested": full, "commits": [BASE, HEAD]},
+            ),
+        ):
+            with self.subTest(label):
+                self.assertEqual(self.first_native(options), "")
+        (entry,) = self.first_native(
+            {"named": self.FAILED_FULL}, diagnose="3"
+        ).splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "diagnose", "reason": self.EJECTED["html_url"]},
+        )
+        url = "https://github.com/example/fork/actions/runs/3"
+        self.assertIn(url, self.first_native({"named": self.FAILED_FULL}, url))
+
+    def test_diagnose_names_a_failed_full_of_this_pr(self) -> None:
+        failed = self.FAILED_FULL
+        requested = dict(
+            failed,
+            event="workflow_dispatch",
+            head_branch="rust-migration",
+            display_title=f"CI full PR 170 f-{HEAD}",
+        )
+        for label, named in (
+            ("a requested Full", requested),
+            ("a bootstrap Full", dict(requested, event="pull_request")),
+            ("a cancelled group", dict(failed, conclusion="cancelled")),
+        ):
+            with self.subTest(label):
+                self.assertTrue(self.first_native({"named": named}, "3"))
+        other = "gh-readonly-queue/rust-migration/pr-171-" + BASE
+        for label, named, message in (
+            ("a green Full", dict(failed, conclusion="success"), "did not fail"),
+            (
+                "a Full still going",
+                dict(failed, status="in_progress", conclusion=None),
+                "did not fail",
+            ),
+            ("another PR's group", dict(failed, head_branch=other), "not a Full of"),
+            (
+                "another PR's request",
+                dict(requested, display_title=f"CI full PR 171 f-{HEAD}"),
+                "not a Full of",
+            ),
+            (
+                "a failed native",
+                dict(requested, display_title=f"CI native PR 170 n-{HEAD}"),
+                "not a Full of",
+            ),
+            (
+                "another workflow",
+                dict(failed, path=".github/workflows/ci-build.yml"),
+                "not a Full of",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.first_native({"named": named}, "3")
+        with self.assertRaisesRegex(ValueError, "run ID or URL"):
+            self.first_native({}, "the queue's run")
+        # A URL names this repository's run, and no attempt or job of it.
+        run = "actions/runs/3"
+        for url in (
+            f"https://github.com/another/fork/{run}",
+            f"https://github.com/example/fork/{run}/attempts/7",
+            f"https://github.com/example/fork/{run}/job/9",
+        ):
+            with self.subTest(url):
+                with self.assertRaisesRegex(ValueError, "a run of example/fork"):
+                    self.first_native({"named": failed}, url)
+
+    def request_native(
+        self, diagnose: str | None, **options: object
+    ) -> tuple[list[str], list[tuple[str, ...]], str]:
+        """Run `request --profile native` itself on an EnqueueWorld of `options`;
+        return the request records it wrote, its gh writes and what it logged,
+        whether or not it refused."""
+        world = EnqueueWorld(**cast(dict[str, Any], options))
+        args = argparse.Namespace(
+            repo="example/fork",
+            pr=170,
+            profile="native",
+            bootstrap=False,
+            unstamped=None,
+            diagnose=diagnose,
+            head=HEAD,
+            wait=False,
+            request_file=None,
+        )
+        records: list[str] = []
+        logged: list[str] = []
+
+        def request() -> str:
+            try:
+                ci.request(args)
+            except ValueError as refusal:
+                self.refusal = str(refusal)
+            records.extend(path.name for path in ci.REQUESTS.glob("*.json"))
+            if self.overrides.exists():
+                logged.append(self.overrides.read_text())
+            return ""
+
+        self.refusal = ""
+        self.within(world, request)
+        return records, self.calls, "".join(logged)
+
+    def test_request_refuses_before_any_record_or_dispatch(self) -> None:
+        """The check is the request command's own, not only a function beside it."""
+        records, calls, logged = self.request_native(None)
+        self.assertIn("one `native` run", self.refusal)
+        self.assertEqual((records, calls, logged), ([], [], ""))
+        # With no green native yet, the same request dispatches and logs nothing.
+        records, calls, logged = self.request_native(None, requested=None)
+        self.assertEqual((self.refusal, len(records), logged), ("", 1, ""))
+        self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+        self.assertIn("profile=native", calls[0])
+        # A named failed Full dispatches too, and the log names that run.
+        records, calls, logged = self.request_native("3", named=self.FAILED_FULL)
+        self.assertEqual((self.refusal, len(records)), ("", 1))
+        self.assertEqual([call[:2] for call in calls], [("workflow", "run")])
+        (entry,) = logged.splitlines()
+        self.assertEqual(
+            {k: v for k, v in json.loads(entry).items() if k in ("kind", "reason")},
+            {"kind": "diagnose", "reason": self.EJECTED["html_url"]},
+        )
+
+    def test_a_platform_run_without_a_macos_runner_is_passed_over(self) -> None:
+        """No macOS job runs on a paid runner (ADR 0009): a platform run whose
+        only failures are macOS jobs GitHub never started, and the jobs that fail
+        with them, leaves the PR to queue on the run before it. Every other
+        failure still refuses."""
+        platform = dict(
+            self.REQUESTED,
+            id=8,
+            display_title=f"CI platform PR 170 p-{HEAD}",
+            conclusion="failure",
+            created_at="2026-11-12T05:00:00Z",
+            html_url="https://github.com/example/fork/actions/runs/8",
+        )
+
+        def job(
+            job_id: int, name: str, conclusion: str, ran: bool = True
+        ) -> ci_log.Job:
+            return {
+                "id": job_id,
+                "run_id": 8,
+                "name": f"platform / {name}",
+                "status": "completed",
+                "conclusion": conclusion,
+                "html_url": f"https://github.com/example/fork/actions/runs/8/job/{job_id}",
+                "runner_id": 7 if ran else 0,
+                "steps": [{"name": "Build", "number": 1, "conclusion": conclusion}]
+                if ran
+                else [],
+            }
+
+        release = "Mac OS (arm64 - Release) / CI"
+        unstarted = job(81, release, "cancelled", ran=False)
+        debug = job(84, "Mac OS (arm64 - Debug) / CI", "success")
+        # As in cadence run 45689219061: the cancellation's annotation fails both
+        # annotation checks, and completion needs macOS.
+        downstream = [
+            job(85, "Check macos annotations", "failure"),
+            job(86, "Check Annotations", "failure"),
+            job(82, "complete", "failure"),
+        ]
+        windows = job(83, "Windows (x64) / CI", "failure")
+        linux = job(87, "Check linux annotations", "failure")
+        capacity = "The job was not acquired by Runner of type hosted even after multiple attempts"
+        usual: dict[str, object] = {
+            "dispatched": [self.REQUESTED, platform],
+            "jobs": [unstarted, debug, *downstream],
+            "annotations": {81: capacity},
+        }
+        entry = {"state": "QUEUED", "position": 1}
+        for label, options in (
+            ("the run failed", {}),
+            (
+                "the run was cancelled",
+                {
+                    "dispatched": [
+                        self.REQUESTED,
+                        dict(platform, conclusion="cancelled"),
+                    ]
+                },
+            ),
+            ("no macOS job started", {"jobs": [unstarted, *downstream]}),
+        ):
+            with self.subTest(label):
+                reported, _ = self.enqueue(**{**usual, "entry": entry, **options})
+                self.assertTrue(reported.startswith("queued"))
+        started = job(81, release, "cancelled")
+        for label, options, message in (
+            (
+                "cancelled by hand",
+                {"annotations": {81: "The run was canceled by @someone."}},
+                "runs/8",
+            ),
+            (
+                "macOS started and was cancelled",
+                {"jobs": [started, debug, *downstream]},
+                "runs/8",
+            ),
+            (
+                "macOS failed",
+                {"jobs": [job(81, release, "failure"), debug, *downstream]},
+                "runs/8",
+            ),
+            (
+                "another build failed too",
+                {"jobs": [unstarted, debug, windows, *downstream]},
+                "runs/8",
+            ),
+            (
+                "another platform's annotations failed too",
+                {"jobs": [unstarted, debug, linux, *downstream]},
+                "runs/8",
+            ),
+            # The macOS job that ran has an annotation of its own, so the checks
+            # did not fail for the cancellation alone.
+            (
+                "the macOS job that ran has a warning",
+                {"annotations": {81: capacity, 84: "unused variable"}},
+                "runs/8",
+            ),
+            ("only downstream jobs failed", {"jobs": [debug, *downstream]}, "runs/8"),
+            # With no run before it, the PR still has no requested run to read.
+            ("no run before it", {"dispatched": [platform]}, "no requested run"),
+            # A jobs read GitHub fails blocks the queue and names what it lacked.
+            (
+                "GitHub did not return the jobs",
+                {"jobs": subprocess.CalledProcessError(1, "gh")},
+                "did not return: the jobs of platform run 8",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.enqueue(**{**usual, **options})
+
+    def test_a_failed_jobs_read_keeps_the_runs_it_read(self) -> None:
+        """`state` shows the PR's runs while its enqueue checks say blocked."""
+        platform: ci_log.Run = {
+            **self.REQUESTED,
+            "id": 8,
+            "display_title": f"CI platform PR 170 p-{HEAD}",
+            "conclusion": "failure",
+        }
+        world = EnqueueWorld(
+            dispatched=[self.REQUESTED, platform],
+            jobs=subprocess.CalledProcessError(1, "gh"),
+        )
+        seen: list[ci.PrRuns] = []
+
+        def read() -> str:
+            seen.append(
+                ci.read_pr_runs("example/fork", 170, "2026-11-11T00:00:00Z", HEAD)
+            )
+            return ""
+
+        self.within(world, read)
+        (runs,) = seen
+        self.assertEqual(
+            [tested.profile for tested in runs.runs], ["native", "platform"]
+        )
+        self.assertEqual(runs.unread, ["the jobs of platform run 8"])
+        self.assertEqual(len(runs.gated()), 2)
 
     def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
         entry = {"state": "AWAITING_CHECKS", "position": 2}
@@ -6483,121 +6870,6 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([w[0] for w in github.writes], ["POST"])
 
 
-def mac_job(
-    job_id: int, conclusion: str | None, runner: bool, name: str = "Release"
-) -> ci_log.Job:
-    job: ci_log.Job = {
-        "id": job_id,
-        "run_id": 2,
-        "name": f"platform / Mac OS (arm64 - {name}) / CI",
-        "status": "completed" if conclusion else "in_progress",
-        "conclusion": conclusion,
-        "html_url": f"https://github.com/example/fork/actions/runs/2/job/{job_id}",
-        "runner_id": 1000 + job_id if runner else 0,
-        "steps": [{"name": "Run", "number": 1, "conclusion": conclusion}] * 28
-        if runner
-        else [],
-    }
-    return job
-
-
-# Each job's failure annotation: the hosted pool never took 1, 2, 8 and 9; job
-# 10 was cancelled by hand. The others ran.
-UNACQUIRED = (
-    "The job was not acquired by Runner of type hosted even after multiple attempts"
-)
-ANNOTATIONS = {1: UNACQUIRED, 2: UNACQUIRED, 8: UNACQUIRED, 9: UNACQUIRED}
-ANNOTATIONS[10] = "The run was canceled by @someone."
-
-
-class FallbackGitHub:
-    """Runs, their attempts' jobs and the variable, as macos-fallback reads them.
-    A rerun of the last run adds an attempt that shows only on the third read
-    after it, so the wait must outlast reads of the old attempt. Each read of
-    the new attempt shows one more of `rerun_jobs`."""
-
-    APPEARS_AFTER = 2
-
-    def __init__(
-        self,
-        attempts: dict[int, dict[int, list[ci_log.Job]]],
-        rerun_jobs: list[ci_log.Job],
-        variable: str | None,
-        create: str = "",
-    ) -> None:
-        self.attempts = attempts
-        self.rerun_jobs = rerun_jobs
-        self.variable = variable
-        self.create = create  # "", "taken" (someone creates it first) or "lost"
-        self.rerun = False
-        self.reads = 0
-        self.shown = 0
-        self.calls: list[tuple[str, ...]] = []
-        self.on_wait: Callable[[], None] = lambda: None
-
-    def read_variable(self, _repository: str, _name: str) -> str | None:
-        if self.create == "lost unread":
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502")
-        return self.variable
-
-    def preset(self, variable: str | None, create: str) -> None:
-        """The variable before the command runs, and how its create goes."""
-        self.variable = variable
-        self.create = create
-
-    def latest(self, run_id: int) -> int:
-        count = max(self.attempts[run_id])
-        if run_id != max(self.attempts) or not self.rerun:
-            return count
-        self.reads += 1
-        return count + (self.reads > self.APPEARS_AFTER)
-
-    def api(self, _repository: str, path: str) -> dict[str, object]:
-        return {"run_attempt": self.latest(int(path.rsplit("/", 1)[1]))}
-
-    def jobs(self, _repository: str, run_id: int, attempt: int) -> list[ci_log.Job]:
-        if attempt > max(self.attempts[run_id]):
-            self.on_wait()
-            self.shown = min(self.shown + 1, len(self.rerun_jobs))
-            return list(self.rerun_jobs[: self.shown])
-        return list(self.attempts[run_id][attempt])
-
-    def gh(self, *args: str) -> str:
-        self.calls.append(args)
-        if args[0] == "api" and args[-1].endswith("/annotations"):
-            job = int(args[-1].split("/")[-2])
-            note = ANNOTATIONS.get(job)
-            return json.dumps([{"message": note}] if note else [])
-        if args[:3] == ("api", "-X", "POST"):
-            return self.created(args)
-        if args[:2] == ("variable", "delete"):
-            self.variable = None
-        elif args[:2] == ("run", "rerun") and self.create == "rerun fails":
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 403")
-        elif args[:2] == ("run", "rerun"):
-            self.rerun = True
-        return ""
-
-    def created(self, args: tuple[str, ...]) -> str:
-        if self.create == "taken":
-            self.variable = "someone else's"
-        if self.variable is not None:
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 409: Conflict")
-        self.variable = args[-1].removeprefix("value=")
-        if self.create in ("terminated", "interrupted"):
-            # The signal lands while the create's answer is still on its way.
-            held = signal.SIGTERM if self.create == "terminated" else signal.SIGINT
-            os.kill(os.getpid(), held)
-        if self.create in ("lost", "lost unread"):
-            raise subprocess.CalledProcessError(1, "gh", stderr="HTTP 502: Bad Gateway")
-        return ""
-
-
-def terminate() -> None:
-    """SIGTERM to this process, as signal-witness.py forwards it."""
-    os.kill(os.getpid(), signal.SIGTERM)
-
-
 @dataclass
 class ReviewerFixture:
     """What GitHub holds for example/fork #170 beyond its reports."""
@@ -7088,264 +7360,6 @@ class ReviewerTests(unittest.TestCase):
             "not posted: the report is signed Model: claude-opus-5-5", err.getvalue()
         )
         self.assertEqual(github.writes, [])
-
-
-class MacosFallbackTests(unittest.TestCase):
-    """ci.py macos-fallback against stubbed gh, never the live repository."""
-
-    CAPACITY = [mac_job(1, "cancelled", False), mac_job(2, "cancelled", False, "Debug")]
-    AGAIN = [mac_job(8, "cancelled", False), mac_job(9, "cancelled", False, "Debug")]
-    STARTED = [mac_job(3, "cancelled", True)]
-    BY_HAND = [mac_job(10, "cancelled", False)]
-    PASSED = [mac_job(4, "success", True), mac_job(5, "success", True, "Debug")]
-    TWO = {1: {1: CAPACITY}, 2: {1: AGAIN}}
-
-    def fallback(
-        self,
-        attempts: dict[int, dict[int, list[ci_log.Job]]],
-        *extra: str,
-        rerun_jobs: list[ci_log.Job] | None = None,
-        names: list[str] | None = None,
-        setup: Callable[[FallbackGitHub], None] = lambda _: None,
-    ) -> tuple[int, list[tuple[str, ...]], str]:
-        """Run macos-fallback on the runs (or `names`) against a FallbackGitHub
-        that `setup` adjusts."""
-        github = FallbackGitHub(
-            attempts, self.PASSED if rerun_jobs is None else rerun_jobs, None
-        )
-        setup(github)
-        clock = itertools.count(0, 10)
-        runs = names or [str(run) for run in attempts]
-        argv = ["ci.py", "macos-fallback", *runs, "--repo", "x/y"]
-        with (
-            patch.object(ci, "api", side_effect=github.api),
-            patch.object(ci, "run_jobs", side_effect=github.jobs),
-            patch.object(ci, "gh", side_effect=github.gh),
-            patch.object(ci, "detached_gh", side_effect=github.gh),
-            patch.object(ci, "variable", side_effect=github.read_variable),
-            patch.object(ci, "failure_logs"),
-            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
-            patch.object(ci.time, "sleep"),
-            patch("sys.argv", [*argv, *extra]),
-            patch("builtins.print") as printed,
-            patch("sys.stderr") as stderr,
-        ):
-            code = ci.main()
-        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
-        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
-        self.left = github.variable
-        writes = [c for c in github.calls if c[0] != "api" or c[1] == "-X"]
-        return code, writes, output
-
-    def test_one_capacity_cancellation_changes_nothing(self) -> None:
-        for label, attempts, names in (
-            ("one attempt", {2: {1: self.CAPACITY}}, None),
-            ("started job", {1: {1: self.STARTED}, 2: {1: self.CAPACITY}}, None),
-            ("cancelled by hand", {1: {1: self.BY_HAND}, 2: {1: self.CAPACITY}}, None),
-            (
-                "one run named twice",
-                {2: {1: self.CAPACITY}},
-                ["2", "https://github.com/x/y/actions/runs/2"],
-            ),
-        ):
-            with self.subTest(label):
-                code, writes, output = self.fallback(attempts, names=names)
-                self.assertEqual((code, writes), (1, []))
-                self.assertIn("Counted 1 hosted-capacity cancellation", output)
-
-    def test_two_cancellations_set_rerun_wait_and_delete_in_order(self) -> None:
-        code, writes, output = self.fallback(
-            self.TWO, "--pr", "995", "--agent", "/root", "--model", "m", "--effort", "e"
-        )
-        self.assertEqual(code, 0)
-        self.assertEqual(
-            [call[:3] for call in writes],
-            [
-                ("api", "-X", "POST"),
-                ("run", "rerun", "2"),
-                ("variable", "delete", ci.MACOS_VARIABLE),
-                ("pr", "comment", "995"),
-            ],
-        )
-        self.assertIn(f"value={ci.MACOS_RUNNER}", writes[0])
-        record = writes[3][writes[3].index("--body") + 1]
-        self.assertIn("set CI_MACOS_HEAVY=blacksmith-6vcpu-macos-26", record)
-        self.assertIn("deleted CI_MACOS_HEAVY", record)
-        self.assertIn("Agent: /root | Model: m | Reasoning effort: e", record)
-        self.assertIsNone(self.left)
-        # Two attempts of one run count as two cancellations too.
-        code, _, _ = self.fallback({2: {1: self.CAPACITY, 2: self.AGAIN}})
-        self.assertEqual(code, 0)
-
-    def test_the_wait_lasts_until_every_rerun_macos_job_completes(self) -> None:
-        # The new attempt lists Release done, and Debug only on the next read.
-        github_jobs = [mac_job(4, "success", True), mac_job(5, None, True, "Debug")]
-        code, writes, _ = self.fallback(
-            self.TWO, "--timeout", "100", rerun_jobs=github_jobs
-        )
-        self.assertEqual(code, 2)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-
-    def test_an_existing_or_racing_variable_is_left_alone(self) -> None:
-        for label, variable, create in (
-            ("already set", "someone's", ""),
-            ("created first by another", None, "taken"),
-        ):
-            with self.subTest(label):
-                code, writes, output = self.fallback(
-                    self.TWO,
-                    setup=lambda fake, v=variable, c=create: fake.preset(v, c),
-                )
-                self.assertEqual(code, 1)
-                self.assertEqual([c[:3] for c in writes], [("api", "-X", "POST")])
-                self.assertIn("already exists", output)
-                self.assertNotEqual(self.left, None)
-        # A create whose answer was lost: reported, not deleted, not rerun.
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "lost")
-        )
-        self.assertEqual(code, 1)
-        self.assertEqual([c[:2] for c in writes], [("api", "-X")])
-        self.assertIn("owner unknown", output)
-        self.assertEqual(self.left, ci.MACOS_RUNNER)
-        # The read-back fails too: both are reported and the change recorded.
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "lost unread")
-        )
-        self.assertEqual(code, 1)
-        self.assertIn("reading it back failed too", output)
-        self.assertIn("**macOS fallback**", output)
-
-    def test_sigterm_during_the_create_still_deletes_what_it_created(self) -> None:
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "terminated")
-        )
-        self.assertEqual(code, 128 + signal.SIGTERM)
-        self.assertEqual(
-            [c[:2] for c in writes], [("api", "-X"), ("variable", "delete")]
-        )
-        self.assertIn("stopped: SIGTERM", output)
-        self.assertIsNone(self.left)
-
-    def test_ctrl_c_during_the_create_still_deletes_what_it_created(self) -> None:
-        seen: list[FallbackGitHub] = []
-
-        def setup(fake: FallbackGitHub) -> None:
-            fake.preset(None, "interrupted")
-            seen.append(fake)
-
-        with self.assertRaises(KeyboardInterrupt):
-            self.fallback(self.TWO, setup=setup)
-        (fake,) = seen
-        writes = [c[:2] for c in fake.calls if c[0] != "api" or c[1] == "-X"]
-        self.assertEqual(writes, [("api", "-X"), ("variable", "delete")])
-        self.assertIsNone(fake.variable)
-
-    def test_a_failed_rerun_a_timeout_or_sigterm_still_deletes_and_records(
-        self,
-    ) -> None:
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: fake.preset(None, "rerun fails")
-        )
-        self.assertEqual(code, 1)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-        self.assertIn("stopped:", output)
-        self.assertIn("deleted CI_MACOS_HEAVY", output)
-        self.assertIsNone(self.left)
-        code, writes, output = self.fallback(
-            self.TWO, "--timeout", "60", rerun_jobs=[mac_job(6, None, True)]
-        )
-        self.assertEqual(code, 2)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-        self.assertIn("deleted CI_MACOS_HEAVY", output)
-        # signal-witness.py forwards SIGTERM to a background job.
-        code, writes, output = self.fallback(
-            self.TWO, setup=lambda fake: setattr(fake, "on_wait", terminate)
-        )
-        self.assertEqual(code, 128 + signal.SIGTERM)
-        self.assertEqual(writes[-1][:2], ("variable", "delete"))
-        self.assertIn("stopped: SIGTERM", output)
-        self.assertIsNone(self.left)
-        # A macOS job that fails on the paid runner fails the command, deleted.
-        failing = [mac_job(7, "failure", True), mac_job(5, "success", True, "Debug")]
-        code, _, output = self.fallback(self.TWO, rerun_jobs=failing)
-        self.assertEqual(code, 1)
-        self.assertIsNone(self.left)
-
-    def test_a_run_with_no_failed_macos_job_is_refused(self) -> None:
-        passed = {1: {1: self.CAPACITY}, 2: {1: self.AGAIN, 2: self.PASSED}}
-        code, writes, output = self.fallback(passed)
-        self.assertEqual((code, writes), (1, []))
-        self.assertIn("no failed macOS job", output)
-
-
-# A gh for macos-fallback's whole command, state kept in files beside it: two
-# runs whose macOS jobs no hosted runner took, and a create that holds its
-# answer back long enough for a signal to reach the command's process group.
-FAKE_GH = """
-import json, pathlib, signal, sys, time
-# The real gh, a Go program, unblocks these signals whatever mask it inherits.
-signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
-state = pathlib.Path(sys.argv[0]).parent
-args = sys.argv[1:]
-job = {"id": 1, "run_id": 2, "name": "platform / Mac OS (arm64 - Release) / CI",
-       "status": "completed", "conclusion": "cancelled", "html_url": "u",
-       "runner_id": 0, "steps": []}
-note = "The job was not acquired by Runner of type hosted even after multiple attempts"
-if args[:3] == ["api", "-X", "POST"]:
-    (state / "variable").write_text("blacksmith")
-    (state / "posting").touch()
-    time.sleep(3)
-elif args[:2] == ["variable", "list"]:
-    held = state / "variable"
-    print(json.dumps([{"name": "CI_MACOS_HEAVY", "value": held.read_text()}]
-                     if held.exists() else []))
-elif args[:2] == ["variable", "delete"]:
-    (state / "variable").unlink(missing_ok=True)
-elif args[:2] == ["run", "rerun"]:
-    (state / "rerun").touch()
-elif args[-1].endswith("/annotations"):
-    print(json.dumps([{"message": note}]))
-elif "/jobs" in args[-1]:
-    print(json.dumps([{"jobs": [job]}]))
-elif args[0] == "api":
-    print(json.dumps({"run_attempt": 1}))
-"""
-
-
-class MacosFallbackGroupSignalTests(unittest.TestCase):
-    def test_a_group_sigterm_during_the_create_still_deletes_the_variable(
-        self,
-    ) -> None:
-        """signal-witness.py and Ctrl-C signal the whole process group; the
-        create's gh runs in its own session, so its outcome is known and the
-        variable it set is deleted (#1013)."""
-        with tempfile.TemporaryDirectory() as directory:
-            folder = Path(directory)
-            (folder / "gh").write_text(f"#!{sys.executable}\n{FAKE_GH}")
-            (folder / "gh").chmod(0o755)
-            environment = {
-                **os.environ,
-                "PATH": f"{folder}{os.pathsep}{os.environ['PATH']}",
-            }
-            command = [sys.executable, str(ROOT / "tools/ci.py"), "macos-fallback"]
-            process = subprocess.Popen(
-                [*command, "1", "2", "--repo", "x/y", "--interval", "1"],
-                env=environment,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                start_new_session=True,
-            )
-            deadline = time.monotonic() + 30
-            while not (folder / "posting").exists() and time.monotonic() < deadline:
-                time.sleep(0.05)
-            self.assertTrue((folder / "posting").exists(), "the create never started")
-            os.killpg(process.pid, signal.SIGTERM)
-            output, _ = process.communicate(timeout=60)
-            self.assertEqual(process.returncode, 128 + signal.SIGTERM, output)
-            self.assertFalse((folder / "variable").exists(), output)
-            self.assertIn("deleted CI_MACOS_HEAVY", output)
 
 
 class FailureCountTests(unittest.TestCase):
