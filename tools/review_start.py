@@ -431,8 +431,9 @@ def hours_since(at: str, now: datetime) -> float:
 
 
 def root_line(
-    pr: int, head: str, asked: Start, reason: str, earlier: list[Review], now: datetime
+    pr: int, head: str, asked: Start, reason: str, earlier: list[Review]
 ) -> str:
+    now = datetime.now(timezone.utc)
     names = ", ".join(review.name.removeprefix(f"review-{pr}-") for review in earlier)
     since = (
         f"; {hours_since(earlier[0].at, now):.1f} h since the first" if earlier else ""
@@ -524,7 +525,7 @@ def refuse(
     if found.fixed:
         print(f"Not started: PR #{pr} asks for {found.reason}.", file=sys.stderr)
         raise SystemExit(1)
-    line = root_line(pr, head, asked, found.reason, earlier, datetime.now(timezone.utc))
+    line = root_line(pr, head, asked, found.reason, earlier)
     print(
         f"Not started: PR #{pr} asks for {found.reason}.\nSend root this line, "
         "queued, and start no reviewer until it answers:\n\n"
