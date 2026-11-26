@@ -1305,11 +1305,11 @@
     "after": 1,
     "before": 0,
     "kind": "suppression",
-    "operation": "orders::update_order_dest",
+    "operation": "orders::update_order_dest_in",
     "reason": "Plan #1060 decision 1: one function per original body; the body keeps the original's branches and comments in its order.",
     "retirement_condition": "Retires when the body is split along the original's own helpers in a later pass, or the lint's threshold covers it.",
     "retiring_owner": "#734",
-    "site": "rust/openttd-kernels/src/orders.rs | fn update_order_dest | allow clippy::too_many_lines",
+    "site": "rust/openttd-kernels/src/orders.rs | fn update_order_dest_in | allow clippy::too_many_lines",
     "source_contract": "`UpdateOrderDest` (src/order_cmd.cpp)",
     "tool": "rust"
   },
@@ -1317,11 +1317,11 @@
     "after": 1,
     "before": 0,
     "kind": "suppression",
-    "operation": "orders::update_order_dest",
+    "operation": "orders::update_order_dest_in",
     "reason": "Plan #1060 decisions 1 and 2: field-sized reads and writes of the live native order, list, consist and vehicle records, or calls of the C++ leaf slots, under the module's lifetime contract, scoped to the item instead of the module.",
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
-    "site": "rust/openttd-kernels/src/orders.rs | fn update_order_dest | allow unsafe_code",
+    "site": "rust/openttd-kernels/src/orders.rs | fn update_order_dest_in | allow unsafe_code",
     "source_contract": "`UpdateOrderDest` (src/order_cmd.cpp)",
     "tool": "rust"
   },
@@ -1563,5 +1563,17 @@
     "reason": "Plan #1060 decision 9: src/tests/orders.cpp's cases \"Orders timetable - signed native economy dates cross into Rust\" and \"Orders ownership - early validation and complete native error storage\" stay native (ADR 0023) and are rebuilt on a live vehicle in `_vehicle_pool` with its order list; the destination-owner arm keeps its station lookup and owner stubs on copies of the production tables, and the date table gains the rows of EconomyTime::MAX_DATE and the first day past it.",
     "retirement_condition": "Retires when the order and vehicle pools move to Rust (#906) and the two cases become Rust tests over the native CommandCost's port.",
     "retiring_owner": "#906"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "orders::depot_get_xy",
+    "reason": "Plan #1060 decisions 1 and 2: field-sized reads and writes of the live native order, list, consist and vehicle records, or calls of the C++ leaf slots, under the module's lifetime contract, scoped to the item instead of the module.",
+    "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
+    "retiring_owner": "#906",
+    "site": "rust/openttd-kernels/src/orders.rs | fn depot_get_xy | allow unsafe_code",
+    "source_contract": "`Depot::Get` (src/depot_base.h)",
+    "tool": "rust"
   }
 ]

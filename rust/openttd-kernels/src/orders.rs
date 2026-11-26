@@ -7141,6 +7141,7 @@ crate::abi::layouts! {
         next_backup,
         vector,
         backup_clear_name,
+        backup_name,
         backup_service_interval,
         backup_set_name,
         backup_set_service_interval,
