@@ -276,8 +276,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	record.cargo_cap = 1;
 	openttd_test_station_prepare(&record, &services, &loading, &links);
 	/* The one packet is kept: nothing accepts it and the entry has no flows. */
-	CHECK(openttd_rust_cargo_list_count(_station_loading_cargo) == 1);
-	CHECK(openttd_rust_cargo_list_action_count(_station_loading_cargo, VehicleCargoList::MTA_KEEP) == 1);
+	CHECK((openttd_rust_cargo_list_count(_station_loading_cargo) == 1 && openttd_rust_cargo_list_action_count(_station_loading_cargo, VehicleCargoList::MTA_KEEP) == 1));
 	openttd_rust_cargo_list_destroy(_station_loading_cargo, CargoStorageServices());
 	CHECK(probe.staged);
 	CHECK(cargo->rating == 6);
