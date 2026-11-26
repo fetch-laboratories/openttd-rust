@@ -466,5 +466,16 @@
   "reason": "Loads the two-byte member of the live spec, which the registry slot addresses.",
   "retiring_owner": "#1058",
   "retirement_condition": "Retires when `CargoSpec::array` is a Rust-owned record the handle borrows (#1058)."
+ },
+ {
+  "kind": "growth",
+  "counter": "generated_records",
+  "added": {
+   "abi-record-setting_addresses.h": 1
+  },
+  "reason": "`SettingAddresses::feeder_payment_share` (decision 4 of #1057 part 4) addresses `_settings_game.economy.feeder_payment_share`, which `CargoPayment::PayTransfer` reads with one field-sized load in place of the payment table's `feeder_payment_share` callback, which the pass deletes with `RustFeederPaymentShare`.",
+  "existing_alternatives": "Keeping the `feeder_payment_share` callback slot, a reader written for one call site that the pass's plan deletes.",
+  "retiring_owner": "#734",
+  "retirement_condition": "Retires when the settings port (phase 4) moves `_settings_game` to a Rust-owned record the address catalog is no longer needed for."
  }
 ]
