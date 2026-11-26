@@ -110,7 +110,12 @@ static void ShipBoundary()
 	ship_probe.record.orders = orders.vehicle.get();
 	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &ship_orders->services; };
 	orders.services.invalidate_vehicle_order = [](void *v, int32_t reason) noexcept { CHECK(v == &ship_probe && reason == -2 && ship_probe.stage++ == 0); };
-	orders.services.depot_get = [](uint16_t destination) noexcept { CHECK(destination == 0x1234); return uint32_t{SHIP_DEST}; };
+	/* The depot order's tile is `Depot::Get(dest)->xy`, through the shared depot table. */
+	static int ship_depot;
+	static OpenTTDDepotServices ship_depots{};
+	ship_depots.get = [](uint16_t destination) noexcept { CHECK(destination == 0x1234); return reinterpret_cast<Depot *>(&ship_depot); };
+	ship_depots.xy = [](const Depot *d) noexcept { CHECK(d == reinterpret_cast<const Depot *>(&ship_depot)); return uint32_t{SHIP_DEST}; };
+	orders.services.depots = &ship_depots;
 	/* The search reads the ship's engine first of what the fixture serves. */
 	ship_vehicle.engine = [](OpenTTDVehicle *v) noexcept -> const OpenTTDEngine * {
 		CHECK(v == &ship_probe.record && ship_probe.stage++ == 1 && ship_probe.record.dest_tile == SHIP_DEST);
