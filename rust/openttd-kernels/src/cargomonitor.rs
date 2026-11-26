@@ -198,6 +198,7 @@ fn clear_cargo_monitoring(cargo_monitor_map: &GameState<CargoMonitorMap>, compan
         return;
     }
 
+    // The loop's increment is /* nothing */: each entry is erased or stepped over once.
     cargo_monitor_map.retain(|&key, _| decode_monitor_company(key) != company);
 }
 
