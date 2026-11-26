@@ -278,17 +278,18 @@ Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has 
 
 Two slots ([ADR 0049](adr/0049-two-implementers-waiting-keeps-slot.md)). Each slot works one chain, and a pass planned on an open PR's head is dispatched when that PR merges. Residue that passes left in files they did not finish is on #734, one comment for each pass since [merges 66 to 75](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6976329602) and [steering 40's list](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-7187322409); two small porting points from #1000 wait on `residue/1000-porting-points` ([record](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6992168925)).
 
-In flight, both in the [resume checkpoint](#resume-checkpoint): #1084 (#1060's first part, `orders.rs` with `order_func.rs`) and #1089 (#1057's third part, `cargo_storage.rs`). They share eleven files.
+In flight at merge 115 (`cc8eef674c`, #1084): #1089 (#1057's third part, `cargo_storage.rs`), finished and taking the base before its first reviews, and #1064's first part (workset 15, NewGRF loading: `newgrf_class.rs`, `override_manager.rs`, `newgrf_properties.rs` and `newgrf_internal.rs`), dispatched at merge 115 with [root's answers](https://github.com/fetch-laboratories/openttd-rust/issues/1064#issuecomment-7173604267).
 
-Waiting on nothing but a slot:
+Waiting on nothing but a slot, planned and reviewed with no open question:
 
-1. **#1064's first part** (workset 15, NewGRF loading: `newgrf_class.rs`, `override_manager.rs`, `newgrf_properties.rs` and `newgrf_internal.rs`, about 2,400 changed lines): planned and reviewed, with [root's answers](https://github.com/fetch-laboratories/openttd-rust/issues/1064#issuecomment-7173604267). The workset (19 files, 8,694 lines) takes seven PRs, and its fourth part (`newgrf_spritegroup.rs` with the resolver frames) goes before #1062's parts 2 to 4.
+1. **#1060's second part** (workset 05: `fleet.rs` with `vehiclelist.rs`, about 5,900 changed lines; `GroupServices` goes from 48 callbacks to 16). Its plan is in #1060's body, written on #1084's head. It shares eight caller files with #1089 and five with #1057's fourth part; whichever merges second takes the base update.
 
 Waiting on a merge:
 
-2. **#1062's parts 2 to 4** (workset 16, NewGRF domains; `newgrf_vehicle.rs`, 2,141 lines, has its own pass): they follow #1064's fourth part and move the 26 `GRFFile` member slots of three finished definition files to the handle ([root's second answers](https://github.com/fetch-laboratories/openttd-rust/issues/1062#issuecomment-7154092829)).
-3. **#1057's fourth part** (`cargo_payment.rs` with `cargomonitor.rs`) follows #1089. Its growth record for the `CargoSpec` member slots names #1058.
-4. **#1060's parts 2 and 3** (`fleet.rs` with `vehiclelist.rs`, then `fleet/transactions.rs` with `fleet/pending.rs`) follow #1084; the third also follows #1089.
+2. **#1057's fourth part** (`cargo_payment.rs` with `cargomonitor.rs`, about 3,900 changed lines; it closes #1057) follows #1089. It is planned and reviewed on #1089's head, in #1057's body, and its growth record for the `CargoSpec` member slots names #1058.
+3. **#1064's second part** (`type_registry.rs`, `type_definitions.rs` and `type_availability.rs`) follows the first and has no plan yet. The workset (19 files, 8,694 lines) takes seven PRs, and its fourth part (`newgrf_spritegroup.rs` with the resolver frames) goes before #1062's parts 2 to 4.
+4. **#1062's parts 2 to 4** (workset 16, NewGRF domains; `newgrf_vehicle.rs`, 2,141 lines, has its own pass): they follow #1064's fourth part and move the 26 `GRFFile` member slots of three finished definition files to the handle ([root's second answers](https://github.com/fetch-laboratories/openttd-rust/issues/1062#issuecomment-7154092829)).
+5. **#1060's third part** (`fleet/transactions.rs` with `fleet/pending.rs`) follows its second part and #1089.
 
 Root plans the next entry when a dispatch leaves a chain without one ([team](team.md#ready-queue-and-pipelining)).
 
