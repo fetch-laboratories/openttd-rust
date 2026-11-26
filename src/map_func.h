@@ -540,26 +540,6 @@ inline TileIndex TileAddByDiagDir(TileIndex tile, DiagDirection dir)
 }
 
 /**
- * Determines the DiagDirection to get from one tile to another.
- * The tiles do not necessarily have to be adjacent.
- * @param tile_from Origin tile
- * @param tile_to Destination tile
- * @return DiagDirection from tile_from towards tile_to, or INVALID_DIAGDIR if the tiles are not on an axis
- */
-inline DiagDirection DiagdirBetweenTiles(TileIndex tile_from, TileIndex tile_to)
-{
-	int dx = (int)TileX(tile_to) - (int)TileX(tile_from);
-	int dy = (int)TileY(tile_to) - (int)TileY(tile_from);
-	if (dx == 0) {
-		if (dy == 0) return INVALID_DIAGDIR;
-		return (dy < 0 ? DIAGDIR_NW : DIAGDIR_SE);
-	} else {
-		if (dy != 0) return INVALID_DIAGDIR;
-		return (dx < 0 ? DIAGDIR_NE : DIAGDIR_SW);
-	}
-}
-
-/**
  * Get a random tile out of a given seed.
  * @param r the random 'seed'
  * @return a valid tile

@@ -16,39 +16,6 @@
 #include "../waypoint_base.h"
 
 /**
- * Calculates the tile of given station that is closest to a given tile
- * for this we assume the station is a rectangle,
- * as defined by its tile are (st->train_station)
- * @param station The station to calculate the distance to
- * @param tile The tile from where to calculate the distance
- * @param station_type the station type to get the closest tile of
- * @return The closest station tile to the given tile.
- */
-inline TileIndex CalcClosestStationTile(StationID station, TileIndex tile, StationType station_type)
-{
-	const BaseStation *st = BaseStation::Get(station);
-	TileArea ta = st->GetTileArea(station_type);
-
-	/* If the rail station is (temporarily) not present, use the station sign to drive near the station */
-	if (ta.tile == INVALID_TILE) return st->xy;
-
-	uint minx = TileX(ta.tile);  // topmost corner of station
-	uint miny = TileY(ta.tile);
-	uint maxx = minx + ta.w - 1; // lowermost corner of station
-	uint maxy = miny + ta.h - 1;
-
-	/* we are going the aim for the x coordinate of the closest corner
-	 * but if we are between those coordinates, we will aim for our own x coordinate */
-	uint x = ClampU(TileX(tile), minx, maxx);
-
-	/* same for y coordinate, see above comment */
-	uint y = ClampU(TileY(tile), miny, maxy);
-
-	/* return the tile of our target coordinates */
-	return TileXY(x, y);
-}
-
-/**
  * Wrapper around GetTileTrackStatus() and TrackStatusToTrackdirBits(), as for
  * single tram bits GetTileTrackStatus() returns 0. The reason for this is
  * that there are no half-tile TrackBits in OpenTTD.

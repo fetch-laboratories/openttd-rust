@@ -155,23 +155,6 @@ inline Track FindFirstTrack(TrackBits tracks)
 }
 
 /**
- * Converts TrackBits to Track.
- *
- * This function converts a TrackBits value to a Track value. As it
- * is not possible to convert two or more tracks to one track the
- * parameter must contain only one track.
- *
- * @param tracks The TrackBits value to convert
- * @return The Track from the value
- * @pre tracks must contains only one Track
- */
-inline Track TrackBitsToTrack(TrackBits tracks)
-{
-	assert(tracks != TRACK_BIT_NONE && KillFirstBit(tracks & TRACK_BIT_MASK) == TRACK_BIT_NONE);
-	return static_cast<Track>(FindFirstBit(tracks & TRACK_BIT_MASK));
-}
-
-/**
  * Returns first Trackdir from TrackdirBits or INVALID_TRACKDIR
  *
  * This function returns the first Trackdir in the given TrackdirBits value or
@@ -347,23 +330,6 @@ inline Trackdir NextTrackdir(Trackdir trackdir)
 }
 
 /**
- * Maps a track to all tracks that make 90 deg turns with it.
- *
- * For the diagonal directions these are the complement of the
- * direction, for the straight directions these are the
- * two vertical or horizontal tracks, depend on the given direction
- *
- * @param track The given track
- * @return The TrackBits with the tracks marked which cross the given track by 90 deg.
- */
-inline TrackBits TrackCrossesTracks(Track track)
-{
-	assert(IsValidTrack(track));
-	extern const TrackBits _track_crosses_tracks[TRACK_END];
-	return _track_crosses_tracks[track];
-}
-
-/**
  * Maps a trackdir to the (4-way) direction the tile is exited when following
  * that trackdir.
  *
@@ -380,43 +346,6 @@ inline DiagDirection TrackdirToExitdir(Trackdir trackdir)
 	assert(IsValidTrackdirForRoadVehicle(trackdir));
 	extern const DiagDirection _trackdir_to_exitdir[TRACKDIR_END];
 	return _trackdir_to_exitdir[trackdir];
-}
-
-/**
- * Maps a track and an (4-way) dir to the trackdir that represents the track
- * with the entry in the given direction.
- *
- * For the diagonal tracks the return value is clear, its either the matching
- * track direction or INVALID_TRACKDIR.
- * For the straight tracks this returns the track direction which results if
- * you follow the DiagDirection and then turn by 45 deg left or right on the
- * next tile. The new direction on the new track will be the returning Trackdir
- * value. If the parameters makes no sense like the track TRACK_UPPER and the
- * direction DIAGDIR_NE (target track cannot be reached) this function returns
- * INVALID_TRACKDIR.
- *
- * @param track The target track
- * @param diagdir The direction to "come from"
- * @return the resulting Trackdir or INVALID_TRACKDIR if not possible.
- */
-inline Trackdir TrackEnterdirToTrackdir(Track track, DiagDirection diagdir)
-{
-	assert(IsValidTrack(track));
-	assert(IsValidDiagDirection(diagdir));
-	extern const Trackdir _track_enterdir_to_trackdir[TRACK_END][DIAGDIR_END];
-	return _track_enterdir_to_trackdir[track][diagdir];
-}
-
-/**
- * Maps a track and a full (8-way) direction to the trackdir that represents
- * the track running in the given direction.
- */
-inline Trackdir TrackDirectionToTrackdir(Track track, Direction dir)
-{
-	assert(IsValidTrack(track));
-	assert(IsValidDirection(dir));
-	extern const Trackdir _track_direction_to_trackdir[TRACK_END][DIR_END];
-	return _track_direction_to_trackdir[track][dir];
 }
 
 /**
@@ -488,21 +417,6 @@ inline TrackdirBits DiagdirReachesTrackdirs(DiagDirection diagdir)
  */
 inline TrackBits DiagdirReachesTracks(DiagDirection diagdir) { return TrackdirBitsToTrackBits(DiagdirReachesTrackdirs(diagdir)); }
 
-/**
- * Maps a trackdir to the trackdirs that can be reached from it (ie, when
- * entering the next tile.
- *
- * This will include 90 degree turns!
- *
- * @param trackdir The track direction which will be leaved
- * @return The track directions which can be used from this direction (in the next tile)
- */
-inline TrackdirBits TrackdirReachesTrackdirs(Trackdir trackdir)
-{
-	assert(IsValidTrackdir(trackdir));
-	extern const TrackdirBits _exitdir_reaches_trackdirs[DIAGDIR_END];
-	return _exitdir_reaches_trackdirs[TrackdirToExitdir(trackdir)];
-}
 /* Note that there is no direct table for this function (there used to be),
  * but it uses two simpler tables to achieve the result */
 
@@ -607,27 +521,6 @@ inline bool IsUphillTrackdir(Slope slope, Trackdir dir)
 	assert(IsValidTrackdirForRoadVehicle(dir));
 	extern const TrackdirBits _uphill_trackdirs[];
 	return HasBit(_uphill_trackdirs[RemoveHalftileSlope(slope)], dir);
-}
-
-/**
- * Determine the side in which the vehicle will leave the tile
- *
- * @param direction vehicle direction
- * @param track vehicle track bits
- * @return side of tile the vehicle will leave
- */
-inline DiagDirection VehicleExitDir(Direction direction, TrackBits track)
-{
-	static const TrackBits state_dir_table[DIAGDIR_END] = { TRACK_BIT_RIGHT, TRACK_BIT_LOWER, TRACK_BIT_LEFT, TRACK_BIT_UPPER };
-
-	DiagDirection diagdir = DirToDiagDir(direction);
-
-	/* Determine the diagonal direction in which we will exit this tile */
-	if (!HasBit(direction, 0) && track != state_dir_table[diagdir]) {
-		diagdir = ChangeDiagDir(diagdir, DIAGDIRDIFF_90LEFT);
-	}
-
-	return diagdir;
 }
 
 #endif /* TRACK_FUNC_H */
