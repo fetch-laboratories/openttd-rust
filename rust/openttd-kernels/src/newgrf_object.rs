@@ -70,13 +70,27 @@ impl ObjectClassID {
     pub const OBJECT_CLASS_MAX: Self = Self(u16::MAX);
 }
 
+/// `ObjectClass`: the class registry of the object specs.
+pub(crate) type ObjectClass = crate::newgrf_class::NewGRFClass<crate::objects::Spec>;
+
 /// `ObjectClass::InsertDefaults`.
 #[allow(unsafe_code)]
-pub(crate) unsafe fn insert_defaults() {
-    use crate::newgrf_class::object::{allocate, get};
+pub(crate) fn insert_defaults() {
     let max = ObjectClassID::OBJECT_CLASS_MAX;
     unsafe {
-        (*get(allocate(u32::from_be_bytes(*b"LTHS"), max))).name = STR_OBJECT_CLASS_LTHS.0;
-        (*get(allocate(u32::from_be_bytes(*b"TRNS"), max))).name = STR_OBJECT_CLASS_TRNS.0;
+        (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"LTHS"), max))).name =
+            STR_OBJECT_CLASS_LTHS;
+        (*ObjectClass::get(ObjectClass::allocate(u32::from_be_bytes(*b"TRNS"), max))).name =
+            STR_OBJECT_CLASS_TRNS;
     }
+}
+
+/// `ObjectClass::IsUIAvailable`.
+#[allow(unsafe_code)]
+pub(crate) fn is_ui_available(class: &ObjectClass, index: u32) -> bool {
+    // SAFETY: Only the object instantiation's table names the object table.
+    crate::objects::ever_available(
+        unsafe { &*<crate::objects::Spec as crate::newgrf_class::ClassSpec>::services().object },
+        class.get_spec(index),
+    )
 }

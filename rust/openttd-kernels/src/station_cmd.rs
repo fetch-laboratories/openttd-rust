@@ -36,8 +36,8 @@ use crate::math::clamp_u;
 use crate::newgrf::GrfSpecFeature;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
 use crate::newgrf_debug::delete_newgrf_inspect_window;
-use crate::newgrf_roadstop::RoadStopClassID;
-use crate::newgrf_station::StationClassID;
+use crate::newgrf_roadstop::{RoadStopClass, RoadStopClassID};
+use crate::newgrf_station::{StationClass, StationClassID};
 use crate::order_type::OrderType;
 use crate::rail_type::RailType;
 use crate::road::{road_type_is_road, road_type_is_tram};
@@ -1997,14 +1997,18 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
-        if u32::from(spec_class.0) >= crate::newgrf_class::station::count()
-            || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(
-                spec_class.0,
-            ))
-            || u32::from(spec_index) >= crate::newgrf_class::station::spec_count(spec_class.0)
-            || plat_len == 0
-            || numtracks == 0
-        {
+        if u32::from(spec_class.0) >= StationClass::get_class_count() {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        // SAFETY: `Get` returns a class of the registry, after the bound check above.
+        let cls = unsafe { &*StationClass::get(spec_class) };
+        if crate::newgrf_station::is_waypoint_class(cls.global_id) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        if u32::from(spec_index) >= cls.get_spec_count() {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        if plat_len == 0 || numtracks == 0 {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let (w_org, h_org) = if axis == Axis::AXIS_X {
@@ -2040,7 +2044,8 @@ impl Ctx<'_> {
         let mut est = StationID::INVALID;
         let mut affected_vehicles = Vec::new();
         /* Add construction and clearing expenses. */
-        let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
+        // SAFETY: `Get` returns a class of the registry.
+        let statspec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(spec_index));
         self.calculate_rail_station_cost(RailStationCost {
             cost,
             ret,
@@ -2087,7 +2092,8 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
         }
-        let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
+        // SAFETY: `Get` returns a class of the registry.
+        let statspec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(spec_index));
         let tile_delta = self
             .map()
             .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
@@ -3326,15 +3332,18 @@ impl Ctx<'_> {
         }
         let distant_join = station_to_join != StationID::INVALID;
         /* Check if the given station class is valid */
-        if u32::from(spec_class.0) >= crate::newgrf_class::roadstop::count()
-            || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::roadstop_label(
-                spec_class.0,
-            ))
-            || u32::from(spec_index) >= crate::newgrf_class::roadstop::spec_count(spec_class.0)
-        {
+        if u32::from(spec_class.0) >= RoadStopClass::get_class_count() {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let roadstopspec = crate::newgrf_class::roadstop::spec(spec_class.0, u32::from(spec_index));
+        // SAFETY: `Get` returns a class of the registry, after the bound check above.
+        let cls = unsafe { &*RoadStopClass::get(spec_class) };
+        if crate::newgrf_station::is_waypoint_class(cls.global_id) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        if u32::from(spec_index) >= cls.get_spec_count() {
+            return cost.error(StringID::INVALID_STRING_ID.0);
+        }
+        let roadstopspec = cls.get_spec(u32::from(spec_index));
         if !roadstopspec.is_null()
             && !self.road_stop_spec_allows(roadstopspec, stop_type, is_drive_through)
         {

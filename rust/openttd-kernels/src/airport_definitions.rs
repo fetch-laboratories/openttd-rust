@@ -660,7 +660,7 @@ pub unsafe fn bind_airport_specs(s: *const Services) {
         let spec = unsafe { (s.airport_base)(id) };
         if (s.shared().specs().airport().substitute().enabled)(spec) {
             unsafe {
-                crate::newgrf_class::airport::assign(spec);
+                crate::newgrf_airport::AirportClass::assign(spec);
             }
         }
     }

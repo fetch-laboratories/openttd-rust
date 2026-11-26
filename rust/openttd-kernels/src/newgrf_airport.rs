@@ -666,15 +666,25 @@ impl AirportClassID {
     pub const APC_MAX: Self = Self(16);
 }
 
-/// `AirportClass::InsertDefaults`: allocate the four default airport classes and set their
-/// names.
-pub(crate) unsafe fn insert_defaults() {
-    use crate::newgrf_class::airport::{allocate, get};
+/// `AirportClass`: the class registry of the airport specs.
+pub(crate) type AirportClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::AirportSpec>;
+
+/// `AirportClass::InsertDefaults`.
+pub(crate) fn insert_defaults() {
     let max = AirportClassID::APC_MAX;
     unsafe {
-        (*get(allocate(u32::from_be_bytes(*b"SMAL"), max))).name = STR_AIRPORT_CLASS_SMALL.0;
-        (*get(allocate(u32::from_be_bytes(*b"LARG"), max))).name = STR_AIRPORT_CLASS_LARGE.0;
-        (*get(allocate(u32::from_be_bytes(*b"HUB_"), max))).name = STR_AIRPORT_CLASS_HUB.0;
-        (*get(allocate(u32::from_be_bytes(*b"HELI"), max))).name = STR_AIRPORT_CLASS_HELIPORTS.0;
+        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"SMAL"), max))).name =
+            STR_AIRPORT_CLASS_SMALL;
+        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"LARG"), max))).name =
+            STR_AIRPORT_CLASS_LARGE;
+        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HUB_"), max))).name =
+            STR_AIRPORT_CLASS_HUB;
+        (*AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))).name =
+            STR_AIRPORT_CLASS_HELIPORTS;
     }
+}
+
+/// `AirportClass::IsUIAvailable`.
+pub(crate) fn is_ui_available(_class: &AirportClass, _index: u32) -> bool {
+    true
 }

@@ -13,7 +13,6 @@ struct OpenTTDGRFClassIdentity { uint32_t grfid; uint16_t local_id; };
 template <typename T> struct OpenTTDGRFClassServices {
 	uint16_t (*class_index)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(class_index);
 	void (*set_index)(T *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_index);
-	OpenTTDGRFClassIdentity (*identity)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	const OpenTTDObjectServices *object;
 	const OpenTTDSharedServices *shared;
 };

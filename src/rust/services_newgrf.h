@@ -152,7 +152,6 @@ template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) no
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
 template <typename Spec> inline OpenTTDSubstituteSpecIdentity RustSpecSubstituteIdentity(const Spec *spec) noexcept { return {RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; }
-template <typename Spec> inline OpenTTDGRFClassIdentity RustSpecIdentity(const Spec *spec) noexcept { return {RustSpecGRFID(spec), RustSpecLocalID(spec)}; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
 inline const SpriteGroup *RustHouseSpriteGroup(uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); }
 inline uint16_t RustHouseLocalID(uint16_t house) noexcept { return RustSpecLocalID(RustHouseSpec(house)); }

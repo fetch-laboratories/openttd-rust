@@ -2126,7 +2126,7 @@ pub(crate) fn get_foundation_object(
         crate::slope_func::flattening_foundation(tileh)
     }
 }
-fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
+pub(crate) fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
     let policy = unsafe { (resolver_services(s).eligibility)(spec) };
     is_enabled(policy.views)
         && policy.climate & (1 << (unsafe { &*s.town }.climate)()) != 0

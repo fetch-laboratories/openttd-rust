@@ -309,8 +309,9 @@ pub(crate) unsafe fn feature_new_name(
                     if class_spec.is_null() {
                         string.write(translated);
                     } else {
-                        crate::newgrf_class::station::openttd_rust_station_class_set_name(
-                            class_spec, translated,
+                        crate::newgrf_class::set_class_name(
+                            class_spec,
+                            crate::strings_type::StringID(translated),
                         );
                     }
                 }

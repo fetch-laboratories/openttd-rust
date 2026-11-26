@@ -799,37 +799,39 @@ pub const ROADSTOP_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
 /// Waypoint road-stop class label.
 pub const ROADSTOP_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
 
+/// `RoadStopClass`: the class registry of the road stop specs.
+pub(crate) type RoadStopClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::RoadSpec>;
+
 /// `RoadStopClass::InsertDefaults`.
-pub(crate) unsafe fn insert_defaults() {
-    use crate::newgrf_class::index;
-    use crate::newgrf_class::roadstop::{allocate, get, insert};
+pub(crate) fn insert_defaults() {
     /* Set up initial data */
     unsafe {
-        (*get(allocate(
+        (*RoadStopClass::get(RoadStopClass::allocate(
             ROADSTOP_CLASS_LABEL_DEFAULT,
             RoadStopClassID::ROADSTOP_CLASS_MAX,
         )))
-        .name = STR_STATION_CLASS_DFLT.0;
-        insert(
-            index(get(allocate(
-                ROADSTOP_CLASS_LABEL_DEFAULT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            ))),
-            std::ptr::null_mut(),
-        );
-        (*get(allocate(
+        .name = STR_STATION_CLASS_DFLT;
+        (*RoadStopClass::get(RoadStopClass::allocate(
+            ROADSTOP_CLASS_LABEL_DEFAULT,
+            RoadStopClassID::ROADSTOP_CLASS_MAX,
+        )))
+        .insert(std::ptr::null_mut());
+        (*RoadStopClass::get(RoadStopClass::allocate(
             ROADSTOP_CLASS_LABEL_WAYPOINT,
             RoadStopClassID::ROADSTOP_CLASS_MAX,
         )))
-        .name = STR_STATION_CLASS_WAYP.0;
-        insert(
-            index(get(allocate(
-                ROADSTOP_CLASS_LABEL_WAYPOINT,
-                RoadStopClassID::ROADSTOP_CLASS_MAX,
-            ))),
-            std::ptr::null_mut(),
-        );
+        .name = STR_STATION_CLASS_WAYP;
+        (*RoadStopClass::get(RoadStopClass::allocate(
+            ROADSTOP_CLASS_LABEL_WAYPOINT,
+            RoadStopClassID::ROADSTOP_CLASS_MAX,
+        )))
+        .insert(std::ptr::null_mut());
     }
+}
+
+/// `RoadStopClass::IsUIAvailable`.
+pub(crate) fn is_ui_available(_class: &RoadStopClass, _index: u32) -> bool {
+    true
 }
 
 /// Availability restriction in a road-stop spec; distinct from `RoadStopType`.

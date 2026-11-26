@@ -9,12 +9,17 @@
     clippy::cast_possible_truncation
 )]
 use crate::cargo_type::CargoTypes;
-use crate::newgrf_class::Identity;
 use crate::newgrf_station::NUM_STATIONSSPECS_PER_STATION;
 use crate::station_cmd::{RailSpec, SpecIndex};
 use crate::station_type::BaseStation;
 use crate::station_type::StationAnimationTriggers;
 use std::ptr;
+/// The GRF ID and local ID of a station's spec-list entry.
+#[repr(C)]
+pub struct Identity {
+    pub grfid: u32,
+    pub local_id: u16,
+}
 #[repr(C)]
 pub struct Vacancy {
     spec: *const RailSpec,
@@ -136,9 +141,11 @@ pub(crate) fn assign(
             (s.resize)(st, usize::from(index) + 1);
         }
     }
-    let identity = unsafe { crate::newgrf_class::station_identity(spec) };
+    let leaves = unsafe { &*s.shared }.specs().station();
+    let grfid = (leaves.grfid)(spec);
+    let local_id = (leaves.local_id)(spec);
     unsafe {
-        (s.set_slot)(st, index, spec, identity.grfid, identity.local_id);
+        (s.set_slot)(st, index, spec, grfid, local_id);
     }
     cache(native, st);
 }
@@ -230,7 +237,8 @@ pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
         if key.grfid == 0 {
             continue;
         }
-        let spec = unsafe { crate::newgrf_class::station::by_grf(key.grfid, key.local_id) };
+        let spec =
+            unsafe { crate::newgrf_station::StationClass::get_by_grf(key.grfid, key.local_id) };
         unsafe {
             (s.rebind)(st, i, spec);
         }
@@ -241,7 +249,8 @@ pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
         if key.grfid == 0 {
             continue;
         }
-        let spec = unsafe { crate::newgrf_class::roadstop::by_grf(key.grfid, key.local_id) };
+        let spec =
+            unsafe { crate::newgrf_roadstop::RoadStopClass::get_by_grf(key.grfid, key.local_id) };
         unsafe {
             (road.rebind)(st, i, spec);
         }
@@ -249,6 +258,7 @@ pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
 }
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDGRFClassIdentity" ["station_service"] => Identity { grfid, local_id };
     "OpenTTDStationSpecVacancy" ["station_service"] => Vacancy { spec, grfid };
     "OpenTTDStationAssociationServices" ["station_service"] => Services { rail_triggers, resolver, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind, set_cached, set_cached_cargo };
 }

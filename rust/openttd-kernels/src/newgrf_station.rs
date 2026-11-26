@@ -1200,37 +1200,39 @@ impl StationClassID {
 /// Default station class label.
 pub const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
 
+/// `StationClass`: the class registry of the station specs.
+pub(crate) type StationClass = crate::newgrf_class::NewGRFClass<crate::station_cmd::RailSpec>;
+
 /// `StationClass::InsertDefaults`.
-pub(crate) unsafe fn insert_defaults() {
-    use crate::newgrf_class::index;
-    use crate::newgrf_class::station::{allocate, get, insert};
+pub(crate) fn insert_defaults() {
     /* Set up initial data */
     unsafe {
-        (*get(allocate(
+        (*StationClass::get(StationClass::allocate(
             STATION_CLASS_LABEL_DEFAULT,
             StationClassID::STAT_CLASS_MAX,
         )))
-        .name = STR_STATION_CLASS_DFLT.0;
-        insert(
-            index(get(allocate(
-                STATION_CLASS_LABEL_DEFAULT,
-                StationClassID::STAT_CLASS_MAX,
-            ))),
-            std::ptr::null_mut(),
-        );
-        (*get(allocate(
+        .name = STR_STATION_CLASS_DFLT;
+        (*StationClass::get(StationClass::allocate(
+            STATION_CLASS_LABEL_DEFAULT,
+            StationClassID::STAT_CLASS_MAX,
+        )))
+        .insert(std::ptr::null_mut());
+        (*StationClass::get(StationClass::allocate(
             STATION_CLASS_LABEL_WAYPOINT,
             StationClassID::STAT_CLASS_MAX,
         )))
-        .name = STR_STATION_CLASS_WAYP.0;
-        insert(
-            index(get(allocate(
-                STATION_CLASS_LABEL_WAYPOINT,
-                StationClassID::STAT_CLASS_MAX,
-            ))),
-            std::ptr::null_mut(),
-        );
+        .name = STR_STATION_CLASS_WAYP;
+        (*StationClass::get(StationClass::allocate(
+            STATION_CLASS_LABEL_WAYPOINT,
+            StationClassID::STAT_CLASS_MAX,
+        )))
+        .insert(std::ptr::null_mut());
     }
+}
+
+/// `StationClass::IsUIAvailable`.
+pub(crate) fn is_ui_available(_class: &StationClass, _index: u32) -> bool {
+    true
 }
 
 /// Native station specification flag bit position.

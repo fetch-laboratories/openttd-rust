@@ -26,9 +26,9 @@ struct NewGRFSpecBase {
 template <typename Tspec, typename Tindex, Tindex Tmax>
 class NewGRFClass {
 public:
-	uint32_t global_id;
-	StringID name;
-	uint32_t rust_index;
+	uint32_t global_id; ///< Global ID for class, e.g. 'DFLT', 'WAYP', etc.
+	StringID name;    ///< Name of this class.
+	uint32_t index;   ///< Index of class within the list of classes, a Tindex held as the shared record's uint32_t.
 private:
 	using Ops = RustGRFClassOps<Tspec>;
 public:
@@ -36,16 +36,17 @@ public:
 	using index_type = Tindex;
 	std::span<Tspec * const> Specs() const { return {Ops::specs(this->Index()), this->GetSpecCount()}; }
 	static std::span<NewGRFClass const> Classes() { return {static_cast<const NewGRFClass *>(Ops::classes()), Ops::count()}; }
-	Tindex Index() const { return static_cast<Tindex>(this->rust_index); }
+	Tindex Index() const { return static_cast<Tindex>(this->index); }
 	uint GetSpecCount() const { return Ops::spec_count(this->Index()); }
 	uint GetUISpecCount() const { return Ops::ui_spec_count(this->Index()); }
 	const Tspec *GetSpec(uint index) const { return Ops::spec(this->Index(), index); }
 	static const OpenTTDGRFClassServices<Tspec> &GetServices();
 	static void Reset();
 	static Tindex Allocate(uint32_t global_id);
-	static void Assign(Tspec *spec) requires requires { Ops::assign; } { assert(static_cast<size_t>(spec->class_index) < Ops::count()); Ops::assign(spec); }
+	static void Assign(Tspec *spec) requires requires { Ops::assign; } { Ops::assign(spec); }
 	static uint GetClassCount() { return Ops::count(); }
 	static uint GetUIClassCount() { return Ops::ui_count(); }
+	/* The inline accessor over the shared record, as the Rust NewGRFClass::get. */
 	static NewGRFClass *Get(Tindex class_index) { assert(static_cast<size_t>(class_index) < Ops::count()); return static_cast<NewGRFClass *>(Ops::classes()) + class_index; }
 	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id) { return Ops::by_grf(grfid, local_id); }
 };
