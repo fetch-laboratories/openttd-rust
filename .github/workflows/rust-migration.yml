@@ -81,17 +81,17 @@ jobs:
     - id: cache
       uses: ./.github/actions/native-cache
     # With CI_QUEUE_SAVES_CACHES the queue's run saves the compiler caches under the group
-    # commit it tests, which is the commit the queue then pushes. A covered push whose
-    # restore finds that entry itself, for these compilers, has nothing to refresh; one
-    # that does not, a failed or evicted save included, refreshes as before.
+    # commit it tests, which is the commit the queue then pushes. With it set, a covered
+    # push whose restore finds that entry itself, for these compilers, has nothing to
+    # refresh; one that does not, a failed or evicted save included, refreshes as before.
     - name: Build native Rust generators without the game
-      if: needs.policy.outputs.covered != 'true' || steps.cache.outputs.hit != 'true'
+      if: ${{ !(needs.policy.outputs.covered == 'true' && vars.CI_QUEUE_SAVES_CACHES == 'true' && steps.cache.outputs.hit == 'true') }}
       run: python3 tools/migration.py tools --jobs "$(nproc)" --ccache
     - name: Check Rust and compare original and migration builds
       if: needs.policy.outputs.covered != 'true'
       run: python3 tools/migration.py verify --jobs "$(nproc)" --ccache
     - name: Refresh compiler caches for an already validated merged tree
-      if: needs.policy.outputs.covered == 'true' && steps.cache.outputs.hit != 'true'
+      if: ${{ needs.policy.outputs.covered == 'true' && !(vars.CI_QUEUE_SAVES_CACHES == 'true' && steps.cache.outputs.hit == 'true') }}
       run: python3 tools/migration.py build --jobs "$(nproc)" --ccache
     - name: Freeze runtime and scenario adapters, then partition the complete inventory
       id: pack
@@ -130,7 +130,7 @@ jobs:
         include-hidden-files: true
     # The queue's run saves what it compiled, so the push of its commit need not compile it again.
     - name: Save bounded protected-branch compiler caches
-      if: success() && (inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && github.event_name == 'push' && steps.cache.outputs.hit != 'true' || github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true')
+      if: ${{ success() && (inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && github.event_name == 'push' && !(needs.policy.outputs.covered == 'true' && vars.CI_QUEUE_SAVES_CACHES == 'true' && steps.cache.outputs.hit == 'true') || github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true') }}
       uses: ./.github/actions/native-cache
       with:
         save: 'true'

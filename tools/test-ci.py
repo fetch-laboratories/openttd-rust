@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any, TypedDict, cast
+from unittest import mock
 from unittest.mock import patch
 from urllib.parse import unquote
 
@@ -1696,13 +1697,15 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
         restored: Mapping[str, bytes],
         index: Mapping[str, bytes],
         fetched: Iterable[str],
-    ) -> tuple[list[str], str, bool]:
+        hook_runs: bool = True,
+    ) -> tuple[dict[str, bytes], str, bool]:
         """Run the native-environment action's package-cache scripts in order,
         on stub sudo, apt-get and apt-cache: `restored` is what the cache
-        restore left in the archive directory, `index` each archive name and the
-        content apt's index lists for it, and `fetched` the names apt downloads
-        from that index during the install. Return the archives the job ends
-        with, the hook's output and whether the job saves."""
+        restore wrote, `index` each archive name and the content apt's index
+        lists for it, and `fetched` the names apt installs, downloading those
+        its own directory lacks. `hook_runs` is whether apt's update reached the
+        hook the setup registered. Return the archives the job would save, what
+        the hook printed and whether the job saves."""
         action = yaml.safe_load(
             (ROOT / ".github/actions/native-environment/action.yml").read_text()
         )
@@ -1713,28 +1716,28 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
             if step.get("uses") == "./.github/actions/apt-install"
         )
         cache = [step for step in steps if "package-cache" in step.get("if", "")]
-        scripts = [step for step in cache if "run" in step]
-        setup, record, added = scripts
-        self.assertLess(steps.index(record), install)
-        self.assertGreater(steps.index(added), install)
+        setup, record, collect = (step for step in cache if "run" in step)
         restore, save = (
             next(
                 step for step in cache if step.get("uses") == f"actions/cache/{kind}@v4"
             )
             for kind in ("restore", "save")
         )
-        # The restore fills the directory apt reads, before the record; the save
-        # takes the same archives, after the count.
+        # The cache restores and saves one directory, which is not the one apt
+        # reads; the record follows the restore, and the save the collection.
         self.assertEqual(restore["with"]["path"], save["with"]["path"])
-        self.assertEqual(restore["with"]["path"], setup["env"]["ARCHIVES"] + "/*.deb")
-        self.assertEqual(
-            [steps.index(step) for step in (setup, restore, record)],
-            sorted(steps.index(step) for step in (setup, restore, record)),
-        )
-        self.assertGreater(steps.index(save), steps.index(added))
+        self.assertEqual(restore["with"]["path"], setup["env"]["RESTORED"] + "/*.deb")
+        self.assertNotEqual(setup["env"]["RESTORED"], setup["env"]["ARCHIVES"])
+        order = [steps.index(step) for step in (setup, restore, record)]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(order[-1], install)
+        self.assertLess(install, steps.index(collect))
+        self.assertLess(steps.index(collect), steps.index(save))
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
-            archives, stubs = folder / "archives", folder / "bin"
+            archives, kept, stubs = (
+                folder / name for name in ("archives", "kept", "bin")
+            )
             stubs.mkdir()
             records = "\n\n".join(
                 "Package: {}\nVersion: {}\nArchitecture: {}\nSHA256: {}\n".format(
@@ -1754,6 +1757,7 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
             env = os.environ | {
                 "PATH": f"{stubs}:{os.environ['PATH']}",
                 "ARCHIVES": str(archives),
+                "RESTORED": str(kept),
                 "APT_CONF": str(folder / "conf"),
                 "GITHUB_WORKSPACE": str(ROOT),
                 "RUNNER_TEMP": directory,
@@ -1771,18 +1775,21 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
 
             run(setup["run"])
             for name, content in restored.items():
-                (archives / name).write_bytes(content)
+                (kept / name).write_bytes(content)
             run(record["run"])
-            # apt runs the hook the setup registered after its update, then
-            # downloads what its directory lacks.
             conf = (folder / "conf").read_text()
             self.assertIn(f'Dir::Cache::archives "{archives}";', conf)
-            (hook,) = re.findall(r'Post-Invoke-Success \{ "(.*)"; \};', conf)
-            hooked = run(hook)
+            # An update whose mirrors all failed returns 0 and skips the success
+            # scripts, so the hook is one apt runs after every update.
+            (hook,) = re.findall(r'APT::Update::Post-Invoke \{ "(.*)"; \};', conf)
+            hooked = run(hook) if hook_runs else ""
+            # apt installs from its own directory alone, by name and size.
             for name in fetched:
                 if not (archives / name).exists():
                     (archives / name).write_bytes(index[name])
-            run(added["run"])
+            installed = {name: (archives / name).read_bytes() for name in fetched}
+            self.assertEqual(installed, {name: index[name] for name in fetched})
+            run(collect["run"])
             output = dict(
                 line.split("=", 1)
                 for line in (folder / "output").read_text().splitlines()
@@ -1792,43 +1799,46 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
                 inputs={"package-cache": "true"},
                 steps={"packages-new": {"outputs": output}},
             )
-            kept = sorted(path.name for path in archives.glob("*.deb"))
-        return kept, hooked, bool(saves)
+            saved = {path.name: path.read_bytes() for path in kept.glob("*.deb")}
+            self.assertEqual(list(archives.glob("*.deb")), [])
+        return saved, hooked, bool(saves)
 
-    def test_paid_native_jobs_keep_only_archives_the_index_vouches_for(self) -> None:
+    def test_paid_native_jobs_install_only_archives_the_index_vouches_for(self) -> None:
         """apt uses an archive of the expected name and size without reading its
-        hash, so the kept ones are checked against the index first (#896)."""
-        good, newer = b"lzo 2.10", b"lzo 2.11"
+        hash, so a kept one reaches apt's directory only once the index vouches
+        for it (#896). `package_cache` asserts what apt installed."""
         lzo, png = "liblzo2-dev_2.10-2build4_amd64.deb", "libpng-dev_1.6.43-5_all.deb"
         epoch = "ccache_1%3a4.9.1-1_amd64.deb"
-        index = {lzo: good, png: b"png", epoch: b"ccache"}
+        index = {lzo: b"lzo 2.10", png: b"png", epoch: b"ccache"}
         wanted = list(index)
         # A cold cache: everything is downloaded, and the job saves.
-        self.assertEqual(
-            self.package_cache({}, index, wanted), (sorted(wanted), "", True)
-        )
+        self.assertEqual(self.package_cache({}, index, wanted), (index, "", True))
         # A warm cache: nothing is discarded or downloaded, and nothing is saved.
-        self.assertEqual(
-            self.package_cache(index, index, wanted), (sorted(wanted), "", False)
-        )
+        self.assertEqual(self.package_cache(index, index, wanted), (index, "", False))
         # A restored archive of the right name and size but other content is
-        # discarded before apt can use it, downloaded again, and saved over.
+        # discarded, downloaded again, and saved over.
         damaged = dict(index, **{lzo: b"lzo 2.1X"})
-        kept, hooked, saves = self.package_cache(damaged, index, wanted)
-        self.assertEqual((kept, saves), (sorted(wanted), True))
+        saved, hooked, saves = self.package_cache(damaged, index, wanted)
+        self.assertEqual((saved, saves), (index, True))
         self.assertIn(f"discarded {lzo}", hooked)
         self.assertNotIn(png, hooked)
         # So are a version the index no longer lists and a name apt never writes.
         stale = "liblzo2-dev_2.09-1_amd64.deb"
-        kept, hooked, saves = self.package_cache(
-            dict(index, **{stale: newer, "junk.deb": b"x"}), index, wanted
+        saved, hooked, saves = self.package_cache(
+            dict(index, **{stale: b"lzo 2.09", "junk.deb": b"x"}), index, wanted
         )
-        self.assertEqual((kept, saves), (sorted(wanted), False))
+        self.assertEqual((saved, saves), (index, False))
         self.assertIn(f"discarded {stale}", hooked)
         self.assertIn("discarded junk.deb", hooked)
         # With no index to read, no kept archive is trusted.
-        kept, _, saves = self.package_cache(index, {}, [])
-        self.assertEqual((kept, saves), ([], False))
+        self.assertEqual(self.package_cache(index, {}, []), ({}, mock.ANY, False))
+        # Where apt never runs the hook, it finds no kept archive: the damaged
+        # one is not installed, and everything is downloaded.
+        for kept in (damaged, index):
+            saved, hooked, saves = self.package_cache(
+                kept, index, wanted, hook_runs=False
+            )
+            self.assertEqual((saved, hooked, saves), (index, "", kept is damaged))
 
     def test_each_native_job_caches_packages_only_on_its_paid_runner(self) -> None:
         """A free runner's cache is GitHub's 10 GiB, which ci-cache.yml bounds."""
@@ -2611,6 +2621,29 @@ class PolicyTests(unittest.TestCase):
                 "",
                 "",
                 {tools, refresh, save},
+            ),
+            # An entry saved before the variable was unset still hits; with the
+            # variable unset the push does what it did before.
+            (
+                "covered push, saved, variable unset",
+                "push",
+                protected,
+                "",
+                "true",
+                "",
+                "true",
+                {tools, refresh, save},
+            ),
+            # A rerun of an uncovered push finds its own entry and validates again.
+            (
+                "uncovered push, own entry",
+                "push",
+                protected,
+                "",
+                "",
+                "true",
+                "true",
+                {tools, verify, save},
             ),
             (
                 "uncovered push",
