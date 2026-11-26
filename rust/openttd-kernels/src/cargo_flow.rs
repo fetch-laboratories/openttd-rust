@@ -1212,7 +1212,9 @@ mod tests {
     #[derive(Debug, PartialEq)]
     enum Event {
         GetOrCreateDataFlows(StationID),
-        FlowMap(StationID),
+        /// A reroute's read of the station's flows: whether origin 7 still has a flow there,
+        /// and the counts of the packets that already sit under the invalid next hop.
+        FlowMap(StationID, bool, Vec<u16>),
         DataIsEmpty(StationID),
         ClearData(StationID),
         Window(WindowClass, WindowNumber, i32, bool),
@@ -1253,7 +1255,16 @@ mod tests {
         ge.cast()
     }
     extern "C" fn flow_map(ge: *const std::ffi::c_void) -> *mut FlowStatMap {
-        record(Event::FlowMap(station_of(ge.cast())));
+        let station = station_of(ge.cast());
+        let origin_7 = unsafe { &*ge.cast::<FlowStatMap>() }
+            .find(StationID(7))
+            .is_some();
+        let moved = unsafe { crate::cargo_storage::tests::counts_and_keys(CARGO_LIST.get()) }
+            .into_iter()
+            .filter(|&(_, key)| key == StationID::INVALID.0)
+            .map(|(count, _)| count)
+            .collect();
+        record(Event::FlowMap(station, origin_7, moved));
         ge.cast_mut().cast()
     }
     fn window(effect: &Effect) {
@@ -1403,7 +1414,8 @@ mod tests {
         list
     }
     /// The native calls of the application, in order: under manual distribution, each of the
-    /// two reroutes reads the station's flows once, for the packet it moves.
+    /// two reroutes reads the station's flows once, for the packet it moves: first the packet
+    /// for 106, then the one for 107, after origin 7's flow was erased.
     fn expected_events(manual: bool) -> Vec<Event> {
         let window = |station: StationID| {
             Event::Window(
@@ -1416,8 +1428,8 @@ mod tests {
         let mut expected = vec![Event::GetOrCreateDataFlows(StationID(100))];
         if manual {
             expected.extend([
-                Event::FlowMap(StationID(100)),
-                Event::FlowMap(StationID(100)),
+                Event::FlowMap(StationID(100), false, vec![]),
+                Event::FlowMap(StationID(100), false, vec![1]),
             ]);
         }
         expected.extend([
