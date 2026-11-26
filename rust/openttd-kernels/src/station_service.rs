@@ -457,8 +457,7 @@ pub struct World {
     pub(crate) rating_redraw: extern "C" fn(*mut BaseStation, bool),
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
 
-    pub(crate) append_packet:
-        extern "C" fn(*mut BaseStation, u8, u32, crate::source_type::Source),
+    pub(crate) append_packet: extern "C" fn(*mut BaseStation, u8, u32, crate::source_type::Source),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
 
     /// `Station::MarkTilesDirty(cargo_change)`.
@@ -575,7 +574,13 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_mask(state: *mut Servic
     unsafe { acceptance_mask(state) }.0
 }
 /// `TruncateCargo`: truncate the cargo by a specific amount.
-unsafe fn truncate_cargo(st: *mut BaseStation, cargo: CargoType, amount: u32, w: &World, l: &Links) {
+unsafe fn truncate_cargo(
+    st: *mut BaseStation,
+    cargo: CargoType,
+    amount: u32,
+    w: &World,
+    l: &Links,
+) {
     /* If truncating also punish the source stations' ratings to
      * decrease the flow of incoming cargo. */
     let list = l.station_cargo(st, cargo);
@@ -2252,8 +2257,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
             if amount_unloaded > 0 {
                 dirty_vehicle = true;
                 anything_unloaded = true;
-                new_load_unload_ticks =
-                    new_load_unload_ticks.wrapping_add(amount_unloaded as i32);
+                new_load_unload_ticks = new_load_unload_ticks.wrapping_add(amount_unloaded as i32);
                 /* Deliver goods to the station */
                 unsafe {
                     (&raw mut (*state).fields.time_since_unload).write(0);
@@ -2427,8 +2431,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
             /* The time it takes to load one 'slice' of cargo or passengers depends
              * on the vehicle type - the values here are those found in TTDPatch */
             const GRADUAL_LOADING_WAIT_TIME: [i32; 4] = [40, 20, 10, 20];
-            new_load_unload_ticks =
-                GRADUAL_LOADING_WAIT_TIME[usize::from(front.vehicle_type().0)];
+            new_load_unload_ticks = GRADUAL_LOADING_WAIT_TIME[usize::from(front.vehicle_type().0)];
         }
         /* We loaded less cargo than possible for all cargo types and it's not full
          * load and we're not supposed to wait any longer: stop loading. */
@@ -2493,11 +2496,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
          * properties such as weight, power and TE whenever the trigger runs. */
         dirty_vehicle = true;
         unsafe {
-            crate::newgrf_vehicle::trigger(
-                vehicle,
-                front,
-                crate::newgrf_vehicle::Trigger::Empty,
-            );
+            crate::newgrf_vehicle::trigger(vehicle, front, crate::newgrf_vehicle::Trigger::Empty);
         };
     }
     if dirty_vehicle {

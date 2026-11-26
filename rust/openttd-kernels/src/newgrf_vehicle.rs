@@ -121,7 +121,8 @@ pub struct Services {
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
     order: unsafe extern "C" fn(V) -> OrderState,
-    pub(crate) cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::VehicleCargoList,
+    pub(crate) cargo_owner:
+        unsafe extern "C" fn(V) -> *const crate::cargo_storage::VehicleCargoList,
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
@@ -1761,14 +1762,18 @@ unsafe fn variable(
             0xba | 0xbb => return high(u32::from(crate::vehicle::VehicleRef::of(v).cargo_cap())),
             0xbc | 0xbd => {
                 return high(
-                    (*(s.cargo_owner)(v)).stored_count().min(u32::from(u16::MAX)),
+                    (*(s.cargo_owner)(v))
+                        .stored_count()
+                        .min(u32::from(u16::MAX)),
                 );
             }
             0xbe => {
                 return u32::from((*(s.cargo_owner)(v)).get_first_station(s.storage()).0);
             }
             0xbf => {
-                return (*(s.cargo_owner)(v)).periods_in_transit().min(u32::from(u8::MAX));
+                return (*(s.cargo_owner)(v))
+                    .periods_in_transit()
+                    .min(u32::from(u8::MAX));
             }
             0xc0 | 0xc1 => return high((s.age)(v).clamp(0, i32::from(u16::MAX)) as u32),
             0xc2 | 0xc3 => return high((s.max_age)(v).clamp(0, i32::from(u16::MAX)) as u32),

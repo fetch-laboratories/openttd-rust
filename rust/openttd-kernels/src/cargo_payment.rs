@@ -427,18 +427,21 @@ pub(crate) unsafe fn pay_transfer(
     };
     // Pay transfer vehicle the difference between the payment for the journey from the source
     // to the current point, and the sum of the previous transfer payments.
-    let profit = feeder_share.saturating_neg().saturating_add(get_transported_goods_income(
-        s,
-        count,
-        distance,
-        periods_in_transit,
-        cargo,
-    ));
+    let profit = feeder_share
+        .saturating_neg()
+        .saturating_add(get_transported_goods_income(
+            s,
+            count,
+            distance,
+            periods_in_transit,
+            cargo,
+        ));
     let profit = profit.saturating_mul(i64::from((s.feeder_payment_share)())) / 100;
     // SAFETY: The caller's live payment.
     unsafe {
         // Accumulate transfer profits for whole vehicle.
-        (*payment).fields.visual_transfer = (*payment).fields.visual_transfer.saturating_add(profit);
+        (*payment).fields.visual_transfer =
+            (*payment).fields.visual_transfer.saturating_add(profit);
     }
     profit // Account for the (virtual) profit already made for the cargo packet.
 }
@@ -506,10 +509,12 @@ pub(crate) unsafe fn pay_final_delivery(
     );
     // SAFETY: As above.
     unsafe {
-        (*ctx.payment).fields.route_profit = (*ctx.payment).fields.route_profit.saturating_add(profit);
+        (*ctx.payment).fields.route_profit =
+            (*ctx.payment).fields.route_profit.saturating_add(profit);
         // The vehicle's profit is whatever route profit there is minus feeder shares.
         let visual = profit.saturating_sub((*cp).get_feeder_share_part(count));
-        (*ctx.payment).fields.visual_profit = (*ctx.payment).fields.visual_profit.saturating_add(visual);
+        (*ctx.payment).fields.visual_profit =
+            (*ctx.payment).fields.visual_profit.saturating_add(visual);
     }
 }
 /// `CargoPayment::PayFinalDelivery`, for the consoles: `payment` pays for `count` items of the

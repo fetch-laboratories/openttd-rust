@@ -170,7 +170,10 @@ impl Services {
     /// other entries terminate.
     pub(crate) fn cargo_fixture(
         cargo: *const crate::cargo_storage::Services,
-        cargo_owner: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::StationCargoList,
+        cargo_owner: extern "C" fn(
+            *mut BaseStation,
+            u8,
+        ) -> *const crate::cargo_storage::StationCargoList,
     ) -> Self {
         macro_rules! unused {
             (($($arg:ty),*) $(-> $result:ty)?) => {{

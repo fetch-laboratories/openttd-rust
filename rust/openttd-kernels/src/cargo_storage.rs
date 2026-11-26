@@ -262,7 +262,10 @@ impl CargoList {
         self.keys.clear();
     }
     /// `CargoList::~CargoList`: destroy the cargolist ("frees" all cargo packets).
-    #[allow(unsafe_code, reason = "frees the caller's list and deletes its packets")]
+    #[allow(
+        unsafe_code,
+        reason = "frees the caller's list and deletes its packets"
+    )]
     unsafe fn destroy(l: *mut Self, s: &Services) {
         // SAFETY: The caller's live list, which no other reference covers; each read of a
         // node ends before the deletion of its packet.
@@ -333,7 +336,10 @@ impl CargoList {
         }
     }
     /// The first packet's `first_station`, or `StationID::Invalid()` for an empty list.
-    #[allow(unsafe_code, reason = "reads the first live packet of the caller's list")]
+    #[allow(
+        unsafe_code,
+        reason = "reads the first live packet of the caller's list"
+    )]
     unsafe fn front_first_station(&self, s: &Services) -> StationID {
         if self.fields.count == 0 {
             StationID::INVALID
@@ -371,12 +377,17 @@ impl CargoPacket {
     }
     /// `CargoPacket::Merge`: merge another packet into this one. `cp` is its shell and
     /// `cp_state` its record.
-    #[allow(unsafe_code, reason = "writes the caller's live packet and deletes the other")]
+    #[allow(
+        unsafe_code,
+        reason = "writes the caller's live packet and deletes the other"
+    )]
     unsafe fn merge(this: *mut Self, s: &Services, cp: *mut c_void, cp_state: *const Self) {
         // SAFETY: Two live, distinct packet records; the writes end before the deletion.
         unsafe {
             (*this).count = (*this).count.wrapping_add((*cp_state).count);
-            (*this).feeder_share = (*this).feeder_share.saturating_add((*cp_state).feeder_share);
+            (*this).feeder_share = (*this)
+                .feeder_share
+                .saturating_add((*cp_state).feeder_share);
         }
         (s.destroy)(cp);
     }
@@ -402,7 +413,11 @@ impl CargoPacket {
     ///
     /// Further more, we keep track of the amount of tiles the cargo moved inside a vehicle. This
     /// is used in `GetDistance()` below.
-    pub(crate) fn update_loading_tile(&mut self, shared: &crate::services::Services, tile: TileIndex) {
+    pub(crate) fn update_loading_tile(
+        &mut self,
+        shared: &crate::services::Services,
+        tile: TileIndex,
+    ) {
         if self.source_xy == crate::tile_type::INVALID_TILE {
             self.source_xy = tile.0;
         }
@@ -498,7 +513,8 @@ impl CargoPacket {
         // However, especially in large networks with large transfer station, etc, one could
         // actually make the route a lot longer. In that case, use the actual distance between
         // source and destination.
-        let distance_travelled = i32::from(local_x).unsigned_abs() + i32::from(local_y).unsigned_abs();
+        let distance_travelled =
+            i32::from(local_x).unsigned_abs() + i32::from(local_y).unsigned_abs();
         let distance_source_dest = world
             .dimensions
             .distance_manhattan(TileIndex(self.source_xy), current_tile);
@@ -620,18 +636,17 @@ impl CargoAction for CargoDelivery<'_> {
     }
     /// `CargoDelivery::operator()`: delivers some cargo. Returns true if the packet was
     /// completely delivered, false if only part of it was.
-    #[allow(unsafe_code, reason = "delivers the caller's live packet from its list")]
+    #[allow(
+        unsafe_code,
+        reason = "delivers the caller's live packet from its list"
+    )]
     unsafe fn call(&mut self, cp: *mut c_void) -> bool {
         let s = self.removal.s;
         let cp_state = CargoPacket::of(s, cp);
         // SAFETY: The module's contract; each reference ends before the payment.
         let remove = self.removal.preprocess(unsafe { &*cp_state });
         unsafe {
-            (*self.removal.source).remove_from_meta(
-                &*cp_state,
-                MoveToAction::MTA_DELIVER,
-                remove,
-            );
+            (*self.removal.source).remove_from_meta(&*cp_state, MoveToAction::MTA_DELIVER, remove);
             crate::cargo_payment::pay_final_delivery(
                 &crate::cargo_payment::FinalDelivery::of(s, self.payment),
                 self.cargo,
@@ -671,7 +686,12 @@ impl<Tsource, Tdest> CargoMovement<'_, Tsource, Tdest> {
         }
     }
     /// The record of `cp_new`, the packet `preprocess` returned for `cp`.
-    fn state(&self, cp: *mut c_void, cp_state: *mut CargoPacket, cp_new: *mut c_void) -> *mut CargoPacket {
+    fn state(
+        &self,
+        cp: *mut c_void,
+        cp_state: *mut CargoPacket,
+        cp_new: *mut c_void,
+    ) -> *mut CargoPacket {
         if cp_new == cp {
             cp_state
         } else {
@@ -809,7 +829,8 @@ impl CargoAction for CargoReturn<'_> {
             (*new_state).update_unloading_tile(m.s.shared(), self.current_tile);
             (*m.source).remove_from_meta(&*new_state, MoveToAction::MTA_LOAD, count);
             let destination = &mut (*m.destination).0;
-            destination.fields.reserved_count = destination.fields.reserved_count.wrapping_sub(count);
+            destination.fields.reserved_count =
+                destination.fields.reserved_count.wrapping_sub(count);
             StationCargoList::append(m.destination, m.s, cp_new, self.next);
         }
         cp_new == cp
@@ -861,9 +882,13 @@ impl<Tlist> CargoReroute<'_, Tlist> {
         let s = self.movement.s;
         // SAFETY: The flows of the goods entry the reroute was made for, live for its call.
         unsafe {
-            crate::station_base::goods_get_via(self.flows, source, self.avoid, self.avoid2, |limit| {
-                s.random_range(limit)
-            })
+            crate::station_base::goods_get_via(
+                self.flows,
+                source,
+                self.avoid,
+                self.avoid2,
+                |limit| s.random_range(limit),
+            )
         }
     }
 }
@@ -1027,8 +1052,16 @@ impl VehicleCargoList {
     ///
     /// # Safety
     /// The module's contract; `cp` is a live packet in no list.
-    #[allow(unsafe_code, reason = "adds the caller's live packet to the caller's list")]
-    pub(crate) unsafe fn append(this: *mut Self, s: &Services, cp: *mut c_void, action: MoveToAction) {
+    #[allow(
+        unsafe_code,
+        reason = "adds the caller's live packet to the caller's list"
+    )]
+    pub(crate) unsafe fn append(
+        this: *mut Self,
+        s: &Services,
+        cp: *mut c_void,
+        action: MoveToAction,
+    ) {
         assert_with(|| !cp.is_null());
         // SAFETY: The module's contract; each reference ends before the next call.
         assert_with(|| {
@@ -1056,7 +1089,9 @@ impl VehicleCargoList {
                 unsafe { (*this).push_back(cp) };
                 return;
             }
-            it = current.previous.map(|token| unsafe { (*this).0.node(token) });
+            it = current
+                .previous
+                .map(|token| unsafe { (*this).0.node(token) });
         }
         not_reached();
     }
@@ -1135,7 +1170,8 @@ impl VehicleCargoList {
         self.assert_count_consistency();
         self.add_to_cache(cp);
         let counts = &mut self.0.fields.action_counts;
-        counts[usize::from(action.0)] = counts[usize::from(action.0)].wrapping_add(u32::from(cp.count));
+        counts[usize::from(action.0)] =
+            counts[usize::from(action.0)].wrapping_add(u32::from(cp.count));
         self.assert_count_consistency();
     }
     /// `VehicleCargoList::AssertCountConsistency`: assert that the designation counts add up.
@@ -1214,7 +1250,10 @@ impl VehicleCargoList {
     /// # Safety
     /// The module's contract; `args.ge` is the live goods entry and `args.payment` the live
     /// payment of the unloading vehicle.
-    #[allow(unsafe_code, reason = "reorders the caller's live list and pays its transfers")]
+    #[allow(
+        unsafe_code,
+        reason = "reorders the caller's live list and pays its transfers"
+    )]
     pub(crate) unsafe fn stage(this: *mut Self, s: &Services, args: &StageArgs<'_>) -> bool {
         // SAFETY: The module's contract; each reference ends before the next call.
         unsafe {
@@ -1259,7 +1298,8 @@ impl VehicleCargoList {
                 action = MoveToAction::MTA_TRANSFER;
                 // We cannot send the cargo to any of the possible next hops and also not to the
                 // current station.
-                let flow_it = flows.and_then(|flows| flows.find(unsafe { (*cp_state).get_first_station() }));
+                let flow_it =
+                    flows.and_then(|flows| flows.find(unsafe { (*cp_state).get_first_station() }));
                 if let Some(flow) = flow_it {
                     let mut new_shares = flow.clone();
                     new_shares.change_share(args.current_station, i32::MIN);
@@ -1286,7 +1326,8 @@ impl VehicleCargoList {
                     unsafe { (*cp_state).first_station = first.0 };
                 }
                 let mut restricted = false;
-                let flow_it = flows.and_then(|flows| flows.find(unsafe { (*cp_state).get_first_station() }));
+                let flow_it =
+                    flows.and_then(|flows| flows.find(unsafe { (*cp_state).get_first_station() }));
                 cargo_next = flow_it.map_or(StationID::INVALID, |flow| {
                     flow.get_via_with_restricted(&mut restricted, |limit| s.random_range(limit))
                 });
@@ -1407,7 +1448,9 @@ impl VehicleCargoList {
                     let cp_split = unsafe {
                         CargoPacket::split(cp, s, sum.wrapping_sub(transfer).wrapping_add(max_move))
                     };
-                    sum = sum.wrapping_sub(u32::from(unsafe { (*CargoPacket::of(s, cp_split)).count() }));
+                    sum = sum.wrapping_sub(u32::from(unsafe {
+                        (*CargoPacket::of(s, cp_split)).count()
+                    }));
                     unsafe { (*this).insert(it, cp_split) };
                 }
                 unsafe { (*cp).set_next_hop(StationID::INVALID) };
@@ -1490,7 +1533,10 @@ impl VehicleCargoList {
     ///
     /// # Safety
     /// The module's contract; `payment` is the live payment of the unloading vehicle.
-    #[allow(unsafe_code, reason = "moves and delivers packets of the caller's live lists")]
+    #[allow(
+        unsafe_code,
+        reason = "moves and delivers packets of the caller's live lists"
+    )]
     pub(crate) unsafe fn unload(
         this: *mut Self,
         s: &Services,
@@ -1524,7 +1570,8 @@ impl VehicleCargoList {
             && unsafe { (*this).action_count(MoveToAction::MTA_DELIVER) } > 0
             && moved < max_move
         {
-            let r#move = unsafe { (*this).action_count(MoveToAction::MTA_DELIVER) }.min(max_move - moved);
+            let r#move =
+                unsafe { (*this).action_count(MoveToAction::MTA_DELIVER) }.min(max_move - moved);
             unsafe {
                 Self::shift_cargo(
                     this,
@@ -1606,7 +1653,10 @@ impl VehicleCargoList {
     ///
     /// # Safety
     /// The module's contract.
-    #[allow(unsafe_code, reason = "reads the first live packet of the caller's list")]
+    #[allow(
+        unsafe_code,
+        reason = "reads the first live packet of the caller's list"
+    )]
     pub(crate) unsafe fn get_first_station(&self, s: &Services) -> StationID {
         // SAFETY: The module's contract.
         unsafe { self.0.front_first_station(s) }
@@ -1674,7 +1724,10 @@ impl StationCargoList {
         let next = if let Some(ends) = l.destinations.get(&key) {
             l.node(ends.last).next
         } else {
-            l.destinations.range(key..).next().map(|(_, ends)| ends.first)
+            l.destinations
+                .range(key..)
+                .next()
+                .map(|(_, ends)| ends.first)
         };
         let previous = next.map_or(l.last, |token| l.node(token).previous);
         let token = l.link(cp, key, previous, next);
@@ -1709,7 +1762,10 @@ impl StationCargoList {
     ///
     /// # Safety
     /// The module's contract; `cp` is a live packet in no list.
-    #[allow(unsafe_code, reason = "adds the caller's live packet to the caller's list")]
+    #[allow(
+        unsafe_code,
+        reason = "adds the caller's live packet to the caller's list"
+    )]
     pub(crate) unsafe fn append(this: *mut Self, s: &Services, cp: *mut c_void, next: StationID) {
         assert_with(|| !cp.is_null());
         let cp_state = CargoPacket::of(s, cp);
@@ -1736,7 +1792,11 @@ impl StationCargoList {
     /// will be aborted. Returns true if all packets with the given next hop have been removed,
     /// false otherwise.
     #[allow(unsafe_code, reason = "applies the action to the caller's live list")]
-    unsafe fn shift_cargo_next(this: *mut Self, action: &mut impl CargoAction, next: StationID) -> bool {
+    unsafe fn shift_cargo_next(
+        this: *mut Self,
+        action: &mut impl CargoAction,
+        next: StationID,
+    ) -> bool {
         // SAFETY: The module's contract; each reference ends before the action.
         let mut it = unsafe { (*this).0.destinations.get(&next) }.map(|ends| ends.first);
         while let Some(token) = it {
@@ -1788,7 +1848,10 @@ impl StationCargoList {
     ///
     /// # Safety
     /// The module's contract.
-    #[allow(unsafe_code, reason = "reduces and deletes packets of the caller's live list")]
+    #[allow(
+        unsafe_code,
+        reason = "reduces and deletes packets of the caller's live list"
+    )]
     pub(crate) unsafe fn truncate(
         this: *mut Self,
         s: &Services,
@@ -1808,7 +1871,11 @@ impl StationCargoList {
                 let cp = CargoPacket::of(s, current.shell);
                 if prev_count > max_move && s.random_range(prev_count) < prev_count - max_move {
                     if do_count && r#loop == 0 {
-                        add_amount(&mut cargo_per_source, unsafe { &*cp }, u32::from(unsafe { (*cp).count }));
+                        add_amount(
+                            &mut cargo_per_source,
+                            unsafe { &*cp },
+                            u32::from(unsafe { (*cp).count }),
+                        );
                     }
                     it = current.next;
                     continue;
@@ -1829,14 +1896,22 @@ impl StationCargoList {
                         return moved;
                     }
                     if do_count {
-                        add_amount(&mut cargo_per_source, unsafe { &*cp }, u32::from(unsafe { (*cp).count }));
+                        add_amount(
+                            &mut cargo_per_source,
+                            unsafe { &*cp },
+                            u32::from(unsafe { (*cp).count }),
+                        );
                     }
                     it = current.next;
                 } else {
                     it = current.next;
                     unsafe { (*this).erase(token) };
                     if do_count && r#loop > 0 {
-                        sub_amount(&mut cargo_per_source, unsafe { &*cp }, u32::from(unsafe { (*cp).count }));
+                        sub_amount(
+                            &mut cargo_per_source,
+                            unsafe { &*cp },
+                            u32::from(unsafe { (*cp).count }),
+                        );
                     }
                     moved = moved.wrapping_add(u32::from(unsafe { (*cp).count }));
                     unsafe { (*this).0.remove_from_cache(&*cp, u32::from((*cp).count)) };
@@ -1899,7 +1974,13 @@ impl StationCargoList {
             unsafe {
                 let fields = &mut (*this).0.fields;
                 fields.reserved_count = fields.reserved_count.wrapping_sub(r#move);
-                VehicleCargoList::reassign(dest, s, MoveToAction::MTA_LOAD, MoveToAction::MTA_KEEP, r#move);
+                VehicleCargoList::reassign(
+                    dest,
+                    s,
+                    MoveToAction::MTA_LOAD,
+                    MoveToAction::MTA_KEEP,
+                    r#move,
+                );
             }
             r#move
         } else {
@@ -1977,7 +2058,10 @@ impl StationCargoList {
     ///
     /// # Safety
     /// The module's contract.
-    #[allow(unsafe_code, reason = "reads the first live packet of the caller's list")]
+    #[allow(
+        unsafe_code,
+        reason = "reads the first live packet of the caller's list"
+    )]
     pub(crate) unsafe fn get_first_station(&self, s: &Services) -> StationID {
         // SAFETY: The module's contract.
         unsafe { self.0.front_first_station(s) }
@@ -1990,7 +2074,10 @@ impl StationCargoList {
     /// `StationCargoList::TotalCount`: returns total count of cargo at the station, including
     /// cargo which is already reserved for loading.
     pub(crate) fn total_count(&self) -> u32 {
-        self.0.fields.count.wrapping_add(self.0.fields.reserved_count)
+        self.0
+            .fields
+            .count
+            .wrapping_add(self.0.fields.reserved_count)
     }
     /// `CargoList::PeriodsInTransit`.
     pub(crate) fn periods_in_transit(&self) -> u32 {
@@ -2011,12 +2098,20 @@ impl StationCargoList {
 }
 /// `(*cargo_per_source)[cp->first_station] += amount`.
 fn add_amount(map: &mut Option<&mut StationCargoAmountMap>, cp: &CargoPacket, amount: u32) {
-    let entry = map.as_mut().unwrap().entry(cp.get_first_station()).or_insert(0);
+    let entry = map
+        .as_mut()
+        .unwrap()
+        .entry(cp.get_first_station())
+        .or_insert(0);
     *entry = entry.wrapping_add(amount);
 }
 /// `(*cargo_per_source)[cp->first_station] -= amount`.
 fn sub_amount(map: &mut Option<&mut StationCargoAmountMap>, cp: &CargoPacket, amount: u32) {
-    let entry = map.as_mut().unwrap().entry(cp.get_first_station()).or_insert(0);
+    let entry = map
+        .as_mut()
+        .unwrap()
+        .entry(cp.get_first_station())
+        .or_insert(0);
     *entry = entry.wrapping_sub(amount);
 }
 
@@ -2041,8 +2136,14 @@ impl CargoPart {
 ///
 /// # Safety
 /// The module's contract; `v` is a live chain with live cargo lists.
-#[allow(unsafe_code, reason = "moves and deletes packets of the chain's live lists")]
-pub(crate) unsafe fn check_cargo_capacity(v: Option<VehicleRef>, s: &crate::newgrf_vehicle::Services) {
+#[allow(
+    unsafe_code,
+    reason = "moves and deletes packets of the chain's live lists"
+)]
+pub(crate) unsafe fn check_cargo_capacity(
+    v: Option<VehicleRef>,
+    s: &crate::newgrf_vehicle::Services,
+) {
     assert_with(|| v.is_none_or(|v| v.first() == v));
     let storage = s.storage();
     let mut src = v;
@@ -2074,8 +2175,9 @@ pub(crate) unsafe fn check_cargo_capacity(v: Option<VehicleRef>, s: &crate::newg
                 dest = dest_part.next();
                 continue;
             }
-            let amount = to_spread
-                .min(u32::from(destination.cargo_cap) - unsafe { (*destination.cargo).total_count() });
+            let amount = to_spread.min(
+                u32::from(destination.cargo_cap) - unsafe { (*destination.cargo).total_count() },
+            );
             unsafe { VehicleCargoList::shift(source.cargo, storage, amount, destination.cargo) };
             to_spread -= amount;
             dest = dest_part.next();
@@ -2121,7 +2223,9 @@ pub(crate) unsafe fn transfer_cargo(
             src = src_part.last_engine_part().next();
             continue;
         }
-        if source.cargo_type >= CargoType::NUM_CARGO || unsafe { (*source.cargo).total_count() } == 0 {
+        if source.cargo_type >= CargoType::NUM_CARGO
+            || unsafe { (*source.cargo).total_count() } == 0
+        {
             src = src_part.next();
             continue;
         }
@@ -2151,7 +2255,8 @@ pub(crate) unsafe fn transfer_cargo(
             }
             // `dest->cargo_cap - dest->cargo.TotalCount()` is unsigned and wraps.
             let amount = unsafe { (*source.cargo).total_count() }.min(
-                u32::from(destination.cargo_cap).wrapping_sub(unsafe { (*destination.cargo).total_count() }),
+                u32::from(destination.cargo_cap)
+                    .wrapping_sub(unsafe { (*destination.cargo).total_count() }),
             );
             // `amount <= 0` on the unsigned amount.
             if amount == 0 {
@@ -2217,7 +2322,10 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_new(p: *const CargoPacket) ->
 /// # Safety
 /// `p` came from `openttd_rust_cargo_packet_new` and is freed once.
 #[unsafe(no_mangle)]
-#[allow(unsafe_code, reason = "the exported symbol and the caller's allocation")]
+#[allow(
+    unsafe_code,
+    reason = "the exported symbol and the caller's allocation"
+)]
 pub unsafe extern "C" fn openttd_rust_cargo_packet_destroy(p: *mut CargoPacket) {
     // SAFETY: The caller's own allocation, freed once.
     drop(unsafe { Box::from_raw(p) });
@@ -2271,7 +2379,10 @@ pub extern "C" fn openttd_rust_cargo_list_new(vehicle: u8) -> *mut CargoList {
 /// # Safety
 /// `l` came from `openttd_rust_cargo_list_new` and is destroyed once; `s` is the live table.
 #[unsafe(no_mangle)]
-#[allow(unsafe_code, reason = "the exported symbol and the caller's allocation")]
+#[allow(
+    unsafe_code,
+    reason = "the exported symbol and the caller's allocation"
+)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_destroy(l: *mut CargoList, s: *const Services) {
     // SAFETY: The caller's own list and live table.
     unsafe { CargoList::destroy(l, &*s) };
@@ -2374,7 +2485,10 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_feeder(l: *const CargoList) -> 
 /// `l` is a live vehicle list.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol and the caller's list")]
-pub unsafe extern "C" fn openttd_rust_cargo_list_action_count(l: *const CargoList, action: u8) -> u32 {
+pub unsafe extern "C" fn openttd_rust_cargo_list_action_count(
+    l: *const CargoList,
+    action: u8,
+) -> u32 {
     // SAFETY: The caller's live vehicle list.
     unsafe { (*VehicleCargoList::of(l.cast_mut())).action_count(MoveToAction(action)) }
 }
@@ -2435,7 +2549,11 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_snapshot(
 /// `l` is a live list.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol and the caller's list")]
-pub unsafe extern "C" fn openttd_rust_cargo_list_insert(l: *mut CargoList, key: u16, shell: *mut c_void) {
+pub unsafe extern "C" fn openttd_rust_cargo_list_insert(
+    l: *mut CargoList,
+    key: u16,
+    shell: *mut c_void,
+) {
     // SAFETY: The caller's live list.
     match unsafe { CargoList::typed(l) } {
         Typed::Vehicle(l) => unsafe { (*l).push_back(shell) },
@@ -2464,7 +2582,10 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_rebuild(l: *mut CargoList, s: *
 /// `l` is a live list and `s` the live table.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code, reason = "the exported symbol and the caller's list")]
-pub unsafe extern "C" fn openttd_rust_cargo_list_first(l: *const CargoList, s: *const Services) -> u16 {
+pub unsafe extern "C" fn openttd_rust_cargo_list_first(
+    l: *const CargoList,
+    s: *const Services,
+) -> u16 {
     // SAFETY: The caller's live list and table.
     match unsafe { CargoList::typed(l.cast_mut()) } {
         Typed::Vehicle(l) => unsafe { (*l).get_first_station(&*s) }.0,
