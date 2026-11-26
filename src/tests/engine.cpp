@@ -76,31 +76,6 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	staged.clear();
 }
 
-template <typename Info, typename Labels>
-static void CheckLiveTypeLabels(Info *types, size_t count, Labels labels)
-{
-	const auto *pointers = labels();
-	for (size_t i = 0; i < count; ++i) CHECK(pointers[i] == &types[i].label);
-	Backup<uint32_t> first(types[0].label, 0x51500001);
-	Backup<uint32_t> last(types[count - 1].label, 0x51500002);
-	CHECK(*pointers[0] == 0x51500001);
-	CHECK(*pointers[count - 1] == 0x51500002);
-	first.Change(0x51500003);
-	CHECK(labels() == pointers);
-	CHECK(*pointers[0] == 0x51500003);
-	CHECK(types[0].label == 0x51500003);
-	last.Restore();
-	first.Restore();
-}
-
-TEST_CASE("Engine type label services expose live canonical scalars", "[rust][engine][abi]")
-{
-	extern RailTypeInfo _railtypes[RAILTYPE_END];
-	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
-	CheckLiveTypeLabels(_railtypes, RAILTYPE_END, GetRustRailRegistryServices().labels);
-	CheckLiveTypeLabels(_roadtypes, ROADTYPE_END, GetRustRoadRegistryServices().labels);
-}
-
 TEST_CASE("Engine type availability returns canonical booleans for sparse masks", "[rust][engine][abi]")
 {
 	static uint64_t available;
@@ -111,8 +86,8 @@ TEST_CASE("Engine type availability returns canonical booleans for sparse masks"
 	shared.current_company = []() noexcept -> uint8_t { return 0; };
 	shared.type_availability = []() noexcept -> const OpenTTDTypeAvailabilityServices * { return &types; };
 	types.editor = []() noexcept { return false; };
-	types.company_roadtypes = [](uint8_t) noexcept { return available; };
-	types.company_railtypes = [](uint8_t) noexcept { return available; };
+	types.avail_roadtypes = [](uint8_t) noexcept { return available; };
+	types.avail_railtypes = [](uint8_t) noexcept { return available; };
 	Backup<uint64_t> road_hidden(*openttd_rust_road_hidden_mask(), 0);
 	Backup<uint64_t> rail_hidden(*openttd_rust_rail_hidden_mask(), 0);
 	for (uint64_t hidden : {UINT64_C(0), UINT64_C(1) << 61}) {

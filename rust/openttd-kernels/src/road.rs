@@ -47,7 +47,7 @@ use crate::order_type::{
 };
 use crate::pathfinder_type::FindDepotData;
 use crate::raw_field::{read_field, write_field};
-use crate::road_type::{RoadBits, RoadTramType, RoadType, RoadTypes};
+use crate::road_type::{RoadBits, RoadTramType, RoadType, RoadTypeLabel, RoadTypes};
 use crate::roadveh::{
     RDE_NEXT_TILE, RDE_TURNED, RV_OVERTAKE_TIMEOUT, RVC_DEFAULT_START_FRAME, RVC_DEPOT_START_FRAME,
     RVC_DRIVE_THROUGH_STOP_FRAME, RVC_START_FRAME_AFTER_LONG_TRAM, RVC_TURN_AROUND_START_FRAME,
@@ -71,6 +71,7 @@ use crate::table::strings::{
 };
 use crate::tile_cmd::{VehicleEnterTileState, VehicleEnterTileStates};
 use crate::tile_type::{TILE_SIZE, TileIndex, TileType};
+use crate::timer_game_calendar::CalendarDate;
 use crate::track_func::{
     diag_dir_to_diag_trackdir, diagdir_reaches_trackdirs, is_reversing_road_trackdir,
     is_straight_road_trackdir, track_status_to_red_signals, track_status_to_trackdir_bits,
@@ -123,6 +124,76 @@ impl RoadTypeFlags {
 
 /// `RoadTypeSpriteGroup::ROTSG_END`.
 pub const ROTSG_END: u8 = 12;
+
+/// Native `RoadTypeInfo` (`road.h`), opaque: `RoadTypeInfo` stays a C++ class in `_roadtypes`
+/// until its storage port, and Rust holds one only through a [`RoadTypeInfoRef`].
+#[repr(C)]
+pub struct RoadTypeInfo {
+    _private: [u8; 0],
+}
+
+/// A resolved `const RoadTypeInfo *` with the availability table whose readers it calls. It is
+/// valid for the call that resolved it.
+#[derive(Clone, Copy)]
+pub(crate) struct RoadTypeInfoRef<'a> {
+    types: &'a crate::type_availability::Services,
+    rti: *const RoadTypeInfo,
+}
+
+/// `GetRoadTypeInfo`: returns a pointer to the road type information for a given road type,
+/// through the native helper and its `assert(roadtype < ROADTYPE_END)`.
+#[inline]
+pub(crate) fn get_road_type_info(
+    types: &crate::type_availability::Services,
+    roadtype: RoadType,
+) -> RoadTypeInfoRef<'_> {
+    RoadTypeInfoRef {
+        types,
+        rti: (types.road_info)(roadtype),
+    }
+}
+
+impl<'a> RoadTypeInfoRef<'a> {
+    /// The handle of `&_roadtypes[rt]`, for the bodies that index the array without
+    /// `GetRoadTypeInfo`'s assertion: `rti` is what the type registry's `spec` returned.
+    #[inline]
+    pub(crate) fn of(
+        types: &'a crate::type_availability::Services,
+        rti: *const RoadTypeInfo,
+    ) -> Self {
+        Self { types, rti }
+    }
+
+    /// `RoadTypeInfo::flags`: bit mask of road type flags.
+    #[inline]
+    pub(crate) fn flags(self) -> RoadTypeFlags {
+        (self.types.road_flags)(self.rti)
+    }
+    /// `RoadTypeInfo::introduces_roadtypes`: bitmask of which other roadtypes are introduced
+    /// when this roadtype is introduced.
+    #[inline]
+    pub(crate) fn introduces_roadtypes(self) -> RoadTypes {
+        (self.types.road_introduces_roadtypes)(self.rti)
+    }
+    /// `RoadTypeInfo::introduction_date`: introduction date. When `INVALID_DATE` or a vehicle
+    /// using this roadtype gets introduced earlier, the vehicle's introduction date will be
+    /// used instead for this roadtype.
+    #[inline]
+    pub(crate) fn introduction_date(self) -> CalendarDate {
+        (self.types.road_introduction_date)(self.rti)
+    }
+    /// `RoadTypeInfo::introduction_required_roadtypes`: bitmask of roadtypes that are required
+    /// for this roadtype to be introduced at a given `introduction_date`.
+    #[inline]
+    pub(crate) fn introduction_required_roadtypes(self) -> RoadTypes {
+        (self.types.road_introduction_required_roadtypes)(self.rti)
+    }
+    /// `RoadTypeInfo::label`: unique 32 bit road type identifier.
+    #[inline]
+    pub(crate) fn label(self) -> RoadTypeLabel {
+        (self.types.road_label)(self.rti)
+    }
+}
 
 pub(crate) mod availability;
 pub(crate) use availability::*;

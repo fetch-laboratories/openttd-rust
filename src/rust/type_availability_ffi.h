@@ -11,15 +11,15 @@ class RoadTypeInfo;
  * Panics and environmental exceptions abort; ordinary play has no throwing leaf. */
 struct OpenTTDTypeAvailabilityServices {
 	bool assertions;
-	uint64_t (*company_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_railtypes);
-	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
+	uint64_t (*avail_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(avail_railtypes);
+	uint64_t (*avail_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(avail_roadtypes);
 	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	uint8_t (*road_flags)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	const RoadTypeInfo *(*road_info)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_info);
-	uint64_t (*road_introduces)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces);
+	uint64_t (*road_introduces_roadtypes)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces_roadtypes);
 	int32_t (*road_introduction_date)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction_date);
-	uint64_t (*road_introduction_required)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction_required);
+	uint64_t (*road_introduction_required_roadtypes)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction_required_roadtypes);
 	uint32_t (*road_label)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
 	void (*set_company_railtypes)(uint8_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_railtypes);
 	void (*set_company_roadtypes)(uint8_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_roadtypes);

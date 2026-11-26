@@ -1213,13 +1213,11 @@ mod startup_tests {
     extern "C" fn no_rail_label(_: *const crate::rail::RailTypeInfo) -> u32 {
         0
     }
-    extern "C" fn no_road_info(
-        _: crate::road_type::RoadType,
-    ) -> *const crate::type_availability::RoadTypeInfo {
+    extern "C" fn no_road_info(_: crate::road_type::RoadType) -> *const crate::road::RoadTypeInfo {
         std::ptr::null()
     }
     extern "C" fn no_road_label(
-        _: *const crate::type_availability::RoadTypeInfo,
+        _: *const crate::road::RoadTypeInfo,
     ) -> crate::road_type::RoadTypeLabel {
         crate::road_type::RoadTypeLabel(0)
     }

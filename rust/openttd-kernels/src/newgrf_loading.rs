@@ -1486,8 +1486,8 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         (s.reset_badges)();
         crate::engine_loading::openttd_rust_engine_setup(&*s.engine);
         (s.reset_bridges)();
-        crate::type_registry::openttd_rust_rail_reset(s.types);
-        crate::type_registry::openttd_rust_road_reset(s.types);
+        crate::type_registry::reset_rail_types(&*s.types);
+        crate::type_registry::reset_road_types(&*s.types);
         crate::engine_loading::openttd_rust_engine_temp_initialize(&*s.engine);
         openttd_rust_grf_reset_grm();
         crate::newgrf_generic::reset_generic_callbacks(s.generic);
@@ -1556,8 +1556,8 @@ unsafe fn after_load(s: &Services) {
         crate::engine_loading::openttd_rust_vehicle_order_commit(&*s.engine);
         (s.activate_shore)();
         (s.activate_tram_depot)();
-        crate::type_registry::rail_init();
-        crate::type_registry::road_init();
+        crate::type_registry::init_rail_types();
+        crate::type_registry::init_road_types();
         crate::engine_loading::openttd_rust_engine_bind_types(&*s.engine);
         (s.aging_stops)();
         (s.finalise_prices)();

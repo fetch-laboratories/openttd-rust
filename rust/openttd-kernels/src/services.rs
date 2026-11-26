@@ -557,6 +557,24 @@ pub struct Services {
     pub grf_file_set_cargo_list_is_fallback: extern "C" fn(*mut c_void, bool),
     /// Store `GRFFile::cargo_map[cargo]` of a non-null file.
     pub grf_file_set_cargo_map: extern "C" fn(*mut c_void, u8, u8),
+    /// `GRFFile::railtype_list` of a non-null file, live until the next write to it.
+    pub grf_file_railtype_list:
+        extern "C" fn(*const c_void) -> crate::type_registry::RailTypeLabels,
+    /// `GRFFile::roadtype_list` of a non-null file, live until the next write to it.
+    pub grf_file_roadtype_list:
+        extern "C" fn(*const c_void) -> crate::type_registry::RoadTypeLabels,
+    /// `GRFFile::tramtype_list` of a non-null file, live until the next write to it.
+    pub grf_file_tramtype_list:
+        extern "C" fn(*const c_void) -> crate::type_registry::RoadTypeLabels,
+    /// `GRFFile::railtype_map` of a non-null file, read and written in place.
+    pub grf_file_railtype_map: extern "C" fn(*mut c_void) -> crate::type_registry::RailTypeMap,
+    /// `GRFFile::roadtype_map` of a non-null file, read and written in place.
+    pub grf_file_roadtype_map: extern "C" fn(*mut c_void) -> crate::type_registry::RoadTypeMap,
+    /// `GRFFile::tramtype_map` of a non-null file, read and written in place.
+    pub grf_file_tramtype_map: extern "C" fn(*mut c_void) -> crate::type_registry::RoadTypeMap,
+    /// `AddStringForMapping(GRFStringID{source}, target)`: record a `NewGRF` string to map
+    /// into the `StringID` at `target` once the strings are loaded.
+    pub add_string_for_mapping: extern "C" fn(u16, *mut u32),
     /// `RustGRFPriceShift`: the live file multiplier, including its null-file default.
     pub grf_price_shift: extern "C" fn(*const c_void, u32) -> i32,
     /// `GRFFile::cargo_map` entry of a non-null file.
@@ -931,6 +949,13 @@ crate::abi::layouts! {
         grf_file_set_cargo_list,
         grf_file_set_cargo_list_is_fallback,
         grf_file_set_cargo_map,
+        grf_file_railtype_list,
+        grf_file_roadtype_list,
+        grf_file_tramtype_list,
+        grf_file_railtype_map,
+        grf_file_roadtype_map,
+        grf_file_tramtype_map,
+        add_string_for_mapping,
         grf_price_shift,
         grf_cargo_map,
         grf_boolean_callback,
@@ -1120,6 +1145,25 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
     extern "C" fn unexpected_set_cargo_map(_: *mut c_void, _: u8, _: u8) {
         std::process::abort()
     }
+    extern "C" fn unexpected_railtype_list(
+        _: *const c_void,
+    ) -> crate::type_registry::RailTypeLabels {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_roadtype_list(
+        _: *const c_void,
+    ) -> crate::type_registry::RoadTypeLabels {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_railtype_map(_: *mut c_void) -> crate::type_registry::RailTypeMap {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_roadtype_map(_: *mut c_void) -> crate::type_registry::RoadTypeMap {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_add_string_for_mapping(_: u16, _: *mut u32) {
+        std::process::abort()
+    }
     extern "C" fn unexpected_boolean(_: *const c_void, _: u16, _: u16) -> bool {
         std::process::abort()
     }
@@ -1182,6 +1226,13 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         grf_file_set_cargo_list: unexpected_set_cargo_list,
         grf_file_set_cargo_list_is_fallback: unexpected_set_cargo_list_is_fallback,
         grf_file_set_cargo_map: unexpected_set_cargo_map,
+        grf_file_railtype_list: unexpected_railtype_list,
+        grf_file_roadtype_list: unexpected_roadtype_list,
+        grf_file_tramtype_list: unexpected_roadtype_list,
+        grf_file_railtype_map: unexpected_railtype_map,
+        grf_file_roadtype_map: unexpected_roadtype_map,
+        grf_file_tramtype_map: unexpected_roadtype_map,
+        add_string_for_mapping: unexpected_add_string_for_mapping,
         grf_price_shift: unexpected_price_shift,
         grf_cargo_map: unexpected_cargo_map,
         grf_boolean_callback: unexpected_boolean,

@@ -12,57 +12,21 @@
 #include "../rail.h"
 #include "newgrf_bytereader.h"
 #include "newgrf_internal.h"
-#include "newgrf_stringmapping.h"
 
 #include "../rust/type_definitions_ffi.h"
-#include "../rust/services_rail.h"
 #include "../rust/newgrf_bytereader_services.h"
 
 #include "../safeguards.h"
 
-static const OpenTTDRailProperties &GetRustRailProperties() noexcept
-{
-	static const OpenTTDRailProperties services = {
-		.toolbar_caption = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.toolbar_caption); },
-		.menu_text = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.menu_text); },
-		.build_caption = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.build_caption); },
-		.replace_text = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.replace_text); },
-		.name = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.name); },
-		.cost_multiplier = RustSetRailCostMultiplier,
-		.max_speed = [](RailTypeInfo *info, uint16_t value) noexcept { info->max_speed = value; },
-		.map_colour = [](RailTypeInfo *info, uint8_t value) noexcept { info->map_colour = PixelColour{value}; },
-		.introduction_date = [](RailTypeInfo *info, int32_t value) noexcept { info->introduction_date = TimerGameCalendar::Date(value); },
-		.sorting_order = [](RailTypeInfo *info, uint8_t value) noexcept { info->sorting_order = value; },
-		.maintenance_multiplier = [](RailTypeInfo *info, uint16_t value) noexcept { info->maintenance_multiplier = value; },
-		.alternate_label = [](RailTypeInfo *info, uint32_t value) noexcept { info->alternate_labels.insert(value); },
-		.new_engine = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.new_loco); },
-		.flags = [](RailTypeInfo *info, uint8_t value) noexcept { info->flags = static_cast<RailTypeFlags>(value); },
-		.powered = [](RailTypeInfo *info, RailType value) noexcept { info->powered_railtypes.Set(value); },
-		.required = [](RailTypeInfo *info, RailType value) noexcept { info->introduction_required_railtypes.Set(value); },
-		.introduces = [](RailTypeInfo *info, RailType value) noexcept { info->introduces_railtypes.Set(value); },
-		.compatible = [](RailTypeInfo *info, RailType value) noexcept { info->compatible_railtypes.Set(value); },
-		.curve_speed = [](RailTypeInfo *info, uint8_t value) noexcept { info->curve_speed = value; },
-		.fallback = [](RailTypeInfo *info, uint8_t value) noexcept { info->fallback_railtype = value; },
-		.acceleration = [](RailTypeInfo *info, uint8_t value) noexcept { info->acceleration_type = static_cast<VehicleAccelerationModel>(value); },
-		.badges = [](RailTypeInfo *info) noexcept { return &info->badges; },
-	};
-	return services;
-}
 static ChangeInfoResult RailTypeChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
-	GRFFile *file = _cur_gps.grffile;
-	auto &map = file->railtype_map;
-	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_rail_change(&GetRustRailProperties(), &GetRustByteReaderServices(), view, file->grf_version, first, last, prop, &buf);
+	int32_t result = openttd_rust_rail_change(&GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }
 static ChangeInfoResult RailTypeReserveInfo(uint first, uint last, int prop, ByteReader &buf)
 {
-	GRFFile *file = _cur_gps.grffile;
-	auto &map = file->railtype_map;
-	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_rail_reserve(&GetRustRailProperties(), &GetRustByteReaderServices(), view, first, last, prop, &buf);
+	int32_t result = openttd_rust_rail_reserve(&GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }

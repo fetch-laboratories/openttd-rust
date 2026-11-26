@@ -12,52 +12,21 @@
 #include "../road.h"
 #include "newgrf_bytereader.h"
 #include "newgrf_internal.h"
-#include "newgrf_stringmapping.h"
 
 #include "../rust/type_definitions_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
 
 #include "../safeguards.h"
 
-static const OpenTTDRoadProperties &GetRustRoadProperties() noexcept
-{
-	static const OpenTTDRoadProperties services = {
-		.toolbar_caption = [](RoadTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.toolbar_caption); },
-		.menu_text = [](RoadTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.menu_text); },
-		.build_caption = [](RoadTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.build_caption); },
-		.replace_text = [](RoadTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.replace_text); },
-		.name = [](RoadTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.name); },
-		.cost_multiplier = [](RoadTypeInfo *info, uint16_t value) noexcept { info->cost_multiplier = value; },
-		.max_speed = [](RoadTypeInfo *info, uint16_t value) noexcept { info->max_speed = value; },
-		.map_colour = [](RoadTypeInfo *info, uint8_t value) noexcept { info->map_colour = PixelColour{value}; },
-		.introduction_date = [](RoadTypeInfo *info, int32_t value) noexcept { info->introduction_date = TimerGameCalendar::Date(value); },
-		.sorting_order = [](RoadTypeInfo *info, uint8_t value) noexcept { info->sorting_order = value; },
-		.maintenance_multiplier = [](RoadTypeInfo *info, uint16_t value) noexcept { info->maintenance_multiplier = value; },
-		.alternate_label = [](RoadTypeInfo *info, uint32_t value) noexcept { info->alternate_labels.insert(value); },
-		.new_engine = [](RoadTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.new_engine); },
-		.flags = [](RoadTypeInfo *info, uint8_t value) noexcept { info->flags = static_cast<RoadTypeFlags>(value); },
-		.powered = [](RoadTypeInfo *info, RoadType value) noexcept { info->powered_roadtypes.Set(value); },
-		.required = [](RoadTypeInfo *info, RoadType value) noexcept { info->introduction_required_roadtypes.Set(value); },
-		.introduces = [](RoadTypeInfo *info, RoadType value) noexcept { info->introduces_roadtypes.Set(value); },
-		.badges = [](RoadTypeInfo *info) noexcept { return &info->badges; },
-	};
-	return services;
-}
 static ChangeInfoResult RoadTypeChangeInfo(uint first, uint last, int prop, ByteReader &buf, RoadTramType rtt)
 {
-	GRFFile *file = _cur_gps.grffile;
-	auto &map = (rtt == RTT_TRAM) ? file->tramtype_map : file->roadtype_map;
-	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_road_change(&GetRustRoadProperties(), &GetRustByteReaderServices(), view, first, last, prop, &buf, rtt);
+	int32_t result = openttd_rust_road_change(&GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf, rtt);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }
 static ChangeInfoResult RoadTypeReserveInfo(uint first, uint last, int prop, ByteReader &buf, RoadTramType rtt)
 {
-	GRFFile *file = _cur_gps.grffile;
-	auto &map = (rtt == RTT_TRAM) ? file->tramtype_map : file->roadtype_map;
-	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_road_reserve(&GetRustRoadProperties(), &GetRustByteReaderServices(), view, first, last, prop, &buf, rtt);
+	int32_t result = openttd_rust_road_reserve(&GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf, rtt);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }
