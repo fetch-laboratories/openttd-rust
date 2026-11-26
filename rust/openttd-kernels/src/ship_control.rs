@@ -561,7 +561,7 @@ pub(crate) fn on_new_calendar_day(v: VehicleRef, leaves: &Leaves) {
     maintenance::age_vehicle(v, leaves.vehicles());
 }
 
-/// `Ship::Tick`, for the scheduler's dispatch over a live ship.
+/// `Ship::Tick`, for the scheduler's dispatch over a live ship and the kept export.
 pub(crate) fn scheduler_tick(v: VehicleRef, leaves: &Leaves, shared: &Services) -> bool {
     tick(&Tables::new(leaves, shared), Ship::of(v))
 }
@@ -1490,7 +1490,8 @@ pub(crate) fn find_closest_depot(t: &Tables<'_>, v: Ship) -> ClosestDepot {
 // The C++ shell's entries. SAFETY for each: the caller holds the game-state mutex and passes
 // a live ship record and the immutable process-lifetime tables.
 
-/// `Ship::Tick`.
+/// `Ship::Tick` for the kept native fixture `tools/migration/windows-abi/ship.inc`; it leaves
+/// with that fixture.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
@@ -1499,8 +1500,7 @@ pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     shared: *const Services,
 ) -> u8 {
     // SAFETY: As the entries' contract.
-    let t = unsafe { Tables::new(&*leaves, &*shared) };
-    u8::from(tick(&t, Ship::of(v)))
+    u8::from(scheduler_tick(v, unsafe { &*leaves }, unsafe { &*shared }))
 }
 /// `Ship::UpdateCache`.
 #[allow(unsafe_code)]
