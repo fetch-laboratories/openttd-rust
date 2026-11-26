@@ -128,6 +128,8 @@ void openttd_rust_object_counts_reset();
 void openttd_rust_object_count_increment(uint16_t);
 void openttd_rust_object_count_decrement(uint16_t);
 uint16_t openttd_rust_object_count(uint16_t);
+uint8_t openttd_rust_object_indirectly_cleared_abi(uint32_t, uint32_t);
+extern "C++" inline bool openttd_rust_object_indirectly_cleared(uint32_t a0, uint32_t a1) { return openttd_rust_object_indirectly_cleared_abi(a0, a1) != 0; }
 OpenTTDObjectHiddenArea openttd_rust_object_tunnel_hide(uint32_t, uint32_t);
 void openttd_rust_object_restore_first(OpenTTDObjectHiddenArea);
 void openttd_rust_object_build(const OpenTTDObjectServices * services, uint16_t kind, uint32_t tile, uint8_t owner, const Town * town, uint8_t view);

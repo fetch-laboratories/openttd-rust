@@ -15,6 +15,7 @@
 
 struct RoadStop;
 struct BaseStation;
+enum class RoadStopType : uint8_t;
 struct OpenTTDRoadState;
 /** One drive-through entry point; Rust owns every instance, native readers only load. */
 struct OpenTTDRoadStopEntry {

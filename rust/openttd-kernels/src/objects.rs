@@ -137,10 +137,10 @@ pub struct HiddenArea {
     pub index: usize,
     pub first_tile: u32,
 }
-/// Whether `tile` lies in a cleared area whose first tile differs (`IsObjectIndirectlyCleared`).
-pub(crate) fn object_indirectly_cleared(tile: u32, log_x: u32) -> bool {
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_indirectly_cleared_abi(tile: u32, log_x: u32) -> u8 {
     let i = openttd_rust_object_areas_find(tile, log_x);
-    i != usize::MAX && openttd_rust_object_areas_get(i).first_tile != tile
+    u8::from(i != usize::MAX && openttd_rust_object_areas_get(i).first_tile != tile)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_tunnel_hide(tile: u32, log_x: u32) -> HiddenArea {
