@@ -200,3 +200,9 @@
 - `cargotype.rs` and `cargo_registry.rs` are finished. `CargoSpec` stays in C++'s `CargoSpec::array` until #1058; Rust reaches a spec through `cargotype::CargoSpecRef`, from `cargo_spec_get` or `iterate`, with one registry-table slot for each member it reads or writes. `GRFFile`'s cargo list, fallback flag and cargo map are methods of `newgrf::GRFFileRef` over the shared table until #669.
 - Each original body (`SetupCargoForClimate`, `BuildCargoLabelMap`, `IsDefaultCargo`, `InitializeSortedCargoSpecs`, `FinaliseCargoArray`, the translation and fallback bodies, `GetCargoCallback`, `GetCustomCargoSprite`, `FindFirstCargoWithTownAcceptanceEffect`) is one Rust function under its name; the exports are shims. `CargoResolverObject` is built in C++ from the spec, as the original's constructor does.
 - Kept in C++: the default cargo table and its copy, `CargoSpecClassSorter`, the sorted-list spans GUI code reads, and the resolver frame (#1064).
+
+## Cargo flows file pass (#1057 part 2)
+
+- `cargo_flow.rs` is finished. `FlowStat` and `FlowStatMap` are its types, with one method for each original body under its name; Rust callers, the link graph's flow mapper included, call those methods. A map owns each flow in its own allocation, which no insertion or erasure of another origin moves, so C++ may hold a flow's address across later calls on the map.
+- `LinkGraphJob::~LinkGraphJob`'s application and `EraseFlows` run in Rust after the native join, calling `RerouteCargo`'s port directly; `DeleteStaleLinks` calls `DeleteFlows` and `RestrictFlows` directly.
+- Kept in C++: the facade in `src/rust/cargo_flow.hpp` for the save, GUI and script readers until their files port, `GoodsEntry` and its data (#634, through three slots), and the `LinkGraphJob` shell with its join (#717).
