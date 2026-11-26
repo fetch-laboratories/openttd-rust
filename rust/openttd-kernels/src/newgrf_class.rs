@@ -774,23 +774,25 @@ mod tests {
 
     /// The indices `set_index` stores, in order.
     static SET_INDEX: Mutex<Vec<u16>> = Mutex::new(Vec::new());
-    /// A stand-in spec: only its `class_index` member, which the stubs read and store.
+    /// A stand-in spec: the `class_index` member the class leaves read, and the views the
+    /// object eligibility leaf reports.
     struct StandIn {
         class_index: u16,
+        views: u8,
     }
     #[allow(unsafe_code)]
-    unsafe extern "C" fn class_index(spec: *const AirportSpec) -> u16 {
+    unsafe extern "C" fn class_index<T>(spec: *const T) -> u16 {
         // SAFETY: Every spec the tests pass is a live `StandIn`.
         unsafe { (*spec.cast::<StandIn>()).class_index }
     }
-    extern "C" fn set_index(_: *mut AirportSpec, index: u16) {
+    extern "C" fn set_index<T>(_: *mut T, index: u16) {
         SET_INDEX.lock().unwrap().push(index);
     }
-    fn airport_services() -> &'static Services<AirportSpec> {
+    fn services<T>(object: *const crate::objects::ObjectServices) -> &'static Services<T> {
         Box::leak(Box::new(Services {
-            class_index,
-            set_index,
-            object: ptr::null(),
+            class_index: class_index::<T>,
+            set_index: set_index::<T>,
+            object,
             shared: ptr::null(),
         }))
     }
@@ -807,15 +809,9 @@ mod tests {
         ) {
             return;
         }
-        let services: &'static Services<crate::objects::Spec> = Box::leak(Box::new(Services {
-            class_index: crate::test_tables::unreachable1,
-            set_index: crate::test_tables::unreachable2,
-            object: ptr::null(),
-            shared: ptr::null(),
-        }));
-        // SAFETY: `services` lives for the process; `ObjectClass::InsertDefaults` reads none
+        // SAFETY: The table lives for the process; `ObjectClass::InsertDefaults` reads none
         // of its leaves.
-        unsafe { ObjectClass::reset(services) };
+        unsafe { ObjectClass::reset(services(ptr::null())) };
         // ObjectClass::InsertDefaults looks up both default classes.
         assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
         let count = u16::try_from(ObjectClass::get_class_count()).unwrap();
@@ -826,26 +822,43 @@ mod tests {
         assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 1);
     }
 
-    /// `NewGRFClass::Assign` asserts the spec's class index against the class count, and `Get`
-    /// asserts it again; a spec whose class index is the count ends at a failed assertion
-    /// before the class is indexed or anything is stored.
+    /// Exit code and marker of `two_failures`, which ends the process at the second failed
+    /// assertion.
+    const SECOND_FAILURE_CODE: i32 = 87;
+    const SECOND_FAILURE_MARKER: &str = "newgrf_class test: second failed assertion";
+    extern "C" fn two_failures(condition: bool) {
+        if !condition && FAILED_ASSERTIONS.fetch_add(1, Ordering::Relaxed) == 1 {
+            eprintln!("{SECOND_FAILURE_MARKER}");
+            std::process::exit(SECOND_FAILURE_CODE);
+        }
+    }
+
+    /// `NewGRFClass::Assign` asserts the spec's class index against the class count, and then
+    /// `Get` asserts it again. Under a policy that returns from the first failure and ends the
+    /// process at the second, a spec whose class index is the count ends at `Get`'s
+    /// assertion, before the class is indexed or anything is stored. Without `Assign`'s own
+    /// assertion, `Get`'s is the first, and the body goes on to index the class.
     #[test]
     #[allow(unsafe_code)] // A live stand-in spec that only the class leaves receive.
-    fn assign_of_a_class_index_past_the_classes_ends_at_its_assertion() {
-        if crate::services_assert::isolate_test_exit(
-            "newgrf_class::tests::assign_of_a_class_index_past_the_classes_ends_at_its_assertion",
+    fn assign_of_a_class_index_past_the_classes_fails_both_assertions() {
+        if crate::services_assert::isolate_test_ends(
+            "newgrf_class::tests::assign_of_a_class_index_past_the_classes_fails_both_assertions",
+            SECOND_FAILURE_CODE,
+            SECOND_FAILURE_MARKER,
         ) {
             return;
         }
+        crate::services_assert::bind_test_check(two_failures);
         // SAFETY: The table lives for the process; `AirportClass::InsertDefaults` reads none
         // of its leaves.
-        unsafe { AirportClass::reset(airport_services()) };
+        unsafe { AirportClass::reset(services(ptr::null())) };
         let mut spec = StandIn {
             class_index: u16::try_from(AirportClass::get_class_count()).unwrap(),
+            views: 0,
         };
-        // SAFETY: `spec` is live; the assertion ends the process before anything stores.
-        unsafe { AirportClass::assign((&raw mut spec).cast()) };
-        unreachable!("Assign returned past its failed assertion");
+        // SAFETY: `spec` is live; the second failed assertion ends the process.
+        unsafe { AirportClass::assign((&raw mut spec).cast::<AirportSpec>()) };
+        unreachable!("Assign returned past its failed assertions");
     }
 
     /// `NewGRFClass::Assign` of a spec with a valid class index inserts it into that class:
@@ -862,12 +875,18 @@ mod tests {
         }
         // SAFETY: The table lives for the process; `AirportClass::InsertDefaults` reads none
         // of its leaves.
-        unsafe { AirportClass::reset(airport_services()) };
+        unsafe { AirportClass::reset(services(ptr::null())) };
         // AirportClass::InsertDefaults allocates four classes and inserts no spec.
         assert_eq!(AirportClass::get_class_count(), 4);
         assert_eq!(AirportClass::get_ui_class_count(), 0);
-        let mut first = StandIn { class_index: 1 };
-        let mut second = StandIn { class_index: 1 };
+        let mut first = StandIn {
+            class_index: 1,
+            views: 0,
+        };
+        let mut second = StandIn {
+            class_index: 1,
+            views: 0,
+        };
         // SAFETY: Both specs are live through the test.
         unsafe {
             AirportClass::assign((&raw mut first).cast());
@@ -881,6 +900,84 @@ mod tests {
         assert_eq!(class.get_spec(1), (&raw const second).cast());
         assert_eq!(class.get_spec(2), ptr::null());
         assert_eq!(AirportClass::get_ui_class_count(), 1);
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
+    }
+
+    /// The object eligibility of a stand-in: its views, every climate, and no flags.
+    #[allow(unsafe_code)]
+    unsafe extern "C" fn eligibility(
+        spec: *const crate::objects::Spec,
+    ) -> crate::objects::Eligibility {
+        crate::objects::Eligibility {
+            flags: 0,
+            climate: u8::MAX,
+            // SAFETY: Every spec the test passes is a live `StandIn`.
+            views: unsafe { (*spec.cast::<StandIn>()).views },
+        }
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn temperate() -> u8 {
+        0
+    }
+
+    /// `ObjectClass::IsUIAvailable` is `GetSpec(index)->IsEverAvailable()`: `Assign` inserts
+    /// both specs into their class, and counts for the user only the one that will be
+    /// available, here the one with views in a game that is not being generated.
+    #[test]
+    #[allow(unsafe_code)] // Live stand-in specs that only the class and eligibility leaves receive.
+    fn object_assign_counts_only_an_ever_available_spec_for_the_ui() {
+        if crate::services_assert::isolate_test_check(
+            "newgrf_class::tests::object_assign_counts_only_an_ever_available_spec_for_the_ui",
+            record_assertion,
+        ) {
+            return;
+        }
+        let mut shared = crate::test_tables::SHARED;
+        shared.clear_square_services.generating_world = no;
+        let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
+        let mut town = crate::test_tables::TOWN_LEAVES;
+        town.shared = shared;
+        town.climate = temperate;
+        town.environment.editor = no;
+        let resolver = crate::objects::ResolverServices {
+            shared: ptr::null(),
+            views: crate::test_tables::unreachable1,
+            eligibility,
+            introduction: crate::test_tables::unreachable1,
+            lifetime: crate::test_tables::unreachable1,
+            town_scope: crate::test_tables::unreachable3,
+            base_scope: crate::test_tables::unreachable3,
+            evaluate: crate::test_tables::unreachable6,
+        };
+        let mut objects = crate::test_tables::OBJECTS;
+        objects.town = Box::leak(Box::new(town));
+        objects.resolver = Box::leak(Box::new(resolver));
+        let objects: &'static crate::objects::ObjectServices = Box::leak(Box::new(objects));
+        // SAFETY: The table lives for the process; `ObjectClass::InsertDefaults` reads none
+        // of its leaves.
+        unsafe { ObjectClass::reset(services(objects)) };
+        let mut shown = StandIn {
+            class_index: 1,
+            views: 1,
+        };
+        let mut hidden = StandIn {
+            class_index: 1,
+            views: 0,
+        };
+        // SAFETY: Both specs are live through the test.
+        unsafe {
+            ObjectClass::assign((&raw mut hidden).cast());
+            ObjectClass::assign((&raw mut shown).cast());
+        }
+        assert_eq!(*SET_INDEX.lock().unwrap(), [0, 1]);
+        // SAFETY: `Get` returns a class of the registry.
+        let class = unsafe { &*ObjectClass::get(ObjectClassID(1)) };
+        assert_eq!(class.get_spec_count(), 2);
+        assert_eq!(class.get_ui_spec_count(), 1);
+        assert_eq!(class.get_spec(1), (&raw const shown).cast());
+        assert_eq!(ObjectClass::get_ui_class_count(), 1);
         assert_eq!(FAILED_ASSERTIONS.load(Ordering::Relaxed), 0);
     }
 }
