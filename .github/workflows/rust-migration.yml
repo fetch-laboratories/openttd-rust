@@ -62,27 +62,9 @@ jobs:
     if: inputs.checkout-ref == ''
     uses: ./.github/workflows/ci-policy.yml
 
-  # With CI_QUEUE_SAVES_CACHES the queue's run saves the compiler caches under the group
-  # commit it tests, which is the commit the queue then pushes. A covered push that finds
-  # them saved has nothing to refresh; one that does not refreshes them as before.
-  saved:
-    needs: policy
-    if: needs.policy.outputs.covered == 'true' && vars.CI_QUEUE_SAVES_CACHES == 'true'
-    runs-on: ${{ vars.CI_LINUX_HEAVY || 'ubuntu-24.04' }}
-    timeout-minutes: 5
-    outputs:
-      hit: ${{ steps.marker.outputs.cache-hit }}
-    steps:
-    - id: marker
-      uses: actions/cache/restore@v4
-      with:
-        path: .local/compiler-cache-saved
-        key: compiler-cache-saved-${{ github.sha }}
-        lookup-only: true
-
   build:
-    needs: [policy, saved]
-    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true') && needs.saved.outputs.hit != 'true' }}
+    needs: policy
+    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true') }}
     runs-on: ${{ vars.CI_LINUX_HEAVY || 'ubuntu-24.04' }}
     timeout-minutes: 30
     outputs:
@@ -98,13 +80,18 @@ jobs:
         package-cache: ${{ startsWith(vars.CI_LINUX_HEAVY, 'blacksmith-') }}
     - id: cache
       uses: ./.github/actions/native-cache
+    # With CI_QUEUE_SAVES_CACHES the queue's run saves the compiler caches under the group
+    # commit it tests, which is the commit the queue then pushes. A covered push whose
+    # restore finds that entry itself, for these compilers, has nothing to refresh; one
+    # that does not, a failed or evicted save included, refreshes as before.
     - name: Build native Rust generators without the game
+      if: needs.policy.outputs.covered != 'true' || steps.cache.outputs.hit != 'true'
       run: python3 tools/migration.py tools --jobs "$(nproc)" --ccache
     - name: Check Rust and compare original and migration builds
       if: needs.policy.outputs.covered != 'true'
       run: python3 tools/migration.py verify --jobs "$(nproc)" --ccache
     - name: Refresh compiler caches for an already validated merged tree
-      if: needs.policy.outputs.covered == 'true'
+      if: needs.policy.outputs.covered == 'true' && steps.cache.outputs.hit != 'true'
       run: python3 tools/migration.py build --jobs "$(nproc)" --ccache
     - name: Freeze runtime and scenario adapters, then partition the complete inventory
       id: pack
@@ -143,7 +130,7 @@ jobs:
         include-hidden-files: true
     # The queue's run saves what it compiled, so the push of its commit need not compile it again.
     - name: Save bounded protected-branch compiler caches
-      if: success() && (inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && github.event_name == 'push' || github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true')
+      if: success() && (inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && github.event_name == 'push' && steps.cache.outputs.hit != 'true' || github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true')
       uses: ./.github/actions/native-cache
       with:
         save: 'true'

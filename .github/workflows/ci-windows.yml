@@ -241,22 +241,6 @@ jobs:
         path: ${{ runner.temp }}/ccache
         key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
-    # The covered push looks this up before it starts this job: the cache key itself
-    # needs the checkout and the runner image.
-    - name: Mark the compiler cache saved
-      if: github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true'
-      shell: bash
-      run: |
-        mkdir -p .local/compiler-cache-saved
-        echo "${{ inputs.checkout-ref || github.sha }}" > .local/compiler-cache-saved/commit
-
-    - name: Save the compiler cache marker
-      if: github.event_name == 'merge_group' && vars.CI_QUEUE_SAVES_CACHES == 'true'
-      uses: actions/cache/save@v4
-      with:
-        path: .local/compiler-cache-saved
-        key: ccache-msvc-saved-${{ inputs.arch }}-${{ inputs.checkout-ref || github.sha }}
-
     - name: Test
       if: ${{ !inputs.cache-only }}
       shell: bash

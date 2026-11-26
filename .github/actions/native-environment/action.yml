@@ -10,14 +10,23 @@ inputs:
 runs:
   using: composite
   steps:
-  # apt checks each archive against its signed index before it uses one, so a stale or
-  # foreign file is fetched again, never installed.
+  # apt uses an archive already in its directory when its name and size are the ones
+  # it expects, without reading its hash. tools/apt_archives.py, run by apt after
+  # each successful update, deletes every kept archive whose SHA-256 the index
+  # does not list, so apt downloads it again.
   - if: inputs.package-cache == 'true'
     shell: bash
+    env:
+      ARCHIVES: /var/tmp/ci-apt-archives
+      APT_CONF: /etc/apt/apt.conf.d/90ci-archives
     run: |
-      sudo mkdir -p /var/tmp/ci-apt-archives/partial
-      sudo chmod -R a+rwX /var/tmp/ci-apt-archives
-      echo 'Dir::Cache::archives "/var/tmp/ci-apt-archives";' | sudo tee /etc/apt/apt.conf.d/90ci-archives > /dev/null
+      sudo mkdir -p "$ARCHIVES/partial"
+      sudo chmod -R a+rwX "$ARCHIVES"
+      # If the check itself cannot run, no kept archive is trusted.
+      printf '%s\n' \
+        "Dir::Cache::archives \"$ARCHIVES\";" \
+        "APT::Update::Post-Invoke-Success { \"python3 '$GITHUB_WORKSPACE/tools/apt_archives.py' verify '$ARCHIVES' || rm -f '$ARCHIVES'/*.deb\"; };" |
+        sudo tee "$APT_CONF" > /dev/null
   - if: inputs.package-cache == 'true'
     id: packages
     uses: actions/cache/restore@v4
@@ -27,27 +36,28 @@ runs:
       restore-keys: apt-archives-v1-${{ runner.os }}-${{ runner.arch }}-
   - if: inputs.package-cache == 'true'
     shell: bash
-    run: ls /var/tmp/ci-apt-archives | grep '\.deb$' | sort > "$RUNNER_TEMP/apt-archives-restored.txt" || true
+    env:
+      ARCHIVES: /var/tmp/ci-apt-archives
+    run: python3 "$GITHUB_WORKSPACE/tools/apt_archives.py" record "$ARCHIVES" "$RUNNER_TEMP/apt-archives-restored.json"
   - uses: ./.github/actions/apt-install
     with:
       packages: >-
         ccache ninja-build libsdl2-dev liblzma-dev libpng-dev
         libcurl4-openssl-dev libfreetype-dev libfontconfig-dev libharfbuzz-dev
         libicu-dev liblzo2-dev openttd-opengfx
-  # Save only when this job downloaded an archive the restored set lacked, after
-  # dropping the ones the indexes no longer offer, so the entry does not grow. The
-  # shards of one run share a key: the first saves, and the others' saves are refused
-  # with a warning, since they hold the same archives.
+  # Save only when this job holds an archive the restored set lacked, after dropping
+  # the ones the indexes no longer offer, so the entry does not grow. The shards of
+  # one run share a key: the first saves, and the others' saves are refused with a
+  # warning, since they hold the same archives.
   - if: inputs.package-cache == 'true'
     id: packages-new
     shell: bash
+    env:
+      ARCHIVES: /var/tmp/ci-apt-archives
     run: |
       sudo apt-get autoclean > /dev/null || true
-      sudo chmod -R a+rX /var/tmp/ci-apt-archives
-      ls /var/tmp/ci-apt-archives | grep '\.deb$' | sort > "$RUNNER_TEMP/apt-archives-final.txt" || true
-      added=$(comm -13 "$RUNNER_TEMP/apt-archives-restored.txt" "$RUNNER_TEMP/apt-archives-final.txt" | wc -l)
-      echo "apt downloaded $added archive(s) the cache lacked; $(wc -l < "$RUNNER_TEMP/apt-archives-final.txt") kept"
-      echo "added=$added" >> "$GITHUB_OUTPUT"
+      sudo chmod -R a+rX "$ARCHIVES"
+      python3 "$GITHUB_WORKSPACE/tools/apt_archives.py" added "$ARCHIVES" "$RUNNER_TEMP/apt-archives-restored.json" | tee -a "$GITHUB_OUTPUT"
   - if: inputs.package-cache == 'true' && steps.packages-new.outputs.added != '0'
     uses: actions/cache/save@v4
     with:

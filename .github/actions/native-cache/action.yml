@@ -11,6 +11,11 @@ outputs:
   prefix:
     description: Compatibility prefix
     value: ${{ steps.identity.outputs.prefix }}
+  hit:
+    description: >-
+      'true' when the restored entry is this commit's own: the caches a run of this
+      commit saved, for these compilers
+    value: ${{ steps.restore.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -32,6 +37,7 @@ runs:
           output.write(f"prefix={identity['prefix']}\n")
       PY
   - if: inputs.save != 'true'
+    id: restore
     uses: actions/cache/restore@v4
     with:
       path: |
@@ -52,16 +58,3 @@ runs:
         .local/compiler-cache/reference
         .local/compiler-cache/candidate
       key: ${{ inputs.prefix }}-${{ github.sha }}
-  # A covered push looks this up before it installs anything: the caches for its
-  # commit are saved, so it has nothing to refresh. The prefix needs the installed
-  # compilers; this key needs only the commit.
-  - if: inputs.save == 'true'
-    shell: bash
-    run: |
-      mkdir -p .local/compiler-cache-saved
-      echo "$GITHUB_SHA" > .local/compiler-cache-saved/commit
-  - if: inputs.save == 'true'
-    uses: actions/cache/save@v4
-    with:
-      path: .local/compiler-cache-saved
-      key: compiler-cache-saved-${{ github.sha }}

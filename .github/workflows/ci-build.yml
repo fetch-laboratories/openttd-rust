@@ -178,21 +178,31 @@ jobs:
       extra-cmake-parameters: ${{ matrix.extra-cmake-parameters }}
 
   # With CI_QUEUE_SAVES_CACHES the queue's Windows job saves its compiler cache under the
-  # group commit, which is the commit the queue then pushes. A covered push that finds it
-  # saved starts no Windows build; one that does not refreshes the cache as before.
+  # group commit, which is the commit the queue then pushes. A covered push that finds
+  # that entry itself, under the key ci-windows.yml would save for this runner image,
+  # starts no Windows build; one that does not, a failed or evicted save included,
+  # refreshes the cache as before.
   windows-saved:
     needs: policy
     if: needs.policy.outputs.covered == 'true' && vars.CI_QUEUE_SAVES_CACHES == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration'
     runs-on: ${{ vars.CI_WINDOWS_HEAVY || 'windows-2022' }}
     timeout-minutes: 5
     outputs:
-      hit: ${{ steps.marker.outputs.cache-hit }}
+      hit: ${{ steps.compiler-cache.outputs.cache-hit }}
     steps:
-    - id: marker
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+        sparse-checkout: migration/ccache.conf
+        sparse-checkout-cone-mode: false
+    - id: runner-image
+      shell: bash
+      run: echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+    - id: compiler-cache
       uses: actions/cache/restore@v4
       with:
-        path: .local/compiler-cache-saved
-        key: ccache-msvc-saved-x64-${{ github.sha }}
+        path: ${{ runner.temp }}/ccache
+        key: ccache-msvc-v1-x64-${{ steps.runner-image.outputs.version }}-${{ hashFiles('migration/ccache.conf') }}-${{ github.sha }}
         lookup-only: true
 
   windows:
