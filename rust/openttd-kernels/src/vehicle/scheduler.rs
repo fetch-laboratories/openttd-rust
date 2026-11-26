@@ -1651,9 +1651,15 @@ mod tests {
             STEPS.with(|s| s.borrow_mut().clear());
             SPRITE.set(ordered_visit);
             framerate::take();
+            FAILURES.store(0, Ordering::Relaxed);
             framerate::observe(Some(record_framerate_and_count));
             run_ticks_with(&vehicles, day_scheduler(VEHICLES).road, &raw const cargo);
             framerate::observe(None);
+            assert_eq!(
+                FAILURES.load(Ordering::Relaxed),
+                0,
+                "no failed native assertion"
+            );
             let steps = STEPS.with(|s| std::mem::take(&mut *s.borrow_mut()));
             assert_eq!(
                 steps[7..],
