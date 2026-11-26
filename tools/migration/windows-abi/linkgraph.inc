@@ -46,11 +46,11 @@ static void LinkGraphJob()
 	openttd_rust_schedule_run(&services, job);
 	CHECK(job->completed.load(std::memory_order_acquire) && job->nodes.size() == 2);
 	for (const auto &node : job->nodes) {
-		auto origin = openttd_rust_flow_map_at(node.flows, 12, 1);
+		auto origin = openttd_rust_flow_map_find(node.flows, 12);
 		CHECK(origin.found != 0);
-		auto share = openttd_rust_flow_share(origin.flow, 0, 0);
+		auto share = openttd_rust_flow_shares_begin(origin.flow);
 		CHECK(share.found != 0 && share.station == 24 && share.cumulative == 10);
-		CHECK(openttd_rust_flow_read(origin.flow, 1, 0) == 10);
+		CHECK(openttd_rust_flow_get_unrestricted(origin.flow) == 10);
 	}
 	CHECK(job->edge_flows[0] == 10);
 	openttd_rust_linkgraph_job_delete(job);

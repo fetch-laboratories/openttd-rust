@@ -109,12 +109,6 @@
 #include "safeguards.h"
 
 /**
- * Static instance of FlowStat::SharesMap.
- * Note: This instance is created on task start.
- *       Lazy creation on first usage results in a data race between the CDist threads.
- */
-
-/**
  * Check whether the given tile is a hangar.
  * @param t the tile to of whether it is a hangar.
  * @pre IsTileType(t, MP_STATION)
@@ -326,14 +320,6 @@ static const OpenTTDStationServices _rust_station_services = {
 static const OpenTTDStationLinks _rust_station_links = {
 	.graphs = &GetRustLiveGraphServices(),
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
-	.delete_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
-		if (ge.HasData()) ge.GetData().flows.DeleteFlows(StationID(destination));
-	},
-	.restrict_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
-		if (ge.HasData()) ge.GetData().flows.RestrictFlows(StationID(destination));
-	},
 	.order_list = [](uint16_t id) noexcept -> OpenTTDOrderList * {
 		return OrderList::GetIfValid(OrderListID(id));
 	},
@@ -1282,21 +1268,6 @@ static bool ClickTile_Station(TileIndex tile)
 		ShowStationViewWindow(bst->index);
 	}
 	return true;
-}
-
-
-
-/**
- * Reroute cargo of type c at station st or in any vehicles unloading there.
- * Make sure the cargo's new next hop is neither "avoid" nor "avoid2".
- * @param st Station to be rerouted at.
- * @param cargo Type of cargo.
- * @param avoid Original next hop of cargo, avoid this.
- * @param avoid2 Another station to be avoided when rerouting.
- */
-void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid2)
-{
-	openttd_rust_station_reroute(st, cargo, avoid.base(), avoid2.base(), &_rust_station_services, &_rust_station_links);
 }
 
 

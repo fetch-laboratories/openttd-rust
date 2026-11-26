@@ -28,57 +28,6 @@
     "rust/openttd-kernels/src/byte_strings.rs | fn case_operation::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_flow.rs | fn openttd_rust_flow_change | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | fn openttd_rust_flow_map_at | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | fn openttd_rust_flow_map_change | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | fn openttd_rust_flow_map_read | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | fn openttd_rust_flow_read | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | fn openttd_rust_flow_share | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn append_share | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn change_share | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn get_via | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn get_via::mod e | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn invalidate | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn new | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn release_share | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn restrict_share | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn scale_to_monthly | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_flow.rs | impl FlowMap::fn add | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/cargo_payment.rs | fn deliver_goods | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       10
     ],
@@ -185,9 +134,6 @@
       1
     ],
     "rust/openttd-kernels/src/math.rs | fn soft_clamp | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/newgrf.rs | fn get_active_cargo_label | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/newgrf_act2.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
@@ -303,9 +249,6 @@
       1,
       1,
       1,
-      1
-    ],
-    "rust/openttd-kernels/src/rail.rs | fn engine_types | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
     ],
     "rust/openttd-kernels/src/rail_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [

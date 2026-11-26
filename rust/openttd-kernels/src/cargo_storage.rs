@@ -22,6 +22,7 @@
 )]
 use crate::cargopacket::{CargoPacket, MoveToAction};
 use crate::services_assert::check;
+use crate::station_type::StationID;
 use crate::tile_type::TileIndex;
 use crate::vehicle::VehicleRef;
 use std::collections::{BTreeMap, BTreeSet};
@@ -87,13 +88,13 @@ pub struct Services {
     pub(crate) destroy: extern "C" fn(*mut c_void),
     pub(crate) pay: extern "C" fn(*mut c_void, u8, u8, *const c_void, u32, u32) -> i64,
     pub(crate) origin: extern "C" fn(*mut c_void, u16, u32, u8),
-    pub(crate) flow_map: extern "C" fn(*const c_void) -> *mut crate::cargo_flow::FlowMap,
+    pub(crate) flow_map: extern "C" fn(*const c_void) -> *mut crate::cargo_flow::FlowStatMap,
     pub(crate) shared: *const crate::services::Services,
     pub(crate) packet_next: extern "C" fn(*mut c_void) -> *mut c_void,
 }
 impl Services {
-    fn random_draw(&self) -> u32 {
-        unsafe { &*self.shared }.random()
+    fn random_range(&self, limit: u32) -> u32 {
+        unsafe { &*self.shared }.random_range(limit)
     }
 }
 #[derive(Clone, Copy)]
@@ -474,42 +475,29 @@ unsafe fn forced_flow(
     station: u16,
     next: NextHops,
 ) -> u16 {
-    use crate::cargo_flow::{
-        flow_via, openttd_rust_flow_change, openttd_rust_flow_clone, openttd_rust_flow_destroy,
-        openttd_rust_flow_read,
-    };
     let map = (s.flow_map)(ge);
     let original = if map.is_null() {
-        std::ptr::null_mut()
+        None
     } else {
-        unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, u32::from(origin), 1).flow }
+        unsafe { &*map }.find(StationID(origin))
     };
-    if original.is_null() {
+    let Some(original) = original else {
         return INVALID;
-    }
-    let flow = unsafe { openttd_rust_flow_clone(original) };
-    unsafe {
-        openttd_rust_flow_change(flow, 0, station, i32::MIN as u32);
-    }
+    };
+    let mut flow = original.clone();
+    flow.change_share(StationID(station), i32::MIN);
     for index in (0..next.length).rev() {
         let station = unsafe { next.at(index) };
-        if unsafe { openttd_rust_flow_read(flow, 2, 0) } == 0 {
+        if flow.get_shares().is_empty() {
             break;
         }
-        unsafe {
-            openttd_rust_flow_change(flow, 0, station, i32::MIN as u32);
-        }
+        flow.change_share(StationID(station), i32::MIN);
     }
-    let mut restricted = 0;
-    let via = if unsafe { openttd_rust_flow_read(flow, 2, 0) } == 0 {
+    if flow.get_shares().is_empty() {
         INVALID
     } else {
-        unsafe { flow_via(flow, 0, 0, 0, &raw mut restricted, || s.random_draw()) }
-    };
-    unsafe {
-        openttd_rust_flow_destroy(flow);
+        flow.get_via(|limit| s.random_range(limit)).0
     }
-    via
 }
 /// Chooses the action to perform with this packet at the current and next stations.
 fn choose(p: Packet, via: u16, station: u16, accepted: bool, next: NextHops) -> MoveToAction {
@@ -966,7 +954,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
         }
         let p = (s.packet)(current.shell);
         let mut via = INVALID;
-        let mut restricted = 0;
+        let mut restricted = false;
         let mut observed = unsafe { read(p) };
         let mut action;
         if unload == 4 {
@@ -981,45 +969,29 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
             let map = (s.flow_map)(ge);
             // Rewrite an invalid source station to some random other one to avoid
             // keeping the cargo in the vehicle forever.
-            if observed.first_station == INVALID && !map.is_null() {
-                let first = unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, 0, 0) };
-                if first.found != 0 {
-                    observed.first_station = first.origin;
-                    unsafe {
-                        (*p).first_station = observed.first_station;
-                    }
+            if observed.first_station == INVALID
+                && !map.is_null()
+                && let Some(first) = unsafe { &*map }.begin()
+            {
+                observed.first_station = first.0;
+                unsafe {
+                    (*p).first_station = observed.first_station;
                 }
             }
             let flow = if map.is_null() {
-                std::ptr::null_mut()
+                None
             } else {
-                unsafe {
-                    crate::cargo_flow::openttd_rust_flow_map_at(
-                        map,
-                        u32::from(observed.first_station),
-                        1,
-                    )
-                    .flow
-                }
+                unsafe { &*map }.find(StationID(observed.first_station))
             };
-            via = if flow.is_null() {
-                INVALID
-            } else {
-                unsafe {
-                    crate::cargo_flow::flow_via(flow, 1, 0, 0, &raw mut restricted, || {
-                        s.random_draw()
-                    })
-                }
-            };
+            via = flow.map_or(INVALID, |flow| {
+                flow.get_via_with_restricted(&mut restricted, |limit| s.random_range(limit))
+                    .0
+            });
             action = choose(observed, via, station, accepted != 0, next_slice);
-            if restricted != 0 && action == MoveToAction::MTA_TRANSFER {
+            if restricted && action == MoveToAction::MTA_TRANSFER {
                 // If the flow is restricted we can't transfer to it. Choose an
                 // unrestricted one instead.
-                via = unsafe {
-                    crate::cargo_flow::flow_via(flow, 0, 0, 0, &raw mut restricted, || {
-                        s.random_draw()
-                    })
-                };
+                via = flow.unwrap().get_via(|limit| s.random_range(limit)).0;
                 action = choose(observed, via, station, accepted != 0, next_slice);
             }
         }
@@ -1172,7 +1144,7 @@ unsafe fn action(
                         p.first_station,
                         avoid,
                         avoid2,
-                        || s.random_draw(),
+                        |limit| s.random_range(limit),
                     )
                 };
                 // Original mutates cp, even when cp_new is a partial split.
@@ -1220,7 +1192,7 @@ unsafe fn action(
                     p.first_station,
                     avoid,
                     avoid2,
-                    || s.random_draw(),
+                    |limit| s.random_range(limit),
                 )
             };
             if src != dst {
@@ -1839,7 +1811,7 @@ pub(crate) unsafe fn reroute_station(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
     thread_local! {
@@ -1882,19 +1854,18 @@ mod tests {
         7
     }
     extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-    extern "C" fn flow_map(context: *const c_void) -> *mut crate::cargo_flow::FlowMap {
+    extern "C" fn flow_map(context: *const c_void) -> *mut crate::cargo_flow::FlowStatMap {
         context.cast_mut().cast()
     }
-    fn flow_fixture(via: u16) -> *mut crate::cargo_flow::FlowMap {
-        let map = crate::cargo_flow::openttd_rust_flow_map_new();
-        let flow = crate::cargo_flow::openttd_rust_flow_new(via, 1, 0);
-        unsafe {
-            for origin in [10, 11] {
-                crate::cargo_flow::openttd_rust_flow_map_insert(map, origin, flow);
-            }
-            crate::cargo_flow::openttd_rust_flow_destroy(flow);
+    fn flow_fixture(via: u16) -> *mut crate::cargo_flow::FlowStatMap {
+        let mut map = crate::cargo_flow::FlowStatMap::default();
+        for origin in [10, 11] {
+            map.emplace(
+                StationID(origin),
+                crate::cargo_flow::FlowStat::new(StationID(via), 1, false),
+            );
         }
-        map
+        Box::into_raw(Box::new(map))
     }
     extern "C" fn draw(_: *mut c_void) -> u32 {
         0
@@ -1913,7 +1884,7 @@ mod tests {
             pool.get(index).copied().unwrap_or(std::ptr::null_mut())
         })
     }
-    fn services() -> Services {
+    pub(crate) fn services() -> Services {
         crate::map_func::fixture::set(
             crate::map_func::TileTypeAllocation {
                 base: std::ptr::null(),
@@ -1952,20 +1923,33 @@ mod tests {
         create(&raw const fields)
     }
     /// A packet waiting at a station: not yet in a vehicle (`UpdateLoadingTile`'s precondition).
-    fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
+    pub(crate) fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
         let shell = cargo(count, first, feeder);
         // SAFETY: the fixture shell was just created and owns its live packet.
         unsafe { (*owner(shell)).in_vehicle = 0 };
         shell
     }
-    fn list(vehicle: bool) -> *mut List {
+    pub(crate) fn list(vehicle: bool) -> *mut List {
         openttd_rust_cargo_list_new(u8::from(vehicle))
     }
-    unsafe fn clean(list: *mut List) {
+    pub(crate) unsafe fn clean(list: *mut List) {
         let service = services();
         unsafe {
             openttd_rust_cargo_list_destroy(list, &raw const service);
         }
+    }
+
+    /// `append` with this module's table, for another module's fixture.
+    pub(crate) unsafe fn append_to(list: *mut List, shell: *mut c_void, key: u16) {
+        unsafe { append(list, services(), shell, key) }
+    }
+    /// Each packet's count and key, in list order.
+    pub(crate) unsafe fn counts_and_keys(list: *const List) -> Vec<(u16, u16)> {
+        let service = services();
+        unsafe { nodes(list) }
+            .iter()
+            .map(|node| (unsafe { packet(service, node.shell) }.count, node.key))
+            .collect()
     }
 
     extern "C" fn deny_allocation() -> u8 {
@@ -2222,13 +2206,15 @@ mod tests {
         let station = list(false);
         PAYMENT_LIST.with(|slot| slot.set(vehicle));
         PAYMENTS.with(|slot| slot.borrow_mut().clear());
-        let flows = crate::cargo_flow::openttd_rust_flow_map_new();
+        let mut map = crate::cargo_flow::FlowStatMap::default();
+        for (origin, via) in [(10, 100), (11, 200), (12, 300)] {
+            map.emplace(
+                StationID(origin),
+                crate::cargo_flow::FlowStat::new(StationID(via), 1, false),
+            );
+        }
+        let flows = Box::into_raw(Box::new(map));
         unsafe {
-            for (origin, via) in [(10, 100), (11, 200), (12, 300)] {
-                let flow = crate::cargo_flow::openttd_rust_flow_new(via, 1, 0);
-                crate::cargo_flow::openttd_rust_flow_map_insert(flows, origin, flow);
-                crate::cargo_flow::openttd_rust_flow_destroy(flow);
-            }
             for first in [10, 11, 12] {
                 append(
                     vehicle,
@@ -2284,7 +2270,7 @@ mod tests {
             PAYMENTS.with(|payments| assert_eq!(*payments.borrow(), [(0, 8, 24), (1, 4, 12)]));
             clean(vehicle);
             clean(station);
-            crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+            drop(Box::from_raw(flows));
         }
     }
     #[test]
@@ -2322,7 +2308,7 @@ mod tests {
                 assert_eq!(selected, 10);
                 assert_eq!(fields(station).count, 16);
                 clean(station);
-                crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+                drop(Box::from_raw(flows));
             }
             let vehicle = list(true);
             let original = cargo(8, 10, 0);
@@ -2358,7 +2344,7 @@ mod tests {
             assert_eq!(packet(service, nodes(vehicle)[0].shell).next_hop, 70);
             assert_eq!(fields(vehicle).action_counts, [8, 0, 0, 0]);
             clean(vehicle);
-            crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+            drop(Box::from_raw(flows));
         }
     }
     #[test]

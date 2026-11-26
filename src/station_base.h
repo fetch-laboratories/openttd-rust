@@ -131,22 +131,6 @@ struct GoodsEntry {
 	}
 
 	/**
-	 * Get the best next hop for a cargo packet from station source, optionally
-	 * excluding one or two stations.
-	 * @param source Source of the packet.
-	 * @param excluded If this station would be chosen choose the second best one instead.
-	 * @param excluded2 Second station to be excluded, if != StationID::Invalid().
-	 * @return The chosen next hop or StationID::Invalid() if none was found.
-	 */
-	inline StationID GetVia(StationID source, StationID excluded, StationID excluded2 = StationID::Invalid()) const
-	{
-		if (!this->HasData()) return StationID::Invalid();
-
-		FlowStatMap::const_iterator flow_it(this->GetData().flows.find(source));
-		return flow_it != this->GetData().flows.end() ? flow_it->second.GetVia(excluded, excluded2) : StationID::Invalid();
-	}
-
-	/**
 	 * Test if this goods entry has optional cargo packet/flow data.
 	 * @returns true iff optional data is present.
 	 */
