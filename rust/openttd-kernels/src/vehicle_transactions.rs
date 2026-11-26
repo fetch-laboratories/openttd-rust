@@ -693,14 +693,14 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         (s.value)(front).saturating_neg(),
     );
     if flags.test(DoCommandFlag::Execute) {
+        // SAFETY: `front` is the live sold vehicle's shell, resolved once for the backup and
+        // the deletion.
+        let record = unsafe { vehicle_ref(front, s.vehicles) };
         if unsafe { (b.groups.primary)(front) } && backup_order {
-            // SAFETY: `front` is the live sold vehicle's shell.
-            let record =
-                unsafe { crate::vehicle::VehicleRef::from_shell(front.cast(), s.orders.base) };
             crate::orders::order_backup_backup(record, client_id.0, s.orders);
         }
         // No owner access or retained reference crosses the deleting callback.
-        (s.vehicles.destroy)(unsafe { vehicle_ref(front, s.vehicles) });
+        (s.vehicles.destroy)(record);
     }
 }
 /// `CmdStartStopVehicle`'s arguments.

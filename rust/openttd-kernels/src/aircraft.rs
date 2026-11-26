@@ -3459,15 +3459,8 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
     // SAFETY: The caller supplies the live table and a flags byte as the callee requires.
     unsafe { get_aircraft_flight_level(&*leaves, id.base(), flags, takeoff) }
 }
-/// `HandleMissingAircraftOrders`.
-/// # Safety
-/// See the shared export contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_missing_orders(leaves: *const Leaves, id: Vehicle) {
-    // SAFETY: As this function's contract.
-    handle_missing_aircraft_orders(unsafe { &*leaves }, id);
-}
-/// `HandleMissingAircraftOrders`, for the Rust callers.
+/// `HandleMissingAircraftOrders`: handle the missing orders of an aircraft, for the Rust
+/// callers.
 pub(crate) fn handle_missing_aircraft_orders(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     let leaves: *const Leaves = leaves;

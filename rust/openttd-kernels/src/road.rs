@@ -2979,13 +2979,13 @@ pub unsafe extern "C" fn openttd_rust_road_update_cache(
 ) {
     entry!(leaves).road_veh_update_cache(Part::new(v, state), same_length);
 }
-/// `RoadVehicle::OnNewCalendarDay`, for the scheduler's dispatch over a live road vehicle
-/// record.
 /// `RoadVehicle::FindClosestDepot` on a live road vehicle record, for the Rust dispatch of
 /// the virtual.
 pub(crate) fn find_closest_depot(v: VehicleRef, leaves: &Leaves) -> ClosestDepot {
     entry!(leaves).find_closest_depot(Part::of(v))
 }
+/// `RoadVehicle::OnNewCalendarDay`, for the scheduler's dispatch over a live road vehicle
+/// record.
 pub(crate) fn on_new_calendar_day(v: VehicleRef, leaves: &Leaves) {
     entry!(leaves).on_new_calendar_day(Part::of(v));
 }

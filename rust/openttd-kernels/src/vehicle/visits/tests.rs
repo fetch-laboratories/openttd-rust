@@ -157,8 +157,6 @@ extern "C" fn money(_: *const crate::services::CommandCost) -> i64 {
     MONEY.get()
 }
 
-// The orders leaves map a fixture shell, which is its record, to the record's owners.
-
 /// The visit table over the recording leaves, with `edit` applied to the shared, station
 /// and loading tables first.
 fn visits(

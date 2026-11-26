@@ -906,8 +906,11 @@ impl<'g, 'a> VehicleOrderSaver<'g, 'a> {
             assert_with(|| order.is_some());
 
             // The list has orders and the index is below their count, so `order` names one
-            // of them, read in place until the list changes.
-            let view = order.unwrap();
+            // of them, read in place until the list changes; past a failed assertion it is
+            // read unchecked, as the original dereferences it.
+            let view = order.unwrap_or_else(|| {
+                crate::orders::get_order_unchecked(v.vehicle(), self.index, g.vs.orders()).view()
+            });
             let goto = match view.kind() {
                 /* Skip service in depot orders when the train doesn't need service. */
                 OrderType::OT_GOTO_DEPOT

@@ -622,38 +622,24 @@ impl Refresher {
             if self.is_full_loading
                 && !orders(v).is_null()
                 && StationID((s.links.graphs.station_id)(st)) == v.last_station_visited()
-                && crate::orders::order_list(v, o)
-                    .unwrap()
-                    .get_total_duration()
-                    > v.current_order_time()
+                && span.get_total_duration() > v.current_order_time()
             {
                 let effective_capacity =
                     cargo_quantity.wrapping_mul(u32::from((s.loading.load_unload_ticks)(v)));
-                if effective_capacity
-                    > crate::orders::order_list(v, o)
-                        .unwrap()
-                        .get_total_duration()
-                        .cast_unsigned()
-                {
+                if effective_capacity > span.get_total_duration().cast_unsigned() {
                     witness::hit(witness::VISITS_FULL_LOAD_INCREASE);
                     increase_stats(
                         s,
                         stats(
-                            effective_capacity
-                                / crate::orders::order_list(v, o)
-                                    .unwrap()
-                                    .get_total_duration()
-                                    .cast_unsigned(),
+                            effective_capacity / span.get_total_duration().cast_unsigned(),
                             0,
                             EdgeUpdateModes::INCREASE,
                         ),
                     );
-                } else if s.shared.random_range(
-                    crate::orders::order_list(v, o)
-                        .unwrap()
-                        .get_total_duration()
-                        .cast_unsigned(),
-                ) < effective_capacity
+                } else if s
+                    .shared
+                    .random_range(span.get_total_duration().cast_unsigned())
+                    < effective_capacity
                 {
                     witness::hit(witness::VISITS_FULL_LOAD_RANDOM);
                     increase_stats(s, stats(1, 0, EdgeUpdateModes::INCREASE));

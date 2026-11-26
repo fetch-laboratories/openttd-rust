@@ -1962,6 +1962,12 @@ fn deref_list(list: Option<OrderListRef>, v: VehicleRef, s: &Leaves) -> OrderLis
     list.unwrap_or_else(|| list_of(v, s))
 }
 
+/// `v->GetOrder(index)`, dereferenced unchecked where the original reads the order without a
+/// test: the stored order `index` of the vehicle's list.
+pub(crate) fn get_order_unchecked(v: VehicleRef, index: VehicleOrderID, s: &Leaves) -> OrderRef {
+    list_of(v, s).order(usize::from(index.0))
+}
+
 /// `v->orders`, dereferenced unchecked where the original reads it without a test.
 fn list_of(v: VehicleRef, s: &Leaves) -> OrderListRef {
     OrderListRef::of(crate::vehicle_base::order_list(v.0.as_ptr()), s)
