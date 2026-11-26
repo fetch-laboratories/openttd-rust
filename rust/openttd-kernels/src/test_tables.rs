@@ -1506,7 +1506,6 @@ pub(crate) const OBJECTIVES: crate::objectives::Services = crate::objectives::Se
     table_can_allocate: unreachable0,
     table_allocate: unreachable3,
     entry_allocate: unreachable7,
-    orders: ptr::null(),
     subsidy: ptr::null(),
     road_commands: ptr::null(),
     vehicle_valid: unreachable1,
