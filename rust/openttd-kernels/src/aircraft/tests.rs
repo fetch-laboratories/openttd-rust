@@ -316,9 +316,16 @@ fn aircraft_handle_dest_too_far_raises_the_original_event_and_advice() {
 fn tick_times_a_normal_aircraft_only() {
     use crate::framerate_type::{
         PerformanceElement,
-        testing::{Effect, take},
+        testing::{Effect, sampling, take},
     };
     use crate::vehicle_base::{VehState, VehStates};
+    thread_local! {
+        static AIRCRAFT: std::cell::Cell<Option<crate::vehicle::VehicleRef>> =
+            const { std::cell::Cell::new(None) };
+    }
+    fn current_order_time() -> i64 {
+        i64::from(AIRCRAFT.get().unwrap().current_order_time())
+    }
     let leaves = leaves(crate::test_tables::VEHICLE);
     // SAFETY: The leaked tables outlive the test.
     let w = unsafe { World::<false>::new(&raw const leaves) };
@@ -328,14 +335,19 @@ fn tick_times_a_normal_aircraft_only() {
     v.base().set_subtype(super::AIR_AIRCRAFT);
     v.base()
         .set_vehstatus(VehStates::from_element(VehState::Stopped));
-    take();
-    assert!(w.tick(v));
+    AIRCRAFT.set(Some(v.base()));
+    let samples = sampling(current_order_time, || assert!(w.tick(v)));
     assert_eq!(
         take(),
         [
             Effect::AccumulatorBegin(PerformanceElement::PFE_GL_AIRCRAFT),
             Effect::AccumulatorEnd(PerformanceElement::PFE_GL_AIRCRAFT),
         ]
+    );
+    assert_eq!(
+        samples,
+        [0, 1],
+        "the order time count lies inside the scope"
     );
     assert_eq!(v.base().tick_counter(), 1);
     let shadow = aircraft();

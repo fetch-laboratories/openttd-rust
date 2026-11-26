@@ -1089,9 +1089,20 @@ mod tests {
             },
             /// The post-`Tick` body's `v->cargo.AgeCargo()`.
             AgeCargo(usize),
+            /// The `tick_counter` of the vehicle at ID 1 when a timing scope ended.
+            EndedAtTickCounter(u8),
         }
         fn record_framerate(effect: Effect) {
             STEPS.with(|s| s.borrow_mut().push(Step::Framerate(effect)));
+        }
+        /// `record_framerate`, and at a scope's end the tick count of the vehicle at ID 1.
+        fn record_framerate_and_count(effect: Effect) {
+            record_framerate(effect);
+            if let Effect::AccumulatorEnd(_) = effect {
+                // SAFETY: The test's live record at ID 1.
+                let counter = unsafe { (*record(1)).tick_counter };
+                STEPS.with(|s| s.borrow_mut().push(Step::EndedAtTickCounter(counter)));
+            }
         }
         fn pool() -> *mut PoolCore {
             POOL.get()
@@ -1615,6 +1626,13 @@ mod tests {
         #[test]
         fn tick_dispatches_each_body_and_its_timing_scope_ends_before_the_post_tick_body() {
             use PerformanceElement as E;
+            // The walk reads the process-wide game mode, which other tests write.
+            if crate::services_assert::isolate_test_check(
+                "vehicle::scheduler::tests::pool::tick_dispatches_each_body_and_its_timing_scope_ends_before_the_post_tick_body",
+                record_failure,
+            ) {
+                return;
+            }
             let _pool = new_pool();
             new_vehicle(0);
             expire(0);
@@ -1632,7 +1650,7 @@ mod tests {
             STEPS.with(|s| s.borrow_mut().clear());
             SPRITE.set(ordered_visit);
             framerate::take();
-            framerate::observe(Some(record_framerate));
+            framerate::observe(Some(record_framerate_and_count));
             run_ticks_with(&vehicles, day_scheduler(VEHICLES).road, &raw const cargo);
             framerate::observe(None);
             let steps = STEPS.with(|s| std::mem::take(&mut *s.borrow_mut()));
@@ -1647,6 +1665,8 @@ mod tests {
                     },
                     Step::Framerate(Effect::AccumulatorBegin(E::PFE_GL_ROADVEHS)),
                     Step::Framerate(Effect::AccumulatorEnd(E::PFE_GL_ROADVEHS)),
+                    // The part's tick count lies inside the scope.
+                    Step::EndedAtTickCounter(1),
                     Step::AgeCargo(1),
                 ]
             );

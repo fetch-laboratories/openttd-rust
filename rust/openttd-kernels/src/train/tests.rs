@@ -258,18 +258,16 @@ mod bodies {
     fn tick_times_a_front_engine_after_its_tick_count() {
         use crate::framerate_type::{
             PerformanceElement as E,
-            testing::{Effect, observe, take},
+            testing::{Effect, sampling, take},
         };
         thread_local! {
             static RECORD: Cell<*mut crate::vehicle_base::VehicleRecord> =
                 const { Cell::new(std::ptr::null_mut()) };
-            static AT_BEGIN: Cell<Option<u8>> = const { Cell::new(None) };
         }
-        fn at_begin(effect: Effect) {
-            if let Effect::AccumulatorBegin(_) = effect {
-                // SAFETY: The fixture's live record.
-                AT_BEGIN.set(Some(unsafe { (*RECORD.get()).tick_counter }));
-            }
+        /// `(tick_counter, current_order_time)` of the fixture's train.
+        fn counts() -> i64 {
+            let v = crate::vehicle::VehicleRef::of(RECORD.get());
+            i64::from(v.tick_counter()) * 1_000 + i64::from(v.current_order_time())
         }
         let f = Fixture::new(LOCAL, FRONT_ENGINE, &SHARED, &VEHICLE);
         // SAFETY: The fixture's fresh record; the consist lives for the test.
@@ -278,10 +276,7 @@ mod bodies {
             (*f.record).vehstatus = crate::vehicle_base::VehStates::from_element(VehState::Stopped);
         }
         RECORD.set(f.record);
-        take();
-        observe(Some(at_begin));
-        assert!(f.game().tick(f.train()));
-        observe(None);
+        let samples = sampling(counts, || assert!(f.game().tick(f.train())));
         assert_eq!(
             take(),
             [
@@ -289,11 +284,8 @@ mod bodies {
                 Effect::AccumulatorEnd(E::PFE_GL_TRAINS),
             ]
         );
-        assert_eq!(
-            AT_BEGIN.get(),
-            Some(1),
-            "the scope opens after the tick count"
-        );
+        // The scope opens after the tick count and ends after the order time count.
+        assert_eq!(samples, [1_000, 1_001]);
         let wagon = Fixture::new(LOCAL, 0, &SHARED, &VEHICLE);
         assert!(wagon.game().tick(wagon.train()));
         assert_eq!(take(), []);

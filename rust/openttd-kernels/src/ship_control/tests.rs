@@ -308,8 +308,14 @@ fn depot_search_statics_are_reused_across_serialized_game_threads() {
 fn tick_times_the_controller() {
     use crate::framerate_type::{
         PerformanceElement,
-        testing::{Effect, take},
+        testing::{Effect, sampling, take},
     };
+    thread_local! {
+        static SHIP: Cell<Option<VehicleRef>> = const { Cell::new(None) };
+    }
+    fn tick_counter() -> i64 {
+        i64::from(SHIP.get().unwrap().tick_counter())
+    }
     extern "C" fn holds(okay: bool) {
         assert!(okay);
     }
@@ -318,14 +324,19 @@ fn tick_times_the_controller() {
     let v = ship(0);
     v.v.set_vehstatus(VehStates::from_element(VehState::Stopped));
     let t = Tables::new(&leaves, &s);
-    take();
-    assert!(tick(&t, v));
+    SHIP.set(Some(v.v));
+    let samples = sampling(tick_counter, || assert!(tick(&t, v)));
     assert_eq!(
         take(),
         [
             Effect::AccumulatorBegin(PerformanceElement::PFE_GL_SHIPS),
             Effect::AccumulatorEnd(PerformanceElement::PFE_GL_SHIPS),
         ]
+    );
+    assert_eq!(
+        samples,
+        [0, 1],
+        "the controller's tick count lies inside the scope"
     );
     assert_eq!((v.v.tick_counter(), v.v.running_ticks()), (1, 0));
     free(v);

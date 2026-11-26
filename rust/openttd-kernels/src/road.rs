@@ -3161,15 +3161,22 @@ mod map_context_tests {
     use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE};
 
     /// Pinned `RoadVehicle::Tick` returns for an articulated part after wrapping
-    /// `tick_counter`. The native ABI fixture leaves map services unused here.
+    /// `tick_counter`. The native ABI fixture leaves map services unused here. It opens
+    /// `PFE_GL_ROADVEHS` for every part, before the tick count, and ends it after.
     #[test]
-    /// `RoadVehicle::Tick` (`roadveh_cmd.cpp`) opens `PFE_GL_ROADVEHS` for every part: a
-    /// non-front part begins and ends it around its tick.
     fn articulated_tick_keeps_early_return_without_map_metadata() {
         use crate::framerate_type::{
             PerformanceElement,
-            testing::{Effect, take},
+            testing::{Effect, sampling, take},
         };
+        thread_local! {
+            static RECORD: std::cell::Cell<*mut crate::vehicle_base::VehicleRecord> =
+                const { std::cell::Cell::new(std::ptr::null_mut()) };
+        }
+        fn tick_counter() -> i64 {
+            // SAFETY: The test's live record.
+            i64::from(unsafe { (*RECORD.get()).tick_counter })
+        }
         let mut shared = SHARED;
         shared.map = std::ptr::null();
         let vehicle = VEHICLE;
@@ -3193,8 +3200,8 @@ mod map_context_tests {
             (*record).running_ticks = 7;
             let part = Part::new(VehicleRef::of(record), std::ptr::from_mut(&mut state));
             let game = Game::new(&raw const leaves);
-            take();
-            assert!(game.tick(part));
+            RECORD.set(record);
+            let samples = sampling(tick_counter, || assert!(game.tick(part)));
             assert_eq!(
                 take(),
                 [
@@ -3202,6 +3209,7 @@ mod map_context_tests {
                     Effect::AccumulatorEnd(PerformanceElement::PFE_GL_ROADVEHS),
                 ]
             );
+            assert_eq!(samples, [255, 0], "the tick count lies inside the scope");
             assert_eq!(((*record).tick_counter, (*record).running_ticks), (0, 7));
             crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
         }
