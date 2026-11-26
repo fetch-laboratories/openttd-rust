@@ -40,7 +40,7 @@
 #include "../rust/vehicle_services_table.h"
 #include "station_spatial_fixture.hpp"
 #include "../core/kdtree.hpp"
-extern "C" void openttd_test_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);
+extern "C" void openttd_test_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *, const OpenTTDStationLinks *);
 
 
 
@@ -214,63 +214,73 @@ TEST_CASE("Station service - goods state conversion reads canonical status")
 
 struct StationLoadingProbe {
 	OpenTTDStationService *owner;
-	int vehicle, payment;
-	bool frame_live = false, staged = false;
+	int vehicle, payment, goods;
+	OpenTTDVehicleOrderState *orders;
+	bool staged = false;
 };
 static StationLoadingProbe *_station_loading_probe;
 static OpenTTDCargoList *_station_loading_cargo;
 
-TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
+TEST_CASE("Station service - direct prepare stages through the goods entry with same-owner reentry")
 {
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
-	StationLoadingProbe probe{owner.get(), 0, 0};
+	OpenTTDVehicleOrderState orders{};
+	StationLoadingProbe probe{owner.get(), 0, 0, 0, &orders};
 	_station_loading_probe = &probe;
 	auto *cargo = openttd_rust_station_service_cargo(owner.get(), 0);
 	cargo->status = 2;
 	cargo->rating = 1;
 	/* Only the services this vehicle reaches are set; the semantic harness
-	 * covers their order, this covers the caller frame and owner reentry. */
+	 * covers their order, this covers the goods entry and owner reentry. */
 	OpenTTDStationServices services{};
 	services.station = [](uint16_t) noexcept -> OpenTTDLoadingStation { return {reinterpret_cast<OpenTTDStation *>(_station_loading_probe), reinterpret_cast<OpenTTDBaseStation *>(_station_loading_probe), _station_loading_probe->owner}; };
 	services.owner = [](OpenTTDBaseStation *) noexcept { return _station_loading_probe->owner; };
+	OpenTTDStationLinks links{};
+	links.goods_entry = [](BaseStation *st, uint8_t cargo) noexcept -> const GoodsEntry * {
+		CHECK(static_cast<void *>(st) == _station_loading_probe);
+		CHECK(cargo == 0);
+		return reinterpret_cast<const GoodsEntry *>(&_station_loading_probe->goods);
+	};
+	/* The vehicle has no order list: the next stations are found through its order state. */
+	OpenTTDOrdersLeaves leaves{};
+	leaves.vehicle = [](void *shell) noexcept {
+		CHECK(shell == &_station_loading_probe->vehicle);
+		return _station_loading_probe->orders;
+	};
+	static const OpenTTDOrdersLeaves *loading_leaves;
+	loading_leaves = &leaves;
 	OpenTTDVehicleServices vehicle{};
+	vehicle.orders = []() noexcept { return loading_leaves; };
+	/* The goods entry has no flows: `flow_map` is the seam at the stage's entry. */
+	OpenTTDCargoStorageServices storage = *CargoStorageServices();
+	storage.flow_map = [](const GoodsEntry *ge) noexcept -> OpenTTDCargoFlowMap * {
+		CHECK(static_cast<const void *>(ge) == &_station_loading_probe->goods);
+		CHECK(openttd_rust_station_queue_size(_station_loading_probe->owner) == 1);
+		openttd_test_station_modify_rating(_station_loading_probe->owner, 5);
+		CHECK(openttd_rust_station_service_cargo(_station_loading_probe->owner, 0)->rating == 6);
+		_station_loading_probe->staged = true;
+		return nullptr;
+	};
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
-	/* The Rust-owned list holds one packet to unload; the vehicle has no order list. */
-	OpenTTDCargoListFields counts{.cargo_periods_in_transit = 0, .feeder_share = 0, .count = 1, .reserved_count = 0, .action_counts = {0, 1, 0, 0}};
+	loading.cargo = &storage;
+	/* The Rust-owned list holds one packet, kept since nothing accepts it. */
 	_station_loading_cargo = openttd_rust_cargo_list_new(true);
-	openttd_rust_cargo_list_import(_station_loading_cargo, &counts);
+	openttd_rust_vehicle_cargo_list_append(_station_loading_cargo, &storage, new CargoPacket(StationID::Invalid(), 1, {Source::Invalid, SourceType::Industry}), VehicleCargoList::MTA_KEEP);
 	loading.cargo_capacity = [](OpenTTDVehicle *) noexcept { return OpenTTDCargoCapacity{_station_loading_cargo, 0}; };
 	loading.unload_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	loading.set_cargo_unloading = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_loading_finished = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_load_ticks = [](OpenTTDVehicle *, uint16_t) noexcept {};
-	loading.with_next_stations = [](OpenTTDVehicle *, void *context, OpenTTDStationScope body) noexcept {
-		int destination = 42;
-		_station_loading_probe->frame_live = true;
-		body(context, &destination);
-		_station_loading_probe->frame_live = false;
-	};
-	loading.stage = [](OpenTTDStation *st, OpenTTDVehicle *, uint8_t, void *next, OpenTTDNativeCargoPayment *payment) noexcept {
-		CHECK(static_cast<void *>(st) == _station_loading_probe);
-		CHECK(_station_loading_probe->frame_live);
-		CHECK(*static_cast<int *>(next) == 42);
-		CHECK(static_cast<void *>(payment) == &_station_loading_probe->payment);
-		CHECK(openttd_rust_station_queue_size(_station_loading_probe->owner) == 1);
-		openttd_test_station_modify_rating(_station_loading_probe->owner, 5);
-		CHECK(openttd_rust_station_service_cargo(_station_loading_probe->owner, 0)->rating == 6);
-		_station_loading_probe->staged = true;
-	};
 	loading.create_payment = [](OpenTTDVehicle *) noexcept -> OpenTTDNativeCargoPayment * { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&_station_loading_probe->payment); };
 	OpenTTDVehicle record{};
-	OpenTTDVehicleOrderState orders{};
 	record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&probe.vehicle);
 	record.orders = &orders;
 	record.cargo_cap = 1;
-	openttd_test_station_prepare(&record, &services, &loading);
+	openttd_test_station_prepare(&record, &services, &loading, &links);
+	CHECK(openttd_rust_cargo_list_action_count(_station_loading_cargo, VehicleCargoList::MTA_KEEP) == openttd_rust_cargo_list_count(_station_loading_cargo));
 	openttd_rust_cargo_list_destroy(_station_loading_cargo, CargoStorageServices());
 	CHECK(probe.staged);
-	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);
 	CHECK(openttd_rust_station_queue_value(openttd_rust_station_queue_first(owner.get())) == &probe.vehicle);
 	_station_loading_probe = nullptr;

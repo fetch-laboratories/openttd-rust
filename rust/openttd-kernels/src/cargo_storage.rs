@@ -2551,16 +2551,17 @@ pub unsafe extern "C" fn openttd_rust_station_cargo_list_reserve(
     s: *const Services,
     max_move: u32,
     dest: *mut CargoList,
-    next: *const StationID,
+    next: *const u16,
     length: usize,
     tile: u32,
 ) -> u32 {
-    // SAFETY: The caller's live lists, table and station IDs, which no callback writes.
+    // SAFETY: The caller's live lists, table and station IDs, which no callback writes;
+    // `StationID` is a transparent `u16`.
     unsafe {
         let next = if length == 0 {
             &[][..]
         } else {
-            std::slice::from_raw_parts(next, length)
+            std::slice::from_raw_parts(next.cast::<StationID>(), length)
         };
         StationCargoList::reserve(
             StationCargoList::of(l),

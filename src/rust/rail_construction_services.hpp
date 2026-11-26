@@ -133,7 +133,6 @@ static void RailDepotChanged(uint32_t tile) noexcept
 const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcept
 {
 	static const OpenTTDRailConstructionServices services{
-		.cargo_capacity = &GetRustCargoCapacityServices(),
 		.train_if_valid = RustTrainGetIfValid,
 		.new_wagon = RailNewWagon,
 		.new_engine = RailNewEngine,

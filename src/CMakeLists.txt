@@ -95,8 +95,6 @@ add_files(
     build_vehicle_gui.cpp
     cachecheck.cpp
     cargo_type.h
-    cargoaction.cpp
-    cargoaction.h
     cargomonitor.cpp
     cargomonitor.h
     cargopacket.cpp

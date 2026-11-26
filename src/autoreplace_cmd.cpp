@@ -45,19 +45,6 @@ extern void ChangeVehicleViewWindow(VehicleID from_index, VehicleID to_index);
  * @return true if they can both carry the same type of cargo (or at least one of them got no capacity at all)
  */
 
-static void CargoCapacityRead(void *shell, OpenTTDCargoCapacityVehicle *out) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(shell);
-	*out = {RustVehicleCargoOwner(v), v->cargo_type};
-}
-const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
-{
-	static const OpenTTDCargoCapacityServices services{
-		.read = CargoCapacityRead,
-		.cargo = CargoStorageServices(),
-	};
-	return services;
-}
 
 
 #include "rust/fleet_transaction_services.hpp"
@@ -95,9 +82,7 @@ CommandCost CmdSetAutoReplace(DoCommandFlags flags, GroupID id_g, EngineID old_e
 
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDFleetTransactionServices.hpp"
-#include "abi-visit-OpenTTDCargoCapacityServices.hpp"
 bool CheckAbi_autoreplace_cmd()
 {
-	return AbiServicesComplete(_fleet_transaction_services) &&
-		AbiServicesComplete(GetRustCargoCapacityServices());
+	return AbiServicesComplete(_fleet_transaction_services);
 }

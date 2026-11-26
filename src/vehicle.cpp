@@ -92,7 +92,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.set_trip_occupancy = RustVehicleSetTripOccupancy,
 		.shared = &GetRustSharedServices(),
 		.station = &GetRustStationServices(),
-		.station_cargo = RustStationCargoOwner,
 	};
 	return services;
 }

@@ -11,7 +11,6 @@
 #include "station_service_ffi.h"
 #include "vehicle_refit_ffi.h"
 
-struct OpenTTDCargoList;
 struct OpenTTDScheduleServices;
 struct OpenTTDVehicleVisits {
 	void (*hide_filling_percent)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(hide_filling_percent);
@@ -26,7 +25,6 @@ struct OpenTTDVehicleVisits {
 	void (*set_trip_occupancy)(OpenTTDVehicle *, int8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_trip_occupancy);
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationServices *station;
-	OpenTTDCargoList *(*station_cargo)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo);
 };
 const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept;
 inline const OpenTTDVehicleVisits *RustVehicleVisits() noexcept { return &GetRustVehicleVisits(); }
