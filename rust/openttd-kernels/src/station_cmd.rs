@@ -413,7 +413,10 @@ struct RailStationLandCheck<'a> {
     rt: RailType,
     /// List of trains with PBS reservations on the tiles.
     affected_vehicles: &'a mut Vec<*mut crate::services::Train>,
-    statspec: *const RailSpec,
+    /// Station class.
+    spec_class: StationClassID,
+    /// Index into the station class.
+    spec_index: u16,
     /// Platform length.
     plat_len: u8,
     /// Number of platforms.
@@ -446,7 +449,10 @@ struct RailStationCost<'a> {
     rt: RailType,
     /// List of trains with PBS reservations on the tiles.
     affected_vehicles: &'a mut Vec<*mut crate::services::Train>,
-    statspec: *const RailSpec,
+    /// Station class.
+    spec_class: StationClassID,
+    /// Index into the station class.
+    spec_index: u16,
     /// Platform length.
     plat_len: u8,
     /// Number of platforms.
@@ -1689,13 +1695,16 @@ impl Ctx<'_> {
             station,
             rt,
             affected_vehicles,
-            statspec,
+            spec_class,
+            spec_index,
             plat_len,
             numtracks,
         } = context;
         let invalid_dirs = crate::direction_func::axis_to_diag_dirs(axis, |ok| {
             crate::movement::native_assert(self.shared, ok);
         });
+        // SAFETY: `Get` returns a class of the registry.
+        let statspec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(spec_index));
         let slope_cb = !statspec.is_null() && (self.s.rail_spec_info)(statspec).slope_callback;
         self.check_buildable(ret, tile_cur, invalid_dirs, allowed_z, false, false);
         if !ret.ok() {
@@ -1766,7 +1775,8 @@ impl Ctx<'_> {
             station,
             rt,
             affected_vehicles,
-            statspec,
+            spec_class,
+            spec_index,
             plat_len,
             numtracks,
         } = context;
@@ -1790,7 +1800,8 @@ impl Ctx<'_> {
                 station: &mut *station,
                 rt,
                 affected_vehicles: &mut *affected_vehicles,
-                statspec,
+                spec_class,
+                spec_index,
                 plat_len,
                 numtracks,
             });
@@ -2044,8 +2055,6 @@ impl Ctx<'_> {
         let mut est = StationID::INVALID;
         let mut affected_vehicles = Vec::new();
         /* Add construction and clearing expenses. */
-        // SAFETY: `Get` returns a class of the registry.
-        let statspec = unsafe { &*StationClass::get(spec_class) }.get_spec(u32::from(spec_index));
         self.calculate_rail_station_cost(RailStationCost {
             cost,
             ret,
@@ -2055,7 +2064,8 @@ impl Ctx<'_> {
             station: &mut est,
             rt,
             affected_vehicles: &mut affected_vehicles,
-            statspec,
+            spec_class,
+            spec_index,
             plat_len,
             numtracks,
         });
