@@ -81,62 +81,104 @@ impl OverrideManagerBase {
     pub(crate) fn invalid_id(&self) -> u16 {
         self.invalid_id
     }
-    /// `entity_overrides[i]`.
+    /// `entity_overrides[i]`, for an `i` below `max_offset`.
+    #[allow(unsafe_code)]
     pub(crate) fn entity_overrides(&self, i: u16) -> u16 {
-        self.entity_overrides[usize::from(i)]
+        // SAFETY: The module's contract; `i` is in bounds, as the original's index is.
+        unsafe { *self.entity_overrides.as_ptr().add(usize::from(i)) }
     }
-    /// Store `entity_overrides[i]`.
+    /// Store `entity_overrides[i]`, for an `i` below `max_offset`.
+    #[allow(unsafe_code)]
     pub(crate) fn set_entity_overrides(&mut self, i: u16, local_id: u16) {
-        self.entity_overrides[usize::from(i)] = local_id;
+        // SAFETY: As for `entity_overrides`.
+        unsafe { *self.entity_overrides.as_mut_ptr().add(usize::from(i)) = local_id };
     }
-    /// `grfid_overrides[i]`.
+    /// `grfid_overrides[i]`, for an `i` below `max_offset`.
+    #[allow(unsafe_code)]
     pub(crate) fn grfid_overrides(&self, i: u16) -> u32 {
-        self.grfid_overrides[usize::from(i)]
+        // SAFETY: As for `entity_overrides`.
+        unsafe { *self.grfid_overrides.as_ptr().add(usize::from(i)) }
     }
-    /// Store `grfid_overrides[i]`.
+    /// Store `grfid_overrides[i]`, for an `i` below `max_offset`.
+    #[allow(unsafe_code)]
     pub(crate) fn set_grfid_overrides(&mut self, i: u16, grfid: u32) {
-        self.grfid_overrides[usize::from(i)] = grfid;
+        // SAFETY: As for `entity_overrides`.
+        unsafe { *self.grfid_overrides.as_mut_ptr().add(usize::from(i)) = grfid };
     }
-    /// `&mappings[id]`, whose fields a caller reads and writes in place.
+    /// `&mappings[id]`, for an `id` below `max_entities`, whose fields a caller reads and
+    /// writes in place.
     pub(crate) fn mappings(&mut self, id: u16) -> *mut EntityIDMapping {
-        &raw mut self.mappings[usize::from(id)]
+        self.mappings.as_mut_ptr().wrapping_add(usize::from(id))
+    }
+
+    /// `OverrideManagerBase::CheckValidNewID`, which `HouseOverrideManager`,
+    /// `IndustryOverrideManager` and `AirportOverrideManager` inherit.
+    pub(crate) fn check_valid_new_id(_testid: u16) -> bool {
+        true
     }
 
     /// `OverrideManagerBase::Add`: since the entity IDs defined by the GRF file does not
     /// necessarily correlate to those used by the game, the IDs used for overriding old
     /// entities must be translated when the entity spec is set. `local_id` is the ID in the
     /// grf file, `grfid` the ID of the grf file and `entity_type` the original entity type.
+    #[allow(unsafe_code)]
     pub(crate) fn add(&mut self, local_id: u16, grfid: u32, entity_type: u32) {
         crate::services_assert::assert_with(|| entity_type < u32::from(self.max_offset));
         let entity_type = entity_type as usize;
-        /* An override can be set only once */
-        if self.entity_overrides[entity_type] != self.invalid_id {
-            return;
+        let (entities, grfids) = (
+            self.entity_overrides.as_mut_ptr(),
+            self.grfid_overrides.as_mut_ptr(),
+        );
+        // SAFETY: The module's contract; the asserted `entity_type` is in bounds, and a build
+        // without assertions indexes as the original's vectors do.
+        unsafe {
+            /* An override can be set only once */
+            if *entities.add(entity_type) != self.invalid_id {
+                return;
+            }
+            *entities.add(entity_type) = local_id;
+            *grfids.add(entity_type) = grfid;
         }
-        self.entity_overrides[entity_type] = local_id;
-        self.grfid_overrides[entity_type] = grfid;
     }
 
     /// `OverrideManagerBase::ResetMapping`: resets the mapping, which is used while
     /// initializing game.
+    #[allow(unsafe_code)]
     pub(crate) fn reset_mapping(&mut self) {
-        self.mappings.fill(EntityIDMapping::default());
+        let mappings = self.mappings.as_mut_ptr();
+        for id in 0..self.mappings.len() {
+            // SAFETY: The module's contract; `id` is in bounds.
+            unsafe { *mappings.add(id) = EntityIDMapping::default() };
+        }
     }
 
     /// `OverrideManagerBase::ResetOverride`: resets the override, which is used while
     /// initializing game.
+    #[allow(unsafe_code)]
     pub(crate) fn reset_override(&mut self) {
-        self.entity_overrides.fill(self.invalid_id);
-        self.grfid_overrides.fill(0);
+        let (entities, grfids) = (
+            self.entity_overrides.as_mut_ptr(),
+            self.grfid_overrides.as_mut_ptr(),
+        );
+        for i in 0..self.entity_overrides.len() {
+            // SAFETY: The module's contract; `i` is in bounds.
+            unsafe { *entities.add(i) = self.invalid_id };
+        }
+        for i in 0..self.grfid_overrides.len() {
+            // SAFETY: As above.
+            unsafe { *grfids.add(i) = 0 };
+        }
     }
 
     /// `OverrideManagerBase::GetID`: return the ID (if ever available) of a previously
     /// inserted entity. `grf_local_id` is the ID of this entity within the grfID and `grfid`
     /// the ID of the grf file. Returns the ID of the candidate, or the invalid flag item ID.
+    #[allow(unsafe_code)]
     pub(crate) fn get_id(&self, grf_local_id: u16, grfid: u32) -> u16 {
         for id in 0..self.max_entities {
-            let map = &self.mappings[usize::from(id)];
-            if map.entity_id == grf_local_id && map.grfid == grfid {
+            let map = self.mappings.as_ptr().wrapping_add(usize::from(id));
+            // SAFETY: The module's contract; `id` is below `max_entities`.
+            if unsafe { (*map).entity_id } == grf_local_id && unsafe { (*map).grfid } == grfid {
                 return id;
             }
         }
@@ -155,9 +197,7 @@ impl OverrideManagerBase {
 
         /* No mapping found, try the overrides */
         for id in 0..self.max_offset {
-            if self.entity_overrides[usize::from(id)] == grf_local_id
-                && self.grfid_overrides[usize::from(id)] == grfid
-            {
+            if self.entity_overrides(id) == grf_local_id && self.grfid_overrides(id) == grfid {
                 return id;
             }
         }
@@ -166,14 +206,18 @@ impl OverrideManagerBase {
     }
 
     /// `OverrideManagerBase::GetGRFID`: gives the GRFID of the file the entity belongs to.
+    #[allow(unsafe_code)]
     pub(crate) fn get_grfid(&self, entity_id: u16) -> u32 {
-        self.mappings[usize::from(entity_id)].grfid
+        // SAFETY: The module's contract; `entity_id` is below `max_entities`.
+        unsafe { (*self.mappings.as_ptr().add(usize::from(entity_id))).grfid }
     }
 
     /// `OverrideManagerBase::GetSubstituteID`: gives the substitute of the entity, as
     /// specified by the grf file.
+    #[allow(unsafe_code)]
     pub(crate) fn get_substitute_id(&self, entity_id: u16) -> u16 {
-        self.mappings[usize::from(entity_id)].substitute_id
+        // SAFETY: As for `get_grfid`.
+        unsafe { (*self.mappings.as_ptr().add(usize::from(entity_id))).substitute_id }
     }
 }
 
@@ -204,14 +248,19 @@ unsafe fn add_entity_id(
     }
 
     /* This entity hasn't been defined before, so give it an ID now. */
+    // SAFETY: The caller's contract, for each access to the manager and its mapping below.
     let mut id = unsafe { (*manager).max_offset };
+    // SAFETY: As above.
     while id < unsafe { (*manager).max_entities } {
+        // SAFETY: As above; the reference ends before the check runs.
         let map = unsafe { (*manager).mappings(id) };
 
+        // SAFETY: As above; no reference to the manager is live across the check.
         if check_valid_new_id(id)
             && unsafe { (*map).entity_id } == 0
             && unsafe { (*map).grfid } == 0
         {
+            // SAFETY: As above.
             unsafe {
                 (*map).entity_id = grf_local_id;
                 (*map).grfid = grfid;
@@ -222,6 +271,7 @@ unsafe fn add_entity_id(
         id += 1;
     }
 
+    // SAFETY: As above.
     unsafe { (*manager).invalid_id }
 }
 
@@ -239,7 +289,14 @@ pub(crate) unsafe fn house_add_entity_id(
     // SAFETY: The caller's contract.
     unsafe {
         let id = (*manager).get_id(grf_local_id, grfid);
-        add_entity_id(manager, grf_local_id, grfid, substitute_id, id, |_| true)
+        add_entity_id(
+            manager,
+            grf_local_id,
+            grfid,
+            substitute_id,
+            id,
+            OverrideManagerBase::check_valid_new_id,
+        )
     }
 }
 
@@ -257,7 +314,14 @@ pub(crate) unsafe fn airport_add_entity_id(
     // SAFETY: The caller's contract.
     unsafe {
         let id = (*manager).get_id(grf_local_id, grfid);
-        add_entity_id(manager, grf_local_id, grfid, substitute_id, id, |_| true)
+        add_entity_id(
+            manager,
+            grf_local_id,
+            grfid,
+            substitute_id,
+            id,
+            OverrideManagerBase::check_valid_new_id,
+        )
     }
 }
 
