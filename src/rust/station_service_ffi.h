@@ -124,8 +124,6 @@ struct OpenTTDVehicleResolverServices;
 struct OpenTTDStationLinks {
 	const OpenTTDLiveGraphServices *graphs;
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
-	void (*delete_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_flows);
-	void (*restrict_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(restrict_flows);
 	OpenTTDOrderList * (*order_list)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_list);
 	size_t (*order_pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(order_pool_size);
 	size_t (*order_count)(OpenTTDOrderList *) noexcept OPENTTD_SERVICE_DEFAULT(order_count);
@@ -194,7 +192,6 @@ void *openttd_rust_station_queue_value(const OpenTTDStationQueueEntry *);
 OpenTTDStationQueueEntry *openttd_rust_station_queue_erase_node(OpenTTDStationService *, OpenTTDStationQueueEntry *);
 /* An empty queue touches only its Rust owner; service tables may be null then. */
 void openttd_rust_station_acceptance(OpenTTDBaseStation *, const OpenTTDStationServices *, uint8_t);
-void openttd_rust_station_reroute(OpenTTDBaseStation *, uint8_t, uint16_t, uint16_t, const OpenTTDStationServices *, const OpenTTDStationLinks *);
 
 }
 #endif

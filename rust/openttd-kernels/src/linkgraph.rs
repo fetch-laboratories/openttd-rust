@@ -16,6 +16,8 @@ pub(crate) mod job;
 pub(crate) mod live;
 pub(crate) mod refresh;
 
+use crate::cargo_flow::FlowStatMap;
+use crate::station_type::StationID;
 use crate::timer_game_tick::DAY_TICKS;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -59,19 +61,9 @@ pub struct Settings {
     pub runtime: u32,
 }
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub struct OutputShare {
-    pub node: u32,
-    pub origin: u32,
-    pub via: u32,
-    pub cumulative: u32,
-    pub unrestricted: u32,
-    pub has_share: u32,
-}
-
 pub struct Result {
-    shares: Vec<OutputShare>,
+    /// Each node's flows, in node order.
+    flows: Vec<FlowStatMap>,
     edge_flows: Vec<u32>,
 }
 
@@ -81,146 +73,12 @@ struct Demand {
     unsatisfied: u32,
 }
 
-#[derive(Default)]
-struct FlowStat {
-    shares: BTreeMap<u32, u32>,
-    unrestricted: u32,
-}
-
-impl FlowStat {
-    fn new(via: u32, flow: u32) -> Self {
-        Self {
-            shares: BTreeMap::from([(flow, via)]),
-            unrestricted: flow,
-        }
-    }
-
-    // Original ChangeShare rebuilds the cumulative-key map in its existing order.
-    fn change(&mut self, via: u32, mut flow: i32) {
-        let mut removed = 0_u32;
-        let mut added = 0_u32;
-        let mut last = 0_u32;
-        let mut shares = BTreeMap::new();
-        for (&cumulative, &station) in &self.shares {
-            if station == via {
-                if flow < 0 {
-                    let share = cumulative.wrapping_sub(last);
-                    if flow == i32::MIN || flow.wrapping_neg() as u32 >= share {
-                        removed = removed.wrapping_add(share);
-                        if cumulative <= self.unrestricted {
-                            self.unrestricted = self.unrestricted.wrapping_sub(share);
-                        }
-                        if flow != i32::MIN {
-                            flow = flow.wrapping_add(share as i32);
-                        }
-                        last = cumulative;
-                        continue;
-                    }
-                    removed = removed.wrapping_add(flow.wrapping_neg() as u32);
-                } else {
-                    added = added.wrapping_add(flow as u32);
-                }
-                if cumulative <= self.unrestricted {
-                    self.unrestricted = self.unrestricted.wrapping_add(flow as u32);
-                }
-                flow = 0;
-            }
-            shares.insert(
-                cumulative.wrapping_add(added).wrapping_sub(removed),
-                station,
-            );
-            last = cumulative;
-        }
-        if flow > 0 {
-            shares.insert(last.wrapping_add(flow as u32), via);
-            if self.unrestricted < last {
-                self.release(via);
-            } else {
-                self.unrestricted = self.unrestricted.wrapping_add(flow as u32);
-            }
-        }
-        self.shares = shares;
-    }
-
-    // Original ChangeShare calls ReleaseShare on its OLD map before swapping.
-    // Normally job flows are unrestricted; retain the branch for wrapping inputs.
-    fn release(&mut self, station: u32) {
-        let mut flow = 0_u32;
-        let mut next = 0_u32;
-        let mut found = false;
-        for (&cumulative, &via) in self.shares.iter().rev() {
-            if cumulative < self.unrestricted {
-                return;
-            }
-            if found {
-                flow = next.wrapping_sub(cumulative);
-                self.unrestricted = self.unrestricted.wrapping_add(flow);
-                break;
-            }
-            if cumulative == self.unrestricted {
-                return;
-            }
-            if via == station {
-                found = true;
-            }
-            next = cumulative;
-        }
-        if flow == 0 {
-            return;
-        }
-        let mut shares = BTreeMap::from([(flow, station)]);
-        for (&cumulative, &via) in &self.shares {
-            if via == station {
-                flow = 0;
-            } else {
-                shares.insert(flow.wrapping_add(cumulative), via);
-            }
-        }
-        self.shares = shares;
-    }
-
-    fn get_share(&self, station: u32) -> u32 {
-        let mut last = 0;
-        for (&share, &via) in &self.shares {
-            if via == station {
-                return share.wrapping_sub(last);
-            }
-            last = share;
-        }
-        0
-    }
-
-    fn finalize(&mut self, station: u32) {
-        let mut local = self.get_share(u32::from(u16::MAX));
-        if local > i32::MAX as u32 {
-            self.change(station, -i32::MAX);
-            self.change(u32::from(u16::MAX), -i32::MAX);
-            local -= i32::MAX as u32;
-        }
-        self.change(station, (local as i32).wrapping_neg());
-        self.change(u32::from(u16::MAX), (local as i32).wrapping_neg());
-    }
-
-    fn scale(&mut self, runtime: u32) {
-        let mut shares = BTreeMap::new();
-        let mut share = 0_u32;
-        for (&old, &via) in &self.shares {
-            share = share.wrapping_add(1).max(old.wrapping_mul(30) / runtime);
-            shares.insert(share, via);
-            if self.unrestricted == old {
-                self.unrestricted = share;
-            }
-        }
-        self.shares = shares;
-    }
-}
-
 struct Node {
     base: InputNode,
     undelivered: u32,
     demands: Vec<Demand>,
     paths: VecDeque<usize>,
-    flows: BTreeMap<u32, FlowStat>,
+    flows: FlowStatMap,
 }
 
 #[derive(Clone, Copy)]
@@ -500,11 +358,11 @@ impl Job {
             let destinations: Vec<usize> = if capacity_mode {
                 self.nodes[from]
                     .flows
-                    .get(&self.nodes[source].base.station)
+                    .find(StationID(self.nodes[source].base.station as u16))
                     .map_or_else(Vec::new, |flow| {
-                        flow.shares
+                        flow.get_shares()
                             .values()
-                            .map(|via| station_to_node[via])
+                            .map(|via| station_to_node[&u32::from(via.0)])
                             .collect()
                     })
             } else {
@@ -806,26 +664,13 @@ impl Job {
     fn add_flow(&mut self, node: usize, origin: u32, via: u32, flow: u32) {
         self.nodes[node]
             .flows
-            .entry(origin)
-            .and_modify(|fs| fs.change(via, flow as i32))
-            .or_insert_with(|| FlowStat::new(via, flow));
+            .add_flow(StationID(origin as u16), StationID(via as u16), flow);
     }
 
     fn pass_on_flow(&mut self, node: usize, origin: u32, via: u32, flow: u32) {
-        use std::collections::btree_map::Entry;
-        match self.nodes[node].flows.entry(origin) {
-            Entry::Vacant(entry) => {
-                let mut fs = FlowStat::new(via, flow);
-                fs.shares
-                    .insert(flow.wrapping_add(flow), u32::from(u16::MAX));
-                fs.unrestricted = fs.unrestricted.wrapping_add(flow);
-                entry.insert(fs);
-            }
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().change(via, flow as i32);
-                entry.get_mut().change(u32::from(u16::MAX), flow as i32);
-            }
-        }
+        self.nodes[node]
+            .flows
+            .pass_on_flow(StationID(origin as u16), StationID(via as u16), flow);
     }
 
     fn map_flows(&mut self, scale: bool) {
@@ -848,10 +693,12 @@ impl Job {
             }
         }
         for node in &mut self.nodes {
-            for fs in node.flows.values_mut() {
-                fs.finalize(node.base.station);
-                if scale {
-                    fs.scale(self.settings.runtime);
+            // Remove local consumption shares marked as invalid.
+            node.flows
+                .finalize_local_consumption(StationID(node.base.station as u16));
+            if scale {
+                for (_, fs) in node.flows.iter_mut() {
+                    fs.scale_to_monthly(self.settings.runtime);
                 }
             }
             node.paths.clear();
@@ -901,7 +748,7 @@ fn run(
                 undelivered: base.supply,
                 demands: vec![Demand::default(); node_count],
                 paths: VecDeque::new(),
-                flows: BTreeMap::new(),
+                flows: FlowStatMap::default(),
             })
             .collect(),
         edges: edges.to_vec(),
@@ -911,60 +758,20 @@ fn run(
         settings,
     };
     job.run(aborted);
-    let mut shares = Vec::new();
-    for (node_id, node) in job.nodes.iter().enumerate() {
-        for (&origin, fs) in &node.flows {
-            if fs.shares.is_empty() {
-                shares.push(OutputShare {
-                    node: node_id as u32,
-                    origin,
-                    via: 0,
-                    cumulative: 0,
-                    unrestricted: fs.unrestricted,
-                    has_share: 0,
-                });
-            }
-            for (&cumulative, &via) in &fs.shares {
-                shares.push(OutputShare {
-                    node: node_id as u32,
-                    origin,
-                    via,
-                    cumulative,
-                    unrestricted: fs.unrestricted,
-                    has_share: 1,
-                });
-            }
-        }
-    }
     Result {
-        shares,
+        flows: job.nodes.into_iter().map(|node| node.flows).collect(),
         edge_flows: job.edge_flows,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{FlowStat, capacity_ratio};
+    use super::capacity_ratio;
 
     #[test]
     fn signed_capacity_numerator_is_promoted_before_division() {
         assert_eq!(capacity_ratio(-1, 100), 42_949_672);
         assert_eq!(capacity_ratio(i32::MIN, u32::MAX), 0);
         assert_eq!(capacity_ratio(2, 0), 32);
-    }
-
-    #[test]
-    fn shares_keep_unsigned_key_wrap_and_empty_origin_state() {
-        let mut fs = FlowStat::new(1, u32::MAX);
-        fs.change(2, 2);
-        assert_eq!(
-            fs.shares.into_iter().collect::<Vec<_>>(),
-            vec![(1, 2), (u32::MAX, 1)]
-        );
-        assert_eq!(fs.unrestricted, 1);
-        let mut fs = FlowStat::new(1, 1);
-        fs.change(1, -1);
-        assert!(fs.shares.is_empty());
-        assert_eq!(fs.unrestricted, 0);
     }
 }

@@ -163,6 +163,54 @@ pub struct Services {
     default_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
 }
+
+#[cfg(test)]
+impl Services {
+    /// A table whose cargo storage is `cargo` and whose cargo lists `cargo_owner` answers; its
+    /// other entries terminate.
+    pub(crate) fn cargo_fixture(
+        cargo: *const crate::cargo_storage::Services,
+        cargo_owner: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
+    ) -> Self {
+        macro_rules! unused {
+            (($($arg:ty),*) $(-> $result:ty)?) => {{
+                extern "C" fn leaf($(_: $arg),*) $(-> $result)? { unreachable!() }
+                leaf
+            }};
+        }
+        Self {
+            shared: ptr::null(),
+            cargo,
+            cargo_owner,
+            group_count: unused!((*const RailSpec) -> usize),
+            group_cargo: unused!((*const RailSpec, usize) -> u8),
+            group: unused!((*const RailSpec, u8) -> *const c_void),
+            spec: unused!((*const RailSpec) -> Spec),
+            loading_count: unused!((*const c_void) -> usize),
+            loaded_count: unused!((*const c_void) -> usize),
+            loading: unused!((*const c_void, usize) -> *const c_void),
+            loaded: unused!((*const c_void, usize) -> *const c_void),
+            axis: unused!((u32) -> crate::services::Axis),
+            tile_random: unused!((u32) -> u8),
+            station_random: unused!((*mut BaseStation) -> u16),
+            waiting: unused!((*mut BaseStation) -> u8),
+            set_waiting: unused!((*mut BaseStation, u8)),
+            set_random: unused!((*mut BaseStation, u16)),
+            cached_cargo: unused!((*mut BaseStation) -> u64),
+            spec_cargo: unused!((*const RailSpec) -> u64),
+            resolve_random: unused!((*const RailSpec, *mut BaseStation, u32, u8) -> Reseed),
+            resolve_callback: unused!((u16, u32, u32, *const RailSpec, *mut BaseStation, u32, u8, *mut i32, usize) -> u16),
+            company: unused!((u8, *const c_void) -> u32),
+            nearby_station: unused!((u8, u32, crate::services::Axis) -> u32),
+            build_date: unused!((*mut BaseStation) -> i32),
+            airport_ttd_type: unused!((*const crate::station_cmd::AirportSpec) -> crate::newgrf_airport::TtdpAirportType),
+            identity: unused!((*mut BaseStation, u8) -> SpecIdentity),
+            town_scope: unused!((*mut c_void, *const crate::services::TownHandle, bool) -> *mut c_void),
+            default_scope: unused!((*mut c_void, u8, u8) -> *mut c_void),
+            slope_error: unused!((*mut CommandCost, *const SlopeResult, *const RailSpec)),
+        }
+    }
+}
 static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_resolver_exchange(

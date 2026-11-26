@@ -6,7 +6,7 @@
 use super::{Settings, live::Graph};
 use crate::cargotype::{CC_EXPRESS, CC_MAIL, PASSENGERS};
 use crate::{
-    cargo_flow::FlowMap, industrytype::NativeVec, linkgraph_type::LinkGraphID,
+    cargo_flow::FlowStatMap, industrytype::NativeVec, linkgraph_type::LinkGraphID,
     timer_game_common::INVALID_DATE,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,7 +37,7 @@ crate::abi::shared_records! {
         pub short_path_saturation: u8,
     }
     "OpenTTDLinkGraphJobNode" ["station_service"] => pub struct JobNode {
-        pub flows: *mut FlowMap => "OpenTTDCargoFlowMap *",
+        pub flows: *mut FlowStatMap => "OpenTTDCargoFlowMap *",
     }
     "OpenTTDLinkGraphJobRecord" ["station_service"] => pub struct JobRecord {
         /// Stable native thread-shell identity through join and publication.
@@ -151,17 +151,13 @@ pub(crate) unsafe fn run(job: *mut JobRecord, cargo_classes: u16, map_max_x: u32
     if unsafe { (*job).aborted.load(Ordering::Acquire) } {
         return;
     }
-    let mut nodes = (0..unsafe { &*graph }.size())
-        .map(|_| JobNode {
-            flows: Box::into_raw(Box::default()),
+    let mut nodes = result
+        .flows
+        .into_iter()
+        .map(|flows| JobNode {
+            flows: Box::into_raw(Box::new(flows)),
         })
         .collect::<Vec<_>>();
-    let mut shares = result.shares.as_slice();
-    while let Some(first) = shares.first() {
-        let count = shares.partition_point(|s| s.node == first.node && s.origin == first.origin);
-        unsafe { &mut *nodes[first.node as usize].flows }.import_shares(&shares[..count]);
-        shares = &shares[count..];
-    }
     unsafe {
         (*job).nodes = NativeVec::from_vec(std::mem::take(&mut nodes));
         (*job).edge_flows = NativeVec::from_vec(result.edge_flows);
@@ -182,7 +178,7 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{cargo_flow, linkgraph::live, linkgraph_type::EdgeUpdateModes};
+    use crate::{linkgraph::live, linkgraph_type::EdgeUpdateModes, station_type::StationID};
 
     #[test]
     fn worker_uses_private_inputs_and_prestart_abort_publishes_no_result() {
@@ -249,10 +245,11 @@ mod tests {
                 if !abort {
                     assert_eq!((*job).edge_flows.as_slice(), [10]);
                     for node in &(*job).nodes {
-                        let origin = cargo_flow::openttd_rust_flow_map_at(node.flows, 12, 1);
-                        assert_eq!(origin.found, 1);
-                        let share = cargo_flow::openttd_rust_flow_share(origin.flow, 0, 0);
-                        assert_eq!((share.station, share.cumulative), (24, 10));
+                        let flow = (*node.flows).find(StationID(12)).unwrap();
+                        assert_eq!(
+                            flow.get_shares().first_key_value(),
+                            Some((&10, &StationID(24)))
+                        );
                     }
                 }
                 openttd_rust_linkgraph_job_delete(job);

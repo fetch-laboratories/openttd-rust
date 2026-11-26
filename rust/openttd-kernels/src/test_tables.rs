@@ -2084,8 +2084,6 @@ pub(crate) const STATION_LOADING: crate::station_service::Loading =
 pub(crate) const STATION_LINKS: crate::station_service::Links = crate::station_service::Links {
     graphs: &LINK_GRAPHS,
     automatic_distribution: unreachable1,
-    delete_flows: unreachable3,
-    restrict_flows: unreachable3,
     order_list: unreachable1,
     order_pool_size: unreachable0,
     order_count: unreachable1,

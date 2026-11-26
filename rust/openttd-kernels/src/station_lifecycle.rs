@@ -557,16 +557,14 @@ unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
             let goods = (links.goods_entry)(other, cargo);
             let flows = (storage.flow_map)(goods.cast());
             if !flows.is_null() {
-                unsafe {
-                    crate::cargo_flow::openttd_rust_flow_map_erase(flows, id.0);
-                }
+                unsafe { &mut *flows }.erase(id);
                 let destination = (graphs.node)(st, cargo);
                 let edge_live = unsafe { &*owner }.nodes[usize::from(node)]
                     .edge(destination)
                     .is_some_and(|e| e.last_update() != crate::timer_game_common::INVALID_DATE);
                 if edge_live {
                     unsafe {
-                        (&mut *flows).deleted(id.0);
+                        (&mut *flows).delete_flows(id);
                         crate::station_service::reroute_cargo(
                             other,
                             CargoType(cargo),
