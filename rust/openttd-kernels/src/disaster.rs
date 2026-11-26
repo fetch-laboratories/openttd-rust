@@ -1426,7 +1426,7 @@ pub(crate) fn tick(t: &Tables<'_>, this: DisasterVehicle) -> bool {
     _disastervehicle_tick_procs[usize::from(this.v.subtype())](t, this)
 }
 /// `DisasterVehicle::Tick`, for the scheduler's dispatch over a live disaster vehicle through
-/// the process-lifetime table `s`, and for the kept export.
+/// the process-lifetime table `s`.
 #[allow(unsafe_code)]
 pub(crate) fn scheduler_tick(s: &Services, v: VehicleRef) -> bool {
     // SAFETY: Every link of the process-lifetime table stays valid for the call.
@@ -1958,7 +1958,8 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 // mutex; the native probe passes its own tables in serialized calls.
 
 /// `DisasterVehicle::Tick` for the kept native fixture
-/// `tools/migration/windows-abi/disaster.inc`; it leaves with that fixture.
+/// `tools/migration/windows-abi/disaster.inc`, through the scheduler's entry; it leaves with
+/// that fixture.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_tick_abi(s: *const Services, v: VehicleRef) -> u8 {
