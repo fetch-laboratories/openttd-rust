@@ -186,6 +186,26 @@ def refusal(pr: int, kind: str, earlier: list[Review]) -> str | None:
     return None
 
 
+# The kind of review a stage's next start asks for.
+NEXT = {
+    "behaviour": "behaviour",
+    "porting": "porting",
+    "recheck": "recheck",
+    "base": "base",
+}
+
+
+def past_limits(pr: int, earlier: list[Review]) -> list[str]:
+    """Each review that started where this command refuses, the reviews before
+    it taken as they stood: what root had to answer first."""
+    return [
+        review.name
+        for index, review in enumerate(earlier)
+        if not review.void
+        and refusal(pr, NEXT.get(review.stage, "records"), earlier[:index])
+    ]
+
+
 def ledger_path(pr: int) -> Path:
     return LEDGER / f"{pr}.json"
 
@@ -329,6 +349,10 @@ def run(args: argparse.Namespace, repository: str) -> None:
             void = " VOID, off the review row" if review.void else ""
             where = review.url or "(started here, no report yet)"
             print(f"  {review.at} {review.stage}: {review.name}{void} {where}")
+        past = past_limits(pr, earlier)
+        print(
+            f"Past the limits: {len(past)}" + (f" ({', '.join(past)})" if past else "")
+        )
         for kind in KINDS:
             reason = refusal(pr, kind, earlier)
             print(f"  {kind}: " + (f"refused, {reason}" if reason else "allowed"))

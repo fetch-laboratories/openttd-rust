@@ -6790,6 +6790,17 @@ class ReviewerTests(unittest.TestCase):
                 agents, "--check", ledger=Path(directory), models=models
             )
             self.assertIn("VOID, off the review row", out)
+            self.assertIn("Past the limits: 0\n", out)
+        chain = ["review-170-behaviour", "review-170-recheck"] + [
+            f"review-170-records-porting-{n}" for n in (1, 2, 3, 4)
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            _, out, _ = self.run_reviewer(chain, "--check", ledger=Path(directory))
+            self.assertIn(
+                "Past the limits: 2 (review-170-records-porting-3, "
+                "review-170-records-porting-4)",
+                out,
+            )
             self.assertFalse((Path(directory) / "171.json").exists())
 
     def test_a_report_off_the_review_row_is_refused(self) -> None:
