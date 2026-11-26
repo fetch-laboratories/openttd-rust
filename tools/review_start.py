@@ -270,23 +270,27 @@ def target(model: str, effort: str) -> dict[str, object]:
     raise ValueError(f"no provider known for the review row's model {model}")
 
 
-def message(
-    url: str,
-    kind: str,
-    name: str,
-    model: str,
-    effort: str,
-    commits: list[str],
-    findings: list[str],
-) -> str:
-    you = f"You are /root/{name}, on {model} at {effort} effort."
-    if kind == "recheck":
+@dataclass(frozen=True)
+class Start:
+    """One reviewer to start: what it reviews and what it is given."""
+
+    kind: str
+    name: str
+    commits: list[str]
+    findings: list[str]
+
+
+def message(url: str, start: Start, row: tuple[str, str]) -> str:
+    model, effort = row
+    you = f"You are /root/{start.name}, on {model} at {effort} effort."
+    commits = " ".join(start.commits)
+    if start.kind == "recheck":
         return (
             f"Re-check PR {url} under `docs/review-brief.md`. {you} Check the fixing "
-            f"commits {' '.join(commits)} against the findings in {' '.join(findings)}."
+            f"commits {commits} against the findings in {' '.join(start.findings)}."
         )
-    review = SCOPED.get(kind, kind)
-    scope = f"the commits {' '.join(commits)}" if kind in SCOPED else "the whole PR"
+    review = SCOPED.get(start.kind, start.kind)
+    scope = f"the commits {commits}" if start.kind in SCOPED else "the whole PR"
     return f"Review PR {url} under `docs/review-brief.md` for {review}. {you} Review {scope}."
 
 
@@ -390,7 +394,9 @@ def run(args: argparse.Namespace, repository: str) -> None:
         "isolation": "worktree",
         "target": target(model, effort),
         "task": message(
-            facts["html_url"], kind, name, model, effort, args.commits or [], findings
+            facts["html_url"],
+            Start(kind, name, args.commits or [], findings),
+            (model, effort),
         ),
     }
     entry = {"name": name, "kind": kind, "at": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
