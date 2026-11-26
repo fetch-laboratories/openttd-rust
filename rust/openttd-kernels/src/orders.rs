@@ -6092,8 +6092,8 @@ fn order_backup_do_restore(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
             let mut new_group = 0;
             // SAFETY: The process-lifetime group table; the command reads no list context.
             let error = unsafe {
-                crate::fleet::openttd_rust_fleet_add_vehicle_group(
-                    groups,
+                crate::fleet::add_vehicle_group(
+                    &*groups,
                     u32::from(flags.0),
                     group.0,
                     id.0,

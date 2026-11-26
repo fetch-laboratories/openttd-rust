@@ -1070,7 +1070,8 @@ impl VehicleList {
         }
     }
 }
-unsafe fn add_vehicle_group(
+/// `CmdAddVehicleGroup`, for the export and for `OrderBackup::DoRestore`'s nested command.
+pub(crate) unsafe fn add_vehicle_group(
     w: &GroupServices,
     flags: u32,
     id: u16,
