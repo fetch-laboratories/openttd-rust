@@ -167,7 +167,8 @@ pub(crate) fn map_new_grf_industry_type(grf_type: IndustryType, grf_id: u32) -> 
     }
     IndustryType(
         (unsafe {
-            crate::override_manager::industry_id(gb(u32::from(grf_type.0), 0, 7) as u16, grf_id)
+            (*crate::override_manager::industry_mngr())
+                .industry_get_id(gb(u32::from(grf_type.0), 0, 7) as u16, grf_id)
         }) as u8,
     )
 }

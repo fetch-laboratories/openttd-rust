@@ -213,20 +213,11 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     (s.check)(u16::from(kind) < crate::airport::NUM_AIRPORTS);
     let mut spec = (s.base_spec)(u16::from(kind));
     if kind >= NEW_AIRPORT_OFFSET && !(s.shared().specs().airport().substitute().enabled)(spec) {
-        if unsafe {
-            crate::override_manager::openttd_rust_override_grfid(
-                crate::override_manager::airport(),
-                u16::from(kind),
-            )
-        } == 0
-        {
+        if unsafe { (*crate::override_manager::airport_mngr()).get_grfid(u16::from(kind)) } == 0 {
             return spec;
         }
         let substitute = unsafe {
-            crate::override_manager::openttd_rust_override_substitute(
-                crate::override_manager::airport(),
-                u16::from(kind),
-            )
+            (*crate::override_manager::airport_mngr()).get_substitute_id(u16::from(kind))
         } as u8;
         if u16::from(substitute) == AT_INVALID {
             return spec;

@@ -112,7 +112,6 @@ IndustryTileOverrideManager::IndustryTileOverrideManager(uint16_t offset, uint16
  */
 void OverrideManagerBase::Add(uint16_t local_id, uint32_t grfid, uint entity_type)
 {
-	assert(entity_type < this->max_offset);
 	openttd_rust_override_add(this->rust_owner, local_id, grfid, entity_type);
 }
 
