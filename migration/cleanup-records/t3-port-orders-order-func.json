@@ -218,7 +218,7 @@
     "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
     "retiring_owner": "#906",
     "site": "rust/openttd-kernels/src/orders.rs | fn get_vehicle_cannot_use_station_reason | allow unsafe_code",
-    "source_contract": "`GetVehicleCannotUseStationReason(v, Station::Get(st))` (src/vehicle.cpp)",
+    "source_contract": "`GetVehicleCannotUseStationReason(v, st)` (src/vehicle.cpp), with the station the caller resolved for `CanVehicleUseStation`",
     "tool": "rust"
   },
   {
@@ -1569,9 +1569,9 @@
     "before": 0,
     "kind": "suppression",
     "operation": "orders::depot_get_xy",
-    "reason": "Plan #1060 decisions 1 and 2: field-sized reads and writes of the live native order, list, consist and vehicle records, or calls of the C++ leaf slots, under the module's lifetime contract, scoped to the item instead of the module.",
-    "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
-    "retiring_owner": "#906",
+    "reason": "Plan #1060 decision 5: the strict `Depot::Get` of the shared depot table and its `xy` reader, under the module's lifetime contract; the original asserts on an invalid index.",
+    "retirement_condition": "Retires when the depot pool moves to Rust (#638) and the depot record is reached without the native lookup.",
+    "retiring_owner": "#638",
     "site": "rust/openttd-kernels/src/orders.rs | fn depot_get_xy | allow unsafe_code",
     "source_contract": "`Depot::Get` (src/depot_base.h)",
     "tool": "rust"

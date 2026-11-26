@@ -325,11 +325,18 @@ fn assign_order_copies_every_member() {
     };
     let mut target = Order::default();
     target.edit().assign_order(view(&source));
-    assert!(view(&target).equals(view(&source)));
-    assert_eq!(
-        (target.wait_time, target.travel_time, target.max_speed),
-        (0x1234, 0x2345, 0x3456)
-    );
+    let fields = |o: &Order| {
+        (
+            o.r#type,
+            o.flags,
+            o.dest,
+            o.refit_cargo,
+            o.wait_time,
+            o.travel_time,
+            o.max_speed,
+        )
+    };
+    assert_eq!(fields(&target), fields(&source));
 }
 
 /// `OrderList::MoveOrder` rotates the moved order to its new place in both directions, as
