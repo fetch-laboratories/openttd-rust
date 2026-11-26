@@ -1,4 +1,6 @@
 #pragma once
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 /* Complete typed tables exercise road cdecl calls without importing game globals.
  * These are boundary/lifetime checks, not a second simulation oracle. */
 template <typename Function> struct VehicleUnused;

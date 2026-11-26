@@ -5,6 +5,8 @@
 #include "rust/company_identity_ffi.h"
 #include "rust/window_ffi.h"
 #include "window_type.h"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 
 /* The window services every vehicle probe dirties through; the first binding stays for the
  * process. */

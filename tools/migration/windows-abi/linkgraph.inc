@@ -1,6 +1,8 @@
 #pragma once
 #include "rust/linkgraph_schedule_ffi.h"
 #include "rust/newgrf_vehicle_ffi.h"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 
 static void LinkGraphJob()
 {

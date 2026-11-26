@@ -23,6 +23,7 @@ GameSettings _settings_game{}, _settings_newgame{};
 #ifdef WITH_RUST
 #include "rust/clock_native.hpp"
 #include "rust/pool_ffi.h"
+#include "rust/shared_services_table.h"
 static const RustPoolDescriptor no_graphs{};
 static const RustPoolDescriptor *const graph_pool = &no_graphs;
 static const OpenTTDSharedServices shared{.vehicle_next = [](uint32_t) noexcept -> OpenTTDVehicle * { return nullptr; }};
