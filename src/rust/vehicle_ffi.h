@@ -84,17 +84,18 @@ struct OpenTTDFleetPendingServices;
 struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
 struct OpenTTDAircraftLeaves;
+struct OpenTTDDisasterServices;
+struct OpenTTDRoadCommandSlot;
 struct OpenTTDRoadLeaves;
 struct OpenTTDShipLeaves;
 struct OpenTTDTrainServices;
 struct OpenTTDVehicleSchedulerServices {
 	const OpenTTDAircraftLeaves *aircraft; ///< Aircraft controller table, immutable for the process.
+	const OpenTTDDisasterServices *disaster; ///< Disaster vehicle table, immutable for the process.
 	const RustPoolDescriptor *const *pool; ///< The vehicle pool's descriptor.
 	const OpenTTDRoadLeaves *road; ///< Road vehicle controller table, immutable for the process.
 	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.
 	const OpenTTDShipLeaves *ship; ///< Ship controller table, immutable for the process.
-	/** Runs the virtual Tick; true when the vehicle survives. */
-	bool (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
 	const OpenTTDTrainServices *train; ///< Train controller table, immutable for the process.
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 };
@@ -106,6 +107,7 @@ struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDFleetPendingServices *pending;
 	OpenTTDCommandCost *refit_cost;
 	OpenTTDCommandCost *refit_temporary;
+	OpenTTDRoadCommandSlot *road_slot; ///< The session frame's road command slot for the vehicle tick; null on calendar day.
 	const OpenTTDVehicleSchedulerServices *scheduler;
 	const OpenTTDStationServices *station;
 	const OpenTTDFleetTransactionServices *transaction;

@@ -532,12 +532,6 @@ public:
 		return this->IsChainInDepot();
 	}
 
-	/**
-	 * Calls the tick handler of the vehicle
-	 * @return is this vehicle still valid?
-	 */
-	virtual bool Tick() { return true; };
-
 	void ShiftDates(TimerGameEconomy::Date interval);
 
 	/**

@@ -33,7 +33,6 @@
 #include "core/backup_type.hpp"
 #include "newgrf.h"
 #include "zoom_func.h"
-#include "framerate_type.h"
 #include "roadveh_cmd.h"
 #include "road_cmd.h"
 #include "newgrf_roadstop.h"
@@ -422,13 +421,6 @@ bool IndividualRoadVehicleController(RoadVehicle *v, const RoadVehicle *prev)
 Money RoadVehicle::GetRunningCost() const
 {
 	return openttd_rust_road_running_cost(RustVehicle(this), this->GetRustState(), &GetRoadLeaves());
-}
-
-bool RoadVehicle::Tick()
-{
-	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
-	OpenTTDRoadCommandSlot road;
-	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &GetRoadLeaves(), &road);
 }
 
 void RoadVehicle::SetDestTile(TileIndex tile)

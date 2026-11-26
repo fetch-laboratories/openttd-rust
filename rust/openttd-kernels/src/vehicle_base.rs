@@ -323,6 +323,7 @@ crate::abi::shared_records! {
         pub aircraft: *mut crate::aircraft::AircraftState,
         pub ship: *mut crate::ship_control::ShipState => "struct OpenTTDShipState *",
         pub disaster: *mut crate::disaster::State => "struct OpenTTDDisasterState *",
+        pub effect: *mut crate::effect::State => "struct OpenTTDEffectState *",
         pub consist: *mut crate::orders::Consist,
         pub orders: *mut crate::orders::VehicleOrders,
         pub visual: *mut u8,
@@ -411,6 +412,7 @@ impl VehicleRecord {
             aircraft: std::ptr::null_mut(),
             ship: std::ptr::null_mut(),
             disaster: std::ptr::null_mut(),
+            effect: std::ptr::null_mut(),
             consist: std::ptr::null_mut(),
             orders: std::ptr::null_mut(),
             visual: std::ptr::null_mut(),
@@ -849,6 +851,10 @@ impl crate::vehicle::VehicleRef {
     /// The disaster owner link; the record is a live disaster vehicle.
     pub(crate) fn disaster(self) -> *mut crate::disaster::State {
         read_field!(self.0.as_ptr(), disaster)
+    }
+    /// The effect owner link; the record is a live effect vehicle.
+    pub(crate) fn effect(self) -> *mut crate::effect::State {
+        read_field!(self.0.as_ptr(), effect)
     }
     /// Store `Vehicle::acceleration`.
     pub(crate) fn set_acceleration(self, value: u8) {

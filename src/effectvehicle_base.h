@@ -26,7 +26,7 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)> rust_state{openttd_rust_effect_new(), openttd_rust_effect_destroy};
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
-	EffectVehicle() : SpecializedVehicleBase() {}
+	EffectVehicle() : SpecializedVehicleBase() { this->record->effect = this->rust_state.get(); }
 	/** We want to 'destruct' the right class. */
 	virtual ~EffectVehicle() = default;
 
@@ -48,7 +48,6 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	}
 
 	void UpdateDeltaXY() override;
-	bool Tick() override;
 	TransparencyOption GetTransparencyOption() const;
 };
 

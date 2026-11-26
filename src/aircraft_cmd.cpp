@@ -37,7 +37,6 @@
 #include "zoom_func.h"
 #include "disaster_vehicle.h"
 #include "newgrf_airporttiles.h"
-#include "framerate_type.h"
 #include "aircraft_cmd.h"
 #include "vehicle_cmd.h"
 

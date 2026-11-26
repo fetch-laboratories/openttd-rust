@@ -251,6 +251,48 @@ mod bodies {
         f.game().consist_changed(f.train(), CCF_ARRANGE);
     }
 
+    /// `Train::Tick` (`train_cmd.cpp`) counts the tick of every part, then opens
+    /// `PFE_GL_TRAINS` for a front engine only: here a stopped one, whose two
+    /// `TrainLocoHandler` calls return at the stop test. A wagon opens none.
+    #[test]
+    fn tick_times_a_front_engine_after_its_tick_count() {
+        use crate::framerate_type::{
+            PerformanceElement as E,
+            testing::{Effect, sampling, take},
+        };
+        thread_local! {
+            static RECORD: Cell<*mut crate::vehicle_base::VehicleRecord> =
+                const { Cell::new(std::ptr::null_mut()) };
+        }
+        /// `(tick_counter, current_order_time)` of the fixture's train.
+        fn counts() -> i64 {
+            let v = crate::vehicle::VehicleRef::of(RECORD.get());
+            i64::from(v.tick_counter()) * 1_000 + i64::from(v.current_order_time())
+        }
+        let f = Fixture::new(LOCAL, FRONT_ENGINE, &SHARED, &VEHICLE);
+        // SAFETY: The fixture's fresh record; the consist lives for the test.
+        unsafe {
+            (*f.record).consist = crate::orders::openttd_rust_consist_new();
+            (*f.record).vehstatus = crate::vehicle_base::VehStates::from_element(VehState::Stopped);
+        }
+        RECORD.set(f.record);
+        let samples = sampling(counts, || assert!(f.game().tick(f.train())));
+        assert_eq!(
+            take(),
+            [
+                Effect::AccumulatorBegin(E::PFE_GL_TRAINS),
+                Effect::AccumulatorEnd(E::PFE_GL_TRAINS),
+            ]
+        );
+        // The scope opens after the tick count and ends after the order time count.
+        assert_eq!(samples, [1_000, 1_001]);
+        let wagon = Fixture::new(LOCAL, 0, &SHARED, &VEHICLE);
+        assert!(wagon.game().tick(wagon.train()));
+        assert_eq!(take(), []);
+        // SAFETY: The wagon fixture's live record.
+        assert_eq!(unsafe { (*wagon.record).tick_counter }, 1);
+    }
+
     /// `Train::UpdateSpeed` switches on the acceleration model with `default: NOT_REACHED()`:
     /// a model other than `AM_ORIGINAL` and `AM_REALISTIC` takes the native unreachable path.
     #[test]

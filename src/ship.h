@@ -95,7 +95,6 @@ struct Ship final : public SpecializedVehicle<Ship, VEH_SHIP> {
 	int GetCurrentMaxSpeed() const override { return std::min<int>(this->Record().cached_max_speed, this->current_order.GetMaxSpeed() * 2); }
 	Money GetRunningCost() const override;
 	bool IsInDepot() const override { return this->GetState() == TRACK_BIT_DEPOT; }
-	bool Tick() override;
 	TileIndex GetOrderStationLocation(StationID station) override;
 	ClosestDepot FindClosestDepot() override;
 	void UpdateCache();

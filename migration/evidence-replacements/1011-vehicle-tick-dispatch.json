@@ -1,0 +1,13 @@
+[
+  {
+    "retires": [
+      "ctest:Base vehicle scheduler - Tick timing scope returns before post-Tick reads"
+    ],
+    "oracle": "Fork-only native case, absent from the pinned original 14ec60f248547d4d062a1160f0fc26d742319888. It made two observations through a wrapped native tick slot over a probe vehicle whose Tick override ended a scope: that the timing scope of Vehicle::Tick ended before the scheduler's post-Tick reads, and that the session's tick entry reached a pooled vehicle through the production pool descriptor. #1011 deletes the virtual Tick and the scheduler's tick slot: the scheduler dispatches Tick on the vehicle type in Rust, and each controller opens its own PerformanceAccumulator. The ordering moves to a Rust test over the real pool walk: a road part's RoadVehicle::Tick (roadveh_cmd.cpp) begins and ends PFE_GL_ROADVEHS before the post-Tick body of CallVehicleTicks (vehicle.cpp) ages its cargo. The pool binding stays in the renamed native case \"Base vehicle scheduler - session tick reaches a pooled vehicle\", which ticks a hidden non-front RoadVehicle through the production scheduler table and checks its tick counter (ADR 0023); it retires with the vehicle pool (#656).",
+    "observations": {
+      "A controller's Tick timing scope ends before the scheduler's post-Tick body reads the survivor": [
+        "rust:lib:vehicle::scheduler::tests::pool::tick_dispatches_each_body_and_its_timing_scope_ends_before_the_post_tick_body"
+      ]
+    }
+  }
+]

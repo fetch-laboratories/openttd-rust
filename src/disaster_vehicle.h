@@ -52,7 +52,6 @@ struct DisasterVehicle final : public SpecializedVehicle<DisasterVehicle, VEH_DI
 	virtual ~DisasterVehicle() = default;
 
 	void UpdateDeltaXY() override;
-	bool Tick() override;
 };
 
 #endif /* DISASTER_VEHICLE_H */

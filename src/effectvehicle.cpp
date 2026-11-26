@@ -32,15 +32,6 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 	return &services;
 }
 
-static bool RunEffect(EffectVehicle *v)
-{
-	if (openttd_rust_effect_run(v->rust_state.get(), RustVehicle(v), &GetRustVehicleServices(), &GetRustSharedServices()) != 0) return true;
-	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
-	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
-	delete v;
-	return false;
-}
-
 /**
  * Create an effect vehicle at a particular location.
  * @param x The x location on the map.
@@ -82,11 +73,6 @@ EffectVehicle *CreateEffectVehicleRel(const Vehicle *v, int x, int y, int z, Eff
 {
 	openttd_rust_effect_bind(GetRustEffectCreationServices());
 	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create_rel(RustVehicle(v), x, y, z, type));
-}
-
-bool EffectVehicle::Tick()
-{
-	return RunEffect(this);
 }
 
 void EffectVehicle::UpdateDeltaXY()

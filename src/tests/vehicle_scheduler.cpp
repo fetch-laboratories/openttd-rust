@@ -103,29 +103,17 @@ TEST_CASE("Vehicle records - distinct native shells and inline scalar aliases")
 	CHECK(record->direction == DIR_NE);
 	delete v;
 }
-/* The native tick leaf's timing scope ends before the scheduler's post-Tick reads. Retires
- * with the native tick leaf. */
-static bool _scheduler_tick_scope_ended;
-struct SchedulerProbeVehicle final : Vehicle {
-	SchedulerProbeVehicle() : Vehicle(VEH_EFFECT) {}
-	bool Tick() override
-	{
-		struct EndScope { ~EndScope() { _scheduler_tick_scope_ended = true; } } scope;
-		_scheduler_tick_scope_ended = false;
-		return true;
-	}
-};
-TEST_CASE("Base vehicle scheduler - Tick timing scope returns before post-Tick reads")
+/* The session tick reaches a real pooled vehicle through the production scheduler table and
+ * its Rust dispatch: a hidden non-front road part's tick counts its tick and its post-Tick
+ * body plays no sound. Retires with the vehicle pool (#656). */
+TEST_CASE("Base vehicle scheduler - session tick reaches a pooled vehicle")
 {
 	_vehicle_pool.CleanPool();
 	REQUIRE(Vehicle::CanAllocateItem());
-	new (VehicleID(0)) SchedulerProbeVehicle();
-	auto services = GetRustVehicleSchedulerServices();
-	services.tick = [](OpenTTDVehicle *shell) noexcept {
-		const bool survives = GetRustVehicleSchedulerServices().tick(shell);
-		CHECK(_scheduler_tick_scope_ended);
-		return survives;
-	};
+	auto *v = new RoadVehicle();
+	v->Record().subtype = 0;
+	v->SetVehStatus(v->GetVehStatus().Set(VehState::Hidden));
+	v->Record().tick_counter = 41;
 	/* Rust borrows complete service values even when the pending map is empty.
 	 * Every function-pointer slot must be non-null, including unused callbacks. */
 	auto group = FleetGroupServices();
@@ -139,14 +127,14 @@ TEST_CASE("Base vehicle scheduler - Tick timing scope returns before post-Tick r
 	};
 	auto transaction = FleetTransactionServices();
 	OpenTTDVehicleSchedulerTables tables{};
-	tables.scheduler = &services;
+	tables.scheduler = &GetRustVehicleSchedulerServices();
 	tables.pending = &pending;
 	tables.transaction = &transaction;
 	tables.group = &group;
 	SessionFixture fixture;
 	fixture.tables = tables;
 	CHECK(fixture.Run());
-	CHECK(_scheduler_tick_scope_ended);
+	CHECK(v->Record().tick_counter == 42);
 	_vehicle_pool.CleanPool();
 }
 

@@ -7,10 +7,9 @@
 
 //! The vehicle scheduler of `vehicle.cpp`: `RunVehicleCalendarDayProc`,
 //! `RunEconomyVehicleDayProc` and `CallVehicleTicks` up to its autoreplace loop, which is
-//! [`fleet::pending::drain`], with the dispatch of the day virtuals `OnNewCalendarDay` and
+//! [`fleet::pending::drain`], with the dispatch of the virtuals `Tick`, `OnNewCalendarDay` and
 //! `OnNewEconomyDay`. The session's two entries take the record [`Tables`], whose
-//! [`SchedulerServices`] holds the vehicle pool's descriptor, the native `Tick` and the
-//! controllers' tables.
+//! [`SchedulerServices`] holds the vehicle pool's descriptor and the controllers' tables.
 //!
 //! The pool and the vehicle records are read in place: the pool through its descriptor, each
 //! member through the `VehicleRef` accessor named after it. No reference into a shell, a record
@@ -31,8 +30,9 @@ use crate::timer_game_tick::DAY_TICKS;
 use crate::vehicle_base::{Pool, VehState, VehStates};
 use crate::vehicle_type::{VehicleID, VehicleType};
 use crate::{
-    aircraft, cargo_storage, fleet, ground_vehicle, newgrf_vehicle, road, services, session,
-    ship_control, station_service, timer_game_common, train, vehicle_base,
+    aircraft, cargo_storage, disaster, effect, fleet, ground_vehicle, newgrf_vehicle, road,
+    road_cmd, services, session, ship_control, station_service, timer_game_common, train,
+    vehicle_base,
 };
 use std::mem::MaybeUninit;
 
@@ -40,6 +40,8 @@ use std::mem::MaybeUninit;
 pub struct SchedulerServices {
     /// The aircraft controller's table, immutable for the process.
     pub aircraft: *const aircraft::Leaves,
+    /// The disaster vehicle table, immutable for the process.
+    pub disaster: *const disaster::Services,
     /// `&_vehicle_pool.descriptor`: the vehicle pool's descriptor, Rust's own record.
     pub pool: *const *const PoolDescriptor,
     /// The road vehicle controller's table, immutable for the process.
@@ -48,8 +50,6 @@ pub struct SchedulerServices {
     pub shared: *const services::Services,
     /// The ship controller's table, immutable for the process.
     pub ship: *const ship_control::Leaves,
-    /// Runs the virtual Tick; true when the vehicle survives.
-    pub tick: extern "C" fn(VehicleRef) -> bool,
     /// The train controller's table, immutable for the process.
     pub train: *const train::Leaves,
     /// The base vehicle table, immutable for the process.
@@ -63,6 +63,9 @@ pub struct Tables {
     pub pending: *const fleet::pending::Services,
     pub refit_cost: *mut services::CommandCost,
     pub refit_temporary: *mut services::CommandCost,
+    /// The session frame's road command slot for the vehicle tick; null on the calendar-day
+    /// entry.
+    pub road_slot: *mut road_cmd::CommandSlot,
     pub scheduler: *const SchedulerServices,
     pub station: *const station_service::World,
     pub transaction: *const fleet::transactions::Services,
@@ -79,6 +82,10 @@ impl SchedulerServices {
     fn aircraft(&self) -> &aircraft::Leaves {
         // SAFETY: Each table link is a process-lifetime table.
         unsafe { &*self.aircraft }
+    }
+    fn disaster(&self) -> &disaster::Services {
+        // SAFETY: As `aircraft`.
+        unsafe { &*self.disaster }
     }
     fn road(&self) -> &road::Leaves {
         // SAFETY: As `aircraft`.
@@ -153,6 +160,23 @@ fn resolver<const COUNTED: bool>(vs: &VehicleServices) -> &'static newgrf_vehicl
     newgrf
 }
 
+/// `v->Tick()`: the virtual's dispatch; true when the vehicle survives. Other types keep the
+/// base class's `return true;`.
+fn tick(tables: &Tables, s: &SchedulerServices, v: VehicleRef, id: VehicleID) -> bool {
+    match v.vehicle_type() {
+        VehicleType::VEH_TRAIN => train::tick(
+            train::Handle::from_record(v.0.as_ptr()),
+            s.train(),
+            s.shared(),
+        ),
+        VehicleType::VEH_ROAD => road::tick(v, s.road(), tables.road_slot),
+        VehicleType::VEH_SHIP => ship_control::scheduler_tick(v, s.ship(), s.shared()),
+        VehicleType::VEH_AIRCRAFT => aircraft::tick(s.aircraft(), aircraft::Vehicle::of(v, id)),
+        VehicleType::VEH_EFFECT => effect::tick(v, s.vehicle(), s.shared()),
+        VehicleType::VEH_DISASTER => disaster::scheduler_tick(s.disaster(), v),
+        _ => true,
+    }
+}
 /// `v->OnNewCalendarDay()`: the virtual's dispatch. Effect and disaster vehicles keep the base
 /// class's empty body.
 fn on_new_calendar_day(s: &SchedulerServices, v: VehicleRef, id: VehicleID) {
@@ -544,7 +568,7 @@ fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
         }
 
         // Vehicle could be deleted in this tick
-        if !svc!(COUNTED, s.tick, v) {
+        if !tick(tables, s, v, id) {
             // `Vehicle::Get` also asserts `vehicle_index < first_unused`, where
             // `TypedPool::shell` returns null instead. That assertion holds: the walk yielded
             // the index below `first_unused`, `FreeItem` never lowers it, and `CleanPool` does
@@ -599,11 +623,11 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
         aircraft,
+        disaster,
         pool,
         road,
         shared,
         ship,
-        tick,
         train,
         vehicle,
     };
@@ -614,6 +638,7 @@ crate::abi::layouts! {
         pending,
         refit_cost,
         refit_temporary,
+        road_slot,
         scheduler,
         station,
         transaction,
@@ -755,6 +780,7 @@ mod tests {
                 pending: null(),
                 refit_cost: null_mut(),
                 refit_temporary: null_mut(),
+                road_slot: null_mut(),
                 scheduler: null(),
                 station: null(),
                 transaction: null(),
@@ -829,7 +855,7 @@ mod tests {
         extern "C" fn packet_next(_: *mut c_void) -> *mut c_void {
             null_mut()
         }
-        fn cargo_services() -> cargo_storage::Services {
+        pub(super) fn cargo_services() -> cargo_storage::Services {
             cargo_storage::Services {
                 can_allocate,
                 create,
@@ -1038,16 +1064,45 @@ mod tests {
             static MUTATE: Cell<bool> = const { Cell::new(false) };
             static GROWTH: Cell<usize> = const { Cell::new(usize::MAX) };
             static STEPS: RefCell<Vec<Step>> = const { RefCell::new(Vec::new()) };
+            /// What an effect's sprite read does: the visit's script.
+            static SPRITE: Cell<fn(VehicleRef)> = const { Cell::new(lifetime_visit) };
+            /// What an effect's viewport update, its procedure's last service call, does.
+            static VIEWPORT: Cell<fn(VehicleRef)> = const { Cell::new(|_| {}) };
+            /// Whether `delete v` of an expired effect deletes it.
+            static DELETES: Cell<bool> = const { Cell::new(true) };
+            /// Whether deleting a vehicle keeps its record and owner allocated.
+            static KEEPS_RECORDS: Cell<bool> = const { Cell::new(false) };
         }
         /// `CallVehicleTicks`'s observable steps before its vehicle loop ends.
         #[derive(Debug, PartialEq, Eq)]
         enum Step {
             Framerate(Effect),
             Stations,
+            /// An effect's procedure read its sprite.
             Tick(usize),
+            /// `delete v` of an expired effect, with its owner's `animation_state` and its
+            /// `progress` then.
+            Destroy {
+                id: usize,
+                animation_state: u16,
+                progress: u8,
+            },
+            /// The post-`Tick` body's `v->cargo.AgeCargo()`.
+            AgeCargo(usize),
+            /// The `tick_counter` of the vehicle at ID 1 when a timing scope ended.
+            EndedAtTickCounter(u8),
         }
         fn record_framerate(effect: Effect) {
             STEPS.with(|s| s.borrow_mut().push(Step::Framerate(effect)));
+        }
+        /// `record_framerate`, and at a scope's end the tick count of the vehicle at ID 1.
+        fn record_framerate_and_count(effect: Effect) {
+            record_framerate(effect);
+            if let Effect::AccumulatorEnd(_) = effect {
+                // SAFETY: The test's live record at ID 1.
+                let counter = unsafe { (*record(1)).tick_counter };
+                STEPS.with(|s| s.borrow_mut().push(Step::EndedAtTickCounter(counter)));
+            }
         }
         fn pool() -> *mut PoolCore {
             POOL.get()
@@ -1098,7 +1153,13 @@ mod tests {
                     .record
                     .cast::<crate::vehicle_base::VehicleRecord>();
                 PoolCore::retire_record(pool(), index);
-                VehicleRecord::delete(record);
+                if !KEEPS_RECORDS.get() {
+                    let owner = (*record).effect;
+                    if !owner.is_null() {
+                        crate::effect::openttd_rust_effect_destroy(owner);
+                    }
+                    VehicleRecord::delete(record);
+                }
                 PoolCore::free_item(pool(), SIZE, index);
             }
         }
@@ -1134,9 +1195,25 @@ mod tests {
             POOL.set(&raw mut *core);
             TestPool { _core: core }
         }
-        /// `new (VehicleID(index)) Vehicle(VEH_EFFECT)`: shell, then its fresh canonical record.
+        /// `new (VehicleID(index)) EffectVehicle()` of type `EV_BREAKDOWN_SMOKE`: shell, then its
+        /// fresh canonical record and its owner, with a `progress` whose next tick reads the
+        /// sprite. Its `animation_state` 0 survives `BreakdownSmokeTick`.
         fn new_vehicle(index: usize) -> *mut Shell {
-            new_vehicle_of(index, VehicleType::VEH_EFFECT)
+            let shell = new_vehicle_of(index, VehicleType::VEH_EFFECT);
+            let fresh = record(index);
+            // SAFETY: The fresh record.
+            unsafe {
+                (*fresh).effect = crate::effect::openttd_rust_effect_new();
+                (*fresh).subtype =
+                    crate::effectvehicle_func::EffectVehicleType::EV_BREAKDOWN_SMOKE.0;
+                (*fresh).progress = 7;
+            }
+            shell
+        }
+        /// Give the effect at `index` the `animation_state` 1 with which its next tick expires it.
+        fn expire(index: usize) {
+            // SAFETY: The live effect's owner.
+            unsafe { crate::effect::openttd_rust_effect_set_animation((*record(index)).effect, 1) };
         }
         /// `new (VehicleID(index)) Vehicle(kind)`.
         fn new_vehicle_of(index: usize, kind: VehicleType) -> *mut Shell {
@@ -1173,9 +1250,45 @@ mod tests {
         extern "C" fn resolver() -> *const newgrf_vehicle::Services {
             &newgrf_vehicle::TEST_TABLE
         }
-        /// `VEHICLE` with the resolver table the tick entry resolves before its loop.
+        /// `BreakdownSmokeTick`'s sprite read: the test's script for the visit. It returns a
+        /// sprite other than the animation's last.
+        extern "C" fn first_sprite(vehicle: VehicleRef) -> u32 {
+            SPRITE.get()(vehicle);
+            0
+        }
+        extern "C" fn write_first_sprite(_: VehicleRef, _: crate::gfx_type::SpriteID) {}
+        extern "C" fn viewport(vehicle: VehicleRef) {
+            VIEWPORT.get()(vehicle);
+        }
+        /// `delete v` of an expired effect.
+        extern "C" fn destroy_effect(vehicle: VehicleRef) {
+            let id = index_of(vehicle);
+            // SAFETY: The expired effect's live owner and record.
+            let (animation_state, progress) = unsafe {
+                (
+                    crate::effect::openttd_rust_effect_get_animation((*vehicle.0.as_ptr()).effect),
+                    (*vehicle.0.as_ptr()).progress,
+                )
+            };
+            STEPS.with(|s| {
+                s.borrow_mut().push(Step::Destroy {
+                    id,
+                    animation_state,
+                    progress,
+                });
+            });
+            if DELETES.get() {
+                delete_vehicle(id);
+            }
+        }
+        /// `VEHICLE` with the resolver table the tick entry resolves before its loop and the
+        /// services `BreakdownSmokeTick` calls.
         const VEHICLES: VehicleServices = VehicleServices {
+            base_viewport: viewport,
+            destroy: destroy_effect,
+            first_sprite,
             newgrf: resolver,
+            write_first_sprite,
             ..VEHICLE
         };
         fn index_of(vehicle: VehicleRef) -> usize {
@@ -1243,25 +1356,20 @@ mod tests {
                 );
             }
         }
-        extern "C" fn lifetime_tick(vehicle: VehicleRef) -> bool {
+        /// The fixture's visit script inside an effect's tick: record the visit, keep the sprite
+        /// read for the next tick and, on the mutating tick, run ID 2's script. ID 0 and the
+        /// grown ID expire on the mutating tick: deleting ID 0 also deletes the unvisited chain
+        /// member at ID 1, and the newly discovered vehicle dies before the next slot is read.
+        fn lifetime_visit(vehicle: VehicleRef) {
             let id = index_of(vehicle);
             VISITS.with(|v| v.borrow_mut().push(id));
-            if !MUTATE.get() {
-                return true;
-            }
-            if id == 0 {
-                delete_vehicle(0); // Also deletes the unvisited chain member at ID 1.
-                assert!(!valid(1));
-                return false;
-            }
-            if id == 2 {
+            // SAFETY: The visiting vehicle's live record.
+            unsafe { (*vehicle.0.as_ptr()).progress = 7 };
+            if MUTATE.get() && id == 2 {
+                assert!(!valid(1), "deleting ID 0 deleted its chain member");
                 mutate_at_two(id);
+                expire(GROWTH.get());
             }
-            if id == GROWTH.get() {
-                delete_vehicle(id); // Newly discovered vehicle dies before the next slot is read.
-                return false;
-            }
-            true
         }
         /// `Station::Iterate()` over no stations, marking the iteration.
         extern "C" fn mark_stations(_: *mut c_void, _: crate::services::StationVisitor) {
@@ -1269,9 +1377,18 @@ mod tests {
         }
         extern "C" fn keep_company(_: u8) {}
 
-        /// Run `CallVehicleTicks` (outside normal play: no day work) with `tick`. It clears and
-        /// drains the process-wide pending map, so it holds that map's test lock.
-        fn run_ticks(tick: extern "C" fn(VehicleRef) -> bool) {
+        /// Run `CallVehicleTicks` (outside normal play: no day work) over the effects' tables. It
+        /// clears and drains the process-wide pending map, so it holds that map's test lock.
+        fn run_ticks() {
+            run_ticks_with(&VEHICLES, null(), null());
+        }
+        /// `run_ticks` with the base vehicle table `vehicle`, the road controller's table `road`
+        /// and the cargo table `cargo`.
+        fn run_ticks_with(
+            vehicle: &VehicleServices,
+            road: *const road::Leaves,
+            cargo: *const cargo_storage::Services,
+        ) {
             static FINANCE: crate::company::FinanceServices = crate::company::FinanceServices {
                 set_current_company: keep_company,
                 ..crate::test_tables::FINANCE
@@ -1282,8 +1399,8 @@ mod tests {
             let descriptor = view().cast_const();
             let mut scheduler = SCHEDULER;
             scheduler.pool = &raw const descriptor;
-            scheduler.tick = tick;
-            scheduler.vehicle = &VEHICLES;
+            scheduler.road = road;
+            scheduler.vehicle = vehicle;
             scheduler.shared = &raw const shared;
             let pending = FLEET_PENDING;
             let mut commands = crate::test_tables::COMMANDS;
@@ -1293,6 +1410,7 @@ mod tests {
             let mut group = FLEET_GROUPS;
             group.shared = &raw const shared;
             let tables = Tables {
+                cargo,
                 group: &raw const group,
                 pending: &raw const pending,
                 scheduler: &raw const scheduler,
@@ -1317,9 +1435,10 @@ mod tests {
             for id in [2, 4, 5] {
                 new_vehicle(id);
             }
+            expire(0);
             for mutate in [true, false] {
                 MUTATE.set(mutate);
-                run_ticks(lifetime_tick);
+                run_ticks();
             }
             // SAFETY: The live pool owner.
             let items = unsafe { (*view()).items };
@@ -1375,9 +1494,8 @@ mod tests {
             )
         }
 
-        extern "C" fn ordered_tick(vehicle: VehicleRef) -> bool {
+        fn ordered_visit(vehicle: VehicleRef) {
             STEPS.with(|s| s.borrow_mut().push(Step::Tick(index_of(vehicle))));
-            true
         }
 
         /// `CallVehicleTicks` (`vehicle.cpp:961-969`): the economy measurer spans the station
@@ -1390,9 +1508,10 @@ mod tests {
             MUTATE.set(false);
             new_vehicle(0);
             STEPS.with(|s| s.borrow_mut().clear());
+            SPRITE.set(ordered_visit);
             framerate::take();
             framerate::observe(Some(record_framerate));
-            run_ticks(ordered_tick);
+            run_ticks();
             framerate::observe(None);
             clean();
             let steps = STEPS.with(|s| std::mem::take(&mut *s.borrow_mut()));
@@ -1421,31 +1540,37 @@ mod tests {
             );
         }
 
-        /// "Base vehicle scheduler - Tick growth, timing return and fresh type": ID 0 grows the
-        /// pool past its old extent and becomes a crashed road vehicle whose cargo ages every 4
-        /// ticks during Tick; the newly discovered vehicle deletes itself.
-        extern "C" fn growing_tick(vehicle: VehicleRef) -> bool {
+        /// "Base vehicle scheduler - Tick growth, timing return and fresh type": ID 0's tick
+        /// grows the pool past its old extent with an expiring effect; the newly discovered
+        /// vehicle expires on its visit.
+        fn growing_visit(vehicle: VehicleRef) {
             if index_of(vehicle) == 0 {
                 GROWTH.set(slots_len());
                 new_vehicle(slots_len());
-                // SAFETY: The visiting vehicle's live record.
-                unsafe {
-                    let record = vehicle.0.as_ptr();
-                    (*record).r#type = VehicleType::VEH_ROAD;
-                    (*record).vehstatus = crate::vehicle_base::VehStates::from_element(
-                        crate::vehicle_base::VehState::Crashed,
-                    );
-                    (*record).cached_cargo_age_period = 4;
-                    (*record).cargo_age_counter = 9;
-                }
-                SURVIVORS.set(SURVIVORS.get() + 1);
-                return true;
+                expire(GROWTH.get());
+                return;
             }
             if index_of(vehicle) == GROWTH.get() {
                 GROWN_VISITS.set(GROWN_VISITS.get() + 1);
             }
-            delete_vehicle(index_of(vehicle));
-            false
+        }
+        /// ID 0's last service call in its tick makes it a crashed road vehicle whose cargo
+        /// ages every 4 ticks.
+        fn retyping_viewport(vehicle: VehicleRef) {
+            if index_of(vehicle) != 0 {
+                return;
+            }
+            // SAFETY: The visiting vehicle's live record.
+            unsafe {
+                let record = vehicle.0.as_ptr();
+                (*record).r#type = VehicleType::VEH_ROAD;
+                (*record).vehstatus = crate::vehicle_base::VehStates::from_element(
+                    crate::vehicle_base::VehState::Crashed,
+                );
+                (*record).cached_cargo_age_period = 4;
+                (*record).cargo_age_counter = 9;
+            }
+            SURVIVORS.set(SURVIVORS.get() + 1);
         }
         #[test]
         fn tick_growth_rereads_the_pool_and_the_fresh_type() {
@@ -1454,7 +1579,9 @@ mod tests {
             GROWTH.set(usize::MAX);
             GROWN_VISITS.set(0);
             SURVIVORS.set(0);
-            run_ticks(growing_tick);
+            SPRITE.set(growing_visit);
+            VIEWPORT.set(retyping_viewport);
+            run_ticks();
             assert_eq!(
                 GROWN_VISITS.get(),
                 1,
@@ -1474,6 +1601,87 @@ mod tests {
             clean();
         }
 
+        /// The cargo list of a road part whose post-`Tick` body ages its cargo.
+        unsafe extern "C" fn ageing_cargo(v: *mut VehicleRecord) -> *const cargo_storage::List {
+            thread_local! {
+                static LIST: *mut cargo_storage::List = cargo_storage::openttd_rust_cargo_list_new(1);
+            }
+            let id = index_of(VehicleRef::of(v));
+            STEPS.with(|s| s.borrow_mut().push(Step::AgeCargo(id)));
+            LIST.with(|l| *l)
+        }
+        extern "C" fn ageing_resolver() -> *const newgrf_vehicle::Services {
+            thread_local! {
+                static RESOLVER: &'static newgrf_vehicle::Services =
+                    Box::leak(Box::new(newgrf_vehicle::TEST_TABLE.with_cargo_owner(ageing_cargo)));
+            }
+            RESOLVER.with(|r| *r)
+        }
+
+        /// `CallVehicleTicks` dispatches `Tick` on the type and runs the post-`Tick` body only for
+        /// a survivor, after the body's timing scope ended: an expiring effect's procedure
+        /// stores its `progress` and `animation_state`, then deletes it (`effectvehicle.cpp`,
+        /// `BreakdownSmokeTick`), and the walk skips its post-`Tick` body; a road part's
+        /// `RoadVehicle::Tick` begins and ends `PFE_GL_ROADVEHS` (`roadveh_cmd.cpp`) before the
+        /// post-`Tick` body ages its cargo (`vehicle.cpp`).
+        #[test]
+        fn tick_dispatches_each_body_and_its_timing_scope_ends_before_the_post_tick_body() {
+            use PerformanceElement as E;
+            // The walk reads the process-wide game mode, which other tests write.
+            if crate::services_assert::isolate_test_check(
+                "vehicle::scheduler::tests::pool::tick_dispatches_each_body_and_its_timing_scope_ends_before_the_post_tick_body",
+                record_failure,
+            ) {
+                return;
+            }
+            let _pool = new_pool();
+            new_vehicle(0);
+            expire(0);
+            let part = road_part(1, EngineID(0), 0);
+            // SAFETY: The fresh record.
+            unsafe {
+                (*part).cached_cargo_age_period = 1;
+                (*part).vehstatus = VehStates::from_element(VehState::Crashed);
+            }
+            let vehicles = VehicleServices {
+                newgrf: ageing_resolver,
+                ..VEHICLES
+            };
+            let cargo = super::post_tick::cargo_services();
+            STEPS.with(|s| s.borrow_mut().clear());
+            SPRITE.set(ordered_visit);
+            framerate::take();
+            FAILURES.store(0, Ordering::Relaxed);
+            framerate::observe(Some(record_framerate_and_count));
+            run_ticks_with(&vehicles, day_scheduler(VEHICLES).road, &raw const cargo);
+            framerate::observe(None);
+            assert_eq!(
+                FAILURES.load(Ordering::Relaxed),
+                0,
+                "no failed native assertion"
+            );
+            let steps = STEPS.with(|s| std::mem::take(&mut *s.borrow_mut()));
+            assert_eq!(
+                steps[7..],
+                [
+                    Step::Tick(0),
+                    Step::Destroy {
+                        id: 0,
+                        animation_state: 0,
+                        progress: 8
+                    },
+                    Step::Framerate(Effect::AccumulatorBegin(E::PFE_GL_ROADVEHS)),
+                    Step::Framerate(Effect::AccumulatorEnd(E::PFE_GL_ROADVEHS)),
+                    // The part's tick count lies inside the scope.
+                    Step::EndedAtTickCounter(1),
+                    Step::AgeCargo(1),
+                ]
+            );
+            // SAFETY: The surviving part's record.
+            assert_eq!(unsafe { (*part).tick_counter }, 1);
+            clean();
+        }
+
         use crate::engine_type::EngineID;
         use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -1485,9 +1693,11 @@ mod tests {
             }
         }
 
-        extern "C" fn deleting_survivor_tick(vehicle: VehicleRef) -> bool {
+        /// An effect's tick that deletes its own vehicle from the pool, keeping its record and
+        /// owner allocated for the rest of its procedure, which then reports survival.
+        fn deleting_survivor_visit(vehicle: VehicleRef) {
+            KEEPS_RECORDS.set(true);
             delete_vehicle(index_of(vehicle));
-            true
         }
         /// `assert(Vehicle::Get(vehicle_index) == v)` after a `Tick` that deleted its vehicle and
         /// reported survival. The body after `Tick` would read the freed record, so the native
@@ -1501,19 +1711,10 @@ mod tests {
             }
             let _pool = new_pool();
             new_vehicle(0);
-            run_ticks(deleting_survivor_tick);
+            SPRITE.set(deleting_survivor_visit);
+            run_ticks();
         }
 
-        extern "C" fn surviving_tick(_: VehicleRef) -> bool {
-            true
-        }
-        extern "C" fn deleting_tick(vehicle: VehicleRef) -> bool {
-            delete_vehicle(index_of(vehicle));
-            false
-        }
-        extern "C" fn undeleting_tick(_: VehicleRef) -> bool {
-            false
-        }
         /// `assert(Vehicle::Get(vehicle_index) == nullptr)` after a false `Tick` and `== v` after a
         /// true one run through the native policy: the two honest results record no failure, and
         /// a `Tick` that reports a deletion it did not make records one.
@@ -1525,16 +1726,18 @@ mod tests {
             ) {
                 return;
             }
-            let ticks: [(extern "C" fn(VehicleRef) -> bool, u32); 3] = [
-                (surviving_tick, 0),
-                (deleting_tick, 0),
-                (undeleting_tick, 1),
-            ];
-            for (tick, failures) in ticks {
+            // Whether the effect expires, whether its `delete v` deletes it, and the failures.
+            let ticks = [(false, true, 0), (true, true, 0), (true, false, 1)];
+            SPRITE.set(|_| {});
+            for (expires, deletes, failures) in ticks {
                 let _pool = new_pool();
                 new_vehicle(0);
+                if expires {
+                    expire(0);
+                }
+                DELETES.set(deletes);
                 FAILURES.store(0, Ordering::Relaxed);
-                run_ticks(tick);
+                run_ticks();
                 assert_eq!(FAILURES.load(Ordering::Relaxed), failures);
                 clean();
             }
@@ -1660,6 +1863,7 @@ mod tests {
                     vehicle,
                     ..crate::test_tables::AIRCRAFT_LEAVES
                 })),
+                disaster: null(),
                 pool: Box::leak(Box::new(view().cast_const())),
                 road: Box::leak(Box::new(road::Leaves {
                     ground: &crate::test_tables::ROAD_GROUND,
@@ -1672,7 +1876,6 @@ mod tests {
                     vehicle,
                     ..crate::test_tables::SHIP_LEAVES
                 })),
-                tick: crate::test_tables::unreachable1,
                 train: Box::leak(Box::new(train::Leaves {
                     vehicle,
                     ..crate::test_tables::TRAIN_LEAVES

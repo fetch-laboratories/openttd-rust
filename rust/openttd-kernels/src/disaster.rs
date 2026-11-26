@@ -1425,6 +1425,14 @@ static _disastervehicle_tick_procs: [DisasterVehicleTickProc; 15] = [
 pub(crate) fn tick(t: &Tables<'_>, this: DisasterVehicle) -> bool {
     _disastervehicle_tick_procs[usize::from(this.v.subtype())](t, this)
 }
+/// `DisasterVehicle::Tick`, for the scheduler's dispatch over a live disaster vehicle through
+/// the process-lifetime table `s`.
+#[allow(unsafe_code)]
+pub(crate) fn scheduler_tick(s: &Services, v: VehicleRef) -> bool {
+    // SAFETY: Every link of the process-lifetime table stays valid for the call.
+    let t = unsafe { Tables::new(s) };
+    tick(&t, DisasterVehicle::of(v))
+}
 
 type DisasterInitProc = fn(&Tables<'_>);
 
@@ -1949,13 +1957,14 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 // disaster vehicle record. The game passes its process-lifetime table under the game-state
 // mutex; the native probe passes its own tables in serialized calls.
 
-/// `DisasterVehicle::Tick`.
+/// `DisasterVehicle::Tick` for the kept native fixture
+/// `tools/migration/windows-abi/disaster.inc`, through the scheduler's entry; it leaves with
+/// that fixture.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_tick_abi(s: *const Services, v: VehicleRef) -> u8 {
     // SAFETY: As the entries' contract.
-    let t = unsafe { Tables::new(&*s) };
-    u8::from(tick(&t, DisasterVehicle::of(v)))
+    u8::from(scheduler_tick(unsafe { &*s }, v))
 }
 /// `ReleaseDisasterVehicle`, after its `DisasterVehicle::GetIfValid` found `v`.
 #[allow(unsafe_code)]

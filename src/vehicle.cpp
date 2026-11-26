@@ -613,7 +613,7 @@ Vehicle::~Vehicle()
 #include "rust/vehicle_ffi.h"
 #include "rust/station_service_ffi.h"
 #include "rust/vehicle_refit_ffi.h"
-OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit_cost, OpenTTDCommandCost *temporary) noexcept
+OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit_cost, OpenTTDCommandCost *temporary, OpenTTDRoadCommandSlot *road_slot) noexcept
 {
 	return {
 		.cargo = CargoStorageServices(),
@@ -622,6 +622,7 @@ OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *ref
 		.pending = &_fleet_pending_services,
 		.refit_cost = refit_cost,
 		.refit_temporary = temporary,
+		.road_slot = road_slot,
 		.scheduler = &GetRustVehicleSchedulerServices(),
 		.station = &GetRustStationServices(),
 		.transaction = &FleetTransactionServices(),

@@ -19,7 +19,9 @@ static_assert(SM_NONE == 0 && SM_NEWGAME == 1 && SM_RESTARTGAME == 2 && SM_RELOA
 static_assert(PauseMode::Normal == PauseMode(0) && PauseMode::SaveLoad == PauseMode(1) && PauseMode::Join == PauseMode(2) && PauseMode::Error == PauseMode(3) && PauseMode::ActiveClients == PauseMode(4) && PauseMode::GameScript == PauseMode(5) && PauseMode::LinkGraph == PauseMode(6) && PauseMode::CommandDuringPause == PauseMode(7));
 static_assert(FT_SAVEGAME == 1 && FT_SCENARIO == 2 && FT_HEIGHTMAP == 3 && SL_OK == 0 && SL_REINIT == 2 && COLOUR_END == 16);
 struct OpenTTDWorldSetupFrame { std::exception_ptr cancellation; };
-struct RustSessionVehicleCosts { CommandCost replacement, refit, temporary; };
+/* The vehicle tick's native storage: the fleet and refit costs, and the one road command
+ * slot every road vehicle's tick reuses; a built context is rebuilt at each use. */
+struct RustSessionVehicleCosts { CommandCost replacement, refit, temporary; OpenTTDRoadCommandSlot road; };
 struct OpenTTDSessionLoad {
 	const std::string &filename;
 	SaveLoadOperation operation;

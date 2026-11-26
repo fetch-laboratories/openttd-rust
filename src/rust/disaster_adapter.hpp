@@ -15,23 +15,21 @@
 #include "environment_services.h"
 
 static OpenTTDVehicle *OPENTTD_RUST_CALL DisasterAllocate() noexcept { return RustVehicle(new DisasterVehicle()); }
-const OpenTTDDisasterServices &DisasterServices() noexcept
-{
-	static const OpenTTDDisasterServices services{
-		.aircraft = &GetRustAircraftLeaves(),
-		.allocate = DisasterAllocate,
-		.environment = &GetRustEnvironmentServices(),
-		.identity = &GetRustCompanyIdentityServices(),
-		.industry = &GetIndustryRustServices(),
-		.road = &GetRustRoadLeaves(),
-		.scheduler = &GetRustVehicleSchedulerServices(),
-		.shared = &GetRustSharedServices(),
-		.vehicles = &GetRustVehicleServices(),
-	};
-	return services;
-}
+/* At namespace scope: the scheduler's table, which this one links, links it back, and two
+ * function-local statics whose initializers name each other would recurse. */
+static const OpenTTDDisasterServices _disaster_services{
+	.aircraft = &GetRustAircraftLeaves(),
+	.allocate = DisasterAllocate,
+	.environment = &GetRustEnvironmentServices(),
+	.identity = &GetRustCompanyIdentityServices(),
+	.industry = &GetIndustryRustServices(),
+	.road = &GetRustRoadLeaves(),
+	.scheduler = &GetRustVehicleSchedulerServices(),
+	.shared = &GetRustSharedServices(),
+	.vehicles = &GetRustVehicleServices(),
+};
+const OpenTTDDisasterServices &DisasterServices() noexcept { return _disaster_services; }
 
-bool DisasterVehicle::Tick() { return openttd_rust_disaster_tick(&DisasterServices(), RustVehicle(this)); }
 void ReleaseDisasterVehicle(VehicleID vehicle)
 {
 	DisasterVehicle *v = DisasterVehicle::GetIfValid(vehicle);

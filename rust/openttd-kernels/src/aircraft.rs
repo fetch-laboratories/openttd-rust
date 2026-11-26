@@ -29,6 +29,7 @@ use crate::direction_func::{
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::effectvehicle_func::EffectVehicleType;
 use crate::engine_type::{AIR_CTOL, AIR_FAST};
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::map_func::Map;
 use crate::newgrf_properties::PropertyID;
 use crate::newgrf_sound::VehicleSoundEvent;
@@ -57,6 +58,7 @@ use crate::vehicle_type::{DepotCommandFlag, DepotCommandFlags, VehicleID, Vehicl
 use crate::window_func::{invalidate_window_data, set_window_classes_dirty, set_window_dirty};
 use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
+use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 
 #[cfg(test)]
@@ -3065,7 +3067,16 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return true;
         }
 
+        crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
         crate::witness::hit(crate::witness::AIRCRAFT_TICKS);
+
+        let mut storage = MaybeUninit::uninit();
+        // SAFETY: The scheduler's `Tick` runs in the game loop, serialized by the game-state
+        // mutex; the guard drops when this body returns, after an `AircraftEventHandler` that
+        // deleted the aircraft, and holds no reference to it.
+        let _framerate = unsafe {
+            PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_AIRCRAFT)
+        };
 
         b.set_tick_counter(b.tick_counter().wrapping_add(1));
 
@@ -3326,13 +3337,19 @@ pub(crate) unsafe fn event(leaves: *const Leaves, id: Vehicle, pass: bool) -> bo
  * flight helpers, a live disaster vehicle with null state). Raw scalar accesses end
  * before noexcept callbacks; no borrow survives reentry. */
 
-/// `Aircraft::Tick`.
+/// `Aircraft::Tick`, for the scheduler's dispatch over every aircraft part. A shadow or rotor
+/// returns before it counts an entry.
+pub(crate) fn tick(leaves: &Leaves, id: Vehicle) -> bool {
+    with_world!(leaves, |w| { w.tick(id) })
+}
+/// `Aircraft::Tick` for the kept native fixture `tools/migration/windows-abi/aircraft.inc`; it
+/// leaves with that fixture.
 /// # Safety
 /// See the shared export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_tick_abi(leaves: *const Leaves, id: Vehicle) -> u8 {
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    u8::from(with_world!(leaves, |w| { w.tick(id) }))
+    // SAFETY: As the shared export contract.
+    u8::from(tick(unsafe { &*leaves }, id))
 }
 /// `Aircraft::OnNewCalendarDay`, for the scheduler's dispatch over a live aircraft.
 pub(crate) fn on_new_calendar_day(leaves: &Leaves, id: Vehicle) {
