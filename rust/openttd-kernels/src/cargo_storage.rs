@@ -421,11 +421,14 @@ impl CargoPacket {
         if self.source_xy == crate::tile_type::INVALID_TILE {
             self.source_xy = tile.0;
         }
+        // `in_vehicle` and its assertion are `#ifdef WITH_ASSERT` in the original; the record
+        // keeps the field in every build, and `assert_with` follows the build's assertions.
         assert_with(|| self.in_vehicle == 0);
         self.in_vehicle = 1;
         let world = crate::map_func::World::new(shared);
         // We want to calculate the vector from tile-unload to tile-load. As we currently only
-        // know the tile-load, add it. When we know the tile-unload, we subtract it.
+        // know the latter, add it. When we know where we unload, we subtract is, giving us our
+        // vector (unload - load).
         self.travelled_x = self
             .travelled_x
             .wrapping_add(world.dimensions.tile_x(tile) as i16);
@@ -439,6 +442,7 @@ impl CargoPacket {
         shared: &crate::services::Services,
         tile: TileIndex,
     ) {
+        // `#ifdef WITH_ASSERT` in the original, as in `update_loading_tile`.
         assert_with(|| self.in_vehicle != 0);
         self.in_vehicle = 0;
         let world = crate::map_func::World::new(shared);
@@ -2696,10 +2700,6 @@ pub unsafe extern "C" fn openttd_rust_station_cargo_list_reserve(
 }
 
 #[cfg(test)]
-#[allow(
-    unsafe_code,
-    reason = "the fixtures build, read and free raw lists, packets and records"
-)]
 pub(crate) mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
@@ -2713,6 +2713,10 @@ pub(crate) mod tests {
     extern "C" fn can_allocate() -> u8 {
         ALLOCATE.with(|flag| u8::from(flag.get()))
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     extern "C" fn create(fields: *const CargoPacket) -> *mut c_void {
         let shell = Box::into_raw(Box::new(unsafe { *fields })).cast();
         POOL.with(|pool| pool.borrow_mut().push(shell));
@@ -2721,6 +2725,10 @@ pub(crate) mod tests {
     extern "C" fn owner(shell: *mut c_void) -> *mut CargoPacket {
         shell.cast()
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     extern "C" fn destroy(shell: *mut c_void) {
         POOL.with(|pool| pool.borrow_mut().retain(|&entry| entry != shell));
         unsafe {
@@ -2802,6 +2810,10 @@ pub(crate) mod tests {
         create(&raw const fields)
     }
     /// A packet waiting at a station: not yet in a vehicle (`UpdateLoadingTile`'s precondition).
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     pub(crate) fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
         let shell = cargo(count, first, feeder);
         // SAFETY: the fixture shell was just created and owns its live packet.
@@ -2817,6 +2829,10 @@ pub(crate) mod tests {
     fn station(l: *mut CargoList) -> *mut StationCargoList {
         StationCargoList::of(l)
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     pub(crate) unsafe fn clean(list: *mut CargoList) {
         let service = services();
         unsafe {
@@ -2824,14 +2840,26 @@ pub(crate) mod tests {
         }
     }
     /// `StationCargoList::Append` with this module's table, for another module's fixture.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     pub(crate) unsafe fn append_to(list: *mut CargoList, shell: *mut c_void, key: u16) {
         unsafe { StationCargoList::append(station(list), &services(), shell, StationID(key)) }
     }
     /// `VehicleCargoList::Append` of `shell` to keep.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe fn keep(list: *mut CargoList, s: &Services, shell: *mut c_void) {
         unsafe { VehicleCargoList::append(vehicle(list), s, shell, MoveToAction::MTA_KEEP) }
     }
     /// The list's nodes, in list order.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe fn nodes(list: *const CargoList) -> Vec<Node> {
         let l = unsafe { &*list };
         let mut out = Vec::new();
@@ -2843,13 +2871,25 @@ pub(crate) mod tests {
         out
     }
     /// The record of the fixture shell `shell`.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe fn packet(shell: *mut c_void) -> CargoPacket {
         unsafe { *owner(shell) }
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe fn fields(list: *const CargoList) -> Fields {
         unsafe { (*list).fields }
     }
     /// Each packet's count and key, in list order.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     pub(crate) unsafe fn counts_and_keys(list: *const CargoList) -> Vec<(u16, u16)> {
         unsafe { nodes(list) }
             .iter()
@@ -2867,6 +2907,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn split_denied_preserves_packet_before_share_arithmetic() {
         // Captured from the unchanged 15.3 CargoPacket::Split body at
         // 14ec60f248547d4d062a1160f0fc26d742319888 using the retiring
@@ -2924,6 +2968,10 @@ pub(crate) mod tests {
 
     /// Runs in an isolated child, the only process whose policy counts failed checks.
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn cargo_packet_preconditions_call_the_native_check_once() {
         if crate::services_assert::isolate_test_check(
             "cargo_storage::tests::cargo_packet_preconditions_call_the_native_check_once",
@@ -2995,6 +3043,10 @@ pub(crate) mod tests {
     /// original's point, with the failures each original body gives. Runs in an isolated
     /// child, the only process whose policy counts failed checks.
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn list_assertions_reach_the_native_check() {
         if crate::services_assert::isolate_test_check(
             "cargo_storage::tests::list_assertions_reach_the_native_check",
@@ -3126,6 +3178,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn canonical_packet_defaults_and_rectangular_map_coordinates() {
         let service = services();
         crate::map_func::fixture::set(
@@ -3178,6 +3234,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn partial_reserve_load_return_and_feeder_rounding() {
         let s = services();
         let st = list(false);
@@ -3237,6 +3297,10 @@ pub(crate) mod tests {
             static CATCHMENT: Cell<*const crate::station::CatchmentServices> = const { Cell::new(std::ptr::null()) };
         }
         /// Payment 1024 and the profit callback answering 7: `1024 * 7 * pieces / 8192`.
+        #[allow(
+            unsafe_code,
+            reason = "the fixture builds, reads or frees raw lists, packets and records"
+        )]
         extern "C" fn spec(_: u8, out: *mut crate::cargo_payment::Spec) {
             unsafe {
                 out.write(crate::cargo_payment::Spec {
@@ -3251,6 +3315,10 @@ pub(crate) mod tests {
         extern "C" fn registry_spec(_: u8) -> *const crate::cargotype::CargoSpec {
             std::ptr::null()
         }
+        #[allow(
+            unsafe_code,
+            reason = "the fixture builds, reads or frees raw lists, packets and records"
+        )]
         extern "C" fn callback_frame(
             _: *const crate::cargotype::CargoSpec,
             _: u16,
@@ -3326,6 +3394,10 @@ pub(crate) mod tests {
 
         /// The storage table `s` with the payment's tables, and a payment for station 200 by
         /// a fresh front record. Station 200 always accepts cargo 0 and has no industry near.
+        #[allow(
+            unsafe_code,
+            reason = "the fixture builds, reads or frees raw lists, packets and records"
+        )]
         pub(super) fn fixture(
             s: &Services,
         ) -> (
@@ -3403,12 +3475,17 @@ pub(crate) mod tests {
             )
         }
         /// The finances' delivered count of cargo 0.
+        #[allow(unsafe_code, reason = "reads the fixture's live finances")]
         pub(super) fn delivered() -> u32 {
             crate::raw_field::read_field!(FINANCES.get(), cur_economy.delivered_cargo[0])
         }
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn stage_order_and_payment_getter_reentry() {
         let (service, state, front) = payment::fixture(&services());
         let veh = list(true);
@@ -3481,6 +3558,10 @@ pub(crate) mod tests {
         }
     }
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn same_list_reroute_and_partial_packet_identity() {
         let s = services();
         unsafe {
@@ -3538,6 +3619,10 @@ pub(crate) mod tests {
         }
     }
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn merge_age_invalidation_and_pool_failure_fallback() {
         let s = services();
         unsafe {
@@ -3567,6 +3652,10 @@ pub(crate) mod tests {
         }
     }
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn all_forced_unloading_selectors() {
         let (s, state, front) = payment::fixture(&services());
         for (unload_type, action) in [
@@ -3607,6 +3696,10 @@ pub(crate) mod tests {
     /// 11 (5); the second removes 10 (1), subtracting all of it, and reduces 10 (3) by the 2
     /// left, subtracting those, and returns. The map holds what is left by origin.
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn truncate_fills_the_per_source_map() {
         let s = services();
         unsafe {
@@ -3643,10 +3736,18 @@ pub(crate) mod tests {
         train: Box<crate::train_state::TrainState>,
     }
     /// The part whose record is `v`.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe fn part_of(v: *mut crate::vehicle::OpenTTDVehicle) -> &'static Part {
         unsafe { &*VehicleRef::of(v).shell().cast::<Part>() }
     }
     /// `v->cargo`, the read the typed path makes once for each part it visits.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe extern "C" fn capacity_owner(
         v: *mut crate::vehicle::OpenTTDVehicle,
     ) -> *const VehicleCargoList {
@@ -3654,12 +3755,20 @@ pub(crate) mod tests {
         CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("read", part.id)));
         vehicle(part.list)
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe extern "C" fn capacity_cargo_type(v: *mut crate::vehicle::OpenTTDVehicle) -> u8 {
         unsafe { part_of(v) }.cargo
     }
     thread_local! {
         static STORAGE: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     unsafe extern "C" fn capacity_storage() -> *const Services {
         STORAGE.get()
     }
@@ -3676,6 +3785,10 @@ pub(crate) mod tests {
     }
     // The record keeps the boxed part address as its shell.
     #[allow(clippy::unnecessary_box_returns)]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn part(cap: u16) -> Box<Part> {
         let mut part = Box::new(Part {
             id: 0,
@@ -3695,17 +3808,29 @@ pub(crate) mod tests {
         }
         part
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn link(parts: &[Box<Part>]) {
         for pair in parts.windows(2) {
             unsafe { crate::vehicle_base::set_next(pair[0].record, pair[1].record) };
         }
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn articulate(part: &Part) {
         unsafe {
             (*part.record).subtype |=
                 1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
         }
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn front_engine(part: &Part) {
         unsafe {
             (*part.record).subtype |=
@@ -3715,6 +3840,10 @@ pub(crate) mod tests {
     fn head(part: &Part) -> VehicleRef {
         VehicleRef::of(part.record)
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn release(part: &Part) {
         unsafe {
             clean(part.list);
@@ -3722,6 +3851,10 @@ pub(crate) mod tests {
         }
     }
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn destination_count_keeps_empty_imported_keys() {
         unsafe {
             let st = list(false);
@@ -3742,6 +3875,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn capacity_autoreplace_single_engine_skips_foreign_parts_in_order() {
         let service = services();
         let resolver = capacity_services(&service);
@@ -3799,6 +3936,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn capacity_shrink_and_autoreplace_consist_transfer() {
         let service = services();
         let resolver = capacity_services(&service);
@@ -3842,10 +3983,6 @@ pub(crate) mod tests {
 /// loads and next-hop queries, reading each appended or loaded packet a bounded number of
 /// times. Expected values are the probe's own checks; its timings were not observations.
 #[cfg(test)]
-#[allow(
-    unsafe_code,
-    reason = "the fixtures build, read and free raw lists and packets"
-)]
 mod scaling_tests {
     use super::*;
     use crate::test_tables::{CARGO_STORAGE, SHARED};
@@ -3858,6 +3995,10 @@ mod scaling_tests {
         READS.set(READS.get() + 1);
         shell.cast()
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     extern "C" fn destroy_packet(shell: *mut c_void) {
         // SAFETY: Every shell in these lists is a packet from `openttd_rust_cargo_packet_new`.
         unsafe { openttd_rust_cargo_packet_destroy(shell.cast()) };
@@ -3865,18 +4006,30 @@ mod scaling_tests {
     extern "C" fn no_flows(_: *const GoodsEntry) -> *mut FlowStatMap {
         std::ptr::null_mut()
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     extern "C" fn collect(context: *mut c_void, _: u16, shell: *mut c_void) {
         if !shell.is_null() {
             // SAFETY: `snapshot`'s own vector.
             unsafe { (*context.cast::<Vec<*mut c_void>>()).push(shell) };
         }
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn snapshot(list: *const CargoList) -> Vec<*mut c_void> {
         let mut shells = Vec::new();
         // SAFETY: A live list; the callback writes only the local vector.
         unsafe { openttd_rust_cargo_list_snapshot(list, (&raw mut shells).cast(), collect) };
         shells
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn packet_aged(periods: u32) -> *mut c_void {
         // SAFETY: A null input allocates a default packet.
         let packet = unsafe { openttd_rust_cargo_packet_new(std::ptr::null()) };
@@ -3887,12 +4040,20 @@ mod scaling_tests {
         }
         packet.cast()
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn exported(list: *const CargoList) -> Fields {
         let mut fields = Fields::default();
         // SAFETY: A live list and a local output.
         unsafe { openttd_rust_cargo_list_export(list, &raw mut fields) };
         fields
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn imported(list: *mut CargoList, count: u32, periods: u64, keep: u32) {
         let mut fields = Fields {
             count,
@@ -3906,6 +4067,10 @@ mod scaling_tests {
 
     /// The vehicle list: 7 `NoUnload` stages keep the order; 1024 first-hit appends merge
     /// into the newest packet with 2 reads each; a reverse removal empties the list.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn check_vehicle(s: &Services, size: u32) {
         let list = openttd_rust_cargo_list_new(1);
         let vehicle = VehicleCargoList::of(list);
@@ -3964,6 +4129,10 @@ mod scaling_tests {
 
     /// The station list: keyed next-hop queries, 1024 first-hit appends with 2 reads each,
     /// and a 1025-piece keyed load of only the front packet with 2 reads.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw lists, packets and records"
+    )]
     fn check_station(s: &Services, size: u32) {
         let list = openttd_rust_cargo_list_new(0);
         let station = StationCargoList::of(list);

@@ -76,8 +76,14 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 		for (Source dst : {town, other, industry, destination}) CmdCreateSubsidy(DoCommandFlag::Execute, cargo, town, dst);
 		if (!CargoPacket::CanAllocateItem() || !CargoPayment::CanAllocateItem()) FixtureAbort(__LINE__);
 		CargoPacket *cp = new CargoPacket(st->index, 10, town); cp->UpdateLoadingTile(st->xy); TileIndex tile = TileXY((TileX(st->xy) + 10) % Map::SizeX(), TileY(st->xy));
+#ifdef WITH_RUST
+		/* CargoPacket::GetDistance and CargoPayment::PayFinalDelivery, whose bodies are Rust's. */
+		CargoPayment *payment = new CargoPayment(front); Money base = GetTransportedGoodsIncome(10, openttd_rust_cargo_packet_distance(cp->RustOwner(), CargoStorageServices(), tile.base()), cp->GetPeriodsInTransit(), cargo);
+		openttd_rust_cargo_payment_final(CargoStorageServices(), payment, cargo, cp, 10, tile.base());
+#else
 		CargoPayment *payment = new CargoPayment(front); Money base = GetTransportedGoodsIncome(10, cp->GetDistance(tile), cp->GetPeriodsInTransit(), cargo);
 		payment->PayFinalDelivery(cargo, cp, 10, tile);
+#endif
 		Money expected = multiplier == 0 ? base + (base >> 1) : base * (multiplier + 1);
 		multipliers &= base > 0 && payment->route_profit == expected;
 		for (Subsidy *s : Subsidy::Iterate()) multipliers &= (s->awarded == FIXTURE_GET(front, Owner, owner)) == (s->dst == town || s->dst == destination);

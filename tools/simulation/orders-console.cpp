@@ -19,6 +19,7 @@
 #include "order_func.h"
 #ifdef WITH_RUST
 #include "rust/orders_ffi.h"
+#include "rust/cargo_storage_ffi.h"
 #endif
 #include "saveload/saveload.h"
 #include "timetable_cmd.h"
@@ -60,11 +61,19 @@ static void ReservedDeparture()
 		if (!CargoPacket::CanAllocateItem()) std::abort();
 		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
 		const std::array<StationID, 1> next{StationID::Invalid()};
+#ifdef WITH_RUST
+		/* StationCargoList::Reserve and VehicleCargoList::ActionCount, whose bodies are Rust's. */
+		static_assert(sizeof(StationID) == sizeof(uint16_t));
+		uint amount = openttd_rust_station_cargo_list_reserve(cargo.RustOwner(), CargoStorageServices(), 7, u->cargo.RustOwner(), reinterpret_cast<const uint16_t *>(next.data()), next.size(), FIXTURE_GET(u, Tile, tile).base());
+		auto loading = [u]() { return openttd_rust_cargo_list_action_count(u->cargo.RustOwner(), VehicleCargoList::MTA_LOAD); };
+#else
 		uint amount = cargo.Reserve(7, &u->cargo, next, FIXTURE_GET(u, Tile, tile));
+		auto loading = [u]() { return u->cargo.ActionCount(VehicleCargoList::MTA_LOAD); };
+#endif
 		uint waiting = cargo.AvailableCount(), reserved = cargo.ReservedCount();
-		uint load = u->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
+		uint load = loading();
 		CheckCommand("reserved-skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
-		reservation = amount == 7 && load == 7 && u->cargo.ActionCount(VehicleCargoList::MTA_LOAD) == 0;
+		reservation = amount == 7 && load == 7 && loading() == 0;
 		fmt::print(stderr, "VISITS reservation {} {} {} {} {}\n", u->index, amount, reservation, cargo.ReservedCount() + 7 == reserved, cargo.AvailableCount() == waiting + 7);
 		break;
 	}
@@ -153,7 +162,11 @@ static bool VisitsScenario(std::span<std::string_view> args)
 	for (Vehicle *u : Vehicle::Iterate()) {
 		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING)) continue;
 		bool any = false;
+#ifdef WITH_RUST
+		for (const Vehicle *part = u; part != nullptr; part = part->Next()) any |= openttd_rust_cargo_list_action_count(part->cargo.RustOwner(), VehicleCargoList::MTA_LOAD) > 0;
+#else
 		for (const Vehicle *part = u; part != nullptr; part = part->Next()) any |= part->cargo.ActionCount(VehicleCargoList::MTA_LOAD) > 0;
+#endif
 		if (!any) continue;
 		CheckCommand("skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
 		++reserved;
