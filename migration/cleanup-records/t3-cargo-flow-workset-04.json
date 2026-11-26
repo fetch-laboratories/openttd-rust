@@ -6,12 +6,6 @@
     "tool": "rust"
   },
   {
-    "from": "rust/openttd-kernels/src/cargo_flow.rs | module | allow unsafe_code",
-    "kind": "carry",
-    "to": "rust/openttd-kernels/src/cargo_flow.rs | mod tests | allow unsafe_code",
-    "tool": "rust"
-  },
-  {
     "kind": "suppression",
     "tool": "rust",
     "before": 0,
@@ -346,5 +340,77 @@
     "reason": "The original body is ported so the file holds each of its bodies; nothing calls it, in the original either.",
     "retiring_owner": "#734",
     "retirement_condition": "Retires when a later pin of the original calls or deletes `FlowStatMap::ReleaseFlows`."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_flow.rs | mod tests > fn data_is_empty | allow unsafe_code",
+    "operation": "cargo_flow::tests::data_is_empty",
+    "source_contract": "The test fixture of `LinkGraphJob::~LinkGraphJob`'s application and the flow types; no original body.",
+    "reason": "The fixture reads the fixture's live map behind the goods entry: the job, graph, pool, map and cargo list records the production entry takes are raw.",
+    "retiring_owner": "#717",
+    "retirement_condition": "Retires when the job, the link graph pool and the station's flows are Rust-owned records the test can build and pass by reference (#717, #634, workset 21)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_flow.rs | mod tests > fn flow_map | allow unsafe_code",
+    "operation": "cargo_flow::tests::flow_map",
+    "source_contract": "The test fixture of `LinkGraphJob::~LinkGraphJob`'s application and the flow types; no original body.",
+    "reason": "The fixture reads the fixture's live map and cargo list at the call: the job, graph, pool, map and cargo list records the production entry takes are raw.",
+    "retiring_owner": "#717",
+    "retirement_condition": "Retires when the job, the link graph pool and the station's flows are Rust-owned records the test can build and pass by reference (#717, #634, workset 21)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_flow.rs | mod tests > fn job_fixture | allow unsafe_code",
+    "operation": "cargo_flow::tests::job_fixture",
+    "source_contract": "The test fixture of `LinkGraphJob::~LinkGraphJob`'s application and the flow types; no original body.",
+    "reason": "The fixture builds the raw snapshot graph and job record: the job, graph, pool, map and cargo list records the production entry takes are raw.",
+    "retiring_owner": "#717",
+    "retirement_condition": "Retires when the job, the link graph pool and the station's flows are Rust-owned records the test can build and pass by reference (#717, #634, workset 21)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_flow.rs | mod tests > fn station_list | allow unsafe_code",
+    "operation": "cargo_flow::tests::station_list",
+    "source_contract": "The test fixture of `LinkGraphJob::~LinkGraphJob`'s application and the flow types; no original body.",
+    "reason": "The fixture fills the raw cargo list: the job, graph, pool, map and cargo list records the production entry takes are raw.",
+    "retiring_owner": "#717",
+    "retirement_condition": "Retires when the job, the link graph pool and the station's flows are Rust-owned records the test can build and pass by reference (#717, #634, workset 21)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_flow.rs | mod tests > fn live_application_erases_before_rerouting_and_preserves_node_order | allow unsafe_code",
+    "operation": "cargo_flow::tests::live_application_erases_before_rerouting_and_preserves_node_order",
+    "source_contract": "The test fixture of `LinkGraphJob::~LinkGraphJob`'s application and the flow types; no original body.",
+    "reason": "The fixture calls the export and reads and frees the fixture's raw records: the job, graph, pool, map and cargo list records the production entry takes are raw.",
+    "retiring_owner": "#717",
+    "retirement_condition": "Retires when the job, the link graph pool and the station's flows are Rust-owned records the test can build and pass by reference (#717, #634, workset 21)."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/cargo_flow.rs | mod tests > fn merged_graph_returns_before_reading_any_station | allow unsafe_code",
+    "operation": "cargo_flow::tests::merged_graph_returns_before_reading_any_station",
+    "source_contract": "The test fixture of `LinkGraphJob::~LinkGraphJob`'s application and the flow types; no original body.",
+    "reason": "The fixture calls the export and reads and frees the fixture's raw records: the job, graph, pool, map and cargo list records the production entry takes are raw.",
+    "retiring_owner": "#717",
+    "retirement_condition": "Retires when the job, the link graph pool and the station's flows are Rust-owned records the test can build and pass by reference (#717, #634, workset 21)."
   }
 ]

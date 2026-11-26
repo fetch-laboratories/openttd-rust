@@ -16,6 +16,7 @@
 //! the borrow that made it. Callers serialise access: the game-state mutex for a station's
 //! flows, and the worker that owns a job's maps until the join.
 use crate::cargo_type::CargoType;
+use crate::linkgraph_type::NodeID;
 use crate::station_type::StationID;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -256,7 +257,7 @@ impl FlowStat {
 
     /// `FlowStat::GetViaWithRestricted`: get a station a package can be routed to. This done by
     /// drawing a random number between 0 and `sum_shares` and then looking that up in the map
-    /// with `lower_bound`. So each share gets selected with a probability dependent on its
+    /// with `upper_bound`. So each share gets selected with a probability dependent on its
     /// flow. Do include restricted flows here. `random_range` is `RandomRange`.
     pub(crate) fn get_via_with_restricted(
         &self,
@@ -394,19 +395,42 @@ impl Drop for FlowStatMap {
 }
 
 impl FlowStatMap {
+    /// `find(origin)`: the entry at `origin` and its node, or `None` at `end()`.
+    fn find_node(&self, origin: StationID) -> Option<(StationID, *mut FlowStat)> {
+        self.entries
+            .get_key_value(&origin)
+            .map(|(&origin, &node)| (origin, node))
+    }
+
+    /// `begin()`: the first entry and its node, or `None` at `end()`.
+    fn begin_node(&self) -> Option<(StationID, *mut FlowStat)> {
+        self.entries
+            .first_key_value()
+            .map(|(&origin, &node)| (origin, node))
+    }
+
+    /// `++it` from the entry at `origin`: the next entry and its node, or `None` at `end()`.
+    fn next_node(&self, origin: StationID) -> Option<(StationID, *mut FlowStat)> {
+        self.entries
+            .range((Excluded(origin), Unbounded))
+            .next()
+            .map(|(&origin, &node)| (origin, node))
+    }
+
     /// `find(origin)`: the flow from `origin`, or `None` at `end()`.
     #[allow(unsafe_code, reason = "borrows a node the map owns")]
     pub(crate) fn find(&self, origin: StationID) -> Option<&FlowStat> {
         // SAFETY: Each stored pointer is a live allocation the map owns; the borrow is the
         // map's.
-        self.entries.get(&origin).map(|&node| unsafe { &*node })
+        self.find_node(origin).map(|(_, node)| unsafe { &*node })
     }
 
     /// `find(origin)`, for a flow the caller changes.
     #[allow(unsafe_code, reason = "borrows a node the map owns")]
     pub(crate) fn find_mut(&mut self, origin: StationID) -> Option<&mut FlowStat> {
         // SAFETY: As for `find`; the borrow is the map's, and unique.
-        self.entries.get(&origin).map(|&node| unsafe { &mut *node })
+        self.find_node(origin)
+            .map(|(_, node)| unsafe { &mut *node })
     }
 
     /// The flows in origin order, as the map's iterators walk them.
@@ -429,15 +453,12 @@ impl FlowStatMap {
 
     /// `begin()->first`: the first origin, or `None` at `end()`.
     pub(crate) fn begin(&self) -> Option<StationID> {
-        self.entries.keys().next().copied()
+        self.begin_node().map(|(origin, _)| origin)
     }
 
     /// `++it` from the entry at `origin`: the next origin, or `None` at `end()`.
     pub(crate) fn next(&self, origin: StationID) -> Option<StationID> {
-        self.entries
-            .range((Excluded(origin), Unbounded))
-            .next()
-            .map(|(&origin, _)| origin)
+        self.next_node(origin).map(|(origin, _)| origin)
     }
 
     /// `emplace(origin, flow)`: move `flow` into a new entry if `origin` has none, and report
@@ -631,14 +652,14 @@ pub struct Origin {
 }
 
 impl Origin {
-    fn of(entry: Option<(&StationID, &*mut FlowStat)>) -> Self {
+    fn of(entry: Option<(StationID, *mut FlowStat)>) -> Self {
         entry.map_or(
             Self {
                 flow: std::ptr::null_mut(),
                 origin: 0,
                 found: 0,
             },
-            |(&origin, &flow)| Self {
+            |(origin, flow)| Self {
                 flow,
                 origin: origin.0,
                 found: 1,
@@ -761,7 +782,7 @@ pub unsafe extern "C" fn openttd_rust_flow_map_destroy(map: *mut FlowStatMap) {
 #[allow(unsafe_code, reason = "the exported symbol and the caller's map")]
 pub unsafe extern "C" fn openttd_rust_flow_map_begin(map: *const FlowStatMap) -> Origin {
     // SAFETY: The caller's live map.
-    Origin::of(unsafe { &*map }.entries.first_key_value())
+    Origin::of(unsafe { &*map }.begin_node())
 }
 
 /// `find(origin)`.
@@ -774,7 +795,7 @@ pub unsafe extern "C" fn openttd_rust_flow_map_find(
     origin: u16,
 ) -> Origin {
     // SAFETY: The caller's live map.
-    Origin::of(unsafe { &*map }.entries.get_key_value(&StationID(origin)))
+    Origin::of(unsafe { &*map }.find_node(StationID(origin)))
 }
 
 /// `++it` from the entry at `origin`.
@@ -787,12 +808,7 @@ pub unsafe extern "C" fn openttd_rust_flow_map_next(
     origin: u16,
 ) -> Origin {
     // SAFETY: The caller's live map.
-    Origin::of(
-        unsafe { &*map }
-            .entries
-            .range((Excluded(StationID(origin)), Unbounded))
-            .next(),
-    )
+    Origin::of(unsafe { &*map }.next_node(StationID(origin)))
 }
 
 /// `emplace(origin, flow)`: copy `flow`, which the caller keeps, into a new entry if `origin`
@@ -886,8 +902,8 @@ pub struct Services {
     reason = "the job's node maps, private to the game thread after the join"
 )]
 fn erase_flows(job: &crate::linkgraph::job::JobRecord, size: u16, from: StationID) {
-    for node_id in 0..size {
-        let flows = job.nodes[usize::from(node_id)].flows;
+    for node_id in (0..size).map(NodeID) {
+        let flows = job.nodes[usize::from(node_id.0)].flows;
         // SAFETY: Each job node owns its map, which no other borrow covers after the join.
         unsafe { &mut *flows }.erase(from);
     }
@@ -918,8 +934,8 @@ unsafe fn link_graph_job_destruct(s: &Services) {
     let cargo = CargoType(snapshot.cargo);
     let size = snapshot.size();
     let mut edge_begin = 0;
-    for node_id in 0..size {
-        let from = &snapshot.nodes[usize::from(node_id)];
+    for node_id in (0..size).map(NodeID) {
+        let from = &snapshot.nodes[usize::from(node_id.0)];
         let station = StationID(from.station);
         let first_edge = edge_begin;
         edge_begin += from.edges.len();
@@ -934,14 +950,14 @@ unsafe fn link_graph_job_destruct(s: &Services) {
         // Link graph merging and station deletion may change around IDs. Make sure that
         // everything is still consistent or ignore it otherwise.
         if (links.graphs.graph_id)(st, cargo.0) != job.graph_index.0
-            || (links.graphs.node)(st, cargo.0) != node_id
+            || NodeID((links.graphs.node)(st, cargo.0)) != node_id
         {
             erase_flows(job, size, station);
             continue;
         }
         let ge = (links.goods_entry)(st, cargo.0).cast_mut();
 
-        let flows = job.nodes[usize::from(node_id)].flows;
+        let flows = job.nodes[usize::from(node_id.0)].flows;
         // SAFETY: The job node's map, which no other borrow covers after the join.
         let flows = unsafe { &mut *flows };
         let geflows = (s.get_or_create_data_flows)(ge);
@@ -950,15 +966,15 @@ unsafe fn link_graph_job_destruct(s: &Services) {
             if job.edge_flows[first_edge + index] == 0 {
                 continue;
             }
-            let dest_id = edge.dest_node;
-            let to = StationID(snapshot.nodes[usize::from(dest_id)].station);
+            let dest_id = NodeID(edge.dest_node);
+            let to = StationID(snapshot.nodes[usize::from(dest_id.0)].station);
             let st2 = (stations.get)(to.0);
             // SAFETY: The live graph, which no station leaf changes.
-            let live_edge = || unsafe { &*lg }.nodes[usize::from(node_id)].edge(dest_id);
+            let live_edge = || unsafe { &*lg }.nodes[usize::from(node_id.0)].edge(dest_id.0);
             if st2.is_null()
                 || !(stations.is_station)(st2)
                 || (links.graphs.graph_id)(st2, cargo.0) != job.graph_index.0
-                || (links.graphs.node)(st2, cargo.0) != dest_id
+                || NodeID((links.graphs.node)(st2, cargo.0)) != dest_id
                 || live_edge()
                     .is_none_or(|edge| edge.last_update() == crate::timer_game_common::INVALID_DATE)
             {
@@ -1062,10 +1078,6 @@ crate::abi::layouts! {
 }
 
 #[cfg(test)]
-#[allow(
-    unsafe_code,
-    reason = "the fixtures' raw job, graph, map and cargo list records"
-)]
 mod tests {
     use super::*;
     use crate::linkgraph::job::{JobNode, JobRecord, SnapshotSettings};
@@ -1246,6 +1258,10 @@ mod tests {
     extern "C" fn clear_data(ge: *mut GoodsEntry) {
         record(Event::ClearData(station_of(ge)));
     }
+    #[allow(
+        unsafe_code,
+        reason = "reads the fixture's live map behind the goods entry"
+    )]
     extern "C" fn data_is_empty(ge: *const GoodsEntry) -> bool {
         record(Event::DataIsEmpty(station_of(ge)));
         unsafe { &*ge.cast::<FlowStatMap>() }.begin().is_none()
@@ -1254,6 +1270,10 @@ mod tests {
         record(Event::GetOrCreateDataFlows(station_of(ge)));
         ge.cast()
     }
+    #[allow(
+        unsafe_code,
+        reason = "reads the fixture's live map and cargo list at the call"
+    )]
     extern "C" fn flow_map(ge: *const std::ffi::c_void) -> *mut FlowStatMap {
         let station = station_of(ge.cast());
         let origin_7 = unsafe { &*ge.cast::<FlowStatMap>() }
@@ -1341,6 +1361,7 @@ mod tests {
 
     /// A job of graph 42 over stations 100 to 103, at nodes 0 to 3; node 0 has one
     /// annotated edge, to node 2, carrying 10. The snapshot is also the live graph.
+    #[allow(unsafe_code, reason = "builds the raw snapshot graph and job record")]
     fn job_fixture(flows: [FlowStatMap; STATIONS]) -> (*mut Graph, *mut JobRecord) {
         let graph = live::openttd_rust_live_graph_new(0);
         let settings = SnapshotSettings {
@@ -1400,6 +1421,7 @@ mod tests {
 
     /// Station 100's cargo list: one packet from origin 7 for each of the next hops 106, 107
     /// and 108, of 1, 2 and 3 units.
+    #[allow(unsafe_code, reason = "fills the raw cargo list")]
     fn station_list() -> *mut crate::cargo_storage::List {
         let list = crate::cargo_storage::tests::list(false);
         for (count, via) in [(1, 106), (2, 107), (3, 108)] {
@@ -1447,6 +1469,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "calls the export and reads and frees the fixture's raw records"
+    )]
     fn live_application_erases_before_rerouting_and_preserves_node_order() {
         for manual in [false, true] {
             MANUAL.set(manual);
@@ -1545,6 +1571,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "calls the export and reads and frees the fixture's raw records"
+    )]
     fn merged_graph_returns_before_reading_any_station() {
         extern "C" fn trap_goods(_: *mut GoodsEntry) {
             unreachable!()
