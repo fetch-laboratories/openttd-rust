@@ -1920,6 +1920,41 @@ pub(crate) fn order_list(v: VehicleRef, s: &Leaves) -> Option<OrderListRef> {
     (!shell.is_null()).then(|| OrderListRef::of(shell, s))
 }
 
+/// `GetNumOrders()` of a vehicle whose resolved list is `list`: 0 without one.
+fn num_orders(list: Option<OrderListRef>) -> VehicleOrderID {
+    list.map_or(VehicleOrderID(0), OrderListRef::get_num_orders)
+}
+
+/// `GetNumManualOrders()` of a vehicle whose resolved list is `list`: 0 without one.
+fn num_manual_orders(list: Option<OrderListRef>) -> VehicleOrderID {
+    list.map_or(VehicleOrderID(0), OrderListRef::get_num_manual_orders)
+}
+
+/// `GetOrder(index)` of a vehicle whose resolved list is `list`.
+fn order_in(list: Option<OrderListRef>, index: VehicleOrderID) -> Option<OrderRef> {
+    list?.get_order_at(index)
+}
+
+/// `GetLastOrder()` of a vehicle whose resolved list is `list`.
+fn last_order_in(list: Option<OrderListRef>) -> Option<OrderRef> {
+    let list = list?;
+    list.get_order_at(list.get_last_order())
+}
+
+/// `FirstShared()` of the vehicle `v` whose resolved list is `list`.
+fn first_shared_in(list: Option<OrderListRef>, v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
+    match list {
+        None => Some(v.first()),
+        Some(list) => list.get_first_shared_vehicle(s),
+    }
+}
+
+/// `v->orders` of the resolved list `list`, dereferenced unchecked where the original reads
+/// it without a test.
+fn deref_list(list: Option<OrderListRef>, v: VehicleRef, s: &Leaves) -> OrderListRef {
+    list.unwrap_or_else(|| list_of(v, s))
+}
+
 /// `v->orders`, dereferenced unchecked where the original reads it without a test.
 fn list_of(v: VehicleRef, s: &Leaves) -> OrderListRef {
     OrderListRef::of(crate::vehicle_base::order_list(v.0.as_ptr()), s)
@@ -1969,10 +2004,7 @@ pub(crate) fn previous_shared(v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
 
 /// `Vehicle::FirstShared`: get the first vehicle of this vehicle chain.
 pub(crate) fn first_shared(v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
-    match order_list(v, s) {
-        None => Some(v.first()),
-        Some(list) => list.get_first_shared_vehicle(s),
-    }
+    first_shared_in(order_list(v, s), v, s)
 }
 
 /// `Vehicle::IsOrderListShared`: check if we share our orders with another vehicle.
@@ -1982,12 +2014,12 @@ pub(crate) fn is_order_list_shared(v: VehicleRef, s: &Leaves) -> bool {
 
 /// `Vehicle::GetNumOrders`: get the number of orders this vehicle has.
 pub(crate) fn get_num_orders(v: VehicleRef, s: &Leaves) -> VehicleOrderID {
-    order_list(v, s).map_or(VehicleOrderID(0), OrderListRef::get_num_orders)
+    num_orders(order_list(v, s))
 }
 
 /// `Vehicle::GetNumManualOrders`: get the number of manually added orders this vehicle has.
 pub(crate) fn get_num_manual_orders(v: VehicleRef, s: &Leaves) -> VehicleOrderID {
-    order_list(v, s).map_or(VehicleOrderID(0), OrderListRef::get_num_manual_orders)
+    num_manual_orders(order_list(v, s))
 }
 
 /// `Vehicle::GetOrder`: returns order `index` of a vehicle or `None` when it doesn't exists.
@@ -2508,7 +2540,10 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
          * to show that we are stopping here.
          * While only groundvehicles have implicit orders, e.g. aircraft might still enter
          * the 'wrong' terminal when skipping orders etc. */
-        let in_list = get_order(v, c.cur_implicit_order_index(), s).map(OrderRef::view);
+        // `this->orders` is resolved once: nothing below replaces the vehicle's list until
+        // `InsertOrder`, after its last read.
+        let list = order_list(v, s);
+        let in_list = order_in(list, c.cur_implicit_order_index()).map(OrderRef::view);
         if is_ground_vehicle(v)
             && (in_list.is_none_or(|in_list| {
                 !in_list.is_type(OrderType::OT_IMPLICIT)
@@ -2519,9 +2554,9 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                 has_bit(v.ground_vehicle_flags(), GVF_SUPPRESS_IMPLICIT_ORDERS);
             /* Do not create consecutive duplicates of implicit orders */
             let prev_order = if c.cur_implicit_order_index().0 > 0 {
-                get_order(v, VehicleOrderID(c.cur_implicit_order_index().0 - 1), s)
-            } else if get_num_orders(v, s).0 > 1 {
-                get_last_order(v, s)
+                order_in(list, VehicleOrderID(c.cur_implicit_order_index().0 - 1))
+            } else if num_orders(list).0 > 1 {
+                last_order_in(list)
             } else {
                 None
             }
@@ -2539,11 +2574,11 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                 let mut target_index = i32::from(c.cur_implicit_order_index().0);
                 let mut found = false;
                 while target_index != i32::from(c.cur_real_order_index().0)
-                    || get_num_manual_orders(v, s).0 == 0
+                    || num_manual_orders(list).0 == 0
                 {
                     // `GetOrder(int)` narrows the index to `VehicleOrderID`.
                     let Some(order) =
-                        get_order(v, VehicleOrderID(target_index as u8), s).map(OrderRef::view)
+                        order_in(list, VehicleOrderID(target_index as u8)).map(OrderRef::view)
                     else {
                         break; // No orders.
                     };
@@ -2554,9 +2589,9 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                         break;
                     }
                     target_index = target_index.wrapping_add(1);
-                    if target_index >= i32::from(list_of(v, s).get_num_orders().0) {
-                        if get_num_manual_orders(v, s).0 == 0
-                            && u32::from(get_num_orders(v, s).0) < IMPLICIT_ORDER_ONLY_CAP
+                    if target_index >= i32::from(deref_list(list, v, s).get_num_orders().0) {
+                        if num_manual_orders(list).0 == 0
+                            && u32::from(num_orders(list).0) < IMPLICIT_ORDER_ONLY_CAP
                         {
                             break;
                         }
@@ -2575,7 +2610,10 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                         invalidate_vehicle_order(v, 0, s);
                     } else {
                         /* Delete all implicit orders up to the station we just reached */
-                        let mut order = order_at(v, c.cur_implicit_order_index(), s).view();
+                        let list = deref_list(list, v, s);
+                        let mut order = list
+                            .order(usize::from(c.cur_implicit_order_index().0))
+                            .view();
                         while !order.is_type(OrderType::OT_IMPLICIT)
                             || order.destination().to_station_id() != v.last_station_visited()
                         {
@@ -2587,7 +2625,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                                     c.cur_implicit_order_index().0.wrapping_add(1),
                                 ));
                             }
-                            let next = get_order(v, c.cur_implicit_order_index(), s);
+                            let next = list.get_order_at(c.cur_implicit_order_index());
 
                             /* Wrapped around. */
                             order = if let Some(next) = next {
@@ -2595,14 +2633,15 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                             } else {
                                 c.set_cur_implicit_order_index(VehicleOrderID(0));
                                 assert_with(|| {
-                                    get_order(v, c.cur_implicit_order_index(), s).is_some()
+                                    list.get_order_at(c.cur_implicit_order_index()).is_some()
                                 });
-                                order_at(v, c.cur_implicit_order_index(), s).view()
+                                list.order(usize::from(c.cur_implicit_order_index().0))
+                                    .view()
                             };
                         }
                     }
                 } else if !suppress_implicit_orders
-                    && (match order_list(v, s) {
+                    && (match list {
                         None => (s.list_can_allocate_item)() != 0,
                         Some(list) => list.get_num_orders() < MAX_VEH_ORDER_ID,
                     })
@@ -2706,7 +2745,8 @@ pub(crate) fn get_location(
 /// `GetOrderDistance`: get the distance between two orders of a vehicle. Conditional orders
 /// are resolved and the bigger distance of the two order branches is returned. `prev` is the
 /// origin order, `cur` the destination order and `conditional_depth` an internal parameter
-/// for resolving conditional orders.
+/// for resolving conditional orders. `list` is the vehicle's `orders`, resolved once by the
+/// caller: no call below replaces it.
 #[allow(
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
@@ -2716,16 +2756,17 @@ pub(crate) fn get_order_distance(
     prev: VehicleOrderID,
     cur: VehicleOrderID,
     v: VehicleRef,
+    list: Option<OrderListRef>,
     mut conditional_depth: i32,
     s: &Leaves,
 ) -> u32 {
-    assert_with(|| order_list(v, s).is_some());
-    let orderlist = list_of(v, s);
+    assert_with(|| list.is_some());
+    let orderlist = deref_list(list, v, s);
     // `orderlist.GetOrders()` indexes the full stored span, not `GetOrderAt`'s narrowed count.
     let orders = |index: VehicleOrderID| orderlist.order(usize::from(index.0)).view();
 
     if orders(cur).is_type(OrderType::OT_CONDITIONAL) {
-        if conditional_depth > i32::from(get_num_orders(v, s).0) {
+        if conditional_depth > i32::from(num_orders(list).0) {
             return 0;
         }
 
@@ -2737,11 +2778,13 @@ pub(crate) fn get_order_distance(
                 prev,
                 orders(cur).condition_skip_to_order(),
                 v,
+                list,
                 conditional_depth,
                 s,
             ) as i32;
             let dist2 =
-                get_order_distance(prev, orderlist.get_next(cur), v, conditional_depth, s) as i32;
+                get_order_distance(prev, orderlist.get_next(cur), v, list, conditional_depth, s)
+                    as i32;
             return dist1.max(dist2) as u32;
         }
     }
@@ -3026,15 +3069,17 @@ pub(crate) fn delete_vehicle_orders(
 /// list. True if the aircraft has enough range for the orders.
 #[allow(unsafe_code)]
 fn check_aircraft_order_distance(v_new: VehicleRef, v_order: VehicleRef, s: &Leaves) -> bool {
-    let aircraft = v_new.aircraft_state();
-    if read_field!(aircraft, cached_max_range) == 0 {
+    let aircraft = crate::aircraft::Vehicle::of(v_new, v_new.index(s.newgrf()));
+    if aircraft.cached_max_range() == 0 {
         return true;
     }
-    if get_num_orders(v_order, s).0 == 0 {
+    // `v_order->orders` is resolved once: nothing below replaces it.
+    let list = order_list(v_order, s);
+    if num_orders(list).0 == 0 {
         return true;
     }
 
-    let orderlist = list_of(v_order, s);
+    let orderlist = deref_list(list, v_order, s);
 
     /* Iterate over all orders to check the distance between all
      * 'goto' orders and their respective next order (of any type). */
@@ -3043,8 +3088,8 @@ fn check_aircraft_order_distance(v_new: VehicleRef, v_order: VehicleRef, s: &Lea
         match orderlist.order(usize::from(cur.0)).view().kind() {
             /* If we don't have a next order, we've reached the end and must check the first order instead. */
             OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_DEPOT | OrderType::OT_GOTO_WAYPOINT
-                if get_order_distance(cur, orderlist.get_next(cur), v_order, 0, s)
-                    > read_field!(aircraft, cached_max_range_sqr) =>
+                if get_order_distance(cur, orderlist.get_next(cur), v_order, list, 0, s)
+                    > aircraft.cached_max_range_sqr() =>
             {
                 return false;
             }
@@ -3077,8 +3122,11 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
         return;
     }
 
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
+
     /* do nothing we we're not the first vehicle in a share-chain */
-    if first_shared(v, s) != Some(v) {
+    if first_shared_in(list, v, s) != Some(v) {
         return;
     }
 
@@ -3088,8 +3136,9 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
 
         /* Check the order list */
         let mut n_st = 0i32;
+        let airports = crate::newgrf_airport::runtime();
 
-        if let Some(list) = orders(v, s) {
+        if let Some(list) = list {
             for index in 0..list.len() {
                 let order = list.order(index).view();
                 /* Dummy order? */
@@ -3099,22 +3148,20 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
                 }
                 /* Does station have a load-bay for this vehicle? */
                 if order.is_type(OrderType::OT_GOTO_STATION) {
-                    let st = order.destination().to_station_id();
+                    let st = crate::newgrf_airport::station_by_id(
+                        order.destination().to_station_id().0,
+                        airports,
+                    );
 
                     n_st = n_st.wrapping_add(1);
-                    if !can_vehicle_use_station(v, st) {
+                    if !crate::vehicle_func::can_vehicle_use_station(v, st, airports) {
                         message = STR_NEWS_VEHICLE_HAS_INVALID_ENTRY;
                     } else if v.vehicle_type() == VehicleType::VEH_AIRCRAFT
                         && ((s.base.engine)(v).aircraft_subtype() & crate::engine_type::AIR_FAST)
                             != 0
-                        && {
-                            let airports = crate::newgrf_airport::runtime();
-                            (airports.fta_flags)(crate::newgrf_airport::station_fta(
-                                crate::newgrf_airport::station_by_id(st.0, airports),
-                                airports,
-                            )) & crate::airport::FTA_SHORT_STRIP
-                                != 0
-                        }
+                        && (airports.fta_flags)(crate::newgrf_airport::station_fta(st, airports))
+                            & crate::airport::FTA_SHORT_STRIP
+                            != 0
                         && !(s.shared().no_jetcrash)()
                         && message == StringID::INVALID_STRING_ID
                     {
@@ -3125,8 +3172,8 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
         }
 
         /* Check if the last and the first order are the same */
-        if get_num_orders(v, s).0 > 1 {
-            let list = list_of(v, s);
+        if num_orders(list).0 > 1 {
+            let list = deref_list(list, v, s);
 
             if list
                 .order(0)
@@ -3142,7 +3189,7 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
             message = STR_NEWS_VEHICLE_HAS_TOO_FEW_ORDERS;
         }
 
-        if let Some(list) = order_list(v, s) {
+        if let Some(list) = list {
             // SAFETY: The live list shell; the C++ body checks it under `WITH_ASSERT`.
             unsafe { (s.debug_check_sanity)(list.shell()) };
         }
@@ -3395,7 +3442,9 @@ pub(crate) fn update_order_dest(
     pbs_look_ahead: bool,
     s: &Leaves,
 ) -> bool {
-    if conditional_depth > i32::from(get_num_orders(v, s).0) {
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
+    if conditional_depth > i32::from(num_orders(list).0) {
         current_order(v).free();
         crate::vehicle_base::set_dest_tile(v, TileIndex(0));
         return false;
@@ -3446,16 +3495,14 @@ pub(crate) fn update_order_dest(
                         }
 
                         if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
-                            let a = v.aircraft_state();
-                            let (state, targetairport) =
-                                (read_field!(a, state), read_field!(a, targetairport));
-                            if state == crate::airport::FLYING
-                                && DestinationID(targetairport) != closest_depot.destination
+                            let a = crate::aircraft::Vehicle::of(v, v.index(s.newgrf()));
+                            if a.state() == crate::airport::FLYING
+                                && DestinationID(a.targetairport().0) != closest_depot.destination
                             {
                                 /* The aircraft is now heading for a different hangar than the next in the orders */
                                 crate::aircraft::aircraft_next_airport_pos_and_order(
                                     c.aircraft(),
-                                    crate::aircraft::Vehicle::of(v, v.index(s.newgrf())),
+                                    a,
                                 );
                             }
                         }
@@ -3472,10 +3519,9 @@ pub(crate) fn update_order_dest(
                 }
             } else {
                 if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
-                    let a = v.aircraft_state();
+                    let a = crate::aircraft::Vehicle::of(v, v.index(s.newgrf()));
                     let destination = v.current_order().destination();
-                    let targetairport = read_field!(a, targetairport);
-                    if DestinationID(targetairport) != destination {
+                    if DestinationID(a.targetairport().0) != destination {
                         /* The aircraft is now heading for a different hangar than the next in the orders */
                         let tile = get_order_station_location(v, destination.to_station_id(), s);
                         crate::vehicle_base::set_dest_tile(v, tile);
@@ -3514,7 +3560,8 @@ pub(crate) fn update_order_dest(
                 update_real_order_index(v, s);
                 con.set_current_order_time(
                     con.current_order_time().wrapping_add(i32::from(
-                        order_at(v, con.cur_real_order_index(), s)
+                        deref_list(list, v, s)
+                            .order(usize::from(con.cur_real_order_index().0))
                             .view()
                             .timetabled_travel(),
                     )),
@@ -3535,13 +3582,13 @@ pub(crate) fn update_order_dest(
     }
 
     let con = consist(v);
-    assert_with(|| con.cur_implicit_order_index() < get_num_orders(v, s));
-    assert_with(|| con.cur_real_order_index() < get_num_orders(v, s));
+    assert_with(|| con.cur_implicit_order_index() < num_orders(list));
+    assert_with(|| con.cur_real_order_index() < num_orders(list));
 
     /* Get the current order */
-    let mut order = get_order(v, con.cur_real_order_index(), s).map(OrderRef::view);
+    let mut order = order_in(list, con.cur_real_order_index()).map(OrderRef::view);
     if order.is_some_and(|order| order.is_type(OrderType::OT_IMPLICIT)) {
-        assert_with(|| get_num_manual_orders(v, s).0 == 0);
+        assert_with(|| num_manual_orders(list).0 == 0);
         order = None;
     }
 
@@ -4175,10 +4222,10 @@ pub(crate) fn cmd_skip_to_order(
 ) {
     let CmdSkipToOrder { veh_id, sel_ord } = args;
     let Some(v) = vehicle_get_if_valid(veh_id, s).filter(|v| {
-        v.is_primary_vehicle()
-            && sel_ord != consist(*v).cur_implicit_order_index()
-            && sel_ord < get_num_orders(*v, s)
-            && get_num_orders(*v, s).0 >= 2
+        v.is_primary_vehicle() && sel_ord != consist(*v).cur_implicit_order_index() && {
+            let num_orders = get_num_orders(*v, s);
+            sel_ord < num_orders && num_orders.0 >= 2
+        }
     }) else {
         return crate::command_func::cmd_error(cost);
     };
@@ -6471,6 +6518,7 @@ pub extern "C" fn openttd_rust_order_distance(
         VehicleOrderID(prev),
         VehicleOrderID(cur),
         v,
+        order_list(v, s),
         conditional_depth,
         s,
     )

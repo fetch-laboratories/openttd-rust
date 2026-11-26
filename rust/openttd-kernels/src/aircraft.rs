@@ -230,7 +230,7 @@ macro_rules! aircraft_fields {
         impl Vehicle {
             $(
                 $(#[$doc])*
-                fn $field(self) -> $ty {
+                pub(crate) fn $field(self) -> $ty {
                     let raw = crate::raw_field::read_field!(self.state, $field);
                     $wrap(raw)
                 }
