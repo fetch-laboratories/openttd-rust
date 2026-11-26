@@ -102,7 +102,6 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	std::unique_ptr<OpenTTDRoadState, decltype(&openttd_rust_road_destroy)> rust_state{openttd_rust_road_new(), openttd_rust_road_destroy};
 
 	RoadType roadtype = INVALID_ROADTYPE; ///< NOSAVE: Roadtype of this vehicle.
-	VehicleID disaster_vehicle = VehicleID::Invalid(); ///< NOSAVE: Disaster vehicle targetting this vehicle.
 	RoadTypes compatible_roadtypes{}; ///< NOSAVE: Roadtypes this consist is powered on.
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
@@ -111,6 +110,10 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	virtual ~RoadVehicle() { this->PreDestructor(); }
 
 	OpenTTDRoadState *GetRustState() const { return this->rust_state.get(); }
+
+	/** NOSAVE: Disaster vehicle targetting this vehicle. */
+	VehicleID GetDisasterVehicle() const { return VehicleID{this->rust_state->disaster_vehicle}; }
+	void SetDisasterVehicle(VehicleID value) { this->rust_state->disaster_vehicle = value.base(); }
 
 	uint8_t GetState() const
 	{
@@ -229,7 +232,6 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	Money GetRunningCost() const override;
 	int GetDisplayImageWidth(Point *offset = nullptr) const;
 	bool IsInDepot() const override { return this->GetState() == RVSB_IN_DEPOT; }
-	bool Tick() override;
 	uint Crash(bool flooded = false) override;
 	Trackdir GetVehicleTrackdir() const override;
 	TileIndex GetOrderStationLocation(StationID station) override;

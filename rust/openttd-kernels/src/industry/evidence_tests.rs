@@ -39,7 +39,6 @@ const ORACLE: &str = include_str!("lifecycle-oracle.txt");
 struct Tile {
     triggers: u8,
     bits: u8,
-    belongs: bool,
 }
 
 /// The fixture's map, resolver and animation state.
@@ -127,9 +126,6 @@ unsafe extern "C" fn set_construction_stage(tile: u32, stage: u8) {
     record([10, tile, stage.into(), 0]);
 }
 
-unsafe extern "C" fn belongs(tile: u32, _: u16) -> bool {
-    with(|w| w.tiles[tile as usize].belongs)
-}
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the fixture's gfx is its tile index"
@@ -290,7 +286,6 @@ unsafe extern "C" fn tile_callback(tile: u32, _: u16, callback: u16, _: u32, _: 
 
 /// `LifecycleServices` with the fixture's trigger and randomisation leaves.
 const LIFECYCLE: LifecycleServices = LifecycleServices {
-    belongs,
     randomisation_spec,
     random_triggers,
     set_random_triggers,
@@ -323,6 +318,7 @@ fn tables() -> Tables {
     shared.industry_gfx = gfx;
     crate::cargo_registry::stub_test_label_file(&mut shared);
     shared.settings = leak(settings);
+    shared.map = crate::map_func::fixture::statics();
     let shared = leak(shared);
     let mut industries = INDUSTRIES;
     industries.shared = shared;
@@ -411,6 +407,48 @@ impl Drop for AnimationScope {
 const SEEDS: [u32; 4] = [0, 1, 0x1234_5678, u32::MAX];
 const MASKS: [u32; 7] = [0, 1, 0x55, 0xFFFF, 0x10000, 0x1234_5678, u32::MAX];
 
+/// A 4x4 map, installed for this thread, whose tiles `belongs` accepts are tiles of
+/// industry 0 and whose others are clear. The returned layouts back the map.
+fn install_map(
+    belongs: impl Fn(u32) -> bool,
+) -> (
+    Vec<crate::map_func::BaseTileLayout>,
+    Vec<crate::map_func::ExtendedTileLayout>,
+) {
+    let base: Vec<_> = (0..16_u32)
+        .map(|tile| crate::map_func::BaseTileLayout {
+            kind: if belongs(tile) {
+                crate::tile_type::TileType::MP_INDUSTRY.0
+            } else {
+                crate::tile_type::TileType::MP_CLEAR.0
+            } << 4,
+            height: 0,
+            m2: 0,
+            m1: 0,
+            m3: 0,
+            m4: 0,
+            m5: 0,
+        })
+        .collect();
+    let extended: Vec<_> = (0..16)
+        .map(|_| crate::map_func::ExtendedTileLayout {
+            m6: 0,
+            m7: 0,
+            m8: 0,
+        })
+        .collect();
+    crate::map_func::fixture::set(
+        crate::map_func::TileTypeAllocation {
+            base: base.as_ptr(),
+            extended: extended.as_ptr(),
+            count: 16,
+            assertions: true,
+        },
+        2,
+    );
+    (base, extended)
+}
+
 /// One lifecycle case on the fixture's industry: `[seed, mask, variant]`, the trigger and
 /// the operation (tile and industry randomisation, industry and tile animation).
 #[allow(
@@ -431,12 +469,14 @@ fn lifecycle_case(
             w.tiles[tile as usize] = Tile {
                 triggers: (tile * 7 + variant) as u8,
                 bits: (tile * 23 + variant) as u8,
-                belongs: tile != 1 && (variant != 7 || tile != 4),
             };
             w.enabled[tile as usize] = (variant >> (tile % 3)) & 1 != 0;
             w.spec_triggers[tile as usize] = (tile * 13 + variant) as u8;
         }
     });
+    // The map: the industry's tiles are industry 0's, except tile 1 and, in variant 7,
+    // tile 4, which `TileBelongsToIndustry` rejects.
+    let _map = install_map(|tile| tile != 1 && (variant != 7 || tile != 4));
     // Production writes the random word through `owner`, so no reference to the owner's
     // metadata lives across the call.
     // SAFETY: The caller's live owner; a field-sized write with no live reference.

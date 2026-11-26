@@ -14,11 +14,11 @@
 #![allow(unsafe_code)]
 
 use crate::airport::{
-    AT_DUMMY, AT_OILRIG, AirportBlock, AirportBlocks, AirportFTAClassFlag, AirportFTAClassFlags,
-    AirportMovementStates, AirportMovingData, AirportMovingDataFlag, ENDLANDING, ENDTAKEOFF,
-    FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2, HELIPAD3, HELITAKEOFF,
-    LANDING, MAX_TERMINALS, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5, TERM6, TERM7,
-    TERM8,
+    AT_DUMMY, AirportBlock, AirportBlocks, AirportFTAClassFlag, AirportFTAClassFlags,
+    AirportMovementStates, AirportMovingData, AirportMovingDataFlag, AirportTypes, ENDLANDING,
+    ENDTAKEOFF, FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELIPAD1, HELIPAD2, HELIPAD3,
+    HELITAKEOFF, LANDING, MAX_TERMINALS, STARTTAKEOFF, TAKEOFF, TERM1, TERM2, TERM3, TERM4, TERM5,
+    TERM6, TERM7, TERM8,
 };
 use crate::base_station_base;
 use crate::bitmath_func::{clr_bit8, gb, has_bit, set_bit8};
@@ -29,6 +29,7 @@ use crate::direction_func::{
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::effectvehicle_func::EffectVehicleType;
 use crate::engine_type::{AIR_CTOL, AIR_FAST};
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::map_func::Map;
 use crate::newgrf_properties::PropertyID;
 use crate::newgrf_sound::VehicleSoundEvent;
@@ -57,6 +58,7 @@ use crate::vehicle_type::{DepotCommandFlag, DepotCommandFlags, VehicleID, Vehicl
 use crate::window_func::{invalidate_window_data, set_window_classes_dirty, set_window_dirty};
 use crate::window_type::{WindowClass, WindowNumber};
 use std::ffi::c_void;
+use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 
 #[cfg(test)]
@@ -343,8 +345,6 @@ pub struct Leaves {
     pub airport_width: unsafe extern "C" fn(*const Station) -> u8,
     /// `u->sprite_cache.sprite_seq.CopyWithoutPalette(v->sprite_cache.sprite_seq)`.
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
-    /// `GetDirectionTowards`.
-    pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
     /// `AirportFTA::blocks`.
     pub fta_blocks: unsafe extern "C" fn(*const c_void) -> AirportBlocks,
     /// `AirportFTA::heading`.
@@ -398,6 +398,69 @@ pub struct Leaves {
     pub vehicle_crash: unsafe extern "C" fn(Vehicle, bool) -> u32,
     /// `v->UpdateViewport(true, false)`.
     pub viewport: unsafe extern "C" fn(Vehicle),
+}
+
+impl Leaves {
+    /// `st->airport.tile` of a live station.
+    pub(crate) fn airport_tile(&self, st: *const Station) -> TileIndex {
+        // SAFETY: The caller's live station; the leaf reads one field.
+        TileIndex(unsafe { (self.airport_tile)(st) })
+    }
+    /// `st->airport.type` of a live station.
+    pub(crate) fn airport_type(&self, st: *const Station) -> AirportTypes {
+        // SAFETY: As `airport_tile`.
+        AirportTypes(unsafe { (self.airport_type)(st) })
+    }
+    /// `&st->airport.blocks` of a live station, which lives as long as the station.
+    pub(crate) fn airport_blocks(&self, st: *const Station) -> *mut AirportBlocks {
+        // SAFETY: As `airport_tile`.
+        unsafe { (self.airport_blocks)(st) }
+    }
+    /// `st->airport.blocks.Set(set)`, in place.
+    ///
+    /// # Safety
+    /// `st` is a handle the installed `airport_blocks` leaf accepts, and the mask that leaf
+    /// returns is initialized, writable and live through the update, which accesses it
+    /// serially. In the game `st` is a live station with an airport and the mask its
+    /// `airport.blocks`; the native ABI probe passes its opaque handle and its own mask.
+    pub(crate) unsafe fn airport_blocks_set(&self, st: *const Station, set: AirportBlocks) {
+        // SAFETY: As this function's contract; the leaf returns that station's field.
+        unsafe { set_airport_blocks(self.airport_blocks(st), set) };
+    }
+    /// `st->airport.blocks.Reset(reset)`, in place.
+    ///
+    /// # Safety
+    /// As [`Self::airport_blocks_set`].
+    pub(crate) unsafe fn airport_blocks_reset(&self, st: *const Station, reset: AirportBlocks) {
+        // SAFETY: As this function's contract.
+        unsafe { reset_airport_blocks(self.airport_blocks(st), reset) };
+    }
+}
+
+/// `blocks.Set(set)` on the `airport.blocks` that `blocks` addresses.
+///
+/// # Safety
+/// `blocks` is an initialized, writable mask, live through the call and accessed serially:
+/// the one `Leaves::airport_blocks` returned.
+unsafe fn set_airport_blocks(blocks: *mut AirportBlocks, set: AirportBlocks) {
+    // SAFETY: As this function's contract: one field-sized load and store.
+    unsafe {
+        let mut mask = blocks.read();
+        mask.set(set);
+        blocks.write(mask);
+    }
+}
+/// `blocks.Reset(reset)` on the `airport.blocks` that `blocks` addresses.
+///
+/// # Safety
+/// As [`set_airport_blocks`].
+unsafe fn reset_airport_blocks(blocks: *mut AirportBlocks, reset: AirportBlocks) {
+    // SAFETY: As this function's contract: one field-sized load and store.
+    unsafe {
+        let mut mask = blocks.read();
+        mask.reset(reset);
+        blocks.write(mask);
+    }
 }
 
 /// The tables and entry-local map descriptor the helpers share.
@@ -490,13 +553,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         })
     }
     fn airport_tile(&self, st: *const Station) -> TileIndex {
-        TileIndex(Self::call(|| unsafe { (self.leaves.airport_tile)(st) }))
+        Self::call(|| self.leaves.airport_tile(st))
     }
     fn airport_rotation(&self, st: *const Station) -> Direction {
         Direction(Self::call(|| unsafe { (self.leaves.rotation)(st) }))
     }
-    fn airport_type(&self, st: *const Station) -> u8 {
-        Self::call(|| unsafe { (self.leaves.airport_type)(st) })
+    fn airport_type(&self, st: *const Station) -> AirportTypes {
+        Self::call(|| self.leaves.airport_type(st))
     }
     fn airport_w(&self, st: *const Station) -> u8 {
         Self::call(|| unsafe { (self.leaves.airport_width)(st) })
@@ -509,19 +572,27 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `st->airport.blocks`, read in place.
     fn airport_blocks(&self, st: *const Station) -> AirportBlocks {
-        let blocks = Self::call(|| unsafe { (self.leaves.airport_blocks)(st) });
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
         // SAFETY: One field-sized load of the live mask, ending before any callback.
         unsafe { blocks.read() }
     }
-    /// `st->airport.blocks.Set(set)` or `Reset(set)` in place.
-    fn airport_blocks_update(&self, st: *const Station, update: impl FnOnce(&mut AirportBlocks)) {
-        let blocks = Self::call(|| unsafe { (self.leaves.airport_blocks)(st) });
-        // SAFETY: One field-sized load and store of the live mask, with no callback between.
-        unsafe {
-            let mut value = blocks.read();
-            update(&mut value);
-            blocks.write(value);
-        }
+    /// `st->airport.blocks.Set(set)` in place.
+    ///
+    /// # Safety
+    /// As [`Leaves::airport_blocks_set`].
+    unsafe fn airport_blocks_set(&self, st: *const Station, set: AirportBlocks) {
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
+        // SAFETY: As this function's contract; the leaf returns that station's field.
+        unsafe { set_airport_blocks(blocks, set) };
+    }
+    /// `st->airport.blocks.Reset(reset)` in place.
+    ///
+    /// # Safety
+    /// As [`Leaves::airport_blocks_set`].
+    unsafe fn airport_blocks_reset(&self, st: *const Station, reset: AirportBlocks) {
+        let blocks = Self::call(|| self.leaves.airport_blocks(st));
+        // SAFETY: As this function's contract.
+        unsafe { reset_airport_blocks(blocks, reset) };
     }
     /// `st->airport.GetSpec()`.
     fn airport_spec(st: *const Station) -> *const crate::station_cmd::AirportSpec {
@@ -664,9 +735,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     /// `GetDirectionTowards(v, x, y)`.
     fn get_direction_towards(&self, v: Vehicle, x: i32, y: i32) -> Direction {
-        Direction(Self::call(|| unsafe {
-            (self.leaves.direction_towards)(v, x, y)
-        }))
+        crate::vehicle::get_direction_towards(v.base(), x, y, |c| self.check(c))
     }
     fn random(&self) -> u32 {
         Self::call(|| self.ss.random())
@@ -1531,7 +1600,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
              * Helicopter has arrived at the target landing pad, so the current position is also where it should land.
              * Except for Oilrigs which are special due to being a 1x1 station, and helicopters land outside it. */
             let (mut x, mut y) = (x, y);
-            if self.airport_type(st) != AT_OILRIG {
+            if self.airport_type(st) != AirportTypes::AT_OILRIG {
                 x = b.x_pos();
                 y = b.y_pos();
                 tile = self.tile_virt_xy(x, y);
@@ -1691,7 +1760,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     };
 
                     /* Oilrigs must keep v->tile as st->airport.tile, since the landing pad is in a non-airport tile */
-                    gp_new_tile = if self.airport_type(st) == AT_OILRIG {
+                    gp_new_tile = if self.airport_type(st) == AirportTypes::AT_OILRIG {
                         self.airport_tile(st)
                     } else {
                         self.tile_virt_xy(gp_x, gp_y)
@@ -1913,11 +1982,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
              * small airports use AIRPORT_BUSY, city airports use AirportBlock::RunwayInOut, etc.
              * but they all share the same number */
             if !st.is_null() {
-                self.airport_blocks_update(st, |blocks| {
-                    blocks.reset(AirportBlocks::from_element(AirportBlock::RUNWAY_IN));
-                    blocks.reset(AirportBlocks::from_element(AirportBlock::RUNWAY_IN_OUT)); // commuter airport
-                    blocks.reset(AirportBlocks::from_element(AirportBlock::RUNWAY_IN2)); // intercontinental
-                });
+                // The three resets of the one mask are its reset of their union.
+                // SAFETY: The crashed aircraft's non-null target airport handle (a live station,
+                // or the probe's), whose mask nothing else touches during the update.
+                unsafe {
+                    self.airport_blocks_reset(
+                        st,
+                        *AirportBlocks::from_element(AirportBlock::RUNWAY_IN)
+                            .set(AirportBlocks::from_element(AirportBlock::RUNWAY_IN_OUT)) // commuter airport
+                            .set(AirportBlocks::from_element(AirportBlock::RUNWAY_IN2)), // intercontinental
+                    );
+                }
             }
 
             Self::call(|| (self.vs.destroy)(b));
@@ -2481,9 +2556,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                          * they all have heading LANDING). And also occupy that block! */
                         v.set_pos(self.next_position(current));
                         let blocks = self.blocks(self.layout(apc, v.pos()));
-                        self.airport_blocks_update(st, |b| {
-                            b.set(blocks);
-                        });
+                        // SAFETY: `st` is the handle the controller resolved for its
+                        // airport (a live station, or the probe's handle), whose mask
+                        // nothing else touches during the update.
+                        unsafe { self.airport_blocks_set(st, blocks) };
                         return;
                     }
                     v.base().set_cur_speed(tcur_speed);
@@ -2597,9 +2673,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 return;
             }
 
-            self.airport_blocks_update(st, |blocks| {
-                blocks.reset(previous_blocks);
-            });
+            // SAFETY: `st` is the handle the controller resolved for its airport (a live
+            // station, or the probe's handle), whose mask nothing else touches during the
+            // update.
+            unsafe { self.airport_blocks_reset(st, previous_blocks) };
         }
     }
 
@@ -2769,9 +2846,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
 
             if next_blocks != AirportBlocks::from_element(AirportBlock::NOTHING) {
-                self.airport_blocks_update(st, |b| {
-                    b.set(blocks); // occupy next block
-                });
+                // SAFETY: `st` is the handle the controller resolved for its airport (a live
+                // station, or the probe's handle), whose mask nothing else touches during the
+                // update.
+                unsafe { self.airport_blocks_set(st, blocks) }; // occupy next block
             }
         }
         true
@@ -2789,9 +2867,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if !self.airport_blocks(st).any(blocks) {
                 /* TERMINAL# HELIPAD# */
                 v.set_state(mapping.state); // start moving to that terminal/helipad
-                self.airport_blocks_update(st, |b| {
-                    b.set(blocks); // occupy terminal/helipad
-                });
+                // SAFETY: `st` is the handle the controller resolved for its airport (a live
+                // station, or the probe's handle), whose mask nothing else touches during the
+                // update.
+                unsafe { self.airport_blocks_set(st, blocks) }; // occupy terminal/helipad
                 return true;
             }
             i += 1;
@@ -2991,7 +3070,16 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return true;
         }
 
+        crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
         crate::witness::hit(crate::witness::AIRCRAFT_TICKS);
+
+        let mut storage = MaybeUninit::uninit();
+        // SAFETY: The scheduler's `Tick` runs in the game loop, serialized by the game-state
+        // mutex; the guard drops when this body returns, after an `AircraftEventHandler` that
+        // deleted the aircraft, and holds no reference to it.
+        let _framerate = unsafe {
+            PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_AIRCRAFT)
+        };
 
         b.set_tick_counter(b.tick_counter().wrapping_add(1));
 
@@ -3111,9 +3199,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             let layout = Self::airport_get_fta(st);
             let mut blocks = self.blocks(self.layout(layout, a.previous_pos()));
             blocks.set(self.blocks(self.layout(layout, a.pos())));
-            self.airport_blocks_update(st, |b| {
-                b.reset(blocks);
-            });
+            // SAFETY: `st` is the handle the controller resolved for its airport (a live
+            // station, or the probe's handle), whose mask nothing else touches during the
+            // update.
+            unsafe { self.airport_blocks_reset(st, blocks) };
         }
     }
 }
@@ -3250,13 +3339,19 @@ pub(crate) unsafe fn event(leaves: *const Leaves, id: Vehicle, pass: bool) -> bo
  * flight helpers, a live disaster vehicle with null state). Raw scalar accesses end
  * before noexcept callbacks; no borrow survives reentry. */
 
-/// `Aircraft::Tick`.
+/// `Aircraft::Tick`, for the scheduler's dispatch over every aircraft part. A shadow or rotor
+/// returns before it counts an entry.
+pub(crate) fn tick(leaves: &Leaves, id: Vehicle) -> bool {
+    with_world!(leaves, |w| { w.tick(id) })
+}
+/// `Aircraft::Tick` for the kept native fixture `tools/migration/windows-abi/aircraft.inc`; it
+/// leaves with that fixture.
 /// # Safety
 /// See the shared export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_tick_abi(leaves: *const Leaves, id: Vehicle) -> u8 {
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    u8::from(with_world!(leaves, |w| { w.tick(id) }))
+    // SAFETY: As the shared export contract.
+    u8::from(tick(unsafe { &*leaves }, id))
 }
 /// `Aircraft::OnNewCalendarDay`, for the scheduler's dispatch over a live aircraft.
 pub(crate) fn on_new_calendar_day(leaves: &Leaves, id: Vehicle) {
@@ -3299,7 +3394,44 @@ pub unsafe extern "C" fn openttd_rust_aircraft_cache(
 ) {
     unsafe { update_aircraft_cache(leaves, id, range) };
 }
-/// `GetAircraftFlightLevelBounds`.
+/// `GetAircraftFlightLevelBounds(v, min_level, max_level)`, for Rust callers: an aircraft,
+/// or a disaster vehicle, whose record has no aircraft link.
+pub(crate) fn get_aircraft_flight_level_bounds(
+    leaves: &Leaves,
+    v: VehicleRef,
+    min_level: Option<&mut i32>,
+    max_level: Option<&mut i32>,
+) {
+    if v.aircraft_state().is_null() {
+        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
+    }
+    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
+    with_world!(leaves, |w| {
+        w.get_aircraft_flight_level_bounds(v, min_level, max_level);
+    });
+}
+/// `GetAircraftFlightLevel(v, takeoff)`, for Rust callers, over the vehicle's `flags`: an
+/// aircraft's, or a disaster vehicle's, whose record has no aircraft link.
+///
+/// # Safety
+/// `flags` addresses a live, initialized and writable flags byte that nothing else reads or
+/// writes during the call. In the game it is the `flags` member of `v`'s aircraft or disaster
+/// owner; the native ABI probe supplies a byte of its own.
+pub(crate) unsafe fn get_aircraft_flight_level(
+    leaves: &Leaves,
+    v: VehicleRef,
+    flags: *mut u8,
+    takeoff: bool,
+) -> i32 {
+    if v.aircraft_state().is_null() {
+        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
+    }
+    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
+    with_world!(leaves, |w| {
+        w.get_aircraft_flight_level(v, flags, takeoff)
+    })
+}
+/// `GetAircraftFlightLevelBounds`, for C++ callers.
 /// # Safety
 /// See the shared export contract; each non-null bound is writable.
 #[unsafe(no_mangle)]
@@ -3309,20 +3441,14 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_bounds(
     min: *mut i32,
     max: *mut i32,
 ) {
-    if id.state.is_null() {
-        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
+    // SAFETY: The caller supplies the live table and null or writable bounds.
+    unsafe {
+        get_aircraft_flight_level_bounds(&*leaves, id.base(), min.as_mut(), max.as_mut());
     }
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| {
-        // SAFETY: The caller supplies null or writable bounds.
-        w.get_aircraft_flight_level_bounds(id.base(), unsafe { min.as_mut() }, unsafe {
-            max.as_mut()
-        });
-    });
 }
-/// `GetAircraftFlightLevel`.
+/// `GetAircraftFlightLevel`, for C++ callers.
 /// # Safety
-/// See the shared export contract; `flags` is the vehicle's live flags.
+/// See the shared export contract; `flags` is as [`get_aircraft_flight_level`] requires.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
     leaves: *const Leaves,
@@ -3330,13 +3456,8 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
     flags: *mut u8,
     takeoff: bool,
 ) -> i32 {
-    if id.state.is_null() {
-        crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
-    }
-    crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| {
-        w.get_aircraft_flight_level(id.base(), flags, takeoff)
-    })
+    // SAFETY: The caller supplies the live table and a flags byte as the callee requires.
+    unsafe { get_aircraft_flight_level(&*leaves, id.base(), flags, takeoff) }
 }
 /// `HandleMissingAircraftOrders`.
 /// # Safety
@@ -3447,7 +3568,6 @@ crate::abi::layouts! {
         airport_type,
         airport_width,
         copy_sprite,
-        direction_towards,
         fta_blocks,
         fta_heading,
         fta_next,

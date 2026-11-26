@@ -44,6 +44,10 @@ impl ScriptEventType {
     pub const ET_INDUSTRY_CLOSE: Self = Self(17);
     /// `ET_STATION_FIRST_VEHICLE`.
     pub const ET_STATION_FIRST_VEHICLE: Self = Self(19);
+    /// `ET_DISASTER_ZEPPELINER_CRASHED`.
+    pub const ET_DISASTER_ZEPPELINER_CRASHED: Self = Self(20);
+    /// `ET_DISASTER_ZEPPELINER_CLEARED`.
+    pub const ET_DISASTER_ZEPPELINER_CLEARED: Self = Self(21);
     /// `ET_TOWN_FOUNDED`.
     pub const ET_TOWN_FOUNDED: Self = Self(22);
     /// `ET_AIRCRAFT_DEST_TOO_FAR`.

@@ -158,8 +158,6 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_company_startup_abi(const OpenTTDCompanyS
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *a0, OpenTTDCompanyStartup *a1) { return openttd_rust_company_startup_abi(a0, a1) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout_abi(const OpenTTDCompanyServices *);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *a0) { return openttd_rust_company_competitor_timeout_abi(a0) != 0; }
-uint8_t OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed_abi(const OpenTTDCompanyServices *, uint8_t, uint8_t);
-extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *a0, uint8_t a1, uint8_t a2) { return openttd_rust_company_takeover_allowed_abi(a0, a1, a2) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_control_abi(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCommandCost *, OpenTTDCompanyControl *);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_control(const OpenTTDCompanyServices *a0, const OpenTTDTileOwnerContext *a1, OpenTTDCommandCost *a2, OpenTTDCompanyControl *a3) { return openttd_rust_company_control_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_company_allow_list(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, OpenTTDByteSpan);

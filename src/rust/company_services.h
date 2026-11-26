@@ -19,8 +19,6 @@ int32_t RustGRFPriceShift(const GRFFile *, uint32_t) noexcept;
 
 inline UnitID RustCompanyUseVehicleUnit(CompanyID owner, VehicleType type, UnitID unit) noexcept { return Company::Get(owner)->freeunits[type].UseID(unit); }
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
-inline bool RustCompanyIsHuman(uint8_t company) noexcept { return Company::IsHumanID(CompanyID{company}); }
-inline uint16_t RustCompanyRoadVehicleCount(const Company *company) noexcept { return company->group_all[VEH_ROAD].num_vehicle; }
 inline void *RustCompanyGroupAll(Company *company, uint8_t type) noexcept { return company->group_all[static_cast<VehicleType>(type)].state.state; }
 inline uint32_t RustCompanyLocationOfHQ(Company *company) noexcept { return company->location_of_HQ.base(); }
 inline bool RustCompanyAllowsPublicKey(uint8_t company, std::string_view public_key) noexcept { return Company::Get(company)->allow_list.Contains(public_key); }

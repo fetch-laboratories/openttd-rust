@@ -4,23 +4,24 @@
 
 ## Effect vehicles
 
-- Rust owns: `effectvehicle.cpp`'s init and tick procedures and `_effect_procs` (`effect.rs`), the three creators, which Rust callers call typed, and each shell's `animation_state` and `animation_substate`.
-- C++ keeps: the shells, their pool allocation, save/load staging and `Tick` override, drawing (`UpdateDeltaXY`, `GetTransparencyOption`), and the shared vehicle table's sprite writers, viewport and sound, which read or write members the shells store. `GetIndustryGfx` is the shared table's `industry_gfx` until its translation is ported (#565).
+- Rust owns: `effectvehicle.cpp`'s init and tick procedures and `_effect_procs` (`effect.rs`), `EffectVehicle::Tick` with the `delete v` of an expired effect, the three creators, which Rust callers call typed, and each shell's `animation_state` and `animation_substate`, reached through the vehicle record's `effect` link.
+- C++ keeps: the shells, their pool allocation, save/load staging, drawing (`UpdateDeltaXY`, `GetTransparencyOption`), and the shared vehicle table's sprite writers, viewport and sound, which read or write members the shells store. `GetIndustryGfx` is the shared table's `industry_gfx` until its translation is ported (#565).
 - Checks: `python3 tools/migration.py simulate effects`.
 - Limits: Gaps remain in viewport pixels, audible output or full legacy fixtures.
 - PRs: #105, #115, #300, #1044; service table #299.
 
 ## Disaster scheduling and vehicles
 
-- Rust owns: fifteen subtype controllers, eight initializers, eligibility, countdown/reset, industry construction reset, square clearing, movement, shadow/rotor updates, target release, private vehicle state and global delay.
-- C++ keeps: map, pools, base vehicles, viewport and square-clearing costs.
+- Rust owns: every simulation body of `disaster_vehicle.cpp` (`disaster.rs`) under its original name, the constructor's body, `_disaster_images`, `_disastervehicle_tick_procs`, `_disasters` and `_disaster_delay`; the members `image_override`, `big_ufo_destroyer_target`, `flags` and `state`, reached through the vehicle record's `disaster` link; `GetDirectionTowards` (`vehicle.rs`); and the road owner's `disaster_vehicle`. `DisasterClearSquare` runs the Rust `CMD_LANDSCAPE_CLEAR` with the company backup, and `ReleaseDisastersTargetingIndustry` is called from the industry destructor's Rust body.
+- C++ keeps: the `DisasterVehicle` shell with its save/load constructor, which the table's `allocate` calls, `ReleaseDisasterVehicle`'s `GetIfValid` lookup, `UpdateDeltaXY`, the daily `IntervalTimer` registration, `_disaster_delay`'s save address, and the pools, stations, industries, towns and company road counts the bodies reach through shared tables (#656, #634, #635, #1048).
+- Checks: the `disasters-` scenarios, the ABI probe's disaster case and the Rust tests of `disaster.rs` and `vehicle.rs`.
 - Limits: Gaps remain in legacy save fixtures, viewport pixels, sound or all NewGRF combinations.
-- PRs: #118, #300, #520.
+- PRs: #118, #300, #520; file pass #1027 part 4.
 
 ## Road vehicle control and private state
 
 - Rust owns: tick/day control, movement, blocking/overtaking, reversal, station/depot transitions, crash expiry, servicing, cache, seven scalars and path per shell; road YAPF (#124) writes that path. The seven scalars form the canonical generated shared prefix and both languages access them directly.
-- C++ keeps: shells/pool identity, modern, split-vector and TTD/TTO save staging, tick entry and counters.
+- C++ keeps: shells/pool identity, modern, split-vector and TTD/TTO save staging and counters, and the road command slot of the vehicle tick, which the session frame holds.
 - Checks: default `roads-` simulation, original movement-table observations in Rust, and native shared-field layout/default/maximum-value checks.
 - Limits: Gaps remain in legacy saves, custom NewGRFs, articulated/tram turns, sounds, and viewport pixels (#156).
 - PRs: #128, #215, #319, #332; direct fields #744/#755.
@@ -28,7 +29,7 @@
 ## Ship controller and private state (#146)
 
 - Rust owns: every simulation body of `ship_cmd.cpp`, all but the drawing and sound members (tick/movement, locks, acceleration, rotation/reversal, track/depot/destination policy, economy-day/service/cache, `CmdBuildShip`, nearest-depot region BFS, `GetVehicleTrackdir`, `IsShipDestinationTile`, `GetEffectiveWaterClass`), the ship owner (`state`, `rotation`, rotation coordinates and cached path) reached through the vehicle record's `ship` link, and the record's sprite-cache direction; ship YAPF (#119) owns search.
-- C++ keeps: the `Ship` shell and its virtual members as one-call shims, the specialised `UpdateViewport` with the drawing members (#656), the depot pool walk (#638), sprites, sound, `UpdateDeltaXY`, the `PerformanceAccumulator` of `Ship::Tick` (#1011) and modern/legacy save staging.
+- C++ keeps: the `Ship` shell and its virtual members as one-call shims, the specialised `UpdateViewport` with the drawing members (#656), the depot pool walk (#638), sprites, sound, `UpdateDeltaXY` and modern/legacy save staging.
 - Checks: `python3 tools/migration.py simulate water --jobs 2`; the ABI probe's ship case runs the real reverse and depot searches.
 - Limits: Gaps remain in legacy saves, viewport pixels or arbitrary custom NewGRF combinations.
 - PRs: #152; file pass #1059.
@@ -52,7 +53,7 @@
 ## Vehicle scheduling and base maintenance (#213)
 
 - Rust owns: calendar/economy-day scheduling, `CallVehicleTicks` traversal, survival, cargo aging, motion/sound, loading/fleet sequencing, renewal, service/depot resets, reliability, breakdowns, age and value.
-- C++ keeps: `Vehicle` shells/pools, type-specific tick facades, NewGRF callbacks, commands and presentation.
+- C++ keeps: `Vehicle` shells/pools, NewGRF callbacks, commands and presentation.
 - Checks: default vehicle, fleet and aircraft simulations.
 - Limits: Gaps remain in replacement and old-news branches, NewGRF and reentrant sound, custom/articulated combinations, and legacy saves (#156).
 - PRs: #257.
@@ -219,9 +220,9 @@
 
 ## Vehicle scheduler file pass (#986)
 
-- `vehicle/scheduler.rs` is finished. `RunVehicleCalendarDayProc`, `RunEconomyVehicleDayProc` and `CallVehicleTicks` read the vehicle pool through its descriptor and each member through its `VehicleRef` accessor, where the original reads it; the survival assertions and the three subtype casts run through the native assertion policy. Each day procedure reads the game mode and day fraction itself and dispatches `OnNewCalendarDay` and `OnNewEconomyDay` on the vehicle's type to the controllers' bodies, so the eight C++ overrides and the two base virtuals are gone; `SchedulerServices` links the four controller tables.
-- The vehicle's cargo list has one binding, `VehicleRef::cargo` over the resolver's slot. C++ keeps the virtual `Tick` with its controllers' timing scopes (#1011), `PlayVehicleSound`, `MarkDirty` and the pool and shells.
-- Checks: `vehicle::scheduler::tests` (post-Tick bodies over live records, the pool walk against `scheduler/pool-oracle.txt`, survival assertions, day procedures, the 32-day callback's results and the day dispatch), the native `Tick` timing-scope test, `RoadServiceBoundary`, source review and exact-head Full. Archive equivalence is unclaimed: every body changes how it reaches its values.
+- `vehicle/scheduler.rs` is finished. `RunVehicleCalendarDayProc`, `RunEconomyVehicleDayProc` and `CallVehicleTicks` read the vehicle pool through its descriptor and each member through its `VehicleRef` accessor, where the original reads it; the survival assertions and the three subtype casts run through the native assertion policy. Each day procedure reads the game mode and day fraction itself and dispatches `OnNewCalendarDay` and `OnNewEconomyDay` on the vehicle's type to the controllers' bodies, so the eight C++ overrides and the two base virtuals are gone. `CallVehicleTicks` dispatches `Tick` the same way to all six owners' bodies; the four controllers (train, road vehicle, ship and aircraft) each open their own `PerformanceAccumulator` where the original does, and effect and disaster ticks have none; `SchedulerServices` links the four controller tables and the disaster table.
+- The vehicle's cargo list has one binding, `VehicleRef::cargo` over the resolver's slot. C++ keeps `PlayVehicleSound`, `MarkDirty` and the pool and shells.
+- Checks: `vehicle::scheduler::tests` (post-Tick bodies over live records, the pool walk against `scheduler/pool-oracle.txt`, survival assertions, day procedures, the 32-day callback's results, the day dispatch and the `Tick` dispatch with its timing scopes), each controller's timing-scope test, the native session-tick case over a pooled vehicle, `RoadServiceBoundary`, source review and exact-head Full. Archive equivalence is unclaimed: every body changes how it reaches its values.
 - PRs: #1045. `vehicle/occupancy.rs` follows in #1003.
 
 ## Vehicle tile hash file pass (#1003)

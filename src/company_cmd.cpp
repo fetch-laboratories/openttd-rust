@@ -323,17 +323,6 @@ void InitializeCompanies()
 	_cur_company_tick_index = 0;
 }
 
-/**
- * Can company \a cbig buy company \a csmall without exceeding vehicle limits?
- * @param cbig   Company buying \a csmall.
- * @param csmall Company getting bought.
- * @return Return \c true if it is allowed.
- */
-bool CheckTakeoverVehicleLimit(CompanyID cbig, CompanyID csmall)
-{
-	return openttd_rust_company_takeover_allowed(&GetRustCompanyServices(), cbig.base(), csmall.base());
-}
-
 
 /** Called every tick for updating some company info. */
 

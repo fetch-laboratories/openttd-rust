@@ -1076,14 +1076,22 @@ pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services) -> u
 }
 
 /// `group_all[type].num_vehicle` of the company `c`.
-fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
+///
+/// # Safety
+/// `c` is a live company and `kind` a company vehicle type, below `VEH_COMPANY_END`, which
+/// the binding indexes `group_all` with.
+#[allow(unsafe_code)] // The contract the binding's dereference and index require.
+pub(crate) unsafe fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
     crate::fleet::num_vehicle((s.group_all)(c, kind))
 }
 
 /// `CheckTakeoverVehicleLimit`: can company `cbig` buy company `csmall` without exceeding
 /// vehicle limits?
+///
+/// # Safety
+/// `cbig` and `csmall` are the IDs of live companies, which `Company::Get` resolves.
 #[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
-pub(crate) fn check_takeover_vehicle_limit(
+pub(crate) unsafe fn check_takeover_vehicle_limit(
     s: &Services,
     cbig: CompanyID,
     csmall: CompanyID,
@@ -1091,7 +1099,9 @@ pub(crate) fn check_takeover_vehicle_limit(
     let c1 = (s.identity.company)(cbig);
     let c2 = (s.identity.company)(csmall);
     let settings = s.shared.settings();
-    let within = |kind: VehicleType, max: u16| {
+    // SAFETY: Both companies are live, as this function's contract requires, and each `kind`
+    // below is a company vehicle type.
+    let within = |kind: VehicleType, max: u16| unsafe {
         i32::from(num_vehicle(s, c1, kind)) + i32::from(num_vehicle(s, c2, kind)) <= i32::from(max)
     };
 
@@ -1105,17 +1115,6 @@ pub(crate) fn check_takeover_vehicle_limit(
         && within(VehicleType::VEH_AIRCRAFT, unsafe {
             settings.max_aircraft.read()
         })
-}
-
-/// `CheckTakeoverVehicleLimit`, for the native function.
-#[unsafe(no_mangle)]
-#[allow(unsafe_code)] // The native export and its conversion of the native arguments.
-pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
-    s: &Services,
-    cbig: CompanyID,
-    csmall: CompanyID,
-) -> u8 {
-    u8::from(check_takeover_vehicle_limit(s, cbig, csmall))
 }
 
 /// `HandleBankruptcyTakeover`: handle the bankruptcy take over of a company. Companies going
@@ -1167,7 +1166,8 @@ fn handle_bankruptcy_takeover(s: &Services, c: CompanyRef) {
         if read_field!(c2.finances, bankrupt_asked).none() // Don't ask companies going bankrupt themselves
             && !read_field!(f, bankrupt_asked).test(c2.index)
             && best_performance < performance
-            && check_takeover_vehicle_limit(s, c2.index, c.index)
+            // SAFETY: `c2` is a live company of the walk, and `c` the live bankrupt company.
+            && unsafe { check_takeover_vehicle_limit(s, c2.index, c.index) }
         {
             best_performance = performance;
             best = Some(c2.index);
@@ -3430,7 +3430,11 @@ pub(crate) fn cmd_buy_company(
     }
 
     // Do not allow takeover if the resulting company would have too many vehicles.
-    if !check_takeover_vehicle_limit(s, current, target_company) {
+    // SAFETY: `Company::GetIfValid` found the target above. The command has neither the
+    // spectator nor the deity flag, so in a normal game `ExecuteCommand` (`command.cpp:280`)
+    // runs it only for a valid current company. Outside a normal game the buyer is not
+    // checked, as the original's `Company::Get(_current_company)` is not (#734).
+    if !unsafe { check_takeover_vehicle_limit(s, current, target_company) } {
         out.error(STR_ERROR_TOO_MANY_VEHICLES_IN_GAME.0);
         return;
     }

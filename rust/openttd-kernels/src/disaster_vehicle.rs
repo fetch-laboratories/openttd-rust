@@ -37,34 +37,3 @@ impl DisasterSubType {
     /// Big submarine, pops up in the oceans but doesn't do anything
     pub const ST_BIG_SUBMARINE: Self = Self(14);
 }
-
-/// `ST_ZEPPELINER`.
-pub const ST_ZEPPELINER: u8 = DisasterSubType::ST_ZEPPELINER.0;
-/// `ST_ZEPPELINER_SHADOW`.
-pub const ST_ZEPPELINER_SHADOW: u8 = DisasterSubType::ST_ZEPPELINER_SHADOW.0;
-/// `ST_SMALL_UFO`.
-pub const ST_SMALL_UFO: u8 = DisasterSubType::ST_SMALL_UFO.0;
-/// `ST_SMALL_UFO_SHADOW`.
-pub const ST_SMALL_UFO_SHADOW: u8 = DisasterSubType::ST_SMALL_UFO_SHADOW.0;
-/// `ST_AIRPLANE`.
-pub const ST_AIRPLANE: u8 = DisasterSubType::ST_AIRPLANE.0;
-/// `ST_AIRPLANE_SHADOW`.
-pub const ST_AIRPLANE_SHADOW: u8 = DisasterSubType::ST_AIRPLANE_SHADOW.0;
-/// `ST_HELICOPTER`.
-pub const ST_HELICOPTER: u8 = DisasterSubType::ST_HELICOPTER.0;
-/// `ST_HELICOPTER_SHADOW`.
-pub const ST_HELICOPTER_SHADOW: u8 = DisasterSubType::ST_HELICOPTER_SHADOW.0;
-/// `ST_HELICOPTER_ROTORS`.
-pub const ST_HELICOPTER_ROTORS: u8 = DisasterSubType::ST_HELICOPTER_ROTORS.0;
-/// `ST_BIG_UFO`.
-pub const ST_BIG_UFO: u8 = DisasterSubType::ST_BIG_UFO.0;
-/// `ST_BIG_UFO_SHADOW`.
-pub const ST_BIG_UFO_SHADOW: u8 = DisasterSubType::ST_BIG_UFO_SHADOW.0;
-/// `ST_BIG_UFO_DESTROYER`.
-pub const ST_BIG_UFO_DESTROYER: u8 = DisasterSubType::ST_BIG_UFO_DESTROYER.0;
-/// `ST_BIG_UFO_DESTROYER_SHADOW`.
-pub const ST_BIG_UFO_DESTROYER_SHADOW: u8 = DisasterSubType::ST_BIG_UFO_DESTROYER_SHADOW.0;
-/// `ST_SMALL_SUBMARINE`.
-pub const ST_SMALL_SUBMARINE: u8 = DisasterSubType::ST_SMALL_SUBMARINE.0;
-/// `ST_BIG_SUBMARINE`.
-pub const ST_BIG_SUBMARINE: u8 = DisasterSubType::ST_BIG_SUBMARINE.0;

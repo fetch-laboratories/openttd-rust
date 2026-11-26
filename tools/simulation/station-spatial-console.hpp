@@ -207,6 +207,11 @@ static void Station602Rail(TileIndex tile, DoCommandFlags exec)
 #include "script/api/script_event_types.hpp"
 #include "news_func.h"
 #include "sound_func.h"
+#ifdef WITH_RUST
+#include "rust/road_ffi.h"
+#include "rust/road_command_services.h"
+#include "rust/vehicle_services.h"
+#endif
 #include "train.h"
 static Station *_station602_crash = nullptr;
 static uint _station602_crash_step = 0, _station602_crash_victims = 0, _station602_other_events = 0;
@@ -290,7 +295,15 @@ static void Station602Crash(bool reload)
 	/* Original Vehicle::Crash samples all passengers once; RoadVehicle adds its driver. */
 	_station602_crash_rng = _random; _station602_crash_victims = _station602_crash_rng.Next(passengers + 1) + 1;
 	fmt::print(stderr, "STCMD spatial602-crash-input {} {} {} {} {} {}\n", passengers, _station602_crash_victims, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
-	_station602_crash_step = 0; _station602_other_events = 0; _station602_crash = st; StationNeed(bus->Tick(), __LINE__); _station602_crash = nullptr;
+	_station602_crash_step = 0; _station602_other_events = 0; _station602_crash = st;
+#ifdef WITH_RUST
+	/* RoadVehicle::Tick through its kept export, with its own command slot. */
+	OpenTTDRoadCommandSlot slot;
+	StationNeed(openttd_rust_road_tick(RustVehicle(bus), bus->GetRustState(), &GetRustRoadLeaves(), &slot), __LINE__);
+#else
+	StationNeed(bus->Tick(), __LINE__);
+#endif
+	_station602_crash = nullptr;
 	StationNeed(_station602_crash_step == 4 && st->goods[0].rating == 40 && FIXTURE_GET(bus, VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
 	sound.Restore(); Station562Rng("spatial602-crash");
 }

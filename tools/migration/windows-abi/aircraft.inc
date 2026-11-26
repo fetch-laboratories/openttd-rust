@@ -211,7 +211,6 @@ static void AircraftPhaseBoundary()
 	s.plane_speed = []() noexcept { return uint8_t{1}; };
 	p.record.acceleration = 8; p.record.cached_max_speed = 100;
 	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.record.direction = DIR_SW; aircraft_probe.record.progress = 255; };
-	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{DIR_SW}; };
 	/* Both callbacks mutate canonical inputs. Subtype must be loaded after
 	 * UpdatePosition, then z after the rotor callback, rather than on acquisition. */
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.record.subtype = 0; aircraft_probe.record.z_pos = 17; };

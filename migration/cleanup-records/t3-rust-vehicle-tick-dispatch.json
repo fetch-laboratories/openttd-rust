@@ -1,0 +1,48 @@
+[
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/ship_control.rs | fn tick | allow unsafe_code",
+    "operation": "ship_control::tick",
+    "source_contract": "`PerformanceAccumulator framerate(PFE_GL_SHIPS);` as the first statement of `Ship::Tick` (ship_cmd.cpp), which writes the unsynchronised `_pf_data` (framerate_gui.cpp) on the game thread under the game-state mutex.",
+    "reason": "`PerformanceAccumulator::new` is an `unsafe fn` whose contract is the serialized access to `_pf_data`; the guard opens in the body that owns it, as the original's does.",
+    "retiring_owner": "#734",
+    "retirement_condition": "Retires when the framerate state moves to Rust and its guard needs no serialized-access contract."
+  },
+  {
+    "kind": "suppression",
+    "tool": "rust",
+    "before": 0,
+    "after": 1,
+    "site": "rust/openttd-kernels/src/disaster.rs | fn scheduler_tick | allow unsafe_code",
+    "operation": "disaster::scheduler_tick",
+    "source_contract": "`v->Tick()` of a `DisasterVehicle` (vehicle.cpp, `CallVehicleTicks`), which reaches the process-lifetime disaster tables.",
+    "reason": "`disaster::Tables::new` is an `unsafe fn` whose contract is that every link of the table stays valid for the call; the scheduler passes the process-lifetime table, as the kept export does.",
+    "retiring_owner": "#656",
+    "retirement_condition": "Retires when the vehicle pool moves to Rust (#656) and the disaster tables are Rust statics."
+  },
+  {
+    "kind": "growth",
+    "counter": "generated_records",
+    "added": {
+      "abi-record-vehicle.h": 1
+    },
+    "reason": "#1011: the vehicle record gains the `effect` link that the `EffectVehicle` constructor sets, as `ship` and `disaster` are linked, so the scheduler's `Tick` dispatch reaches each effect's owner from the record instead of through a C++ call. The declaration is generated from the Rust record.",
+    "existing_alternatives": "The base reached the effect owner only inside the C++ `EffectVehicle::Tick` override (`RunEffect`), the Rust-to-C++-to-Rust bounce this work order removes.",
+    "retiring_owner": "#734",
+    "retirement_condition": "The link is its one definition and stays with the vehicle record."
+  },
+  {
+    "kind": "growth",
+    "counter": "tools_cpp",
+    "added": {
+      "tools/simulation/station-spatial-console.hpp": 4
+    },
+    "reason": "#1011: the station crash fixture ticked its bus through the C++ `RoadVehicle::Tick` override, which this work order deletes. The Rust build now calls the kept road tick export with the command slot the override built, and the build without Rust keeps the original `bus->Tick()`, which adds the `#ifdef` branch, the slot and the export's includes.",
+    "existing_alternatives": "No C++ entry to a road vehicle's tick remains but the kept export; the fixture compiles against the original too, so the original call stays in its branch.",
+    "retiring_owner": "#634",
+    "retirement_condition": "Retires with the native station fixture, which #736's classification places under #634."
+  }
+]

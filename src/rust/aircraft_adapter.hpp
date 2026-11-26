@@ -144,7 +144,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_type = Aircraft_airport_type,
 	.airport_width = Aircraft_airport_width,
 	.copy_sprite = Aircraft_copy_sprite,
-	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
 	.fta_blocks = Aircraft_fta_blocks,
 	.fta_heading = Aircraft_fta_heading,
 	.fta_next = Aircraft_fta_next,
@@ -175,12 +174,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 };
 const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept { return _aircraft_leaves; }
 
-bool Aircraft::Tick()
-{
-	if (!this->IsNormalAircraft()) return true;
-	PerformanceAccumulator framerate(PFE_GL_AIRCRAFT);
-	return openttd_rust_aircraft_tick(&_aircraft_leaves, RustAircraftVehicle(this));
-}
 void SetAircraftPosition(Aircraft *v, int x, int y, int z) { openttd_rust_aircraft_position(&_aircraft_leaves, RustAircraftVehicle(v), x, y, z); }
 void UpdateAircraftCache(Aircraft *v, bool update_range) { openttd_rust_aircraft_cache(&_aircraft_leaves, RustAircraftVehicle(v), update_range); }
 void GetAircraftFlightLevelBounds(const Vehicle *v, int *min, int *max) { openttd_rust_aircraft_flight_bounds(&_aircraft_leaves, RustAircraftVehicle(const_cast<Vehicle *>(v)), min, max); }

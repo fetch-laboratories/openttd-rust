@@ -184,7 +184,6 @@ struct GetNewVehiclePosResult {
 };
 
 GetNewVehiclePosResult GetNewVehiclePos(const Vehicle *v);
-Direction GetDirectionTowards(const Vehicle *v, int x, int y);
 
 /**
  * Is the given vehicle type buildable by a company?

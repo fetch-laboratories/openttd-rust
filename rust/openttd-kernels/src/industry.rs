@@ -231,6 +231,16 @@ pub(crate) fn location(owner: *mut Industry) -> TileArea {
     // SAFETY: Live owner supplied by the caller's resolved shell.
     unsafe { lifecycle::location(owner) }
 }
+/// `Industry::TileBelongsToIndustry`: check if a given tile belongs to the industry with
+/// this index; the index is read only from an industry tile.
+pub(crate) fn tile_belongs_to_industry(
+    world: &crate::map_func::World<'_>,
+    tile: TileIndex,
+    index: IndustryID,
+) -> bool {
+    world.is_tile_type(tile, TileType::MP_INDUSTRY)
+        && world.asserted(|m| crate::industry_map::get_industry_index(m, tile)) == index
+}
 /// `Industry::IsCargoAccepted()`: any slot holds a valid cargo.
 pub(crate) fn is_cargo_accepted(owner: *mut Industry) -> bool {
     (0..accepted_count(owner))
@@ -586,7 +596,7 @@ use crate::direction_type::DiagDirection;
 use crate::landscape_type::LandscapeType;
 use crate::tree_map::TreeGround;
 /// `Industry::type`.
-fn industry_type(owner: *const Industry) -> IndustryType {
+pub(crate) fn industry_type(owner: *const Industry) -> IndustryType {
     IndustryType(unsafe { (*owner).metadata.kind })
 }
 /// `GetIndustrySpec(i->type)` through the owner's type.
@@ -1428,13 +1438,13 @@ fn servicing_news_type(servicing: Servicing) -> NewsType {
     }
 }
 /// `i->index` of a live industry.
-fn industry_index(shell: *mut c_void, svc: &Services) -> IndustryID {
+pub(crate) fn industry_index(shell: *mut c_void, svc: &Services) -> IndustryID {
     (crate::station::Ctx::from_shared(svc.shared()).c.industry_id)(shell.cast())
 }
 /// `i->town->index` of a live industry.
-fn town_index(shell: *mut c_void, svc: &Services) -> crate::town_type::TownId {
+pub(crate) fn town_index(shell: *mut c_void, svc: &Services) -> crate::town_type::TownId {
     let (resolver, transaction) = unsafe { (&*svc.resolver, &*svc.transaction) };
-    crate::town_type::TownId(unsafe { (resolver.town_id)((transaction.town)(shell.cast())) })
+    resolver::town_index(unsafe { (transaction.town)(shell.cast()) }, resolver)
 }
 /// Original `ReportNewsProductionChangeIndustry`: report news that industry production has
 /// changed significantly. `percent` is the percentage of change (>0 means increase, <0 means
@@ -2570,9 +2580,12 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builde
     unsafe { (*owner).registry[usize::from(kind)].clear() };
 }
 
-/// `Industry::location.tile`, the only industry location the subsidy search reads.
-/// SAFETY: Live serialized industry owner, immediate read with no callbacks.
-pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> TileIndex {
+/// `Industry::location.tile`, the one field of the location a caller reads.
+///
+/// # Safety
+/// `owner` is a live industry's Rust owner, with no callback running during the read.
+pub(crate) unsafe fn location_tile(owner: *const Industry) -> TileIndex {
+    // SAFETY: As this function's contract; an immediate field read.
     TileIndex(unsafe { (*owner).metadata.tile })
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
@@ -2798,11 +2811,9 @@ crate::abi::layouts! {
         clear_docking,
         industry_field,
         disassociate_field,
-        release_disasters,
         delete_storage,
         subsidies,
         invalidate_cargo,
-        belongs,
         randomisation_spec,
         random_triggers,
         set_random_triggers,

@@ -181,7 +181,7 @@ impl<'a> World<'a> {
         crate::bridge_map::get_bridge_height(tile, self.s)
     }
     fn clear_command(&self, out: Cost<'_>, tile: u32, flags: u16) {
-        crate::landscape_cmd::clear_command(self.cmd, out.0, tile, flags);
+        crate::landscape_cmd::clear_command_raw(self.cmd, out.0, tile, flags);
     }
     fn signal(&self, tile: u32, direction: u8, owner: u8) {
         crate::signal::Context {

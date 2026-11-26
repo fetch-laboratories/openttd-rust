@@ -357,6 +357,30 @@ pub(crate) mod testing {
         measurer_set_inactive,
     };
 
+    thread_local! {
+        static SAMPLER: Cell<Option<fn() -> i64>> = const { Cell::new(None) };
+        static SAMPLES: RefCell<Vec<i64>> = const { RefCell::new(Vec::new()) };
+    }
+    fn sample_at_boundary(effect: Effect) {
+        if let Effect::AccumulatorBegin(_) | Effect::AccumulatorEnd(_) = effect
+            && let Some(sample) = SAMPLER.get()
+        {
+            SAMPLES.with(|s| s.borrow_mut().push(sample()));
+        }
+    }
+    /// Run `run` with the recording table bound, calling `sample` at each accumulator begin
+    /// and end, so a test sees which of the body's stores lie inside the scope. Returns the
+    /// samples in order.
+    pub(crate) fn sampling(sample: fn() -> i64, run: impl FnOnce()) -> Vec<i64> {
+        take();
+        SAMPLER.set(Some(sample));
+        observe(Some(sample_at_boundary));
+        run();
+        observe(None);
+        SAMPLER.set(None);
+        SAMPLES.with(|s| std::mem::take(&mut *s.borrow_mut()))
+    }
+
     /// Bind the recording table for the process; return and clear this thread's recorded
     /// calls. A test calls it before the calls it observes.
     pub(crate) fn take() -> Vec<Effect> {

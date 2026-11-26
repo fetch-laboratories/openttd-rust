@@ -12,8 +12,8 @@
 //! by its destructor. An [`EffectVehicle`] handle names the shell's shared record and that
 //! owner. Every access to the owner is one field load or store, and no reference to it
 //! lives across a service call. A tick procedure that ends its effect returns false where
-//! the original has `delete v; return false;`, and `RunEffect` (`src/effectvehicle.cpp`)
-//! deletes the shell after the export returns, with nothing run in between.
+//! the original has `delete v; return false;`, and [`tick`], the scheduler's entry, deletes
+//! the shell after the procedure returns, with nothing run in between.
 #![allow(
     clippy::cast_possible_truncation,
     reason = "the original's integer stores into narrower members: progress = GB(r, 16, 3), spritenum = GB(Random(), 0, 2) + 1 and animation_state = anim_state"
@@ -96,6 +96,13 @@ struct Tables<'a> {
 }
 
 impl EffectVehicle {
+    /// The live effect vehicle `v` and the owner its record's link names.
+    fn of(v: VehicleRef) -> Self {
+        Self {
+            record: v,
+            owner: StateRef(v.effect()),
+        }
+    }
     /// `animation_state`.
     fn animation_state(self) -> u16 {
         self.owner.animation_state()
@@ -936,8 +943,20 @@ pub extern "C" fn openttd_rust_effect_create_rel(
     ))
 }
 
-/// `EffectVehicle::Tick` for the shell that holds `owner`, over the given tables. Returns
-/// 0 where the original deletes the effect, which the caller then does.
+/// `EffectVehicle::Tick`, for the scheduler's dispatch over a live effect vehicle: where the
+/// procedure ends the effect, the original's `delete v; return false;`.
+pub(crate) fn tick(v: VehicleRef, vehicles: &VehicleServices, shared: &Services) -> bool {
+    let t = Tables { vehicles, shared };
+    if EffectVehicle::of(v).tick(&t) {
+        return true;
+    }
+    (t.vehicles.destroy)(v);
+    false
+}
+
+/// `EffectVehicle::Tick` for the shell that holds `owner`, over the given tables, for the
+/// kept native fixture `src/tests/effect_protocol.hpp`, whose record is not in the pool.
+/// Returns 0 where the original deletes the effect, which the caller then does.
 ///
 /// # Safety
 /// `owner` is the live owner `record`'s shell holds, and both tables are live.

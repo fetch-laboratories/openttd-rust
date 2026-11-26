@@ -138,6 +138,13 @@ impl CompanyInfrastructure {
     }
 }
 
+/// `Company::IsHumanID`: is this company a valid company, not controlled by a `NoAI` program?
+/// If you know that `index` refers to a valid company, you can use this instead of
+/// `IsValidHumanID`; `Company::Get` asserts that it is in the pool.
+pub(crate) fn is_human_id(identity: &crate::company_identity::Services, index: CompanyID) -> bool {
+    !(identity.is_ai)((identity.company)(index))
+}
+
 crate::abi::layouts! {
     fn abi_layout;
     "CompanyInfrastructure" ["company_economy"] => CompanyInfrastructure {

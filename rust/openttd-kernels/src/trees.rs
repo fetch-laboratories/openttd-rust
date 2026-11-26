@@ -1012,8 +1012,8 @@ fn cmd_plant_tree(
                                     crate::landscape_cmd::clear_command(
                                         commands,
                                         out.0,
-                                        current_tile.0,
-                                        flags.0,
+                                        current_tile,
+                                        flags,
                                     );
                                     // A failed clear is the command's result.
                                     if !out.ok() {

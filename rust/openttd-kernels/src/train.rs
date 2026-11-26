@@ -25,6 +25,7 @@ use crate::direction_func::{
 };
 use crate::direction_type::{Axis, DiagDirection, DirDiff, Direction};
 use crate::engine_type::{EngineID, EngineMiscFlag, EngineMiscFlags, VE_DISABLE_WAGON_POWER};
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::ground_vehicle::{AccelStatus, GroundVehicleFlags};
 use crate::map_func::{Map, World};
 use crate::movement::CachedTable;
@@ -72,6 +73,7 @@ use crate::window_func::{
     invalidate_window_data, set_window_classes_dirty, set_window_dirty, set_window_widget_dirty,
 };
 use crate::window_type::{WindowClass, WindowNumber};
+use std::mem::MaybeUninit;
 
 /// `VehicleRailFlag`: rail vehicle flags, as bit positions of `VehicleRailFlags`.
 #[repr(transparent)]
@@ -4005,6 +4007,14 @@ impl Game<'_> {
             .set_tick_counter(this.vehicle().tick_counter().wrapping_add(1));
 
         if this.is_front_engine() {
+            let mut storage = MaybeUninit::uninit();
+            // SAFETY: The scheduler's `Tick` runs in the game loop, serialized by the
+            // game-state mutex; the guard drops when this branch returns, after a
+            // `TrainLocoHandler` that deleted the train, and holds no reference to it.
+            let _framerate = unsafe {
+                PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_TRAINS)
+            };
+
             if !this.vehicle().vehstatus().test(VehState::Stopped) || this.vehicle().cur_speed() > 0
             {
                 this.vehicle()
@@ -4320,16 +4330,9 @@ pub unsafe extern "C" fn openttd_rust_train_mark_dirty(
 ) {
     entry_game!(leaves, services).mark_dirty(v);
 }
-/// `Train::Tick`.
-/// # Safety
-/// As [`openttd_rust_train_consist_changed`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_tick(
-    v: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u8 {
-    u8::from(entry_game!(leaves, services).tick(v))
+/// `Train::Tick`, for the scheduler's dispatch over a live train.
+pub(crate) fn tick(id: Handle, leaves: &Leaves, services: &Services) -> bool {
+    Game::new(leaves, services).tick(id)
 }
 /// `Train::OnNewCalendarDay`: calendar day handler.
 pub(crate) fn on_new_calendar_day(id: Handle, leaves: &Leaves, services: &Services) {

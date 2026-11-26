@@ -427,7 +427,7 @@ impl<'a> Ctx<'a> {
     }
     /// `Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile)` into `out`.
     fn landscape_clear(&self, out: Cost<'_>, flags: DoCommandFlags, tile: TileIndex) {
-        crate::landscape_cmd::clear_command(self.command, out.0, tile.0, flags.0);
+        crate::landscape_cmd::clear_command(self.command, out.0, tile, flags);
     }
     /// A nested `Command<...>::Do(flags, tile, ...)` running `body` with the nested
     /// command's flags.

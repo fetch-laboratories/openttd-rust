@@ -31,6 +31,7 @@ use crate::direction_func::{
 };
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::engine_type::EngineID;
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::ground_vehicle::GroundVehicleFlags;
 use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
@@ -83,6 +84,7 @@ use crate::vehicle_base::Closest;
 use crate::vehicle_base::ClosestDepot;
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
+use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 
 /// Roadtype flags (`road.h`), as bit numbers, retaining every underlying byte.
@@ -137,7 +139,6 @@ crate::abi::shared_records! {
     fn abi_record;
     /// The scalar members of `RoadVehicle`, with the original widths and zero defaults.
     /// This is the first member of the stable allocation; the path stays Rust-private.
-    #[derive(Default)]
     "OpenTTDRoadState" ["road_state"] => pub struct OpenTTDRoadState {
         /// @see `RoadVehicleStates`
         pub state: u8,
@@ -150,6 +151,23 @@ crate::abi::shared_records! {
         /// Animation counter when the vehicle has crashed. @see `RoadVehIsCrashed`
         pub crashed_ctr: u16,
         pub reverse_ctr: u8,
+        /// NOSAVE: Disaster vehicle targetting this vehicle.
+        pub disaster_vehicle: VehicleID,
+    }
+}
+
+impl Default for OpenTTDRoadState {
+    fn default() -> Self {
+        Self {
+            state: 0,
+            frame: 0,
+            blocked_ctr: 0,
+            overtaking: 0,
+            overtaking_ctr: 0,
+            crashed_ctr: 0,
+            reverse_ctr: 0,
+            disaster_vehicle: VehicleID::INVALID,
+        }
     }
 }
 
@@ -300,6 +318,18 @@ pub(crate) unsafe fn overtaking_ctr(s: *const State) -> u8 {
 /// The serialized native shell owns this live state for the scalar access.
 pub(crate) unsafe fn crashed_ctr(s: *const State) -> u16 {
     read_field!(s, fields.crashed_ctr)
+}
+/// `RoadVehicle::disaster_vehicle`.
+/// # Safety
+/// As [`crashed_ctr`].
+pub(crate) unsafe fn disaster_vehicle(s: *const State) -> VehicleID {
+    read_field!(s, fields.disaster_vehicle)
+}
+/// Store `RoadVehicle::disaster_vehicle`.
+/// # Safety
+/// As [`crashed_ctr`].
+pub(crate) unsafe fn set_disaster_vehicle(s: *mut State, disaster_vehicle: VehicleID) {
+    write_field!(s, fields.disaster_vehicle, disaster_vehicle);
 }
 
 /// The services a road vehicle entry calls; the shared tables are borrowed through pointers.
@@ -532,7 +562,8 @@ struct Game<'a> {
     gs: &'a GroundServices,
     ss: &'a Services,
     movement: CachedTable<'a>,
-    /// The controller's native stack slot for `CanBuildTramTrackOnTile`; null elsewhere.
+    /// The native command slot for `CanBuildTramTrackOnTile`: the session frame's for a
+    /// vehicle tick, or the entry's caller's; null elsewhere.
     road: *mut crate::road_cmd::CommandSlot,
 }
 
@@ -2576,6 +2607,14 @@ impl<'a> Game<'a> {
     /// `RoadVehicle::Tick`.
     #[inline]
     fn tick(&self, v: Part) -> bool {
+        let mut storage = MaybeUninit::uninit();
+        // SAFETY: The scheduler's `Tick` runs in the game loop, serialized by the game-state
+        // mutex; the guard drops when this body returns, after a `RoadVehController` that
+        // deleted the vehicle, and holds no reference to it.
+        let _framerate = unsafe {
+            PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_ROADVEHS)
+        };
+
         v.v.set_tick_counter(v.v.tick_counter().wrapping_add(1));
 
         if v.v.is_front_engine() {
@@ -2846,7 +2885,26 @@ macro_rules! entry {
     }};
 }
 
-/// `RoadVehicle::Tick`.
+/// `RoadVehicle::Tick` over a live record and road owner pair; `road` is the native command
+/// slot, which the tram track query of a front vehicle builds its context in.
+fn tick_part(v: Part, leaves: *const Leaves, road: *mut crate::road_cmd::CommandSlot) -> bool {
+    crate::witness::hit(crate::witness::ROAD_TICKS);
+    let mut g = entry!(leaves);
+    g.road = road;
+    g.tick(v)
+}
+/// `RoadVehicle::Tick`, for the scheduler's dispatch over a live road vehicle record; `road`
+/// is the session frame's command slot for the vehicle tick.
+pub(crate) fn tick(
+    v: VehicleRef,
+    leaves: &Leaves,
+    road: *mut crate::road_cmd::CommandSlot,
+) -> bool {
+    tick_part(Part::of(v), leaves, road)
+}
+/// `RoadVehicle::Tick` for the kept native fixture `RoadServiceBoundary`
+/// (`tools/migration/windows-abi/road.inc`), which supplies the road owner itself; it leaves
+/// with that fixture.
 /// # Safety
 /// A live record and road owner pair, the static tables and the native command slot for
 /// this synchronous call.
@@ -2857,10 +2915,7 @@ pub unsafe extern "C" fn openttd_rust_road_tick_abi(
     leaves: *const Leaves,
     road: *mut crate::road_cmd::CommandSlot,
 ) -> u8 {
-    crate::witness::hit(crate::witness::ROAD_TICKS);
-    let mut g = entry!(leaves);
-    g.road = road;
-    u8::from(g.tick(Part::new(v, state)))
+    u8::from(tick_part(Part::new(v, state), leaves, road))
 }
 /// `IndividualRoadVehicleController`.
 /// # Safety
@@ -2891,6 +2946,14 @@ pub unsafe extern "C" fn openttd_rust_road_leave_depot_abi(
     leaves: *const Leaves,
 ) -> u8 {
     u8::from(entry!(leaves).road_veh_leave_depot(Part::new(v, state), first))
+}
+/// `RoadVehicle::Crash(flooded)`, for Rust callers.
+///
+/// # Safety
+/// `v` is a live road vehicle record and `s` the road owner its record names, which the
+/// caller has resolved.
+pub(crate) unsafe fn crash(leaves: &Leaves, v: VehicleRef, s: *mut State, flooded: bool) -> u32 {
+    entry!(leaves).crash(Part::new(v, s), flooded)
 }
 /// `RoadVehicle::Crash`.
 /// # Safety
@@ -3104,9 +3167,22 @@ mod map_context_tests {
     use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE};
 
     /// Pinned `RoadVehicle::Tick` returns for an articulated part after wrapping
-    /// `tick_counter`. The native ABI fixture leaves map services unused here.
+    /// `tick_counter`. The native ABI fixture leaves map services unused here. It opens
+    /// `PFE_GL_ROADVEHS` for every part, before the tick count, and ends it after.
     #[test]
     fn articulated_tick_keeps_early_return_without_map_metadata() {
+        use crate::framerate_type::{
+            PerformanceElement,
+            testing::{Effect, sampling, take},
+        };
+        thread_local! {
+            static RECORD: std::cell::Cell<*mut crate::vehicle_base::VehicleRecord> =
+                const { std::cell::Cell::new(std::ptr::null_mut()) };
+        }
+        fn tick_counter() -> i64 {
+            // SAFETY: The test's live record.
+            i64::from(unsafe { (*RECORD.get()).tick_counter })
+        }
         let mut shared = SHARED;
         shared.map = std::ptr::null();
         let vehicle = VEHICLE;
@@ -3130,7 +3206,16 @@ mod map_context_tests {
             (*record).running_ticks = 7;
             let part = Part::new(VehicleRef::of(record), std::ptr::from_mut(&mut state));
             let game = Game::new(&raw const leaves);
-            assert!(game.tick(part));
+            RECORD.set(record);
+            let samples = sampling(tick_counter, || assert!(game.tick(part)));
+            assert_eq!(
+                take(),
+                [
+                    Effect::AccumulatorBegin(PerformanceElement::PFE_GL_ROADVEHS),
+                    Effect::AccumulatorEnd(PerformanceElement::PFE_GL_ROADVEHS),
+                ]
+            );
+            assert_eq!(samples, [255, 0], "the tick count lies inside the scope");
             assert_eq!(((*record).tick_counter, (*record).running_ticks), (0, 7));
             crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
         }

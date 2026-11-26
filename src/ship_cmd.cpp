@@ -30,7 +30,6 @@
 #include "company_base.h"
 #include "tunnelbridge_map.h"
 #include "zoom_func.h"
-#include "framerate_type.h"
 #include "industry.h"
 #include "industry_map.h"
 #include "ship_cmd.h"
@@ -182,12 +181,6 @@ void Ship::UpdateDeltaXY()
 	}
 }
 
-
-bool Ship::Tick()
-{
-	PerformanceAccumulator framerate(PFE_GL_SHIPS);
-	return openttd_rust_ship_tick(RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
-}
 
 void Ship::SetDestTile(TileIndex tile)
 {

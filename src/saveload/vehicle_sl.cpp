@@ -523,11 +523,11 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 					RoadVehicle *u = RoadVehicle::GetIfValid(v->GetDestTile().base());
 					if (u != nullptr && u->IsFrontEngine()) {
 						/* Delete UFO targetting a vehicle which is already a target. */
-						if (u->disaster_vehicle != VehicleID::Invalid() && u->disaster_vehicle != dv->index) {
+						if (u->GetDisasterVehicle() != VehicleID::Invalid() && u->GetDisasterVehicle() != dv->index) {
 							delete v;
 							continue;
 						} else {
-							u->disaster_vehicle = dv->index;
+							u->SetDisasterVehicle(dv->index);
 						}
 					}
 				}

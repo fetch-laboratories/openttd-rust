@@ -30,6 +30,7 @@ crate::abi::shared_records! {
         pub construction_limits: *const ConstructionLimits,
         pub custom_industry_number: *const u16,
         pub disable_elrails: *const bool,
+        pub disasters: *const bool,
         pub dist_local_authority: *const u8,
         pub economy: *const bool,
         pub economy_type: *const u8,
@@ -160,6 +161,11 @@ impl SettingAddresses {
         // SAFETY: As `road_side`.
         crate::landscape_type::LandscapeType(unsafe { self.climate.read() })
     }
+    /// `_settings_game.difficulty.disasters`; one field-sized load.
+    pub(crate) fn disasters(&self) -> bool {
+        // SAFETY: As `road_side`.
+        unsafe { self.disasters.read() }
+    }
     /// `_settings_game.order.no_servicing_if_no_breakdowns`; one field-sized load.
     pub(crate) fn no_servicing_if_no_breakdowns(&self) -> bool {
         // SAFETY: As `road_side`.
@@ -205,6 +211,7 @@ impl SettingAddresses {
         construction_limits: std::ptr::null(),
         custom_industry_number: std::ptr::null(),
         disable_elrails: std::ptr::null(),
+        disasters: std::ptr::null(),
         dist_local_authority: std::ptr::null(),
         economy: std::ptr::null(),
         economy_type: std::ptr::null(),
