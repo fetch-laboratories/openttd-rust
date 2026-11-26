@@ -1512,11 +1512,15 @@ class CarryTests(unittest.TestCase):
             initialize(root, {"rust/x.rs": body})
             accepted = git("rev-parse", "HEAD", cwd=root).strip()
             (root / "rust/x.rs").write_text(
-                body.replace("names a live record.", "names a record the game keeps live,\n/// as the original's callers do.")
-                .replace("the caller's live record.", "the module contract.")
+                body.replace(
+                    "names a live record.",
+                    "names a record the game keeps live,\n/// as the original's callers do.",
+                ).replace("the caller's live record.", "the module contract.")
             )
             reworded = commit(root)
-            (root / "rust/x.rs").write_text(body.replace("unsafe { *p }", "unsafe { *p.add(1) }"))
+            (root / "rust/x.rs").write_text(
+                body.replace("unsafe { *p }", "unsafe { *p.add(1) }")
+            )
             changed = commit(root)
             site = "rust/x.rs | fn read | allow unsafe_code"
             with patch.object(POLICY, "git", partial(git, cwd=root)):
