@@ -80,7 +80,4 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 protected:
 };
 
-/** Native scratch clients query the first intersecting area. */
-inline bool IsObjectIndirectlyCleared(TileIndex tile) { return openttd_rust_object_indirectly_cleared(tile.base(), *GetRustSharedServices().map->log_x); }
-
 #endif /* OBJECT_BASE_H */
