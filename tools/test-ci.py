@@ -6624,6 +6624,7 @@ class ReviewerTests(unittest.TestCase):
         models: dict[str, str] | None = None,
         extra: list[status_comment.Comment] | None = None,
         submitted: list[review_report.Review] | None = None,
+        files: tuple[str, ...] = ("rust/openttd-kernels/src/x.rs",),
     ) -> tuple[int, str, str]:
         models = models or {}
         comments = [
@@ -6641,6 +6642,8 @@ class ReviewerTests(unittest.TestCase):
                 return json.dumps([comments])
             if path.endswith("/pulls/170/reviews?per_page=100"):
                 return json.dumps([submitted or []])
+            if path.endswith("/pulls/170/files?per_page=100"):
+                return json.dumps([[{"filename": name} for name in files]])
             raise AssertionError(args)
 
         with (
@@ -6773,6 +6776,8 @@ class ReviewerTests(unittest.TestCase):
                 "--commits",
                 "c2",
                 "--root",
+                "approve",
+                "--root-answer",
                 "one more, then residue",
                 ledger=ledger,
             )
@@ -6792,6 +6797,8 @@ class ReviewerTests(unittest.TestCase):
                 "--commits",
                 "c",
                 "--root",
+                "approve",
+                "--root-answer",
                 "residue",
                 ledger=Path(directory),
             )
@@ -6807,7 +6814,7 @@ class ReviewerTests(unittest.TestCase):
                 ["review-170-behaviour"], "recheck", "--commits", "c", ledger=ledger
             )
             self.assertEqual(code, 1)
-            self.assertIn("wait for review-170-porting", err)
+            self.assertIn("it needs a porting report", err)
             agents = ["review-170-behaviour", "review-170-porting"]
             code, _, err = self.run_reviewer(
                 agents, "recheck", "--commits", "c", ledger=ledger
@@ -6871,6 +6878,96 @@ class ReviewerTests(unittest.TestCase):
                 )
                 self.assertEqual(code, 0, err)
 
+    def test_a_re_check_needs_the_first_stage_the_pr_shape_needs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            only = ["review-170-behaviour"]
+            code, _, err = self.run_reviewer(
+                only, "recheck", "--commits", "c", ledger=ledger
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("it needs a porting report", err)
+            # A porting report off the review row is no porting report.
+            both = ["review-170-behaviour", "review-170-porting"]
+            off = {"review-170-porting": "claude-opus-5-5"}
+            code, _, _ = self.run_reviewer(
+                both, "recheck", "--commits", "c", ledger=ledger, models=off
+            )
+            self.assertEqual(code, 1)
+            # A PR with no game code has the behaviour review alone.
+            code, _, err = self.run_reviewer(
+                only, "recheck", "--commits", "c", ledger=ledger, files=("tools/x.py",)
+            )
+            self.assertEqual(code, 0, err)
+
+    def test_root_must_approve_in_so_many_words(self) -> None:
+        agents = ["review-170-records-porting", "review-170-records-porting-2"]
+        with tempfile.TemporaryDirectory() as directory:
+            code, _, _ = self.run_reviewer(
+                agents,
+                "records",
+                "--commits",
+                "c",
+                "--root",
+                "record it as residue and queue",
+                ledger=Path(directory),
+            )
+            self.assertEqual(code, 2)
+            code, _, err = self.run_reviewer(
+                agents,
+                "records",
+                "--commits",
+                "c",
+                "--root",
+                "approve",
+                ledger=Path(directory),
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("--root-answer", err)
+
+    def test_an_ambiguous_retry_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory)
+            for commit in ("a", "b"):
+                self.run_reviewer([], "records", "--commits", commit, ledger=ledger)
+            code, _, err = self.run_reviewer([], "records", "--again", ledger=ledger)
+            self.assertEqual(code, 1)
+            self.assertIn("name the one whose dispatch failed", err)
+            code, out, _ = self.run_reviewer(
+                [], "records", "--again", "review-170-records-porting", ledger=ledger
+            )
+            self.assertEqual(code, 0)
+            self.assertIn("commits a.", json.loads(out)["task"])
+
+    def test_a_ledger_entry_without_a_usable_call_is_refused(self) -> None:
+        entry = {
+            "name": "review-170-behaviour",
+            "kind": "behaviour",
+            "at": "x",
+            "call": None,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "170.json").write_text(json.dumps([entry]))
+            code, _, err = self.run_reviewer(
+                [], "behaviour", "--again", ledger=Path(directory)
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("is not a ledger of starts", err)
+
+    def test_a_comment_with_two_attributions_is_no_review(self) -> None:
+        two = FakeComments.comment(
+            1200,
+            f"Reviewed commit: {HEAD}\n"
+            "Agent: /root/review-170-behaviour | Model: gpt-6.2-sol | Reasoning effort: high\n"
+            "Agent: /root/review-170-porting | Model: gpt-6.2-sol | Reasoning effort: high\n"
+            "Disposition: accepted, whole PR",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            code, _, err = self.run_reviewer(
+                [], "behaviour", ledger=Path(directory), extra=[two]
+            )
+        self.assertEqual(code, 0, err)
+
     def test_a_void_review_counts_for_nothing(self) -> None:
         agents = ["review-170-behaviour", "review-170-porting"]
         models = {a: "claude-opus-5-5" for a in agents}
@@ -6885,7 +6982,7 @@ class ReviewerTests(unittest.TestCase):
             )
             self.assertIn("VOID, off the review row", out)
             self.assertIn("Past the limits: 0\n", out)
-        chain = ["review-170-behaviour", "review-170-recheck"] + [
+        chain = ["review-170-behaviour", "review-170-porting", "review-170-recheck"] + [
             f"review-170-records-porting-{n}" for n in (1, 2, 3, 4)
         ]
         with tempfile.TemporaryDirectory() as directory:

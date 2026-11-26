@@ -28,7 +28,6 @@ with `t3_background_wait` (docs/team.md, Background jobs).
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -42,6 +41,7 @@ from typing import NotRequired, TypedDict
 
 import review_report
 import status_comment
+import validation_execution
 import vcs
 from status_comment import Target
 
@@ -53,6 +53,7 @@ KINDS = ("behaviour", "porting", "recheck", "base", "simulation", "records")
 SCOPED = {"base": "behaviour", "simulation": "behaviour", "records": "porting"}
 SCOPED_LIMIT = 2
 FIRST_STAGE = ("behaviour", "porting")
+GAME_CODE = ("src/", "rust/")
 # A first-stage name, numbered when a void review took the plain one.
 FIRST = re.compile(r"(behaviour|porting)(?:-\d+)?")
 PROVIDERS = {"gpt-": ("codex", "reasoningEffort"), "claude-": ("claudeAgent", "effort")}
@@ -207,9 +208,12 @@ class Refusal:
     fixed: bool  # an ADR's limit, which root's answer does not lift
 
 
-def refusal(pr: int, kind: str, earlier: list[Review]) -> Refusal | None:
+def refusal(
+    pr: int, kind: str, earlier: list[Review], required: tuple[str, ...] = FIRST_STAGE
+) -> Refusal | None:
     """Why one more review of this kind is beyond the PR's limits, or None. A
-    void review counts for nothing."""
+    void review counts for nothing. `required` is the first stage the PR's
+    shape needs: behaviour alone for a PR with no game code (ADR 0051)."""
     earlier = [review for review in earlier if not review.void]
     stages = [review.stage for review in earlier]
     if kind in ("behaviour", "porting") and kind in stages:
@@ -225,11 +229,11 @@ def refusal(pr: int, kind: str, earlier: list[Review]) -> Refusal | None:
             "(docs/workflow.md, Review)",
             True,
         )
-    if kind == "recheck" and (
-        waiting := [r.name for r in earlier if r.stage in FIRST_STAGE and not r.url]
-    ):
+    reported = {r.stage for r in earlier if r.stage in FIRST_STAGE and r.url}
+    if kind == "recheck" and (missing := [s for s in required if s not in reported]):
         return Refusal(
-            f"a re-check before every first-stage report: wait for {', '.join(waiting)}",
+            "a re-check before every first-stage report: it needs a "
+            f"{' and a '.join(missing)} report on the review row",
             True,
         )
     scoped = [review.name for review in earlier if review.stage == "scoped"]
@@ -252,14 +256,16 @@ NEXT = {
 }
 
 
-def past_limits(pr: int, earlier: list[Review]) -> list[str]:
+def past_limits(
+    pr: int, earlier: list[Review], required: tuple[str, ...] = FIRST_STAGE
+) -> list[str]:
     """Each review that started where this command refuses, the reviews before
     it taken as they stood: what root had to answer first."""
     return [
         review.name
         for index, review in enumerate(earlier)
         if not review.void
-        and refusal(pr, NEXT.get(review.stage, "records"), earlier[:index])
+        and refusal(pr, NEXT.get(review.stage, "records"), earlier[:index], required)
     ]
 
 
@@ -308,13 +314,25 @@ def ledger_path(pr: int) -> Path:
 def locked(pr: int) -> Generator[None]:
     """Hold the PR's ledger while a start is read, checked and written: two
     reviewers started together each see the other."""
-    LEDGER.mkdir(parents=True, exist_ok=True)
-    with open(LEDGER / f"{pr}.lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+    with validation_execution.file_lock(
+        LEDGER / f"{pr}.lock", label=f"PR #{pr} reviewers"
+    ):
+        yield
+
+
+def well_formed(entry: object) -> bool:
+    """A start: its name, kind and time as text, and a saved call, if any, with
+    the fields `delegate_task` takes."""
+    if not isinstance(entry, dict) or not all(
+        isinstance(entry.get(key), str) for key in ("name", "kind", "at")
+    ):
+        return False
+    call = entry.get("call", {"task": "", "target": {}})
+    return (
+        isinstance(call, dict)
+        and isinstance(call.get("task"), str)
+        and isinstance(call.get("target"), dict)
+    )
 
 
 def started(pr: int) -> list[LedgerEntry]:
@@ -325,10 +343,7 @@ def started(pr: int) -> list[LedgerEntry]:
         return []
     try:
         entries = json.loads(text)
-        if not isinstance(entries, list) or not all(
-            isinstance(entry, dict) and {"name", "kind", "at"} <= entry.keys()
-            for entry in entries
-        ):
+        if not isinstance(entries, list) or not all(map(well_formed, entries)):
             raise ValueError("not a list of starts")
     except ValueError as error:
         raise ValueError(
@@ -462,7 +477,33 @@ def pull_reviews(repository: str, pr: int) -> list[review_report.Review]:
     return [review for page in pages for review in page]
 
 
-def read_reviews(repository: str, pr: int) -> tuple[str, list[Review]]:
+@dataclass(frozen=True)
+class Facts:
+    head: str
+    earlier: list[Review]
+    required: tuple[str, ...]  # the first stage the PR's shape needs
+
+
+def pull_files(repository: str, pr: int) -> list[str]:
+    pages = json.loads(
+        status_comment.gh(
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repository}/pulls/{pr}/files?per_page=100",
+        )
+    )
+    return [item["filename"] for page in pages for item in page]
+
+
+def first_stage(files: list[str]) -> tuple[str, ...]:
+    """Behaviour and porting for a PR that changes game code, behaviour alone
+    for one that changes only tools, CI or records (docs/workflow.md, Review)."""
+    game = any(name.startswith(GAME_CODE) for name in files)
+    return FIRST_STAGE if game else ("behaviour",)
+
+
+def read_reviews(repository: str, pr: int) -> Facts:
     """The PR's head and its reviews, from GitHub and this checkout's ledger."""
     facts = pull(repository, pr)
     head = facts["head"]["sha"]
@@ -473,20 +514,31 @@ def read_reviews(repository: str, pr: int) -> tuple[str, list[Review]]:
         item["html_url"]: item.get("body") or "" for item in [*comments, *submitted]
     }
     void = {url for url, body in bodies.items() if off_row(body)}
-    undecided = {url for url, body in bodies.items() if not decided(body)}
-    return head, reviews(pr, found, started(pr), void, undecided)
+    # A report has one attribution and a disposition (`ci.py report`); any other
+    # text under a header is no review.
+    undecided = {
+        url
+        for url, body in bodies.items()
+        if not decided(body) or len(review_report.attributions(body)) != 1
+    }
+    earlier = reviews(pr, found, started(pr), void, undecided)
+    return Facts(head, earlier, first_stage(pull_files(repository, pr)))
 
 
-def show(pr: int, head: str, earlier: list[Review]) -> None:
-    print(f"PR #{pr}, head {head[:10]}: {len(earlier)} reviews")
+def show(pr: int, facts: Facts) -> None:
+    earlier = facts.earlier
+    print(
+        f"PR #{pr}, head {facts.head[:10]}: {len(earlier)} reviews; its first "
+        f"stage is {' and '.join(facts.required)}"
+    )
     for review in earlier:
         void = " VOID, off the review row" if review.void else ""
         where = review.url or "(started here, no report yet)"
         print(f"  {review.at} {review.stage}: {review.name}{void} {where}")
-    past = past_limits(pr, earlier)
+    past = past_limits(pr, earlier, facts.required)
     print(f"Past the limits: {len(past)}" + (f" ({', '.join(past)})" if past else ""))
     for kind in KINDS:
-        found = refusal(pr, kind, earlier)
+        found = refusal(pr, kind, earlier, facts.required)
         print(f"  {kind}: " + (f"refused, {found.reason}" if found else "allowed"))
 
 
@@ -502,18 +554,26 @@ def release(pr: int, name: str, earlier: list[Review]) -> None:
     print(f"Released {name}: it counts for nothing now.")
 
 
-def again(pr: int, kind: str, earlier: list[Review]) -> None:
+def again(pr: int, kind: str, earlier: list[Review], name: str | None) -> None:
     reported = {review.name for review in earlier if review.url}
     waiting = [
         entry
         for entry in started(pr)
         if entry["kind"] == kind and entry["name"] not in reported and "call" in entry
     ]
+    if name is not None:
+        waiting = [entry for entry in waiting if entry["name"] == name]
     if not waiting:
         raise ValueError(
-            f"PR #{pr} has no {kind} start without a report to print again"
+            f"PR #{pr} has no {kind} start {name or ''} without a report to print again"
         )
-    print(json.dumps(waiting[-1]["call"], indent=1))
+    if len(waiting) > 1:
+        names = ", ".join(entry["name"] for entry in waiting)
+        raise ValueError(
+            f"PR #{pr} has {len(waiting)} {kind} starts without a report ({names}); "
+            "name the one whose dispatch failed: --again NAME"
+        )
+    print(json.dumps(waiting[0]["call"], indent=1))
     print(
         "The same start, again: pass it to delegate_task as written.", file=sys.stderr
     )
@@ -530,8 +590,9 @@ def refuse(
         f"Not started: PR #{pr} asks for {found.reason}.\nSend root this line, "
         "queued, and start no reviewer until it answers:\n\n"
         + line
-        + "\n\nIf root approves it, run this command again with --root '<root's "
-        "answer>'; otherwise do as it says. Put the answer in the status comment.",
+        + "\n\nIf root approves it, run this command again with --root approve "
+        "--root-answer '<root's answer>'; otherwise do as it says. Put the answer "
+        "in the status comment.",
         file=sys.stderr,
     )
     raise SystemExit(1)
@@ -540,9 +601,10 @@ def refuse(
 def begin(args: argparse.Namespace, repository: str, kind: str) -> None:
     pr = args.pr
     with locked(pr):
-        head, earlier = read_reviews(repository, pr)
+        facts = read_reviews(repository, pr)
+        head, earlier = facts.head, facts.earlier
         if args.again:
-            again(pr, kind, earlier)
+            again(pr, kind, earlier, None if args.again is True else args.again)
             return
         name = name_for(pr, kind, earlier)
         findings = [
@@ -551,8 +613,8 @@ def begin(args: argparse.Namespace, repository: str, kind: str) -> None:
             if review.stage in FIRST_STAGE and review.url and not review.void
         ]
         asked = Start(kind, name, args.commits or [], findings)
-        if found := refusal(pr, kind, earlier):
-            if found.fixed or not args.root:
+        if found := refusal(pr, kind, earlier, facts.required):
+            if found.fixed or args.root != "approve":
                 refuse(pr, head, asked, found, earlier)
         if kind == "recheck" and not findings:
             raise ValueError(
@@ -572,8 +634,8 @@ def begin(args: argparse.Namespace, repository: str, kind: str) -> None:
             "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "call": call,
         }
-        if args.root:
-            entry["root"] = args.root
+        if args.root == "approve":
+            entry["root"] = args.root_answer
         save(pr, [*started(pr), entry])
     print(json.dumps(call, indent=1))
     print(
@@ -586,12 +648,14 @@ def begin(args: argparse.Namespace, repository: str, kind: str) -> None:
 def run(args: argparse.Namespace, repository: str) -> None:
     pr = args.pr
     if args.check:
-        show(pr, *read_reviews(repository, pr))
+        show(pr, read_reviews(repository, pr))
         return
     if args.release:
         with locked(pr):
-            release(pr, args.release, read_reviews(repository, pr)[1])
+            release(pr, args.release, read_reviews(repository, pr).earlier)
         return
+    if args.root and not args.root_answer:
+        raise ValueError("--root approve takes root's words too: --root-answer TEXT")
     kind = args.kind
     if kind is None:
         raise ValueError("name the review's KIND, or pass --check or --release NAME")
@@ -618,13 +682,18 @@ def register(commands: argparse._SubParsersAction) -> None:
     )
     parser.add_argument(
         "--root",
-        metavar="ANSWER",
-        help="root's approval of a scoped review past the limit",
+        choices=("approve",),
+        help="root approved this scoped review past the limit",
+    )
+    parser.add_argument(
+        "--root-answer", metavar="TEXT", help="root's answer, kept with the start"
     )
     parser.add_argument(
         "--again",
-        action="store_true",
-        help="print this kind's last start with no report again, for a failed dispatch",
+        nargs="?",
+        const=True,
+        metavar="NAME",
+        help="print a start with no report again, for a failed dispatch",
     )
     parser.add_argument(
         "--release",
