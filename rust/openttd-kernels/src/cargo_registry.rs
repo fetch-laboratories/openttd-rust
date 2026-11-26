@@ -75,8 +75,12 @@ pub struct Services {
 
     /// `CargoSpec::bitnum`.
     pub(crate) bitnum: extern "C" fn(*const CargoSpec) -> u8,
+    /// `CargoSpec::callback_mask`.
+    pub(crate) callback_mask: extern "C" fn(*const CargoSpec) -> u8,
     /// `CargoSpec::classes`.
     pub(crate) classes: extern "C" fn(*const CargoSpec) -> u16,
+    /// `CargoSpec::current_payment`.
+    pub(crate) current_payment: extern "C" fn(*const CargoSpec) -> i64,
     /// `CargoSpec::Index`.
     pub(crate) index: extern "C" fn(*const CargoSpec) -> u8,
     /// `CargoSpec::label`.
@@ -87,6 +91,8 @@ pub struct Services {
     pub(crate) town_production_effect: extern "C" fn(*const CargoSpec) -> u8,
     /// `CargoSpec::town_production_multiplier`.
     pub(crate) town_production_multiplier: extern "C" fn(*const CargoSpec) -> u16,
+    /// The address of `CargoSpec::transit_periods`, whose two bytes the reader loads.
+    pub(crate) transit_periods: extern "C" fn(*const CargoSpec) -> *const [u8; 2],
 
     /// Store `CargoSpec::abbrev`.
     pub(crate) set_abbrev: extern "C" fn(*mut CargoSpec, u32),
@@ -136,12 +142,15 @@ pub(crate) const TEST_TABLE: Services = Services {
     fill_default: crate::test_tables::unreachable1,
 
     bitnum: crate::test_tables::unreachable1,
+    callback_mask: crate::test_tables::unreachable1,
     classes: crate::test_tables::unreachable1,
+    current_payment: crate::test_tables::unreachable1,
     index: crate::test_tables::unreachable1,
     label: crate::test_tables::unreachable1,
     town_acceptance_effect: crate::test_tables::unreachable1,
     town_production_effect: crate::test_tables::unreachable1,
     town_production_multiplier: crate::test_tables::unreachable1,
+    transit_periods: crate::test_tables::unreachable1,
 
     set_abbrev: crate::test_tables::unreachable2,
     set_grffile: crate::test_tables::unreachable2,
@@ -909,12 +918,15 @@ crate::abi::layouts! {
         fill_default,
 
         bitnum,
+        callback_mask,
         classes,
+        current_payment,
         index,
         label,
         town_acceptance_effect,
         town_production_effect,
         town_production_multiplier,
+        transit_periods,
 
         set_abbrev,
         set_grffile,

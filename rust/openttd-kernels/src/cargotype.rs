@@ -6,6 +6,7 @@
 use crate::cargo_registry::Services;
 use crate::cargo_type::{CargoLabel, CargoType};
 use crate::newgrf::GRFFile;
+use crate::newgrf_callbacks::CargoCallbackMasks;
 use crate::strings_type::StringID;
 
 /// `CargoClass::Mail` mask.
@@ -94,6 +95,27 @@ impl<'a> CargoSpecRef<'a> {
     /// `CargoSpec::classes`: classes of this cargo type.
     pub(crate) fn classes(self) -> CargoClasses {
         CargoClasses((self.s.classes)(self.cs))
+    }
+
+    /// `CargoSpec::callback_mask`: bitmask of cargo callbacks that have to be called.
+    pub(crate) fn callback_mask(self) -> CargoCallbackMasks {
+        CargoCallbackMasks((self.s.callback_mask)(self.cs))
+    }
+
+    /// `CargoSpec::current_payment`.
+    pub(crate) fn current_payment(self) -> i64 {
+        (self.s.current_payment)(self.cs)
+    }
+
+    /// `CargoSpec::transit_periods`.
+    #[allow(
+        unsafe_code,
+        reason = "loads the two-byte member of the live spec the slot addresses"
+    )]
+    pub(crate) fn transit_periods(self) -> [u8; 2] {
+        // SAFETY: The handle names an element of `CargoSpec::array`, which outlives the call; the
+        // slot returns the address of its two-byte member.
+        unsafe { (self.s.transit_periods)(self.cs).read() }
     }
 
     /// `CargoSpec::town_acceptance_effect`: the effect that delivering this cargo type has

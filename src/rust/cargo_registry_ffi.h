@@ -23,12 +23,15 @@ struct OpenTTDCargoRegistryServices {
 	void (*fill_default)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(fill_default);
 
 	uint8_t (*bitnum)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(bitnum);
+	uint8_t (*callback_mask)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(callback_mask);
 	uint16_t (*classes)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(classes);
+	int64_t (*current_payment)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(current_payment);
 	uint8_t (*index)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(index);
 	uint32_t (*label)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(label);
 	uint8_t (*town_acceptance_effect)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(town_acceptance_effect);
 	uint8_t (*town_production_effect)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(town_production_effect);
 	uint16_t (*town_production_multiplier)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(town_production_multiplier);
+	const uint8_t *(*transit_periods)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(transit_periods);
 
 	void (*set_abbrev)(CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_abbrev);
 	void (*set_grffile)(CargoSpec *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_grffile);

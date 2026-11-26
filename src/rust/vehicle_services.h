@@ -146,7 +146,6 @@ void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) 
 void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;
 void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept;
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
-ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 

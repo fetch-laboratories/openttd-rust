@@ -7,7 +7,6 @@
 
 /** @file cargo_storage.hpp Pool services and native cargo ownership facade. */
 #include "services_ffi.h"
-#include "cargomonitor_ffi.h"
 static uint8_t CargoCanAllocate() noexcept { return CargoPacket::CanAllocateItem(); }
 static CargoPacket *CargoCreate(const OpenTTDCargoPacket *fields) noexcept { return new CargoPacket(*fields); }
 static OpenTTDCargoPacket *CargoOwner(CargoPacket *shell) noexcept { return shell->RustOwner(); }
@@ -24,11 +23,9 @@ static CargoPacket *CargoNextPacket(CargoPacket *shell) noexcept
 }
 static const OpenTTDCargoStorageServices _cargo_storage_services = {
 	.can_allocate = CargoCanAllocate,
-	.cargo_delivery_state = GetCargoDeliveryState,
 	.create = CargoCreate,
 	.destroy = CargoDestroy,
 	.flow_map = CargoFlowMap,
-	.monitors = &GetRustCargoMonitorServices(),
 	.packet = CargoOwner,
 	.packet_next = CargoNextPacket,
 	.payment = &GetRustCargoServices(),

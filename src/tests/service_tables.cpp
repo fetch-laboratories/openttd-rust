@@ -66,7 +66,6 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(water_cmd) \
 	X(tunnelbridge_cmd) \
 	X(subsidy) \
-	X(cargomonitor) \
 	X(spritegroup) \
 	X(storage) \
 	X(cargo_registry) \

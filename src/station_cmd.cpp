@@ -268,9 +268,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		return Station::From(static_cast<BaseStation *>(handle))->goods[cargo].AvailableCount();
 	},
 	.cargo_valid = OpenTTDCargoSpecValid,
-	.rating_callback_enabled = [](uint8_t cargo) noexcept -> bool {
-		return RustCargoSpec(cargo)->callback_mask.Test(CargoCallbackMask::StationRatingCalc);
-	},
 	.passenger_cargo = [](uint8_t cargo) noexcept -> bool {
 		return IsCargoInClass(cargo, CargoClass::Passengers);
 	},

@@ -14,21 +14,7 @@
 #include "safeguards.h"
 
 #include "rust/cargomonitor_ffi.h"
-#include "rust/services_station.h"
-#include "rust/services_assert.h"
-#include "rust/town_services.h"
-const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
-{
-	static const OpenTTDCargoMonitorServices services = {
-		.station_town = RustStationTownID,
-		.check = RustAssertCondition,
-	};
-	return services;
-}
 void ClearCargoPickupMonitoring(CompanyID company) { openttd_rust_monitor_clear_pickups(company.base()); }
 void ClearCargoDeliveryMonitoring(CompanyID company) { openttd_rust_monitor_clear_deliveries(company.base()); }
 int32_t GetPickupAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_pickup(monitor, keep); }
 int32_t GetDeliveryAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_delivery(monitor, keep); }
-#include "rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDCargoMonitorServices.hpp"
-bool CheckAbi_cargomonitor() { return AbiServicesComplete(GetRustCargoMonitorServices()); }

@@ -95,15 +95,12 @@ pub struct Fields {
 pub struct Services {
     /// `CargoPacket::CanAllocateItem()`.
     pub(crate) can_allocate: extern "C" fn() -> u8,
-    /// `GetCargoDeliveryState()`, the process-wide delivery state final payments fill.
-    pub(crate) cargo_delivery_state: extern "C" fn() -> *mut crate::cargo_payment::Delivery,
     /// `new CargoPacket(fields)`: a new shell owning a copy of the record.
     pub(crate) create: extern "C" fn(*const CargoPacket) -> *mut NativeCargoPacket,
     /// `delete cp`.
     pub(crate) destroy: extern "C" fn(*mut NativeCargoPacket),
     /// `ge->HasData() ? &ge->GetData().flows : nullptr`.
     pub(crate) flow_map: extern "C" fn(*const GoodsEntry) -> *mut FlowStatMap,
-    pub(crate) monitors: *const crate::cargomonitor::Services,
     /// `CargoPacket::state`: the record the shell owns.
     pub(crate) packet: extern "C" fn(*mut NativeCargoPacket) -> *mut CargoPacket,
     /// The next shell of `CargoPacket::Iterate()` after `shell`, from the first for null.
@@ -111,13 +108,19 @@ pub struct Services {
     pub(crate) payment: *const crate::cargo_payment::Services,
     /// `CargoPayment::rust_state`.
     pub(crate) payment_state:
-        extern "C" fn(*mut NativePayment) -> *mut crate::cargo_payment::Payment,
+        extern "C" fn(*mut NativePayment) -> *mut crate::cargo_payment::CargoPayment,
     pub(crate) shared: *const crate::services::Services,
 }
 impl Services {
     /// `RandomRange(limit)`.
     fn random_range(&self, limit: u32) -> u32 {
         self.shared().random_range(limit)
+    }
+    /// The payment table.
+    #[allow(unsafe_code, reason = "reads the process-lifetime payment table")]
+    pub(crate) fn payment(&self) -> &crate::cargo_payment::Services {
+        // SAFETY: The table names the immutable process-lifetime payment table.
+        unsafe { &*self.payment }
     }
     /// The shared services.
     #[allow(unsafe_code, reason = "reads the process-lifetime shared table")]
@@ -1464,7 +1467,7 @@ impl VehicleCargoList {
                     let share = unsafe {
                         crate::cargo_payment::pay_transfer(
                             (s.payment_state)(args.payment),
-                            &*s.payment,
+                            s.payment(),
                             s.shared(),
                             args.cargo,
                             cp_state,
@@ -2370,11 +2373,9 @@ crate::abi::layouts! {
     };
     "OpenTTDCargoStorageServices" ["probe"] => Services {
         can_allocate,
-        cargo_delivery_state,
         create,
         destroy,
         flow_map,
-        monitors,
         packet,
         packet_next,
         payment,
@@ -3365,39 +3366,44 @@ pub(crate) mod tests {
     /// leaves saw.
     mod payment {
         use super::*;
-        use crate::cargo_payment::{Delivery, NativePayment, Payment};
+        use crate::cargo_payment::{CargoPayment, NativePayment};
         thread_local! {
             /// The list whose total the income callback reads.
             pub(super) static LIST: Cell<*mut CargoList> = const { Cell::new(std::ptr::null_mut()) };
             /// Each income callback: final delivery, pieces, the list's total at the call.
             pub(super) static INCOME: RefCell<Vec<(bool, u32, u32)>> = const { RefCell::new(Vec::new()) };
-            /// Whether `GetCargoDeliveryState()` was requested.
+            /// Whether the final delivery's `Station::Get` was called.
             pub(super) static DELIVERY: Cell<bool> = const { Cell::new(false) };
-            static STATE: RefCell<Delivery> = RefCell::new(Delivery::default());
             static STATION: Cell<*mut crate::station_service::Service> = const { Cell::new(std::ptr::null_mut()) };
             static FINANCES: Cell<*mut crate::company::Finances> = const { Cell::new(std::ptr::null_mut()) };
             static TOWN: Cell<*mut crate::town::State> = const { Cell::new(std::ptr::null_mut()) };
             static SUBSIDIES: Cell<*const crate::subsidy::Services> = const { Cell::new(std::ptr::null()) };
             static CATCHMENT: Cell<*const crate::station::CatchmentServices> = const { Cell::new(std::ptr::null()) };
-        }
-        /// Payment 1024 and the profit callback answering 7: `1024 * 7 * pieces / 8192`.
-        #[allow(
-            unsafe_code,
-            reason = "the fixture builds, reads or frees raw lists, packets and records"
-        )]
-        extern "C" fn spec(_: u8, out: *mut crate::cargo_payment::Spec) {
-            unsafe {
-                out.write(crate::cargo_payment::Spec {
-                    payment: 1024,
-                    valid: 1,
-                    callback: 1,
-                    periods1: 0,
-                    periods2: 0,
-                });
-            }
+            /// `_settings_game.economy.feeder_payment_share`.
+            static FEEDER_PAYMENT_SHARE: Cell<u8> = const { Cell::new(100) };
+            /// The spec's `transit_periods`.
+            static TRANSIT_PERIODS: Cell<[u8; 2]> = const { Cell::new([0, 0]) };
         }
         extern "C" fn registry_spec(_: u8) -> *const crate::cargotype::CargoSpec {
             std::ptr::null()
+        }
+        /// A valid spec.
+        extern "C" fn bitnum(_: *const crate::cargotype::CargoSpec) -> u8 {
+            0
+        }
+        /// The profit callback is enabled.
+        extern "C" fn callback_mask(_: *const crate::cargotype::CargoSpec) -> u8 {
+            crate::newgrf_callbacks::CargoCallbackMasks::from_element(
+                crate::newgrf_callbacks::CargoCallbackMask::ProfitCalc,
+            )
+            .0
+        }
+        /// Payment 1024 and the profit callback answering 7: `1024 * 7 * pieces / 8192`.
+        extern "C" fn current_payment(_: *const crate::cargotype::CargoSpec) -> i64 {
+            1024
+        }
+        extern "C" fn transit_periods(_: *const crate::cargotype::CargoSpec) -> *const [u8; 2] {
+            TRANSIT_PERIODS.with(Cell::as_ptr)
         }
         #[allow(
             unsafe_code,
@@ -3424,36 +3430,27 @@ pub(crate) mod tests {
         extern "C" fn town_acceptance_effect(_: *const crate::cargotype::CargoSpec) -> u8 {
             0
         }
-        extern "C" fn feeder_payment_share() -> u8 {
-            100
-        }
-        extern "C" fn payment_state(payment: *mut NativePayment) -> *mut Payment {
+        extern "C" fn payment_state(payment: *mut NativePayment) -> *mut CargoPayment {
             payment.cast()
-        }
-        extern "C" fn cargo_delivery_state() -> *mut Delivery {
-            DELIVERY.set(true);
-            STATE.with(RefCell::as_ptr)
         }
         extern "C" fn subsidies() -> *const crate::subsidy::Services {
             SUBSIDIES.get()
         }
-        extern "C" fn station(_: u16) -> *const crate::station::Station {
-            std::ptr::dangling()
+        /// `Station::Get(200)`: the fixture's station.
+        extern "C" fn station(id: u16) -> crate::station_service::LoadingStation {
+            assert_eq!(id, 200);
+            DELIVERY.set(true);
+            crate::station_service::LoadingStation {
+                native: std::ptr::dangling_mut(),
+                base: std::ptr::dangling_mut(),
+                state: STATION.get(),
+            }
         }
         extern "C" fn no_source_flag(_: Source, _: crate::subsidy_type::PartOfSubsidy) -> bool {
             false
         }
         extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
             CATCHMENT.get()
-        }
-        extern "C" fn station_owner(id: StationID) -> *mut crate::station_service::Service {
-            assert_eq!(id, StationID(200));
-            STATION.get()
-        }
-        extern "C" fn station_company(
-            _: *const crate::station::Station,
-        ) -> crate::company_type::CompanyID {
-            crate::company_type::CompanyID(0)
         }
         extern "C" fn station_town(
             _: *const crate::station::Station,
@@ -3465,19 +3462,18 @@ pub(crate) mod tests {
         ) -> *mut crate::town::State {
             TOWN.get()
         }
-        extern "C" fn monitor_town(_: *const crate::station::Station) -> u16 {
+        extern "C" fn town_id(_: *const crate::services::TownHandle) -> u16 {
             0
-        }
-        extern "C" fn monitor_check(condition: bool) {
-            assert!(condition);
         }
         extern "C" fn company_finances(company: u8) -> *mut crate::company::Finances {
             assert_eq!(company, 0);
             FINANCES.get()
         }
 
-        /// The storage table `s` with the payment's tables, and a payment for station 200 by
-        /// a fresh front record. Station 200 always accepts cargo 0 and has no industry near.
+        /// The storage table `s` with the payment's tables and the shared table the transfer
+        /// reads the feeder share through, and a payment by a fresh front
+        /// record that last visited station 200. Station 200 always accepts cargo 0 and has no
+        /// industry near.
         #[allow(
             unsafe_code,
             reason = "the fixture builds, reads or frees raw lists, packets and records"
@@ -3486,23 +3482,27 @@ pub(crate) mod tests {
             s: &Services,
         ) -> (
             Services,
-            *mut Payment,
+            *mut CargoPayment,
             *mut crate::vehicle_base::VehicleRecord,
         ) {
             INCOME.with(|calls| calls.borrow_mut().clear());
             DELIVERY.set(false);
+            let settings: &'static _ =
+                Box::leak(Box::new(crate::settings_type::SettingAddresses {
+                    feeder_payment_share: FEEDER_PAYMENT_SHARE.with(Cell::as_ptr),
+                    ..crate::settings_type::SettingAddresses::NULL
+                }));
             let mut shared = crate::services::fixture(std::ptr::null_mut(), draw);
+            shared.settings = settings;
             shared.station_catchment = station_catchment;
             shared.town_owner = town_owner;
             let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
             CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
                 shared,
-                station_owner,
                 ..crate::test_tables::CATCHMENT
             })));
             SUBSIDIES.set(Box::leak(Box::new(crate::subsidy::Services {
                 shared,
-                station,
                 has_source_flag: no_source_flag,
                 ..crate::test_tables::SUBSIDY
             })));
@@ -3516,6 +3516,10 @@ pub(crate) mod tests {
             TOWN.set(crate::town::openttd_rust_town_new());
             let mut registry = crate::cargo_registry::TEST_TABLE;
             registry.spec = registry_spec;
+            registry.bitnum = bitnum;
+            registry.callback_mask = callback_mask;
+            registry.current_payment = current_payment;
+            registry.transit_periods = transit_periods;
             registry.callback_frame = callback_frame;
             registry.town_acceptance_effect = town_acceptance_effect;
             let registry: &'static _ = Box::leak(Box::new(registry));
@@ -3523,35 +3527,56 @@ pub(crate) mod tests {
                 company_finances,
                 ..crate::test_tables::FINANCE
             }));
-            let payment: &'static _ = Box::leak(Box::new(crate::cargo_payment::Services {
-                spec,
-                registry,
-                station_company,
-                station_town,
-                subsidies,
-                finance,
-                shared,
-                feeder_payment_share,
-                ..crate::test_tables::CARGO
+            let resolver: &'static _ =
+                Box::leak(Box::new(crate::industry::resolver::ResolverServices {
+                    shared,
+                    lifecycle: std::ptr::null(),
+                    tile: std::ptr::null(),
+                    get: crate::test_tables::unreachable1,
+                    clean_gfx: crate::test_tables::unreachable1,
+                    nearby: crate::test_tables::unreachable3,
+                    water_distance: crate::test_tables::unreachable2,
+                    town_tile: crate::test_tables::unreachable1,
+                    town_id,
+                    founder_info: crate::test_tables::unreachable1,
+                    callback_id: crate::test_tables::unreachable1,
+                    storage_owner: crate::test_tables::unreachable1,
+                    unhandled: crate::test_tables::unreachable4,
+                    base_scope: crate::test_tables::unreachable3,
+                    existing_town: crate::test_tables::unreachable1,
+                    make_town: crate::test_tables::unreachable3,
+                    callback: crate::test_tables::unreachable6,
+                    callback_error: crate::test_tables::unreachable3,
+                }));
+            let stations: &'static _ = Box::leak(Box::new(crate::station_service::World {
+                station,
+                ..crate::test_tables::STATION_WORLD
             }));
-            let monitors: &'static _ = Box::leak(Box::new(crate::cargomonitor::Services {
-                station_town: monitor_town,
-                check: monitor_check,
+            let payment: &'static _ = Box::leak(Box::new(crate::cargo_payment::Services {
+                finance,
+                registry,
+                resolver,
+                shared,
+                stations,
+                subsidies,
+                town: station_town,
+                ..crate::test_tables::CARGO
             }));
             let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
                 std::ptr::dangling_mut(),
                 crate::vehicle_type::VehicleType::TRAIN,
             );
-            // Company 0's vehicle.
-            unsafe { (*front).owner = crate::company_type::CompanyID(0) };
-            let state =
-                crate::cargo_payment::openttd_rust_cargo_payment_new(front.cast(), StationID(200));
+            // Company 0's vehicle at station 200.
+            unsafe {
+                (*front).owner = crate::company_type::CompanyID(0);
+                (*front).last_station_visited = StationID(200);
+            }
+            let state = crate::cargo_payment::openttd_rust_cargo_payment_new(front.cast());
             (
                 Services {
-                    cargo_delivery_state,
-                    monitors,
                     payment,
                     payment_state,
+                    shared,
                     ..*s
                 },
                 state,
@@ -3609,8 +3634,9 @@ pub(crate) mod tests {
             // The transfer of 8 at distance 0 earns `1024 * 7 * 8 / 8192`, all of it shared.
             assert_eq!(fields(veh).feeder_share, 7);
             assert_eq!((*state).fields.visual_transfer, 7);
-            // A transfer leaves the delivery state unrequested.
+            // A transfer delivers nothing.
             assert!(!payment::DELIVERY.get());
+            assert!(crate::cargo_payment::cargo_delivery_destinations_is_empty());
             assert_eq!(
                 VehicleCargoList::unload(
                     vehicle(veh),
@@ -3628,8 +3654,10 @@ pub(crate) mod tests {
             payment::INCOME.with(|calls| {
                 assert_eq!(*calls.borrow(), [(false, 8, 24), (true, 4, 12)]);
             });
-            // The station always accepts: all 4 delivered, earning `1024 * 7 * 4 / 8192`.
+            // The station always accepts: all 4 delivered, earning `1024 * 7 * 4 / 8192`, and
+            // no industry is near to receive any.
             assert_eq!(payment::delivered(), 4);
+            assert!(crate::cargo_payment::cargo_delivery_destinations_is_empty());
             assert_eq!(
                 ((*state).fields.route_profit, (*state).fields.visual_profit),
                 (3, 3)

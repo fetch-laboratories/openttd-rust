@@ -96,7 +96,6 @@ struct OpenTTDStationServices {
 	bool (*rating_cheat)() noexcept OPENTTD_SERVICE_DEFAULT(rating_cheat);
 	uint32_t (*available)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(available);
 	bool (*cargo_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_valid);
-	bool (*rating_callback_enabled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_callback_enabled);
 	bool (*passenger_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(passenger_cargo);
 	bool (*packet_available)() noexcept OPENTTD_SERVICE_DEFAULT(packet_available);
 	void (*rating_redraw)(OpenTTDBaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(rating_redraw);
@@ -155,7 +154,6 @@ struct OpenTTDStationLoading {
 	OpenTTDNativeCargoPayment * (*get_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(get_payment);
 	OpenTTDNativeCargoPayment * (*create_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(create_payment);
 	void (*delete_payment)(OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(delete_payment);
-	void (*flush_delivery)() noexcept OPENTTD_SERVICE_DEFAULT(flush_delivery);
 };
 
 const OpenTTDStationServices &GetRustStationServices() noexcept;

@@ -44,6 +44,18 @@ impl Source {
             kind: Self::INDUSTRY,
         }
     }
+    /// `Source::ToIndustryID`, with its assertion that the source is an industry.
+    #[must_use]
+    pub fn to_industry_id(self) -> crate::industry_type::IndustryID {
+        crate::services_assert::assert_with(|| SourceType(self.kind) == SourceType::Industry);
+        crate::industry_type::IndustryID(self.id)
+    }
+    /// `Source::ToTownID`, with its assertion that the source is a town.
+    #[must_use]
+    pub fn to_town_id(self) -> crate::town_type::TownID {
+        crate::services_assert::assert_with(|| SourceType(self.kind) == SourceType::Town);
+        crate::town_type::TownID(self.id)
+    }
     /// `Source::MakeInvalid`.
     pub const fn make_invalid(&mut self) {
         self.id = Self::Invalid;

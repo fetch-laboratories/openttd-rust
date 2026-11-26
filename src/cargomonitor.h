@@ -30,7 +30,6 @@ typedef uint32_t CargoMonitorID; ///< Type of the cargo monitor number.
 
 /** Map type for storing and updating active cargo monitor numbers and their amounts. */
 #include "rust/cargomonitor_ffi.h"
-#include "rust/services_assert.h"
 
 
 /* Constants for encoding and extracting cargo monitors. */
@@ -55,7 +54,7 @@ static_assert(MAX_COMPANIES <= (1 << CCB_COMPANY_LENGTH));
  */
 inline CargoMonitorID EncodeCargoIndustryMonitor(CompanyID company, CargoType ctype, IndustryID ind)
 {
-	return openttd_rust_monitor_encode_industry(company.base(), ctype, ind.base(), RustAssertCondition);
+	return openttd_rust_monitor_encode_industry(company.base(), ctype, ind.base());
 }
 
 /**
@@ -67,7 +66,7 @@ inline CargoMonitorID EncodeCargoIndustryMonitor(CompanyID company, CargoType ct
  */
 inline CargoMonitorID EncodeCargoTownMonitor(CompanyID company, CargoType ctype, TownID town)
 {
-	return openttd_rust_monitor_encode_town(company.base(), ctype, town.base(), RustAssertCondition);
+	return openttd_rust_monitor_encode_town(company.base(), ctype, town.base());
 }
 
 /**

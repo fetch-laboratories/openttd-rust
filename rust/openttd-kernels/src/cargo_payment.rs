@@ -5,24 +5,27 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Payment state, delivery acceptance and the production flush. C++ keeps world and pool
-//! storage and the `NewGRF` resolvers; save/load and pointer fixing write `Payment::fields`
-//! in place between Rust calls. Pointer contracts are in `cargo_payment_ffi.h`.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    clippy::missing_safety_doc,
-    clippy::too_many_arguments
-)]
+//! The cargo payment of `economy.cpp`: `GetTransportedGoodsIncome`, the delivery of goods to
+//! industries and towns, `CargoPayment` and the production triggered by the industries that
+//! received cargo.
+//!
+//! C++ keeps the payment pool and its shell, whose save aliases address [`CargoPayment::fields`]
+//! in place between Rust calls, and the world records the services read. A payment or packet
+//! pointer names a live record. A payment's front is a live vehicle from the constructor to the
+//! destructor, and unresolved between loading and `AfterLoad`. The game-state mutex serialises
+//! every access, and no reference to a payment, the delivery destinations or a station's list
+//! is alive across a callback, a leaf or a delivery.
+use crate::bitmath_func::{gb, has_bit};
 use crate::cargo_type::CargoType;
 use crate::company_type::{CompanyID, Owner};
-use crate::industry_type::{Industry as ShellHandle, IndustryID};
-use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_CARGO_PROFIT_CALC};
-use crate::source_type::Source;
-use crate::station_type::Station;
-use crate::station_type::StationID;
+use crate::industry_type::{Industry, IndustryID};
+use crate::math::{clamp_to_u8, clamp_to_u16};
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_CARGO_PROFIT_CALC, CargoCallbackMask};
+use crate::source_type::{Source, SourceType};
+use crate::station_service::LoadingStation;
+use crate::station_type::{Station, StationID};
+use crate::tile_type::TileIndex;
+use crate::vehicle::VehicleRef;
 use crate::vehicle_type::OpenTTDVehicle;
 
 /// Opaque live native `CargoPayment`; never dereferenced by Rust.
@@ -31,260 +34,386 @@ pub struct NativePayment {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-#[derive(Default)]
-pub struct Spec {
-    pub(crate) payment: i64,
-    pub(crate) valid: u8,
-    pub(crate) callback: u8,
-    pub(crate) periods1: u8,
-    pub(crate) periods2: u8,
-}
+/// The members of `CargoPayment` the save code aliases.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Fields {
+    /// The front vehicle to do the payment of.
     pub(crate) front: *mut OpenTTDVehicle,
+    /// The amount of money to add/remove from the bank account.
     pub(crate) route_profit: i64,
+    /// The visual profit to show.
     pub(crate) visual_profit: i64,
+    /// The transfer credits to be shown.
     pub(crate) visual_transfer: i64,
 }
+
+/// The C++ services and tables the payment reaches.
 #[repr(C)]
 pub struct Services {
-    pub(crate) spec: extern "C" fn(u8, *mut Spec),
-    pub(crate) registry: *const crate::cargo_registry::Services,
-    pub(crate) station_company: extern "C" fn(*const Station) -> CompanyID,
-    pub(crate) station_town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
-    pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
-    pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
-    pub(crate) industry_delivery: *const crate::industry::DeliveryServices,
+    /// `this->front->cargo_payment = nullptr`: the store into the vehicle's C++ shell, whose
+    /// pool #634 owns.
     pub(crate) detach_payment: extern "C" fn(*mut OpenTTDVehicle),
-    pub(crate) finance: *const crate::company::FinanceServices,
-    pub(crate) vehicles: *const crate::vehicle::VehicleServices,
-    pub(crate) local_company: extern "C" fn() -> bool,
-    pub(crate) expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> crate::services::ExpenseType,
-    pub(crate) profit: extern "C" fn(*mut OpenTTDVehicle) -> i64,
-    pub(crate) shared: *const crate::services::Services,
+    /// `ShowFeederIncomeAnimation`.
     pub(crate) feeder_animation: extern "C" fn(i32, i32, i32, i64, i64),
-    pub(crate) feeder_payment_share: extern "C" fn() -> u8,
-}
-/// Rust-allocated payment with the `OpenTTDCargoPayment` C layout (ABI layout 60).
-#[repr(C)]
-pub struct Payment {
-    pub(crate) fields: Fields,
-    pub(crate) station: StationID,
-}
-#[derive(Default)]
-pub struct Delivery {
-    /// The industries to which cargo has currently been brought.
-    destinations: Vec<*mut ShellHandle>,
+    pub(crate) finance: *const crate::company::FinanceServices,
+    pub(crate) industry_delivery: *const crate::industry::DeliveryServices,
+    pub(crate) registry: *const crate::cargo_registry::Services,
+    pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
+    pub(crate) shared: *const crate::services::Services,
+    /// The station table, for `Station::Get`.
+    pub(crate) stations: *const crate::station_service::World,
+    pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
+    /// `BaseStation::town`.
+    pub(crate) town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
+    pub(crate) vehicles: *const crate::vehicle::VehicleServices,
 }
 
-/// Original `economy.cpp::GetTransportedGoodsIncome`.
-fn get_transported_goods_income(
+/// `CargoPayment`: helper class to perform the cargo payment. Rust allocates it with the
+/// `OpenTTDCargoPayment` C layout (ABI layout 60).
+#[repr(C)]
+pub struct CargoPayment {
+    pub(crate) fields: Fields,
+    /// NOSAVE: The current station.
+    pub(crate) current_station: StationID,
+}
+
+/// `SmallIndustryList`.
+type SmallIndustryList = Vec<*mut Industry>;
+
+/// `_cargo_delivery_destinations`: the industries we've currently brought cargo to.
+static CARGO_DELIVERY_DESTINATIONS: crate::game_state::GameState<SmallIndustryList> =
+    crate::game_state::GameState::new(Vec::new());
+
+/// `_cargo_delivery_destinations`, for one operation that ends before any callback.
+#[allow(
+    unsafe_code,
+    reason = "borrows the process-wide list under the module's contract"
+)]
+fn cargo_delivery_destinations() -> &'static mut SmallIndustryList {
+    // SAFETY: The game-state mutex serialises every access, and each caller ends the borrow
+    // before a callback.
+    unsafe { &mut *CARGO_DELIVERY_DESTINATIONS.get() }
+}
+
+/// Whether `_cargo_delivery_destinations` is empty.
+#[cfg(test)]
+pub(crate) fn cargo_delivery_destinations_is_empty() -> bool {
+    cargo_delivery_destinations().is_empty()
+}
+
+/// `BigMulS`: multiply two integer values and shift the results to right. The result of `a`
+/// times `b` is shifted by `shift` to the right.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`(int32_t)((int64_t)a * (int64_t)b >> shift)`"
+)]
+fn big_mul_s(a: i32, b: i32, shift: u8) -> i32 {
+    ((i64::from(a) * i64::from(b)) >> shift) as i32
+}
+
+/// `GetTransportedGoodsIncome`: the income for `num_pieces` of `cargo_type` carried `dist` in
+/// `transit_periods`.
+#[allow(unsafe_code, reason = "reads the process-lifetime registry table")]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "the original's `int` and `uint` conversions of `GB(callback, 0, 14)`, `result * num_pieces`, `dist * time_factor * num_pieces` and `BigMulS`' `int32_t` payment"
+)]
+pub(crate) fn get_transported_goods_income(
     s: &Services,
     num_pieces: u32,
     dist: u32,
     transit_periods: u16,
     cargo_type: CargoType,
 ) -> i64 {
-    const MIN_TIME_FACTOR: i32 = 31;
-    const MAX_TIME_FACTOR: i32 = 255;
-    const TIME_FACTOR_FRAC_BITS: i32 = 4;
-    const TIME_FACTOR_FRAC: i32 = 1 << TIME_FACTOR_FRAC_BITS;
-
-    let mut cs = Spec::default();
-    (s.spec)(cargo_type.0, &raw mut cs);
-    if cs.valid == 0 {
-        // The user changed NewGRFs, but a vehicle still carries cargo that is no longer available.
+    // SAFETY: The table names the immutable process-lifetime registry table.
+    let cs = crate::cargotype::cargo_spec_get(unsafe { &*s.registry }, cargo_type);
+    if !cs.is_valid() {
+        /* User changed newgrfs and some vehicle still carries some cargo which is no longer available. */
         return 0;
     }
-    // Use the callback to calculate cargo profit, if available.
-    if cs.callback != 0 {
-        let var18 = dist.min(65535)
-            | (num_pieces.min(255) << 16)
-            | (u32::from(transit_periods).min(255) << 24);
+
+    /* Use callback to calculate cargo profit, if available */
+    if cs.callback_mask().test(CargoCallbackMask::ProfitCalc) {
+        let var18 = u32::from(clamp_to_u16(i64::from(dist)))
+            | (u32::from(clamp_to_u8(i64::from(num_pieces))) << 16)
+            | (u32::from(clamp_to_u8(i64::from(transit_periods))) << 24);
         let callback = crate::cargo_registry::get_cargo_callback(
             CBID_CARGO_PROFIT_CALC,
             0,
             var18,
-            crate::cargotype::cargo_spec_get(unsafe { &*s.registry }, cargo_type),
+            cs,
             &mut [],
         );
         if callback != CALLBACK_FAILED {
-            let mut result = i32::from(callback & 0x3fff);
-            // Simulate a 15-bit signed value.
-            if callback & 0x4000 != 0 {
+            let mut result = gb(u32::from(callback), 0, 14) as i32;
+
+            /* Simulate a 15 bit signed value */
+            if has_bit(callback, 14) {
                 result -= 0x4000;
             }
-            // Multiply the signed multiplier by the amount of cargo moved and the price
-            // factor, then divide by 8192.
-            // result * uint first promotes to uint and wraps; the uint * Money
-            // overload passes through int64 then operator*=(int), narrowing!
+
+            /* "The result should be a signed multiplier that gets multiplied
+             * by the amount of cargo moved and the price factor, then gets
+             * divided by 8192." */
+            // `result * num_pieces` promotes to `uint` and wraps; the `uint * Money` product
+            // passes through `int64` and then `operator*=(int)`, which narrows it.
             let factor = (result as u32).wrapping_mul(num_pieces) as i32;
-            return cs.payment.saturating_mul(i64::from(factor)) / 8192;
+            return cs.current_payment().saturating_mul(i64::from(factor)) / 8192;
         }
     }
-    let periods1 = i32::from(cs.periods1);
-    let periods2 = i32::from(cs.periods2);
-    let transit = i32::from(transit_periods);
-    let periods_over_periods1 = (transit - periods1).max(0);
+
+    const MIN_TIME_FACTOR: i32 = 31;
+    const MAX_TIME_FACTOR: i32 = 255;
+    const TIME_FACTOR_FRAC_BITS: u8 = 4;
+    const TIME_FACTOR_FRAC: i32 = 1 << TIME_FACTOR_FRAC_BITS;
+
+    let [periods1, periods2] = cs.transit_periods().map(i32::from);
+    let transit_periods = i32::from(transit_periods);
+    let periods_over_periods1 = (transit_periods - periods1).max(0);
     let periods_over_periods2 = (periods_over_periods1 - periods2).max(0);
     let mut periods_over_max = MIN_TIME_FACTOR - MAX_TIME_FACTOR;
     if periods2 > -periods_over_max {
-        periods_over_max += transit - periods1;
+        periods_over_max += transit_periods - periods1;
     } else {
-        periods_over_max += 2 * (transit - periods1) - periods2;
+        periods_over_max += 2 * (transit_periods - periods1) - periods2;
     }
-    // The time factor compares the transit periods with two cargo-dependent values:
-    // constant for fast transits, decreasing with slope -1 for medium transports,
-    // then with slope -2 for slow transports. After MIN_TIME_FACTOR it decreases
-    // asymptotically towards 1 using a scaled 1/(x+1) function.
-    let (time_factor, shift) = if periods_over_max > 0 {
-        // MIN_TIME_FACTOR / (x/(2 * TIME_FACTOR_FRAC) + 1) + 1,
-        // expressed as fixed point with TIME_FACTOR_FRAC_BITS.
-        (
-            (2 * MIN_TIME_FACTOR * TIME_FACTOR_FRAC * TIME_FACTOR_FRAC
-                / (periods_over_max + 2 * TIME_FACTOR_FRAC))
-                .max(1),
+
+    /*
+     * The time factor is calculated based on the time it took
+     * (transit_periods) compared two cargo-depending values. The
+     * range is divided into four parts:
+     *
+     *  - constant for fast transits
+     *  - linear decreasing with time with a slope of -1 for medium transports
+     *  - linear decreasing with time with a slope of -2 for slow transports
+     *  - after hitting MIN_TIME_FACTOR, the time factor will be asymptotically decreased to a limit of 1 with a scaled 1/(x+1) function.
+     *
+     */
+    if periods_over_max > 0 {
+        // MIN_TIME_FACTOR / (x/(2 * TIME_FACTOR_FRAC) + 1) + 1, expressed as fixed point with TIME_FACTOR_FRAC_BITS.
+        let time_factor = (2 * MIN_TIME_FACTOR * TIME_FACTOR_FRAC * TIME_FACTOR_FRAC
+            / (periods_over_max + 2 * TIME_FACTOR_FRAC))
+            .max(1);
+        i64::from(big_mul_s(
+            dist.wrapping_mul(time_factor as u32)
+                .wrapping_mul(num_pieces) as i32,
+            cs.current_payment() as i32,
             21 + TIME_FACTOR_FRAC_BITS,
-        )
+        ))
     } else {
-        (
-            (MAX_TIME_FACTOR - periods_over_periods1 - periods_over_periods2).max(MIN_TIME_FACTOR),
+        let time_factor =
+            (MAX_TIME_FACTOR - periods_over_periods1 - periods_over_periods2).max(MIN_TIME_FACTOR);
+        i64::from(big_mul_s(
+            dist.wrapping_mul(time_factor as u32)
+                .wrapping_mul(num_pieces) as i32,
+            cs.current_payment() as i32,
             21,
-        )
-    };
-    // BigMulS takes two int32 parameters and returns int32 after signed shift.
-    let native = dist
-        .wrapping_mul(time_factor as u32)
-        .wrapping_mul(num_pieces) as i32;
-    i64::from(((i64::from(native) * i64::from(cs.payment as i32)) >> shift) as i32)
+        ))
+    }
 }
 
-/// Deliver goods to industries/towns and calculate payment. Cargo is added to
-/// industry stockpiles; the caller must trigger production after unloading.
-fn deliver_goods(
-    d: *mut Delivery,
-    s: &Services,
-    num_pieces: u32,
+/// `DeliverGoodsToIndustry`: transfer goods from station to industry. All cargo is delivered
+/// to the nearest (Manhattan) industry to the station sign, which is inside the acceptance
+/// rectangle and actually accepts the cargo. `st` is the station that accepted `num_pieces` of
+/// `cargo_type` from `source`, delivered by `company`. Returns the actually accepted pieces of
+/// cargo.
+#[allow(
+    unsafe_code,
+    reason = "walks the live station's nearby industries and updates their acceptance"
+)]
+fn deliver_goods_to_industry(
+    ctx: &FinalDelivery<'_>,
+    st: LoadingStation,
     cargo_type: CargoType,
-    dest: StationID,
-    distance: u32,
-    periods_in_transit: u16,
+    num_pieces: u32,
+    source: IndustryID,
     company: CompanyID,
-    src: Source,
-    monitors: &crate::cargomonitor::Services,
-) -> i64 {
-    crate::services_assert::assert_with(|| (num_pieces as i32) > 0);
-    let industry_source = if src.kind == Source::INDUSTRY {
-        IndustryID(src.id)
-    } else {
-        IndustryID::INVALID
-    };
-    // Give the goods to the industry. Find the nearest industry tile to the station
-    // sign inside its catchment area whose industry accepts the cargo. This can fail
-    // when houses provide acceptance, nearby industries temporarily refuse cargo
-    // before the daily station loop updates acceptance, or CBID_INDUSTRY_REFUSE_CARGO
-    // and CBID_INDTILE_CARGO_ACCEPTANCE give inconsistent results (documented behaviour).
-    let mut remaining = num_pieces;
-    let mut accepted_ind = 0_u32;
-    let subsidies = unsafe { &*(s.subsidies)() };
-    let st = (subsidies.station)(dest.0);
-    let catchment = crate::station::Ctx::from_shared(subsidies.shared());
-    let station_owner = (catchment.c.station_owner)(dest);
-    let visit = |near: crate::station::IndustryListEntry| {
-        if remaining == 0 {
-            return false;
-        }
-        let ind = near.industry;
-        if near.id == industry_source {
-            return true;
-        }
-        let owner = (subsidies.industry_owner)(ind.cast());
-        // Check if matching cargo has been found.
-        let Some(slot) = (unsafe { crate::industry::get_cargo_accepted(owner, cargo_type) }) else {
-            return true;
-        };
-        // Check if the industry temporarily refuses acceptance.
-        if unsafe {
-            crate::industry::resolver::industry_temporarily_refuses_cargo(
+) -> u32 {
+    /* Find the nearest industrytile to the station sign inside the catchment area, whose industry accepts the cargo.
+     * This fails in three cases:
+     *  1) The station accepts the cargo because there are enough houses around it accepting the cargo.
+     *  2) The industries in the catchment area temporarily reject the cargo, and the daily station loop has not yet updated station acceptance.
+     *  3) The results of callbacks CBID_INDUSTRY_REFUSE_CARGO and CBID_INDTILE_CARGO_ACCEPTANCE are inconsistent. (documented behaviour)
+     */
+
+    let s = ctx.services;
+    // SAFETY: The table names the immutable process-lifetime station and resolver tables.
+    let (stations, resolver) = unsafe { (&*s.stations, &*s.resolver) };
+    let catchment = crate::station::Ctx::from_shared(ctx.shared);
+    let mut num_pieces = num_pieces;
+    let mut accepted = 0_u32;
+
+    // SAFETY: The live station owner; each entry is copied before its visit, whose callbacks
+    // cannot change the list.
+    unsafe {
+        crate::station::for_each_industry_near(st.state, |i| {
+            if num_pieces == 0 {
+                return false;
+            }
+
+            let ind = i.industry;
+            if i.id == source {
+                return true;
+            }
+
+            let owner = (catchment.c.industry_owner)(ind);
+            let it = crate::industry::get_cargo_accepted(owner, cargo_type);
+            /* Check if matching cargo has been found */
+            let Some(it) = it else {
+                return true;
+            };
+
+            /* Check if industry temporarily refuses acceptance */
+            if crate::industry::resolver::industry_temporarily_refuses_cargo(
                 ind.cast(),
                 owner,
                 cargo_type,
-                &*s.resolver,
-            )
-        } {
-            return true;
-        }
-        let supplier = unsafe { crate::industry::exclusive_supplier(owner) };
-        if supplier != Owner::INVALID && supplier != (s.station_company)(st) {
-            return true;
-        }
-        // Insert the industry into the delivery destinations if not yet contained.
-        // No owner borrow is alive during a world leaf; include preserves order.
-        let destinations = unsafe { &mut (*d).destinations };
-        if !destinations.contains(&ind) {
-            destinations.push(ind);
-        }
-        let amount = unsafe {
-            crate::industry::accept_delivery(owner, slot, remaining, || {
+                resolver,
+            ) {
+                return true;
+            }
+
+            let exclusive_supplier = crate::industry::exclusive_supplier(owner);
+            if exclusive_supplier != Owner::INVALID
+                && exclusive_supplier != CompanyID((stations.station_owner)(st.base))
+            {
+                return true;
+            }
+
+            /* Insert the industry into _cargo_delivery_destinations, if not yet contained */
+            crate::container_func::include(cargo_delivery_destinations(), &ind);
+
+            let amount = crate::industry::accept_delivery(owner, it, num_pieces, || {
                 crate::timer_game_common::economy_date()
-            })
-        };
-        remaining -= amount;
-        accepted_ind += amount;
-        // Update the cargo monitor.
-        crate::cargomonitor::add_delivery(
-            monitors,
-            cargo_type.0,
-            company.0,
-            amount,
-            Source::industry(industry_source.0),
-            st,
-            station_owner,
-            near.id,
-        );
-        true
-    };
-    // SAFETY: The live station owner; each entry is copied before the services in `visit`.
-    unsafe { crate::station::for_each_industry_near(station_owner, visit) };
-    // If this cargo type is always accepted, accept all.
-    let accepted_total =
-        if unsafe { crate::station_service::always_accepts(station_owner, cargo_type) } {
-            num_pieces
-        } else {
-            accepted_ind
-        };
-    // Update station statistics.
-    if accepted_total > 0 {
-        unsafe { crate::station_service::record_delivery(station_owner, cargo_type) };
+            });
+            num_pieces -= amount;
+            accepted += amount;
+
+            /* Update the cargo monitor. */
+            crate::cargomonitor::add_cargo_delivery(
+                s,
+                cargo_type,
+                company,
+                amount,
+                Source::industry(source.0),
+                st,
+                i.id,
+            );
+            true
+        });
     }
-    // Update company statistics.
-    let finance = unsafe { &*s.finance };
+
+    accepted
+}
+
+/// `DeliverGoods`' parameters.
+struct DeliverGoods {
+    /// Amount of cargo delivered.
+    num_pieces: i32,
+    /// The type of cargo that is delivered.
+    cargo_type: CargoType,
+    /// Station the cargo has been unloaded.
+    dest: StationID,
+    /// The distance the cargo has traveled.
+    distance: u32,
+    /// Travel time in cargo aging periods.
+    periods_in_transit: u16,
+    /// The company delivering the cargo.
+    company: CompanyID,
+    /// Source of cargo.
+    src: Source,
+}
+
+/// `DeliverGoods`: delivers goods to industries/towns and calculates the payment. Returns the
+/// revenue for delivering cargo. The cargo is just added to the stockpile of the industry. It
+/// is due to the caller to trigger the industry's production machinery.
+#[allow(
+    unsafe_code,
+    reason = "updates the live station, company and town records of the delivery"
+)]
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "`DeliverGoods`' `int num_pieces` passed and compared as `uint`"
+)]
+fn deliver_goods(ctx: &FinalDelivery<'_>, args: DeliverGoods) -> i64 {
+    let DeliverGoods {
+        num_pieces,
+        cargo_type,
+        dest,
+        distance,
+        periods_in_transit,
+        company,
+        src,
+    } = args;
+    crate::services_assert::assert_with(|| num_pieces > 0);
+
+    let s = ctx.services;
+    // SAFETY: The table names the immutable process-lifetime tables.
+    let (stations, finance, registry) = unsafe { (&*s.stations, &*s.finance, &*s.registry) };
+    let st = (stations.station)(dest.0);
     let finances = (finance.company_finances)(company.0);
+
+    /* Give the goods to the industry. */
+    let accepted_ind = deliver_goods_to_industry(
+        ctx,
+        st,
+        cargo_type,
+        num_pieces as u32,
+        if SourceType(src.kind) == SourceType::Industry {
+            src.to_industry_id()
+        } else {
+            IndustryID::INVALID
+        },
+        company,
+    );
+
+    /* If this cargo type is always accepted, accept all */
+    // SAFETY: The station's live owner.
+    let accepted_total = if unsafe { crate::station_service::always_accepts(st.state, cargo_type) }
+    {
+        num_pieces as u32
+    } else {
+        accepted_ind
+    };
+
+    /* Update station statistics */
+    if accepted_total > 0 {
+        // SAFETY: As above.
+        unsafe { crate::station_service::record_delivery(st.state, cargo_type) };
+    }
+
+    /* Update company statistics */
+    // SAFETY: `Company::Get(this->front->owner)`'s live record.
     unsafe { crate::company::record_delivery(finances, cargo_type, accepted_total) };
-    // Increase the town counter for town effects.
-    let effect = crate::cargotype::cargo_spec_get(unsafe { &*s.registry }, cargo_type)
-        .town_acceptance_effect();
-    let town = (s.station_town)(st);
-    let town = (subsidies.shared().town_owner)(town);
-    unsafe { crate::town::add_received(town, effect, accepted_total) };
-    // Determine profit.
+
+    /* Increase town's counter for town effects */
+    let cs = crate::cargotype::cargo_spec_get(registry, cargo_type);
+    let town = (ctx.shared.town_owner)((s.town)(st.native));
+    // SAFETY: The station's live town.
+    unsafe { crate::town::add_received(town, cs.town_acceptance_effect(), accepted_total) };
+
+    /* Determine profit */
     let mut profit =
         get_transported_goods_income(s, accepted_total, distance, periods_in_transit, cargo_type);
-    // Update the cargo monitor.
-    crate::cargomonitor::add_delivery(
-        monitors,
-        cargo_type.0,
-        company.0,
+
+    /* Update the cargo monitor. */
+    crate::cargomonitor::add_cargo_delivery(
+        s,
+        cargo_type,
+        company,
         accepted_total - accepted_ind,
         src,
         st,
-        station_owner,
         IndustryID::INVALID,
     );
-    // Modify profit if a subsidy is in effect.
-    if subsidies.check_subsidised(cargo_type, company, src, dest) {
+
+    /* Modify profit if a subsidy is in effect */
+    // SAFETY: The immutable process-lifetime subsidy table.
+    let subsidies = unsafe { &*(s.subsidies)() };
+    if subsidies.check_subsidised(cargo_type, company, src, || st.state) {
         profit = match (subsidies.multiplier)() {
             0 => profit.saturating_add(profit >> 1),
             1 => profit.saturating_mul(2),
@@ -292,131 +421,141 @@ fn deliver_goods(
             _ => profit.saturating_mul(4),
         };
     }
+
     profit
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_payment_new(
-    front: *mut OpenTTDVehicle,
-    station: StationID,
-) -> *mut Payment {
-    Box::into_raw(Box::new(Payment {
-        fields: Fields {
-            front,
-            ..Fields::default()
-        },
-        station,
-    }))
-}
-/// The payment's live front record.
-fn record(front: *mut OpenTTDVehicle) -> crate::vehicle::VehicleRef {
-    crate::vehicle::VehicleRef(std::ptr::NonNull::new(front).unwrap())
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_front(
-    p: *const Payment,
-) -> *mut OpenTTDVehicle {
-    unsafe { (*p).fields.front }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_afterload(p: *mut Payment) {
-    let front = unsafe { (*p).fields.front };
-    let station = StationID(record(front).last_station_visited_raw());
-    unsafe {
-        (*p).station = station;
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
-    p: *mut Payment,
-    s: *const Services,
-    cleaning: u8,
-) {
-    let fields = unsafe { (*p).fields };
-    if cleaning == 0 {
-        let s = unsafe { &*s };
-        (s.detach_payment)(fields.front);
-        if fields.visual_profit != 0 || fields.visual_transfer != 0 {
-            let finance = unsafe { &*s.finance };
-            let vehicles = unsafe { &*s.vehicles };
-            let old_company = CompanyID((finance.current_company)());
-            let company = CompanyID(record(fields.front).owner_raw());
-            (finance.set_current_company)(company.0);
-            let expense = (s.expense)(fields.front, true);
-            let finances = (finance.company_finances)(company.0);
-            // SAFETY: The front's owner is the live company selected above.
-            if !finances.is_null() {
-                unsafe {
-                    crate::company::subtract_money_from_any_company(
-                        finance,
-                        finances,
-                        company,
-                        fields.route_profit.saturating_neg(),
-                        crate::economy_type::ExpensesType(expense.0),
-                    );
-                }
-            }
-            // SAFETY: Settlement retains its live native front until all callbacks return.
-            let front = crate::vehicle::VehicleRef(unsafe {
-                std::ptr::NonNull::new_unchecked(fields.front)
-            });
-            let profit = (s.profit)(fields.front).saturating_add(
-                fields
-                    .visual_profit
-                    .saturating_add(fields.visual_transfer)
-                    .wrapping_shl(8),
+/// The production machinery at the end of `LoadUnloadStation`: call the production machinery
+/// of the industries that received cargo, then forget them.
+#[allow(
+    unsafe_code,
+    reason = "runs the production of the live industries in the destination list"
+)]
+pub(crate) fn trigger_industry_production_of_deliveries(s: &Services) {
+    // SAFETY: The table names the immutable process-lifetime tables.
+    let (resolver, industry_delivery, shared) =
+        unsafe { (&*s.resolver, &*s.industry_delivery, &*s.shared) };
+    let catchment = crate::station::Ctx::from_shared(shared);
+    // SAFETY: As above.
+    let subsidies = unsafe { &*(s.subsidies)() };
+
+    /* Call the production machinery of industries */
+    // The list is read again at each step: the production callbacks run between them.
+    let mut index = 0;
+    while let Some(&iid) = cargo_delivery_destinations().get(index) {
+        // SAFETY: A live industry of the list; no borrow of the list is alive across the call.
+        unsafe {
+            crate::industry::trigger_industry_production(
+                iid,
+                (catchment.c.industry_owner)(iid),
+                (catchment.c.industry_id)(iid),
+                resolver,
+                &*subsidies.industry,
+                industry_delivery,
             );
-            (vehicles.write_profit)(front, profit);
-            if fields.route_profit != 0
-                && (s.local_company)()
-                && !(vehicles.play_vehicle_sound)(front, crate::newgrf_sound::VSE_LOAD_UNLOAD)
-            {
-                (vehicles.play_sound)(front, crate::sound_type::SND_14_CASHTILL);
-            }
-            let front = record(fields.front);
-            let (x_pos, y_pos, z_pos) = (front.x_pos(), front.y_pos(), front.z_pos());
-            if fields.visual_transfer != 0 {
-                (s.feeder_animation)(
-                    x_pos,
-                    y_pos,
-                    z_pos,
-                    fields.visual_transfer,
-                    fields.visual_profit.saturating_neg(),
-                );
-            } else {
-                // SAFETY: the caller supplies the immutable shared table for settlement.
-                unsafe {
-                    ((*s.shared).cost_animation)(
-                        x_pos,
-                        y_pos,
-                        z_pos,
-                        fields.visual_profit.saturating_neg(),
-                    );
-                }
-            }
-            (finance.set_current_company)(old_company.0);
+        }
+        index += 1;
+    }
+    cargo_delivery_destinations().clear();
+}
+
+impl CargoPayment {
+    /// `CargoPayment::CargoPayment(Vehicle *front)`: makes us a new cargo payment helper for
+    /// the front of the train.
+    fn new(front: VehicleRef) -> Self {
+        Self {
+            fields: Fields {
+                front: front.0.as_ptr(),
+                ..Fields::default()
+            },
+            current_station: front.last_station_visited(),
         }
     }
-    unsafe {
-        drop(Box::from_raw(p));
-    }
 }
-/// `CargoPayment::PayTransfer`: handle payment for transfer of the given cargo packet; the
-/// payment for `count` items of `cp` is not made. Returns the amount of money paid for the
-/// transfer.
+
+/// `CargoPayment::~CargoPayment`, after its `CleaningPool()` return.
+#[allow(unsafe_code, reason = "settles the payment of its live front vehicle")]
+unsafe fn settle(p: *mut CargoPayment, s: &Services) {
+    // SAFETY: The caller's live payment; each read ends before the next call.
+    (s.detach_payment)(unsafe { (*p).fields.front });
+
+    if unsafe { (*p).fields.visual_profit == 0 && (*p).fields.visual_transfer == 0 } {
+        return;
+    }
+
+    // SAFETY: The table names the immutable process-lifetime tables.
+    let (finance, vehicles, shared) = unsafe { (&*s.finance, &*s.vehicles, &*s.shared) };
+    // SAFETY: The front is the payment's live vehicle until the destructor returns.
+    let front = VehicleRef(unsafe { std::ptr::NonNull::new_unchecked((*p).fields.front) });
+
+    let cur_company = (finance.current_company)();
+    (finance.set_current_company)(front.owner().0);
+
+    crate::company::subtract_money_from_company(
+        shared,
+        finance,
+        unsafe { (*p).fields.route_profit }.saturating_neg(),
+        front.get_expense_type(true),
+    );
+    let (visual_profit, visual_transfer) =
+        unsafe { ((*p).fields.visual_profit, (*p).fields.visual_transfer) };
+    front.set_profit_this_year(
+        vehicles,
+        front.profit_this_year(vehicles).saturating_add(
+            visual_profit
+                .saturating_add(visual_transfer)
+                .wrapping_shl(8),
+        ),
+    );
+
+    if unsafe { (*p).fields.route_profit } != 0
+        && crate::command::is_local_company_of(shared.local_company, shared.current_company)
+        && !(vehicles.play_vehicle_sound)(front, crate::newgrf_sound::VSE_LOAD_UNLOAD)
+    {
+        (vehicles.play_sound)(front, crate::sound_type::SND_14_CASHTILL);
+    }
+
+    if visual_transfer != 0 {
+        (s.feeder_animation)(
+            front.x_pos(),
+            front.y_pos(),
+            front.z_pos(),
+            visual_transfer,
+            visual_profit.saturating_neg(),
+        );
+    } else {
+        (shared.cost_animation)(
+            front.x_pos(),
+            front.y_pos(),
+            front.z_pos(),
+            visual_profit.saturating_neg(),
+        );
+    }
+
+    (finance.set_current_company)(cur_company);
+}
+
+/// `CargoPayment::PayTransfer`: handle payment for transfer of `count` items of the given
+/// cargo packet `cp` of `cargo` on `current_tile`; actual payment won't be made. Returns the
+/// amount of money paid for the transfer.
 ///
 /// # Safety
-/// `payment` is the live payment and `cp` a live packet record; no reference to either spans a
-/// callback.
+/// `payment` is the live payment and `cp` a live packet record.
+#[allow(
+    unsafe_code,
+    reason = "reads the live packet and accumulates into the live payment"
+)]
 pub(crate) unsafe fn pay_transfer(
-    payment: *mut Payment,
+    payment: *mut CargoPayment,
     s: &Services,
     shared: &crate::services::Services,
     cargo: CargoType,
     cp: *const crate::cargo_storage::CargoPacket,
     count: u32,
-    current_tile: crate::tile_type::TileIndex,
+    current_tile: TileIndex,
 ) -> i64 {
+    /* Pay transfer vehicle the difference between the payment for the journey from
+     * the source to the current point, and the sum of the previous transfer payments */
     // SAFETY: The caller's live record; the reads end before the income callback.
     let (feeder_share, distance, periods_in_transit) = unsafe {
         (
@@ -425,8 +564,6 @@ pub(crate) unsafe fn pay_transfer(
             (*cp).get_periods_in_transit(),
         )
     };
-    // Pay transfer vehicle the difference between the payment for the journey from the source
-    // to the current point, and the sum of the previous transfer payments.
     let profit = feeder_share
         .saturating_neg()
         .saturating_add(get_transported_goods_income(
@@ -436,86 +573,151 @@ pub(crate) unsafe fn pay_transfer(
             periods_in_transit,
             cargo,
         ));
-    let profit = profit.saturating_mul(i64::from((s.feeder_payment_share)())) / 100;
+
+    let profit = profit.saturating_mul(i64::from(shared.settings().feeder_payment_share())) / 100;
+
     // SAFETY: The caller's live payment.
     unsafe {
         // Accumulate transfer profits for whole vehicle.
         (*payment).fields.visual_transfer =
             (*payment).fields.visual_transfer.saturating_add(profit);
     }
-    profit // Account for the (virtual) profit already made for the cargo packet.
+    profit // account for the (virtual) profit already made for the cargo packet
 }
+
 /// The payment and tables `CargoPayment::PayFinalDelivery` reaches.
 pub(crate) struct FinalDelivery<'a> {
     /// `CargoPayment::rust_state` of the paying vehicle.
-    pub(crate) payment: *mut Payment,
+    pub(crate) payment: *mut CargoPayment,
     pub(crate) services: &'a Services,
-    pub(crate) monitors: &'a crate::cargomonitor::Services,
     pub(crate) shared: &'a crate::services::Services,
-    /// `GetCargoDeliveryState()`.
-    pub(crate) cargo_delivery_state: extern "C" fn() -> *mut Delivery,
 }
 impl<'a> FinalDelivery<'a> {
     /// The context of the native payment `payment`, from the storage table's slots.
     pub(crate) fn of(s: &'a crate::cargo_storage::Services, payment: *mut NativePayment) -> Self {
-        // SAFETY: The storage table names the immutable process-lifetime payment and monitor
-        // tables.
-        let (services, monitors) = unsafe { (&*s.payment, &*s.monitors) };
         Self {
             payment: (s.payment_state)(payment),
-            services,
-            monitors,
+            services: s.payment(),
             shared: s.shared(),
-            cargo_delivery_state: s.cargo_delivery_state,
         }
     }
 }
+
 /// `CargoPayment::PayFinalDelivery`: handle payment for final delivery of `count` items of the
-/// given cargo packet.
+/// given cargo packet `cp` of `cargo` on `current_tile`.
 ///
 /// # Safety
-/// `ctx.payment` is the live payment and `cp` a live packet record; no reference to either spans
-/// a callback.
+/// `ctx.payment` is the live payment and `cp` a live packet record.
+#[allow(
+    unsafe_code,
+    reason = "reads the live payment and packet and accumulates into the payment"
+)]
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "`DeliverGoods(count, ...)` converts `uint count` to its `int num_pieces`"
+)]
 pub(crate) unsafe fn pay_final_delivery(
     ctx: &FinalDelivery<'_>,
     cargo: CargoType,
     cp: *const crate::cargo_storage::CargoPacket,
     count: u32,
-    current_tile: crate::tile_type::TileIndex,
+    current_tile: TileIndex,
 ) {
     // SAFETY: The caller's live payment and record; the reads end before the delivery.
-    let (station, front, distance, periods_in_transit, source) = unsafe {
+    let (current_station, front, distance, periods_in_transit, source) = unsafe {
         (
-            (*ctx.payment).station,
+            (*ctx.payment).current_station,
             (*ctx.payment).fields.front,
             (*cp).get_distance(ctx.shared, current_tile),
             (*cp).get_periods_in_transit(),
             (*cp).get_source(),
         )
     };
-    let company = CompanyID(record(front).owner_raw());
-    // Handle end of route payment.
+    // SAFETY: The payment's live front.
+    let company = VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(front) }).owner();
+
+    /* Handle end of route payment */
     let profit = deliver_goods(
-        (ctx.cargo_delivery_state)(),
-        ctx.services,
-        count,
-        cargo,
-        station,
-        distance,
-        periods_in_transit,
-        company,
-        source,
-        ctx.monitors,
+        ctx,
+        DeliverGoods {
+            num_pieces: count as i32,
+            cargo_type: cargo,
+            dest: current_station,
+            distance,
+            periods_in_transit,
+            company,
+            src: source,
+        },
     );
     // SAFETY: As above.
     unsafe {
         (*ctx.payment).fields.route_profit =
             (*ctx.payment).fields.route_profit.saturating_add(profit);
-        // The vehicle's profit is whatever route profit there is minus feeder shares.
+
+        /* The vehicle's profit is whatever route profit there is minus feeder shares. */
         let visual = profit.saturating_sub((*cp).get_feeder_share_part(count));
         (*ctx.payment).fields.visual_profit =
             (*ctx.payment).fields.visual_profit.saturating_add(visual);
     }
+}
+
+/// `CargoPayment::CargoPayment`: the payment of the live `front`, or for null the default
+/// constructor the loader calls.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code, reason = "the exported symbol")]
+pub extern "C" fn openttd_rust_cargo_payment_new(front: *mut OpenTTDVehicle) -> *mut CargoPayment {
+    let payment = match std::ptr::NonNull::new(front) {
+        Some(front) => CargoPayment::new(VehicleRef(front)),
+        None => CargoPayment {
+            fields: Fields::default(),
+            current_station: StationID::INVALID,
+        },
+    };
+    Box::into_raw(Box::new(payment))
+}
+/// `CargoPayment::front`.
+///
+/// # Safety
+/// `p` is a live payment.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code, reason = "the exported symbol and the caller's payment")]
+pub unsafe extern "C" fn openttd_rust_cargo_payment_front(
+    p: *const CargoPayment,
+) -> *mut OpenTTDVehicle {
+    // SAFETY: The caller's live payment.
+    unsafe { (*p).fields.front }
+}
+/// `CargoPayment::AfterLoad`'s `this->current_station = this->front->last_station_visited`.
+///
+/// # Safety
+/// `p` is a live payment whose front the loader has resolved.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code, reason = "the exported symbol and the caller's payment")]
+pub unsafe extern "C" fn openttd_rust_cargo_payment_afterload(p: *mut CargoPayment) {
+    // SAFETY: The caller's live payment and its resolved front.
+    unsafe {
+        let front = VehicleRef(std::ptr::NonNull::new_unchecked((*p).fields.front));
+        (*p).current_station = front.last_station_visited();
+    }
+}
+/// `CargoPayment::~CargoPayment`: `cleaning` is `CleaningPool()`, which settles nothing; `s` may
+/// be null only then.
+///
+/// # Safety
+/// `p` is a live payment the constructor allocated, released here.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code, reason = "the exported symbol and the caller's payment")]
+pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
+    p: *mut CargoPayment,
+    s: *const Services,
+    cleaning: u8,
+) {
+    if cleaning == 0 {
+        // SAFETY: The caller's live payment and process-lifetime table.
+        unsafe { settle(p, &*s) };
+    }
+    // SAFETY: The constructor's allocation.
+    drop(unsafe { Box::from_raw(p) });
 }
 /// `CargoPayment::PayFinalDelivery`, for the consoles: `payment` pays for `count` items of the
 /// packet shell `cp` on `tile`.
@@ -523,6 +725,10 @@ pub(crate) unsafe fn pay_final_delivery(
 /// # Safety
 /// `s` is the live storage table, `payment` a live payment and `cp` a live packet shell.
 #[unsafe(no_mangle)]
+#[allow(
+    unsafe_code,
+    reason = "the exported symbol and the caller's payment and packet"
+)]
 pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     s: *const crate::cargo_storage::Services,
     payment: *mut NativePayment,
@@ -539,92 +745,57 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
             CargoType(cargo),
             (s.packet)(cp),
             count,
-            crate::tile_type::TileIndex(tile),
+            TileIndex(tile),
         );
     }
 }
+/// `GetTransportedGoodsIncome`, for its C++ callers.
+///
+/// # Safety
+/// `s` is the live payment table.
 #[unsafe(no_mangle)]
+#[allow(unsafe_code, reason = "the exported symbol and the caller's table")]
 pub unsafe extern "C" fn openttd_rust_cargo_income(
     s: *const Services,
-    pieces: u32,
-    distance: u32,
-    periods: u16,
-    cargo: u8,
+    num_pieces: u32,
+    dist: u32,
+    transit_periods: u16,
+    cargo_type: u8,
 ) -> i64 {
-    get_transported_goods_income(unsafe { &*s }, pieces, distance, periods, CargoType(cargo))
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_delivery_new() -> *mut Delivery {
-    Box::into_raw(Box::new(Delivery::default()))
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_delivery_destroy(d: *mut Delivery) {
-    unsafe {
-        drop(Box::from_raw(d));
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: *const Services) {
-    let s = unsafe { &*s };
-    // Call the production machinery of the industries that received cargo.
-    let mut index = 0;
-    while index < unsafe { (*d).destinations.len() } {
-        let ind = unsafe { (&(*d).destinations)[index] };
-        let subsidies = unsafe { &*(s.subsidies)() };
-        let owner = (subsidies.industry_owner)(ind.cast());
-        unsafe {
-            crate::industry::trigger_industry_production(
-                ind,
-                owner,
-                IndustryID((subsidies.industry_id)(ind.cast())),
-                &*s.resolver,
-                &*subsidies.industry,
-                &*s.industry_delivery,
-            );
-        };
-        index += 1;
-    }
-    unsafe {
-        (*d).destinations.clear();
-    }
+    // SAFETY: The caller's process-lifetime table.
+    get_transported_goods_income(
+        unsafe { &*s },
+        num_pieces,
+        dist,
+        transit_periods,
+        CargoType(cargo_type),
+    )
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDCargoSpec" ["probe"] => Spec {
-        payment,
-        valid,
-        callback,
-        periods1,
-        periods2,
-    };
     "OpenTTDCargoPaymentFields" ["probe"] => Fields {
         front,
         route_profit,
         visual_profit,
         visual_transfer,
     };
-    "OpenTTDCargoPayment" ["probe"] => Payment {
+    "OpenTTDCargoPayment" ["probe"] => CargoPayment {
         fields,
-        station,
+        current_station => station,
     };
     "OpenTTDCargoServices" ["probe"] => Services {
-        spec,
-        registry,
-        station_company,
-        station_town,
-        resolver,
-        subsidies,
-        industry_delivery,
         detach_payment,
-        finance,
-        vehicles,
-        local_company,
-        expense,
-        profit,
-        shared,
         feeder_animation,
-        feeder_payment_share,
+        finance,
+        industry_delivery,
+        registry,
+        resolver,
+        shared,
+        stations,
+        subsidies,
+        town,
+        vehicles,
     };
 }
 
@@ -662,27 +833,34 @@ mod income_tests {
     thread_local! {
         /// The fixture's spec: payment, valid, transit periods; its profit callback is enabled.
         static SPEC: Cell<(i64, u8, u8, u8)> = const { Cell::new((0, 0, 0, 0)) };
+        /// The spec's `transit_periods` member, which its reader addresses.
+        static TRANSIT_PERIODS: Cell<[u8; 2]> = const { Cell::new([0, 0]) };
         static CALLBACK: Cell<u16> = const { Cell::new(0) };
         static CALLS: Cell<u32> = const { Cell::new(0) };
         /// The last callback's `var18`; like the fixture's global, never reset.
         static ARGUMENT: Cell<u32> = const { Cell::new(0) };
         static SHARE: Cell<u8> = const { Cell::new(0) };
     }
-    extern "C" fn spec(_: u8, out: *mut Spec) {
-        let (payment, valid, periods1, periods2) = SPEC.get();
-        // SAFETY: The income routine's own spec slot.
-        unsafe {
-            out.write(Spec {
-                payment,
-                valid,
-                callback: 1,
-                periods1,
-                periods2,
-            });
-        }
-    }
     extern "C" fn registry_spec(_: u8) -> *const CargoSpec {
         ptr::null()
+    }
+    extern "C" fn bitnum(_: *const CargoSpec) -> u8 {
+        if SPEC.get().1 == 0 {
+            crate::cargotype::INVALID_CARGO_BITNUM
+        } else {
+            0
+        }
+    }
+    extern "C" fn callback_mask(_: *const CargoSpec) -> u8 {
+        crate::newgrf_callbacks::CargoCallbackMasks::from_element(CargoCallbackMask::ProfitCalc).0
+    }
+    extern "C" fn current_payment(_: *const CargoSpec) -> i64 {
+        SPEC.get().0
+    }
+    extern "C" fn transit_periods(_: *const CargoSpec) -> *const [u8; 2] {
+        let (_, _, periods1, periods2) = SPEC.get();
+        TRANSIT_PERIODS.set([periods1, periods2]);
+        TRANSIT_PERIODS.with(Cell::as_ptr)
     }
     extern "C" fn callback_frame(
         _: *const CargoSpec,
@@ -696,9 +874,6 @@ mod income_tests {
         ARGUMENT.set(callback_param2);
         CALLBACK.get()
     }
-    extern "C" fn feeder_payment_share() -> u8 {
-        SHARE.get()
-    }
 
     /// Split a case index of nested loops into its digits, innermost loop first.
     fn digits<const N: usize>(mut index: usize, radices: [usize; N]) -> [usize; N] {
@@ -710,6 +885,10 @@ mod income_tests {
     }
 
     /// Income for each case of the fixture's nested domain: (inputs, "income calls argument").
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw payments, packets and records"
+    )]
     fn income_cases(s: &Services) -> Vec<(String, String)> {
         let radices = [
             CALLBACKS.len(),
@@ -807,7 +986,12 @@ mod income_tests {
             },
             8,
         );
-        let shared = crate::services::fixture(ptr::null_mut(), draw);
+        let settings = crate::settings_type::SettingAddresses {
+            feeder_payment_share: SHARE.with(Cell::as_ptr),
+            ..crate::settings_type::SettingAddresses::NULL
+        };
+        let mut shared = crate::services::fixture(ptr::null_mut(), draw);
+        shared.settings = &raw const settings;
         let radices = [SHARES.len(), EXTREMES.len(), EXTREMES.len()];
         (0..radices.iter().product())
             .map(|index| {
@@ -822,6 +1006,10 @@ mod income_tests {
             })
             .collect()
     }
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw payments, packets and records"
+    )]
     fn transfer_case(
         s: &Services,
         shared: &crate::services::Services,
@@ -831,7 +1019,7 @@ mod income_tests {
     ) -> (String, String) {
         SHARE.set(share);
         CALLS.set(0);
-        let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+        let payment = openttd_rust_cargo_payment_new(ptr::null_mut());
         // Loaded on tile 0 (`travelled` holds its coordinates, zero) and in transit 45 periods,
         // so `GetDistance` on tile 250 is 250.
         let packet = crate::cargo_storage::CargoPacket {
@@ -879,15 +1067,21 @@ mod income_tests {
         (inputs, output)
     }
 
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw payments, packets and records"
+    )]
     #[test]
     fn income_and_transfer_match_original() {
         let mut registry = crate::cargo_registry::TEST_TABLE;
         registry.spec = registry_spec;
+        registry.bitnum = bitnum;
+        registry.callback_mask = callback_mask;
+        registry.current_payment = current_payment;
+        registry.transit_periods = transit_periods;
         registry.callback_frame = callback_frame;
         let mut s = CARGO;
-        s.spec = spec;
         s.registry = &raw const registry;
-        s.feeder_payment_share = feeder_payment_share;
         let sections = oracle::parse(ORACLE);
 
         // The cases run in the fixture's order: its callback argument and spec carry over.
@@ -989,15 +1183,20 @@ mod settlement_tests {
     extern "C" fn detach_payment(_: *mut OpenTTDVehicle) {
         log(0, 0, 0);
     }
-    extern "C" fn local_company() -> bool {
+    /// `_local_company`: equal to `_current_company` exactly for a local case.
+    extern "C" fn local_company() -> u8 {
         log(5, 0, 0);
-        LOCAL.get()
+        if LOCAL.get() {
+            CURRENT.get()
+        } else {
+            CURRENT.get().wrapping_add(1)
+        }
     }
-    extern "C" fn expense(_: *mut OpenTTDVehicle, income: bool) -> ExpensesType {
-        assert!(income);
-        ExpensesType::EXPENSES_TRAIN_REVENUE
+    /// `_current_company`, as `SubtractMoneyFromCompany` and `IsLocalCompany` read it.
+    extern "C" fn shared_current_company() -> u8 {
+        CURRENT.get()
     }
-    extern "C" fn profit(_: *mut OpenTTDVehicle) -> i64 {
+    extern "C" fn profit(_: VehicleRef) -> i64 {
         1000
     }
     extern "C" fn cost_animation(x: i32, y: i32, z: i32, income: i64) {
@@ -1056,6 +1255,10 @@ mod settlement_tests {
 
     /// One fixture case: settle (or clean up) a payment whose route and visual profits are
     /// `INT64_MIN`, with a maximal or no transfer.
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw payments, packets and records"
+    )]
     fn settle(s: &Services, case: Case) {
         let (cleaning, transfer, local, custom, valid) = (
             case.cleaning(),
@@ -1083,7 +1286,7 @@ mod settlement_tests {
             (*front).owner = crate::company_type::CompanyID(3);
             ((*front).x_pos, (*front).y_pos, (*front).z_pos) = (11, 22, 33);
         }
-        let payment = openttd_rust_cargo_payment_new(front, StationID(42));
+        let payment = openttd_rust_cargo_payment_new(front);
         // SAFETY: The payment allocated above; destroy releases it.
         unsafe {
             (*payment).fields = Fields {
@@ -1133,6 +1336,10 @@ mod settlement_tests {
         assert_eq!(CURRENT.get(), 17, "{inputs}: restored company");
     }
 
+    #[allow(
+        unsafe_code,
+        reason = "the fixture builds, reads or frees raw payments, packets and records"
+    )]
     #[test]
     fn settlement_order_money_boundaries_and_cleanup() {
         let mut finance = FINANCE;
@@ -1141,18 +1348,18 @@ mod settlement_tests {
         finance.company_finances = company_finances;
         finance.invalidate_company_windows = invalidate_company_windows;
         let mut vehicles = VEHICLE;
+        vehicles.profit = profit;
         vehicles.write_profit = write_profit;
         vehicles.play_vehicle_sound = play_vehicle_sound;
         vehicles.play_sound = play_sound;
         let mut shared = SHARED;
         shared.cost_animation = cost_animation;
+        shared.current_company = shared_current_company;
+        shared.local_company = local_company;
         let mut s = CARGO;
         s.finance = &raw const finance;
         s.vehicles = &raw const vehicles;
         s.detach_payment = detach_payment;
-        s.local_company = local_company;
-        s.expense = expense;
-        s.profit = profit;
         s.shared = &raw const shared;
         s.feeder_animation = feeder_animation;
         // SAFETY: Plain integer record; every case rewrites it before use.
@@ -1165,7 +1372,7 @@ mod settlement_tests {
         }
         // A payment with neither visual profit nor transfer only detaches.
         SETTLEMENT.with(|s| s.borrow_mut().clear());
-        let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+        let payment = openttd_rust_cargo_payment_new(ptr::null_mut());
         // SAFETY: The payment allocated above; destroy releases it.
         unsafe {
             (*payment).fields = Fields {
@@ -1178,5 +1385,72 @@ mod settlement_tests {
         }
         assert_eq!(SETTLEMENT.with(|s| s.borrow().clone()), [(0, 0, 0)]);
         FINANCES.set(ptr::null_mut());
+    }
+}
+
+/// `Vehicle::GetExpenseType` and its four overrides, which the settlement charges with
+/// `income` and refit with a running cost.
+#[cfg(test)]
+mod expense_type_tests {
+    use crate::economy_type::ExpensesType;
+    use crate::vehicle_type::VehicleType;
+
+    #[test]
+    #[allow(
+        unsafe_code,
+        reason = "the test allocates and frees raw vehicle records"
+    )]
+    fn get_expense_type_over_every_vehicle_type_and_both_flags() {
+        // Each type's (`GetExpenseType(true)`, `GetExpenseType(false)`), from `train.h`,
+        // `roadveh.h`, `ship.h`, `aircraft.h` and, for the rest, `vehicle_base.h`.
+        for (kind, expected) in [
+            (
+                VehicleType::TRAIN,
+                (
+                    ExpensesType::EXPENSES_TRAIN_REVENUE,
+                    ExpensesType::EXPENSES_TRAIN_RUN,
+                ),
+            ),
+            (
+                VehicleType::ROAD,
+                (
+                    ExpensesType::EXPENSES_ROADVEH_REVENUE,
+                    ExpensesType::EXPENSES_ROADVEH_RUN,
+                ),
+            ),
+            (
+                VehicleType::SHIP,
+                (
+                    ExpensesType::EXPENSES_SHIP_REVENUE,
+                    ExpensesType::EXPENSES_SHIP_RUN,
+                ),
+            ),
+            (
+                VehicleType::AIRCRAFT,
+                (
+                    ExpensesType::EXPENSES_AIRCRAFT_REVENUE,
+                    ExpensesType::EXPENSES_AIRCRAFT_RUN,
+                ),
+            ),
+            (
+                VehicleType::EFFECT,
+                (ExpensesType::EXPENSES_OTHER, ExpensesType::EXPENSES_OTHER),
+            ),
+            (
+                VehicleType::DISASTER,
+                (ExpensesType::EXPENSES_OTHER, ExpensesType::EXPENSES_OTHER),
+            ),
+        ] {
+            let record =
+                crate::vehicle_base::openttd_rust_vehicle_record_new(std::ptr::null_mut(), kind);
+            let v = crate::vehicle::VehicleRef(std::ptr::NonNull::new(record).unwrap());
+            assert_eq!(
+                (v.get_expense_type(true), v.get_expense_type(false)),
+                expected,
+                "{kind:?}"
+            );
+            // SAFETY: The record allocated above; nothing else holds it.
+            unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(record) };
+        }
     }
 }

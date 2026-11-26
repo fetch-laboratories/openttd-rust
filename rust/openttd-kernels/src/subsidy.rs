@@ -643,13 +643,14 @@ impl Services {
         }
     }
     /// Tests whether given delivery is subsidised and possibly awards the subsidy to delivering
-    /// company
+    /// company. `st` resolves the delivering station's owner after the source test: the station
+    /// a Rust caller holds, or the lookup of the C++ entry's `StationID`.
     pub(crate) fn check_subsidised(
         &self,
         cargo_type: CargoType,
         company: CompanyID,
         src: Source,
-        station: StationID,
+        st: impl FnOnce() -> *mut crate::station_service::Service,
     ) -> bool {
         // If the source isn't subsidised, don't continue
         if !src.is_valid()
@@ -662,7 +663,7 @@ impl Services {
         // town destination. A fixed membership set preserves first-discovery
         // semantics without allocating on the cargo-delivery hot path.
         let catchment = crate::station::Ctx::from_shared(self.shared());
-        let station_state = (catchment.c.station_owner)(station);
+        let station_state = st();
         // One bit per `TownID` value.
         let mut towns_near = [0_u64; (u16::MAX as usize + 1) / u64::BITS as usize];
         let town_word = |town: TownID| usize::from(town.0) / u64::BITS as usize;
@@ -810,12 +811,12 @@ pub unsafe extern "C" fn openttd_rust_subsidy_check_abi(
     src: Source,
     station: u16,
 ) -> u8 {
-    u8::from(unsafe { &*s }.check_subsidised(
-        CargoType(cargo),
-        CompanyID(company),
-        src,
-        StationID(station),
-    ))
+    let s = unsafe { &*s };
+    u8::from(
+        s.check_subsidised(CargoType(cargo), CompanyID(company), src, || {
+            (crate::station::Ctx::from_shared(s.shared()).c.station_owner)(StationID(station))
+        }),
+    )
 }
 
 crate::abi::layouts! {
