@@ -613,11 +613,6 @@ impl Leaves {
         // SAFETY: The station command table names the process-lifetime command table.
         unsafe { &*self.station_commands().command }
     }
-    /// The company services, for `CheckOwnership`.
-    fn company(&self) -> &'static crate::company::Services {
-        // SAFETY: The command table returns the process-lifetime company table.
-        unsafe { &*(self.commands().company)() }
-    }
     /// The native `CommandCost` at `out`, written through the shared cost services.
     fn cost(&self, out: *mut CommandCost) -> Cost<'static> {
         // SAFETY: The station command table names the process-lifetime cost table.
@@ -3713,27 +3708,6 @@ fn ship_station_tile(st: StationID, s: &Leaves) -> u32 {
     read_field!(area, tile).0
 }
 
-/// `CheckOwnership(owner)`, written to `cost`: true where it succeeded.
-fn check_ownership(owner: Owner, cost: Cost<'_>, s: &Leaves) -> bool {
-    crate::company::check_ownership(s.company(), cost, owner, TileIndex(0));
-    cost.ok()
-}
-
-/// `return CMD_ERROR;`
-fn cmd_error(cost: Cost<'_>) {
-    crate::command_func::cmd_error(cost);
-}
-
-/// `return CommandCost(msg);`
-fn command_cost(cost: Cost<'_>, msg: StringID) {
-    cost.error(msg.0);
-}
-
-/// `return CommandCost(msg, extra_msg);`
-fn command_cost_extra(cost: Cost<'_>, msg: StringID, extra_msg: StringID) {
-    cost.error_extra(msg, extra_msg);
-}
-
 /// `Command<cmd>::Do(flags, args)` around the Rust body `body` of a command with no tile
 /// argument; the result is discarded, as each caller here discards it.
 #[allow(unsafe_code)]
@@ -3780,10 +3754,11 @@ pub(crate) fn cmd_insert_order(
         new_order,
     } = args;
     let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -3793,7 +3768,7 @@ pub(crate) fn cmd_insert_order(
         || new_order.travel_time() != 0
         || new_order.max_speed() != u16::MAX
     {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     /* Check if the inserted order is to the correct destination (owner, type),
@@ -3803,18 +3778,18 @@ pub(crate) fn cmd_insert_order(
             let st_id = new_order.destination().to_station_id();
             let st = (s.catchment().station_if_valid)(st_id);
             if st.is_null() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
-            if base_station_owner(st, s) != Owner::NONE
-                && !check_ownership(base_station_owner(st, s), cost, s)
-            {
-                return;
+            if base_station_owner(st, s) != Owner::NONE {
+                cost.ownership(s.commands(), base_station_owner(st, s).0, 0);
+                if !cost.ok() {
+                    return;
+                }
             }
 
             if !can_vehicle_use_station(v, st_id) {
-                return command_cost_extra(
-                    cost,
+                return cost.error_extra(
                     STR_ERROR_CAN_T_ADD_ORDER,
                     get_vehicle_cannot_use_station_reason(v, st_id, s),
                 );
@@ -3822,8 +3797,7 @@ pub(crate) fn cmd_insert_order(
             let mut u = first_shared(v, s);
             while let Some(shared) = u {
                 if !can_vehicle_use_station(shared, st_id) {
-                    return command_cost_extra(
-                        cost,
+                    return cost.error_extra(
                         STR_ERROR_CAN_T_ADD_ORDER_SHARED,
                         get_vehicle_cannot_use_station_reason(shared, st_id, s),
                     );
@@ -3833,7 +3807,7 @@ pub(crate) fn cmd_insert_order(
 
             /* Non stop only allowed for ground vehicles. */
             if new_order.non_stop().any() && !is_ground_vehicle(v) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Filter invalid load/unload types. */
@@ -3842,11 +3816,11 @@ pub(crate) fn cmd_insert_order(
 
                 OrderLoadType::FullLoad | OrderLoadType::FullLoadAny => {
                     if has_unbunching_order(v, s) {
-                        return command_cost(cost, STR_ERROR_UNBUNCHING_NO_FULL_LOAD);
+                        return cost.error(STR_ERROR_UNBUNCHING_NO_FULL_LOAD.0);
                     }
                 }
 
-                _ => return cmd_error(cost),
+                _ => return crate::command_func::cmd_error(cost),
             }
             match new_order.unload_type() {
                 OrderUnloadType::UnloadIfPossible
@@ -3854,20 +3828,20 @@ pub(crate) fn cmd_insert_order(
                 | OrderUnloadType::Transfer
                 | OrderUnloadType::NoUnload => {}
 
-                _ => return cmd_error(cost),
+                _ => return crate::command_func::cmd_error(cost),
             }
 
             /* Filter invalid stop locations */
             match new_order.stop_location() {
                 OrderStopLocation::NearEnd | OrderStopLocation::Middle => {
                     if v.vehicle_type() != VehicleType::VEH_TRAIN {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 }
 
                 OrderStopLocation::FarEnd => {}
 
-                _ => return cmd_error(cost),
+                _ => return crate::command_func::cmd_error(cost),
             }
         }
 
@@ -3881,10 +3855,11 @@ pub(crate) fn cmd_insert_order(
                     let st = (s.catchment().station_if_valid)(st_id);
 
                     if st.is_null() {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
 
-                    if !check_ownership(base_station_owner(st, s), cost, s) {
+                    cost.ownership(s.commands(), base_station_owner(st, s).0, 0);
+                    if !cost.ok() {
                         return;
                     }
 
@@ -3895,48 +3870,49 @@ pub(crate) fn cmd_insert_order(
                             airports,
                         )
                     {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 } else {
                     let dp = (s.depots().depot)(new_order.destination().to_depot_id());
 
                     if dp.is_null() {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
 
                     // SAFETY: The live depot `Depot::GetIfValid` returned.
                     let xy = TileIndex(unsafe { (s.depots().xy)(dp) });
                     let map = crate::map_func::World::new(s.shared());
-                    if !check_ownership(map.owner(xy), cost, s) {
+                    cost.ownership(s.commands(), map.owner(xy).0, 0);
+                    if !cost.ok() {
                         return;
                     }
 
                     match v.vehicle_type() {
                         VehicleType::VEH_TRAIN => {
                             if !map.is_rail_depot_tile(xy) {
-                                return cmd_error(cost);
+                                return crate::command_func::cmd_error(cost);
                             }
                         }
 
                         VehicleType::VEH_ROAD => {
                             if !map.road_depot(xy) {
-                                return cmd_error(cost);
+                                return crate::command_func::cmd_error(cost);
                             }
                         }
 
                         VehicleType::VEH_SHIP => {
                             if !map.is_ship_depot_tile(xy) {
-                                return cmd_error(cost);
+                                return crate::command_func::cmd_error(cost);
                             }
                         }
 
-                        _ => return cmd_error(cost),
+                        _ => return crate::command_func::cmd_error(cost),
                     }
                 }
             }
 
             if new_order.non_stop().any() && !is_ground_vehicle(v) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Check depot order type is valid. */
@@ -3946,7 +3922,7 @@ pub(crate) fn cmd_insert_order(
             }
             depot_order_type = depot_order_type.reset(OrderDepotTypeFlag::PartOfOrders);
             if depot_order_type.any() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Check depot action type is valid. */
@@ -3963,7 +3939,7 @@ pub(crate) fn cmd_insert_order(
                 )
                 .any()
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Vehicles cannot have a "service if needed" order that also has a depot action. */
@@ -3974,7 +3950,7 @@ pub(crate) fn cmd_insert_order(
                     ),
                 )
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Check if we're allowed to have a new unbunching order. */
@@ -3983,13 +3959,13 @@ pub(crate) fn cmd_insert_order(
                 .test(OrderDepotActionFlag::Unbunch)
             {
                 if has_full_load_order(v, s) {
-                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD);
+                    return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD.0);
                 }
                 if has_unbunching_order(v, s) {
-                    return command_cost(cost, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED);
+                    return cost.error(STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED.0);
                 }
                 if has_conditional_order(v, s) {
-                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL);
+                    return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL.0);
                 }
             }
         }
@@ -3997,21 +3973,19 @@ pub(crate) fn cmd_insert_order(
         OrderType::OT_GOTO_WAYPOINT => {
             let wp = (s.waypoint_get_if_valid)(new_order.destination().0);
             if wp.is_null() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
             let facilities = s.station_commands().facilities(wp);
 
             match v.vehicle_type() {
                 VehicleType::VEH_TRAIN => {
                     if !facilities.test(crate::station_type::StationFacility::Train) {
-                        return command_cost_extra(
-                            cost,
-                            STR_ERROR_CAN_T_ADD_ORDER,
-                            STR_ERROR_NO_RAIL_WAYPOINT,
-                        );
+                        return cost
+                            .error_extra(STR_ERROR_CAN_T_ADD_ORDER, STR_ERROR_NO_RAIL_WAYPOINT);
                     }
 
-                    if !check_ownership(base_station_owner(wp, s), cost, s) {
+                    cost.ownership(s.commands(), base_station_owner(wp, s).0, 0);
+                    if !cost.ok() {
                         return;
                     }
                 }
@@ -4020,75 +3994,70 @@ pub(crate) fn cmd_insert_order(
                     if !facilities.test(crate::station_type::StationFacility::BusStop)
                         && !facilities.test(crate::station_type::StationFacility::TruckStop)
                     {
-                        return command_cost_extra(
-                            cost,
-                            STR_ERROR_CAN_T_ADD_ORDER,
-                            STR_ERROR_NO_ROAD_WAYPOINT,
-                        );
+                        return cost
+                            .error_extra(STR_ERROR_CAN_T_ADD_ORDER, STR_ERROR_NO_ROAD_WAYPOINT);
                     }
 
-                    if !check_ownership(base_station_owner(wp, s), cost, s) {
+                    cost.ownership(s.commands(), base_station_owner(wp, s).0, 0);
+                    if !cost.ok() {
                         return;
                     }
                 }
 
                 VehicleType::VEH_SHIP => {
                     if !facilities.test(crate::station_type::StationFacility::Dock) {
-                        return command_cost_extra(
-                            cost,
-                            STR_ERROR_CAN_T_ADD_ORDER,
-                            STR_ERROR_NO_BUOY,
-                        );
+                        return cost.error_extra(STR_ERROR_CAN_T_ADD_ORDER, STR_ERROR_NO_BUOY);
                     }
-                    if base_station_owner(wp, s) != Owner::NONE
-                        && !check_ownership(base_station_owner(wp, s), cost, s)
-                    {
-                        return;
+                    if base_station_owner(wp, s) != Owner::NONE {
+                        cost.ownership(s.commands(), base_station_owner(wp, s).0, 0);
+                        if !cost.ok() {
+                            return;
+                        }
                     }
                 }
 
-                _ => return cmd_error(cost),
+                _ => return crate::command_func::cmd_error(cost),
             }
 
             /* Order flags can be any of the following for waypoints:
              * [non-stop]
              * non-stop orders (if any) are only valid for trains and road vehicles */
             if new_order.non_stop().any() && !is_ground_vehicle(v) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
         OrderType::OT_CONDITIONAL => {
             let skip_to = new_order.condition_skip_to_order();
             if skip_to.0 != 0 && skip_to >= get_num_orders(v, s) {
-                return cmd_error(cost); // Always allow jumping to the first (even when there is no order).
+                return crate::command_func::cmd_error(cost); // Always allow jumping to the first (even when there is no order).
             }
             if new_order.condition_variable() >= OrderConditionVariable::End {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
             if has_unbunching_order(v, s) {
-                return command_cost(cost, STR_ERROR_UNBUNCHING_NO_CONDITIONAL);
+                return cost.error(STR_ERROR_UNBUNCHING_NO_CONDITIONAL.0);
             }
 
             let occ = new_order.condition_comparator();
             if occ >= OrderConditionComparator::End {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
             match new_order.condition_variable() {
                 OrderConditionVariable::RequiresService => {
                     if occ != OrderConditionComparator::IsTrue
                         && occ != OrderConditionComparator::IsFalse
                     {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 }
 
                 OrderConditionVariable::Unconditionally => {
                     if occ != OrderConditionComparator::Equal {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                     if new_order.condition_value() != 0 {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 }
 
@@ -4100,29 +4069,29 @@ pub(crate) fn cmd_insert_order(
                             | OrderConditionVariable::MaxReliability
                     ) && new_order.condition_value() > 100
                     {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                     if occ == OrderConditionComparator::IsTrue
                         || occ == OrderConditionComparator::IsFalse
                     {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 }
             }
         }
 
-        _ => return cmd_error(cost),
+        _ => return crate::command_func::cmd_error(cost),
     }
 
     if sel_ord > get_num_orders(v, s) {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if get_num_orders(v, s) >= MAX_VEH_ORDER_ID {
-        return command_cost(cost, STR_ERROR_TOO_MANY_ORDERS);
+        return cost.error(STR_ERROR_TOO_MANY_ORDERS.0);
     }
     if order_list(v, s).is_none() && (s.list_can_allocate_item)() == 0 {
-        return command_cost(cost, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
+        return cost.error(STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -4148,10 +4117,11 @@ pub(crate) fn cmd_delete_order(
 ) {
     let CmdDeleteOrder { veh_id, sel_ord } = args;
     let Some(v) = vehicle_get_if_valid(veh_id, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -4161,7 +4131,7 @@ pub(crate) fn cmd_delete_order(
     }
 
     if get_order(v, sel_ord, s).is_none() {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -4192,10 +4162,11 @@ pub(crate) fn cmd_skip_to_order(
             && sel_ord < get_num_orders(*v, s)
             && get_num_orders(*v, s).0 >= 2
     }) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -4249,10 +4220,11 @@ pub(crate) fn cmd_move_order(
         target_order,
     } = args;
     let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -4262,12 +4234,12 @@ pub(crate) fn cmd_move_order(
         || moving_order == target_order
         || get_num_orders(v, s).0 <= 1
     {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     /* Don't move an empty order */
     if get_order(v, moving_order, s).is_none() {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -4382,20 +4354,21 @@ pub(crate) fn cmd_modify_order(
         data,
     } = args;
     if mof >= ModifyOrderFlags::MOF_END {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
     /* Is it a valid order? */
     if sel_ord >= get_num_orders(v, s) {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     let order = get_order(v, sel_ord, s);
@@ -4408,19 +4381,19 @@ pub(crate) fn cmd_modify_order(
                 && mof != ModifyOrderFlags::MOF_UNLOAD
                 && mof != ModifyOrderFlags::MOF_LOAD
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
         OrderType::OT_GOTO_DEPOT => {
             if mof != ModifyOrderFlags::MOF_NON_STOP && mof != ModifyOrderFlags::MOF_DEPOT_ACTION {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
         OrderType::OT_GOTO_WAYPOINT => {
             if mof != ModifyOrderFlags::MOF_NON_STOP {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
@@ -4430,11 +4403,11 @@ pub(crate) fn cmd_modify_order(
                 && mof != ModifyOrderFlags::MOF_COND_VALUE
                 && mof != ModifyOrderFlags::MOF_COND_DESTINATION
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
-        _ => return cmd_error(cost),
+        _ => return crate::command_func::cmd_error(cost),
     }
 
     // `static_cast<..>(data)` of the `uint16_t` data to each `uint8_t` enumeration.
@@ -4442,12 +4415,12 @@ pub(crate) fn cmd_modify_order(
     match mof {
         ModifyOrderFlags::MOF_NON_STOP => {
             if !is_ground_vehicle(v) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             let nonstop_flags = OrderNonStopFlags(byte);
             if nonstop_flags == order.view().non_stop() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Test for invalid flags. */
@@ -4460,16 +4433,16 @@ pub(crate) fn cmd_modify_order(
                         .0),
             );
             if nonstop_flags.any() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
         ModifyOrderFlags::MOF_STOP_LOCATION => {
             if v.vehicle_type() != VehicleType::VEH_TRAIN {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
             if data >= u16::from(OrderStopLocation::End.0) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
@@ -4479,12 +4452,12 @@ pub(crate) fn cmd_modify_order(
                 .non_stop()
                 .test(OrderNonStopFlag::NoDestination)
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             let unload_type = OrderUnloadType(byte);
             if unload_type == order.view().unload_type() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Test for invalid types. */
@@ -4494,7 +4467,7 @@ pub(crate) fn cmd_modify_order(
                 | OrderUnloadType::Transfer
                 | OrderUnloadType::NoUnload => {}
 
-                _ => return cmd_error(cost),
+                _ => return crate::command_func::cmd_error(cost),
             }
         }
 
@@ -4504,12 +4477,12 @@ pub(crate) fn cmd_modify_order(
                 .non_stop()
                 .test(OrderNonStopFlag::NoDestination)
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             let load_type = OrderLoadType(byte);
             if load_type == order.view().load_type() {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Test for invalid types. */
@@ -4518,18 +4491,18 @@ pub(crate) fn cmd_modify_order(
 
                 OrderLoadType::FullLoad | OrderLoadType::FullLoadAny => {
                     if has_unbunching_order(v, s) {
-                        return command_cost(cost, STR_ERROR_UNBUNCHING_NO_FULL_LOAD);
+                        return cost.error(STR_ERROR_UNBUNCHING_NO_FULL_LOAD.0);
                     }
                 }
 
-                _ => return cmd_error(cost),
+                _ => return crate::command_func::cmd_error(cost),
             }
         }
 
         ModifyOrderFlags::MOF_DEPOT_ACTION => {
             let depot_action = OrderDepotAction(byte);
             if depot_action >= OrderDepotAction::End {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
             /* Check if we are allowed to add unbunching. We are always allowed to remove it. */
             if depot_action == OrderDepotAction::Unbunch {
@@ -4540,15 +4513,15 @@ pub(crate) fn cmd_modify_order(
                         .depot_action_flags()
                         .test(OrderDepotActionFlag::Unbunch)
                 {
-                    return command_cost(cost, STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED);
+                    return cost.error(STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED.0);
                 }
                 /* We don't allow unbunching if the vehicle has a conditional order. */
                 if has_conditional_order(v, s) {
-                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL);
+                    return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_CONDITIONAL.0);
                 }
                 /* We don't allow unbunching if the vehicle has a full load order. */
                 if has_full_load_order(v, s) {
-                    return command_cost(cost, STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD);
+                    return cost.error(STR_ERROR_UNBUNCHING_NO_UNBUNCHING_FULL_LOAD.0);
                 }
             }
         }
@@ -4556,23 +4529,25 @@ pub(crate) fn cmd_modify_order(
         ModifyOrderFlags::MOF_COND_VARIABLE => {
             let cond_variable = OrderConditionVariable(byte);
             if cond_variable >= OrderConditionVariable::End {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
         ModifyOrderFlags::MOF_COND_COMPARATOR => {
             let cond_comparator = OrderConditionComparator(byte);
             if cond_comparator >= OrderConditionComparator::End {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
             match order.view().condition_variable() {
-                OrderConditionVariable::Unconditionally => return cmd_error(cost),
+                OrderConditionVariable::Unconditionally => {
+                    return crate::command_func::cmd_error(cost);
+                }
 
                 OrderConditionVariable::RequiresService => {
                     if cond_comparator != OrderConditionComparator::IsTrue
                         && cond_comparator != OrderConditionComparator::IsFalse
                     {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 }
 
@@ -4580,7 +4555,7 @@ pub(crate) fn cmd_modify_order(
                     if cond_comparator == OrderConditionComparator::IsTrue
                         || cond_comparator == OrderConditionComparator::IsFalse
                     {
-                        return cmd_error(cost);
+                        return crate::command_func::cmd_error(cost);
                     }
                 }
             }
@@ -4588,27 +4563,27 @@ pub(crate) fn cmd_modify_order(
 
         ModifyOrderFlags::MOF_COND_VALUE => match order.view().condition_variable() {
             OrderConditionVariable::Unconditionally | OrderConditionVariable::RequiresService => {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             OrderConditionVariable::LoadPercentage
             | OrderConditionVariable::Reliability
             | OrderConditionVariable::MaxReliability => {
                 if data > 100 {
-                    return cmd_error(cost);
+                    return crate::command_func::cmd_error(cost);
                 }
             }
 
             _ => {
                 if data > 2047 {
-                    return cmd_error(cost);
+                    return crate::command_func::cmd_error(cost);
                 }
             }
         },
 
         ModifyOrderFlags::MOF_COND_DESTINATION => {
             if data >= u16::from(get_num_orders(v, s).0) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
         }
 
@@ -4819,10 +4794,11 @@ pub(crate) fn cmd_clone_order(
         veh_src,
     } = args;
     let Some(dst) = vehicle_get_if_valid(veh_dst, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(dst.owner(), cost, s) {
+    cost.ownership(s.commands(), dst.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -4834,10 +4810,11 @@ pub(crate) fn cmd_clone_order(
             let Some(src) = src.filter(|src| {
                 src.is_primary_vehicle() && dst.vehicle_type() == src.vehicle_type() && dst != *src
             }) else {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             };
 
-            if !check_ownership(src.owner(), cost, s) {
+            cost.ownership(s.commands(), src.owner().0, 0);
+            if !cost.ok() {
                 return;
             }
 
@@ -4846,12 +4823,12 @@ pub(crate) fn cmd_clone_order(
                 && crate::road_stop::is_bus(s.shared(), src)
                     != crate::road_stop::is_bus(s.shared(), dst)
             {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             /* Is the vehicle already in the shared list? */
             if first_shared(src, s) == first_shared(dst, s) {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             }
 
             if let Some(list) = orders(src, s) {
@@ -4866,8 +4843,7 @@ pub(crate) fn cmd_clone_order(
                      * are temporarily invalid due to reconstruction. */
                     let st = order.destination().to_station_id();
                     if can_vehicle_use_station(src, st) && !can_vehicle_use_station(dst, st) {
-                        return command_cost_extra(
-                            cost,
+                        return cost.error_extra(
                             STR_ERROR_CAN_T_COPY_SHARE_ORDER,
                             get_vehicle_cannot_use_station_reason(dst, st, s),
                         );
@@ -4879,11 +4855,11 @@ pub(crate) fn cmd_clone_order(
             if dst.vehicle_type() == VehicleType::VEH_AIRCRAFT
                 && !check_aircraft_order_distance(dst, src, s)
             {
-                return command_cost(cost, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE);
+                return cost.error(STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE.0);
             }
 
             if order_list(src, s).is_none() && (s.list_can_allocate_item)() == 0 {
-                return command_cost(cost, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
+                return cost.error(STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
             }
 
             if flags.test(DoCommandFlag::Execute) {
@@ -4924,10 +4900,11 @@ pub(crate) fn cmd_clone_order(
             let Some(src) = src.filter(|src| {
                 src.is_primary_vehicle() && dst.vehicle_type() == src.vehicle_type() && dst != *src
             }) else {
-                return cmd_error(cost);
+                return crate::command_func::cmd_error(cost);
             };
 
-            if !check_ownership(src.owner(), cost, s) {
+            cost.ownership(s.commands(), src.owner().0, 0);
+            if !cost.ok() {
                 return;
             }
 
@@ -4941,8 +4918,7 @@ pub(crate) fn cmd_clone_order(
                     }
                     let st = order.destination().to_station_id();
                     if !can_vehicle_use_station(dst, st) {
-                        return command_cost_extra(
-                            cost,
+                        return cost.error_extra(
                             STR_ERROR_CAN_T_COPY_SHARE_ORDER,
                             get_vehicle_cannot_use_station_reason(dst, st, s),
                         );
@@ -4954,12 +4930,12 @@ pub(crate) fn cmd_clone_order(
             if dst.vehicle_type() == VehicleType::VEH_AIRCRAFT
                 && !check_aircraft_order_distance(dst, src, s)
             {
-                return command_cost(cost, STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE);
+                return cost.error(STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE.0);
             }
 
             /* make sure there are orders available */
             if (s.list_can_allocate_item)() == 0 {
-                return command_cost(cost, STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
+                return cost.error(STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
             }
 
             if flags.test(DoCommandFlag::Execute) {
@@ -5013,7 +4989,7 @@ pub(crate) fn cmd_clone_order(
         }
 
         CloneOptions::CO_UNSHARE => declone_order(dst, flags, s),
-        _ => cmd_error(cost),
+        _ => crate::command_func::cmd_error(cost),
     }
 }
 
@@ -5041,28 +5017,29 @@ pub(crate) fn cmd_order_refit(
         cargo,
     } = args;
     if cargo.0 >= NUM_CARGO && cargo.0 != CARGO_NO_REFIT && cargo.0 != CARGO_AUTO_REFIT {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
     let Some(order) = get_order(v, order_number, s) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
     /* Automatic refit cargo is only supported for goto station orders. */
     if cargo.0 == CARGO_AUTO_REFIT && !order.view().is_type(OrderType::OT_GOTO_STATION) {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if order.view().load_type() == OrderLoadType::NoLoad {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -5279,21 +5256,22 @@ pub(crate) fn cmd_change_timetable(
         data,
     } = args;
     let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
     let Some(order) =
         get_order(v, order_number, s).filter(|order| !order.view().is_type(OrderType::OT_IMPLICIT))
     else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
     if mtf >= ModifyTimetableFlags::MTF_END {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     let mut wait_time = i32::from(order.view().wait_time());
@@ -5322,26 +5300,26 @@ pub(crate) fn cmd_change_timetable(
                     .non_stop()
                     .test(OrderNonStopFlag::NoDestination)
                 {
-                    return command_cost(cost, STR_ERROR_TIMETABLE_NOT_STOPPING_HERE);
+                    return cost.error(STR_ERROR_TIMETABLE_NOT_STOPPING_HERE.0);
                 }
             }
 
             OrderType::OT_CONDITIONAL => {}
 
-            _ => return command_cost(cost, STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS),
+            _ => return cost.error(STR_ERROR_TIMETABLE_ONLY_WAIT_AT_STATIONS.0),
         }
     }
 
     if travel_time != i32::from(order.view().travel_time())
         && order.view().is_type(OrderType::OT_CONDITIONAL)
     {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
     if max_speed != i32::from(order.view().max_speed())
         && (order.view().is_type(OrderType::OT_CONDITIONAL)
             || v.vehicle_type() == VehicleType::VEH_AIRCRAFT)
     {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -5425,19 +5403,20 @@ pub(crate) fn cmd_bulk_change_timetable(
 ) {
     let CmdBulkChangeTimetable { veh, mtf, data } = args;
     let Some(v) = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle()) else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
     if mtf >= ModifyTimetableFlags::MTF_END {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if get_num_orders(v, s).0 == 0 {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -5491,17 +5470,18 @@ pub(crate) fn cmd_set_vehicle_on_time(
     let Some(v) = vehicle_get_if_valid(veh, s)
         .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
     else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
     let c = consist(v);
 
     /* A vehicle can't be late if its timetable hasn't started.
      * If we're setting all vehicles in the group, we handle that below. */
     if !apply_to_group && !c.vehicle_flags().test(VehicleFlag::TIMETABLE_STARTED) {
-        return command_cost(cost, STR_ERROR_TIMETABLE_NOT_STARTED);
+        return cost.error(STR_ERROR_TIMETABLE_NOT_STARTED.0);
     }
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -5630,10 +5610,11 @@ pub(crate) fn cmd_set_timetable_start(
     let Some(v) = vehicle_get_if_valid(veh_id, s)
         .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
     else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
@@ -5650,7 +5631,7 @@ pub(crate) fn cmd_set_timetable_start(
 
     /* Don't let a timetable start at an invalid date. */
     if !(0..=crate::timer_game_common::MAX_DATE).contains(&start_date) {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     /* Don't let a timetable start more than 15 years into the future... */
@@ -5659,23 +5640,23 @@ pub(crate) fn cmd_set_timetable_start(
             crate::timetable::MAX_TIMETABLE_START_YEARS,
         )
     {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
     /* ...or 1 year in the past. */
     if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     /* If trying to distribute start dates over a shared order group, we need to know the total duration. */
     if timetable_all && !list.is_complete_timetable() {
-        return command_cost(cost, STR_ERROR_TIMETABLE_INCOMPLETE);
+        return cost.error(STR_ERROR_TIMETABLE_INCOMPLETE.0);
     }
 
     /* Don't allow invalid start dates for other vehicles in the shared order group. */
     if timetable_all
         && start_date.wrapping_add(total_duration / DAY_TICKS) > crate::timer_game_common::MAX_DATE
     {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
@@ -5760,10 +5741,11 @@ pub(crate) fn cmd_autofill_timetable(
     let Some(v) = vehicle_get_if_valid(veh, s)
         .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
     else {
-        return cmd_error(cost);
+        return crate::command_func::cmd_error(cost);
     };
 
-    if !check_ownership(v.owner(), cost, s) {
+    cost.ownership(s.commands(), v.owner().0, 0);
+    if !cost.ok() {
         return;
     }
 
