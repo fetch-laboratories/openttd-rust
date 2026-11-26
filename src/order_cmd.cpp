@@ -111,7 +111,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.base_station_get_if_valid = [](uint16_t index) noexcept { return BaseStation::GetIfValid(StationID(index)); },
 	.waypoint_get_if_valid = [](uint16_t index) noexcept -> BaseStation * { return Waypoint::GetIfValid(StationID(index)); },
 	.debug_check_sanity = RustOrderListDebugCheckSanity,
-	.get_vehicle_cannot_use_station_reason = [](void *v, const BaseStation *st) noexcept -> uint32_t { return GetVehicleCannotUseStationReason(static_cast<const Vehicle *>(v), Station::From(st)); },
+	.get_vehicle_cannot_use_station_reason = [](void *v, const BaseStation *st) noexcept -> uint32_t { return GetVehicleCannotUseStationReason(static_cast<const Vehicle *>(v), static_cast<const Station *>(st)); },
 	.invalidate_vehicle_order = [](void *v, int32_t data) noexcept { InvalidateVehicleOrder(static_cast<const Vehicle *>(v), data); },
 	.append_station = [](void *next_station, uint16_t station) noexcept { static_cast<std::vector<StationID> *>(next_station)->push_back(StationID(station)); },
 	.clear_order_backup_unsafe = [](uint32_t tile, uint32_t user) noexcept { Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(STR_NULL, nullptr, true, false, TileIndex(tile), CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args{TileIndex(tile), static_cast<ClientID>(user)}); },
