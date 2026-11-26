@@ -32,7 +32,6 @@
 #include "order_backup.h"
 #include "zoom_func.h"
 #include "newgrf_debug.h"
-#include "framerate_type.h"
 #include "train_cmd.h"
 #include "misc_cmd.h"
 #include "timer/timer_game_calendar.h"
@@ -802,15 +801,6 @@ Money Train::GetRunningCost() const
  * Update train vehicle data for a tick.
  * @return True if the vehicle still exists, false if it has ceased to exist (front of consists only).
  */
-bool Train::Tick()
-{
-	if (this->IsFrontEngine()) {
-		PerformanceAccumulator framerate(PFE_GL_TRAINS);
-		return openttd_rust_train_tick(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices()) != 0;
-	}
-	return openttd_rust_train_tick(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices()) != 0;
-}
-
 /**
  * Get the tracks of the train vehicle.
  * @return Current tracks of the vehicle.

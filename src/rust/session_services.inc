@@ -114,7 +114,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.tick_timer = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { TimerManager<TimerGameTick>::Elapsed(1); }); },
 		.tile_loop_begin = [](OpenTTDSessionFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
 		.tile_loop_end = [](OpenTTDSessionFrame *f) noexcept { f->loop.reset(); },
-		.vehicle_tables = [](OpenTTDSessionFrame *f, bool tick) noexcept { if (!tick) return RustVehicleSchedulerTables(); auto &costs = f->vehicle.emplace(); return RustVehicleSchedulerTables(RustCommandCost(&costs.refit), RustCommandCost(&costs.temporary)); },
+		.vehicle_tables = [](OpenTTDSessionFrame *f, bool tick) noexcept { if (!tick) return RustVehicleSchedulerTables(); auto &costs = f->vehicle.emplace(); return RustVehicleSchedulerTables(RustCommandCost(&costs.refit), RustCommandCost(&costs.temporary), &costs.road); },
 		.vehicle_cost = [](OpenTTDSessionFrame *f) noexcept { return RustCommandCost(&f->vehicle->replacement); },
 		.vehicle_end = [](OpenTTDSessionFrame *f) noexcept { f->vehicle.reset(); },
 		.town = &GetRustTownServices(),

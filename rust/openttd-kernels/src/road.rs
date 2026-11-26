@@ -31,6 +31,7 @@ use crate::direction_func::{
 };
 use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::engine_type::EngineID;
+use crate::framerate_type::{PerformanceAccumulator, PerformanceElement};
 use crate::ground_vehicle::GroundVehicleFlags;
 use crate::map_func::{Map, World};
 use crate::math::is_inside_mm;
@@ -83,6 +84,7 @@ use crate::vehicle::{GroundServices, VehicleRef, VehicleServices};
 use crate::vehicle_base::ClosestDepot;
 use crate::vehicle_base::{VehState, VehStates};
 use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH, VehicleID, VehicleType};
+use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 
 /// Roadtype flags (`road.h`), as bit numbers, retaining every underlying byte.
@@ -560,7 +562,8 @@ struct Game<'a> {
     gs: &'a GroundServices,
     ss: &'a Services,
     movement: CachedTable<'a>,
-    /// The controller's native stack slot for `CanBuildTramTrackOnTile`; null elsewhere.
+    /// The native command slot for `CanBuildTramTrackOnTile`: the session frame's for a
+    /// vehicle tick, or the entry's caller's; null elsewhere.
     road: *mut crate::road_cmd::CommandSlot,
 }
 
@@ -2604,6 +2607,14 @@ impl<'a> Game<'a> {
     /// `RoadVehicle::Tick`.
     #[inline]
     fn tick(&self, v: Part) -> bool {
+        let mut storage = MaybeUninit::uninit();
+        // SAFETY: The scheduler's `Tick` runs in the game loop, serialized by the game-state
+        // mutex; the guard drops when this body returns, after a `RoadVehController` that
+        // deleted the vehicle, and holds no reference to it.
+        let _framerate = unsafe {
+            PerformanceAccumulator::new(&mut storage, PerformanceElement::PFE_GL_ROADVEHS)
+        };
+
         v.v.set_tick_counter(v.v.tick_counter().wrapping_add(1));
 
         if v.v.is_front_engine() {
@@ -2873,7 +2884,26 @@ macro_rules! entry {
     }};
 }
 
-/// `RoadVehicle::Tick`.
+/// `RoadVehicle::Tick` over a live record and road owner pair; `road` is the native command
+/// slot, which the tram track query of a front vehicle builds its context in.
+fn tick_part(v: Part, leaves: *const Leaves, road: *mut crate::road_cmd::CommandSlot) -> bool {
+    crate::witness::hit(crate::witness::ROAD_TICKS);
+    let mut g = entry!(leaves);
+    g.road = road;
+    g.tick(v)
+}
+/// `RoadVehicle::Tick`, for the scheduler's dispatch over a live road vehicle record; `road`
+/// is the session frame's command slot for the vehicle tick.
+pub(crate) fn tick(
+    v: VehicleRef,
+    leaves: &Leaves,
+    road: *mut crate::road_cmd::CommandSlot,
+) -> bool {
+    tick_part(Part::of(v), leaves, road)
+}
+/// `RoadVehicle::Tick` for the kept native fixture `RoadServiceBoundary`
+/// (`tools/migration/windows-abi/road.inc`), which supplies the road owner itself; it leaves
+/// with that fixture.
 /// # Safety
 /// A live record and road owner pair, the static tables and the native command slot for
 /// this synchronous call.
@@ -2884,10 +2914,7 @@ pub unsafe extern "C" fn openttd_rust_road_tick_abi(
     leaves: *const Leaves,
     road: *mut crate::road_cmd::CommandSlot,
 ) -> u8 {
-    crate::witness::hit(crate::witness::ROAD_TICKS);
-    let mut g = entry!(leaves);
-    g.road = road;
-    u8::from(g.tick(Part::new(v, state)))
+    u8::from(tick_part(Part::new(v, state), leaves, road))
 }
 /// `IndividualRoadVehicleController`.
 /// # Safety

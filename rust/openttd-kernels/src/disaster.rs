@@ -1425,6 +1425,14 @@ static _disastervehicle_tick_procs: [DisasterVehicleTickProc; 15] = [
 pub(crate) fn tick(t: &Tables<'_>, this: DisasterVehicle) -> bool {
     _disastervehicle_tick_procs[usize::from(this.v.subtype())](t, this)
 }
+/// `DisasterVehicle::Tick`, for the scheduler's dispatch over a live disaster vehicle through
+/// the process-lifetime table `s`.
+#[allow(unsafe_code)]
+pub(crate) fn scheduler_tick(s: &Services, v: VehicleRef) -> bool {
+    // SAFETY: Every link of the process-lifetime table stays valid for the call.
+    let t = unsafe { Tables::new(s) };
+    tick(&t, DisasterVehicle::of(v))
+}
 
 type DisasterInitProc = fn(&Tables<'_>);
 

@@ -251,7 +251,8 @@ TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 
 	v->Record().subtype = 0;
 	v->Record().tick_counter = UINT8_MAX;
-	CHECK(v->Tick()); // Actual nonfront entry consumes no front-only place or callback.
+	/* Actual nonfront entry consumes no front-only place, callback or command slot. */
+	CHECK(openttd_rust_road_tick(RustVehicle(v), v->GetRustState(), &GetRustRoadLeaves(), nullptr));
 	CHECK(v->Record().tick_counter == 0);
 	CHECK(v->Record().running_ticks == UINT8_MAX);
 	CHECK(v->current_order_time == INT32_MAX);

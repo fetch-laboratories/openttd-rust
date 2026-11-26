@@ -899,11 +899,11 @@ pub(crate) const HOUSE_ANIMATION: crate::newgrf_animation_base::Binding<
 pub(crate) const SCHEDULER: crate::vehicle::scheduler::SchedulerServices =
     crate::vehicle::scheduler::SchedulerServices {
         aircraft: ptr::null(),
+        disaster: ptr::null(),
         pool: ptr::null(),
         road: ptr::null(),
         shared: ptr::null(),
         ship: ptr::null(),
-        tick: unreachable1,
         train: ptr::null(),
         vehicle: ptr::null(),
     };

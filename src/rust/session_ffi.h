@@ -122,7 +122,7 @@ void RustAskUnsafeUnpause() noexcept;
 void RustSaveDesyncGame();
 OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDWorldFrameStorage *) noexcept;
 bool RustWorldFrameEnd(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept;
-OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;
+OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr, OpenTTDRoadCommandSlot *road_slot = nullptr) noexcept;
 extern "C" {
 uint8_t openttd_rust_session_generate_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool, GWDoneProc *const *);
 extern "C++" inline bool openttd_rust_session_generate(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1, GenWorldMode a2, uint32_t a3, uint32_t a4, bool a5, GWDoneProc *const *a6) { return openttd_rust_session_generate_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }

@@ -153,14 +153,23 @@ TEST_CASE("Effect vehicles - zero construction, nested save staging and pool cle
 	_vehicle_pool.CleanPool();
 }
 
-/* Use the real controller's expiry route for ordinary owner destruction. This
- * also avoids invoking the pool's post-destructor index read directly from a
- * test translation unit, which GCC 15 diagnoses when devirtualizing delete. */
+/* `EffectVehicle::Tick` through the tick export, with the scheduler's `delete v` of an
+ * expired effect through the production vehicle table. Deleting there also avoids invoking
+ * the pool's post-destructor index read directly from a test translation unit, which GCC 15
+ * diagnoses when devirtualizing delete. */
+static bool TickEffect(EffectVehicle *v)
+{
+	if (openttd_rust_effect_run(v->rust_state.get(), RustVehicle(v), &GetRustVehicleServices(), &GetRustSharedServices()) != 0) return true;
+	GetRustVehicleServices().destroy(RustVehicle(v));
+	return false;
+}
+
+/* Use the real controller's expiry route for ordinary owner destruction. */
 static void ExpireEffect(EffectVehicle *v)
 {
 	v->Record().subtype = EV_BREAKDOWN_SMOKE;
 	v->SetAnimationState(1);
-	CHECK_FALSE(v->Tick());
+	CHECK_FALSE(TickEffect(v));
 }
 
 TEST_CASE("Effect vehicles - first sprite mutation and sequence replacement")
@@ -176,13 +185,13 @@ TEST_CASE("Effect vehicles - first sprite mutation and sequence replacement")
 	sequence.seq[0] = {3738, 17};
 	sequence.seq[1] = {3740, 19};
 	v->Record().progress = 7;
-	REQUIRE(v->Tick());
+	REQUIRE(TickEffect(v));
 	CHECK(sequence.seq[0].sprite == 3739);
 	CHECK(sequence.count == 2);
 	CHECK(sequence.seq[0].pal == 17);
 	sequence.seq[0].sprite = 3740;
 	v->Record().progress = 15;
-	REQUIRE(v->Tick());
+	REQUIRE(TickEffect(v));
 	CHECK(sequence.seq[0].sprite == 3737);
 	CHECK(sequence.count == 1);
 	CHECK(sequence.seq[0].pal == 0);

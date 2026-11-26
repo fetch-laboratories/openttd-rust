@@ -110,7 +110,6 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 		return this->GetVehStatus().Test(VehState::Hidden) && IsHangarTile(this->GetTile());
 	}
 
-	bool Tick() override;
 	uint Crash(bool flooded = false) override;
 	TileIndex GetOrderStationLocation(StationID station) override;
 	TileIndex GetCargoTile() const override { return this->First()->GetTile(); }

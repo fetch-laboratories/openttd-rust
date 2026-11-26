@@ -42,6 +42,7 @@
 #include "../station_base.h"
 #include "vehicle_maintenance_ffi.h"
 #include "clock_ffi.h"
+#include "disaster_ffi.h"
 #include "aircraft_ffi.h"
 #include "road_ffi.h"
 #include "ship_control_ffi.h"
@@ -182,20 +183,15 @@ const OpenTTDVehicleServices &GetRustVehicleServices() noexcept
 }
 
 
-/* Existing virtual facades own the original controller timing scopes. The
- * timing destructor completes before this callback returns to Rust assertions;
- * Rust then reads the survivor's type and First() from its records. */
-static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell) noexcept { return VehicleOf(shell)->Tick(); }
-
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept
 {
 	static const OpenTTDVehicleSchedulerServices services{
 		.aircraft = &GetRustAircraftLeaves(),
+		.disaster = &DisasterServices(),
 		.pool = &_vehicle_pool.descriptor,
 		.road = &GetRustRoadLeaves(),
 		.shared = &GetRustSharedServices(),
 		.ship = &GetRustShipServices(),
-		.tick = VehicleSchedulerTick,
 		.train = &GetTrainServices(),
 		.vehicle = &_rust_vehicle_services,
 	};
