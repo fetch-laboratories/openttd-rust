@@ -8,6 +8,9 @@
 #include "rust/news_ffi.h"
 #include "rust/settings_table_ffi.h"
 #include "core/backup_type.hpp"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
+#include "abi-record-setting_addresses.h"
 
 struct DisasterProbe {
 	OpenTTDVehicle record{};

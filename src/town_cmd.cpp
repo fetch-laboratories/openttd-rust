@@ -42,6 +42,7 @@
 #include "core/pool_func.hpp"
 #include "town.h"
 #include "rust/command_services.h"
+#include "rust/shared_services_table.h"
 #include "rust/road_command_services.h"
 #include "rust/services_road.h"
 #include "rust/company_services.h"

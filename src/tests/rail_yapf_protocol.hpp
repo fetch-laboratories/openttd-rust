@@ -12,6 +12,7 @@
 #include "../rust/pbs_ffi.h"
 #include "abi-record-ground.h"
 #include "abi-record-settings.h"
+#include "abi-record-setting_addresses.h"
 #include "../track_type.h"
 #include "../track_func.h"
 #include "../rail_map.h"

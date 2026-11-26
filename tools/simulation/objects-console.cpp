@@ -21,6 +21,7 @@ void ObjectProbeIncreaseProgress(GenWorldProgress);
 using HiddenObjectArea = OpenTTDObjectHiddenArea;
 static HiddenObjectArea HideObjectForTunnel(TileIndex t) { return openttd_rust_object_tunnel_hide(t.base(), Map::LogX()); }
 static void RestoreObjectFirstTile(HiddenObjectArea h) { openttd_rust_object_restore_first(h); }
+static bool IsObjectIndirectlyCleared(TileIndex t) { return openttd_rust_object_indirectly_cleared(t.base(), Map::LogX()); }
 /* A top-level command lifecycle around no procedure: it clears the cleared-object areas. */
 static void ResetScratch()
 {

@@ -10,6 +10,7 @@ struct ResolverObject;
 struct ScopeResolver;
 struct TownScopeResolver;
 struct Town;
+struct OpenTTDTownHandle;
 struct GRFFile;
 struct Livery;
 enum class HouseZone : uint8_t;

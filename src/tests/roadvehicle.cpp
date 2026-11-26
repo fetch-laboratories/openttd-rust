@@ -18,6 +18,8 @@
 #include "abi_layout.hpp"
 #include "fixture_map.hpp"
 #include "../rust/service_table_check.hpp"
+#include "../rust/shared_services_table.h"
+#include "abi-record-setting_addresses.h"
 #include "abi-visit-OpenTTDVehicleResolverServices.hpp"
 #include "../safeguards.h"
 

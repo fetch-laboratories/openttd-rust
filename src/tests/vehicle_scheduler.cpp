@@ -23,6 +23,7 @@
 #include "../rust/company_adapter.h"
 #include "../rust/company_identity_ffi.h"
 #include "../rust/session_ffi.h"
+#include "../rust/vehicle_services_table.h"
 #include "../safeguards.h"
 
 TEST_CASE("Base vehicle scheduler - consumed boundary layouts")

@@ -9,6 +9,9 @@
 #include "rust/settings_table_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/water_regions_ffi.h"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
+#include "abi-record-setting_addresses.h"
 
 /* Saves cannot observe NOSAVE rotation coordinates. Compare their full bit domain
  * with native C++ narrowing, and exercise real nested owner mutation in a callback. */

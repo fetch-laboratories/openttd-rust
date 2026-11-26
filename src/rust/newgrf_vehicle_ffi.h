@@ -9,6 +9,7 @@ struct OpenTTDEngineCapabilitiesServices;
 struct Vehicle;
 struct NewGRFCache;
 struct ResolverObject;
+struct OpenTTDEngine;
 struct SpriteGroup;
 struct RealSpriteGroup;
 struct GRFFile;

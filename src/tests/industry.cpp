@@ -23,6 +23,7 @@
 #include "../newgrf.h"
 #include "../newgrf_spritegroup.h"
 #include "../rust/newgrf_global_ffi.h"
+#include "../rust/shared_services_table.h"
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"

@@ -16,6 +16,7 @@
 #include "rail_command_ffi.h"
 #include "train_ffi.h"
 #include "ground_ffi.h"
+enum RailType : uint8_t;
 #include "town_ffi.h"
 #include "byte_span_ffi.h"
 #include "vehicle_ffi.h"

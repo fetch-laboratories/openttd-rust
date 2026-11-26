@@ -16,6 +16,8 @@
 #include "../landscape.h"
 #include "../core/random_func.hpp"
 #include "../rust/vehicle_services.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/vehicle_services_table.h"
 #include "mock_environment.h"
 #include "../../tools/simulation/session-fixture.hpp"
 #include "effect_protocol.hpp"

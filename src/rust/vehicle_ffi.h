@@ -12,9 +12,7 @@
 #include <cstdint>
 #include <cstddef>
 enum VehicleType : uint8_t;
-enum VehicleSoundEvent : uint8_t;
 enum Direction : uint8_t;
-enum class GRFBug : uint8_t;
 #include "call_ffi.h"
 #include "pool_ffi.h"
 /** Typed vehicle handles identify shared records; legacy void* contexts identify
@@ -23,99 +21,27 @@ enum class GRFBug : uint8_t;
 struct OpenTTDTrainState;
 struct OpenTTDVehicle;
 struct OpenTTDTrainHandle { OpenTTDVehicle *record; OpenTTDTrainState *owner; };
-struct OpenTTDOrdersLeaves;
 struct OpenTTDVehicleOnTile { uint32_t tile; OpenTTDVehicle *current; };
 struct OpenTTDVehicleNear {
 	int32_t left, top, right, bottom;
 	uint32_t hxmin, hxmax, hymin, hymax, hx, hy;
 	OpenTTDVehicle *current_veh;
 };
-struct OpenTTDEngine;
-struct OpenTTDVehicleMaintenanceServices;
-struct OpenTTDVehicleResolverServices;
-struct OpenTTDVehicleVisits;
-struct OpenTTDVehicleServices {
-	void (OPENTTD_RUST_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
-	bool (*can_allocate)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	void (OPENTTD_RUST_CALL *destroy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
-	const OpenTTDEngine *(OPENTTD_RUST_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	uint32_t (*first_sprite)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_sprite);
-	void (OPENTTD_RUST_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
-	const OpenTTDVehicleMaintenanceServices *maintenance;
-	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
-	const OpenTTDOrdersLeaves *(*orders)() noexcept OPENTTD_SERVICE_DEFAULT(orders);
-	void (OPENTTD_RUST_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
-	void (*play_leave_station_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(play_leave_station_sound);
-	void (OPENTTD_RUST_CALL *play_sound)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
-	bool (OPENTTD_RUST_CALL *play_vehicle_sound)(OpenTTDVehicle *, VehicleSoundEvent) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);
-	int64_t (OPENTTD_RUST_CALL *profit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit);
-	int64_t (OPENTTD_RUST_CALL *profit_last_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_last_year);
-	OpenTTDVehicle *(*record_from_shell)(void *) noexcept OPENTTD_SERVICE_DEFAULT(record_from_shell);
-	void (*set_cargo_subtype)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_subtype);
-	void (*set_cargo_type)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_type);
-	void (*set_colourmap)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_colourmap);
-	void (*set_max_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_max_age);
-	void (*show_newgrf_vehicle_error)(uint16_t, uint32_t, uint32_t, GRFBug, bool) noexcept OPENTTD_SERVICE_DEFAULT(show_newgrf_vehicle_error);
-	void (OPENTTD_RUST_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);
-	void (*update_delta)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
-	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
-	void (OPENTTD_RUST_CALL *write_breakdowns)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_breakdowns);
-	void (OPENTTD_RUST_CALL *write_calendar_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_calendar_service);
-	void (OPENTTD_RUST_CALL *write_economy_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_economy_service);
-	void (OPENTTD_RUST_CALL *write_first_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_sprite);
-	void (OPENTTD_RUST_CALL *write_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(write_profit);
-	void (OPENTTD_RUST_CALL *write_reliability)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_reliability);
-	void (OPENTTD_RUST_CALL *write_sprite_seq)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_sprite_seq);
-	void (OPENTTD_RUST_CALL *write_spritenum)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_spritenum);
-};
-struct OpenTTDGroundPhysicsServices;
-struct OpenTTDGroundServices {
-	const OpenTTDGroundPhysicsServices *physics;
-};
+/* The vehicle tables C++ fills for Rust are defined in vehicle_services_table.h and
+ * vehicle_scheduler_table.h, which only the C++ that fills or calls them includes. */
+struct OpenTTDVehicleServices;
+struct OpenTTDGroundServices;
+struct OpenTTDVehicleSchedulerServices;
+struct OpenTTDVehicleSchedulerTables;
 extern const OpenTTDVehicleServices _rust_vehicle_services;
+/** The one immutable process-wide GroundVehicle table, for road vehicles. */
+extern const OpenTTDGroundServices _rust_ground_services;
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;
 
-struct Vehicle;
-struct OpenTTDCargoStorageServices;
-struct OpenTTDSharedServices;
-struct OpenTTDStationServices;
-struct OpenTTDStationLoading;
-struct OpenTTDFleetPendingServices;
-struct OpenTTDFleetTransactionServices;
-struct OpenTTDFleetGroupServices;
-struct OpenTTDAircraftLeaves;
-struct OpenTTDDisasterServices;
-struct OpenTTDRoadCommandSlot;
-struct OpenTTDRoadLeaves;
-struct OpenTTDShipLeaves;
-struct OpenTTDTrainServices;
-struct OpenTTDVehicleSchedulerServices {
-	const OpenTTDAircraftLeaves *aircraft; ///< Aircraft controller table, immutable for the process.
-	const OpenTTDDisasterServices *disaster; ///< Disaster vehicle table, immutable for the process.
-	const RustPoolDescriptor *const *pool; ///< The vehicle pool's descriptor.
-	const OpenTTDRoadLeaves *road; ///< Road vehicle controller table, immutable for the process.
-	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.
-	const OpenTTDShipLeaves *ship; ///< Ship controller table, immutable for the process.
-	const OpenTTDTrainServices *train; ///< Train controller table, immutable for the process.
-	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
-};
-struct OpenTTDCommandCost;
-struct OpenTTDVehicleSchedulerTables {
-	const OpenTTDCargoStorageServices *cargo;
-	const OpenTTDFleetGroupServices *group;
-	const OpenTTDStationLoading *loading;
-	const OpenTTDFleetPendingServices *pending;
-	OpenTTDCommandCost *refit_cost;
-	OpenTTDCommandCost *refit_temporary;
-	OpenTTDRoadCommandSlot *road_slot; ///< The session frame's road command slot for the vehicle tick; null on calendar day.
-	const OpenTTDVehicleSchedulerServices *scheduler;
-	const OpenTTDStationServices *station;
-	const OpenTTDFleetTransactionServices *transaction;
-	const OpenTTDVehicleVisits *visits;
-};
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept;
 struct OpenTTDCommandServices;
 struct OpenTTDCommandCost;
+struct OpenTTDSharedServices;
 extern "C" {
 void openttd_rust_occupancy_ground(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint32_t);
 void openttd_rust_occupancy_wormhole(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint32_t, uint32_t, const OpenTTDVehicle *);

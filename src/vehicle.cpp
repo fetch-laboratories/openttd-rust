@@ -611,6 +611,7 @@ Vehicle::~Vehicle()
 
 
 #include "rust/vehicle_ffi.h"
+#include "rust/vehicle_scheduler_table.h"
 #include "rust/station_service_ffi.h"
 #include "rust/vehicle_refit_ffi.h"
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit_cost, OpenTTDCommandCost *temporary, OpenTTDRoadCommandSlot *road_slot) noexcept

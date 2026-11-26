@@ -36,6 +36,8 @@
 #include "abi_layout.hpp"
 #include "../rust/station_queue_save.hpp"
 #include "../rust/services_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/vehicle_services_table.h"
 #include "station_spatial_fixture.hpp"
 #include "../core/kdtree.hpp"
 extern "C" void openttd_test_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);

@@ -16,6 +16,7 @@
 #include "../rust/roadstop_resolver_ffi.h"
 #include "../rust/tile_owner_ffi.h"
 #include "../rust/abi_ffi.h"
+#include "../rust/shared_services_table.h"
 #include <array>
 #include <type_traits>
 

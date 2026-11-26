@@ -197,19 +197,6 @@ inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return Ve
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
 
-/** One immutable process-wide GroundVehicle table per vehicle type. */
-template <class T>
-inline const OpenTTDGroundServices _rust_ground_services{
-	.physics = &GetRustGroundPhysicsServices(),
-};
-
-template <class T>
-const OpenTTDGroundServices &GetRustGroundServices() noexcept
-{
-	return _rust_ground_services<T>;
-}
-
-
 inline void RustVehicleDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
 
 template <typename Handle>

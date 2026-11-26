@@ -8,6 +8,7 @@
 #include "command_cost_services.h"
 #include "vehicle_refit_ffi.h"
 #include "services_ffi.h"
+#include "shared_services_table.h"
 #include "company_services.h"
 #include "engine_services.h"
 #include "services_assert.h"

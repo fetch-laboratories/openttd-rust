@@ -17,6 +17,8 @@
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/newgrf_vehicle_ffi.h"
 #include "rust/news_ffi.h"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 
 static constexpr uint32_t INVALID_TILE = UINT32_MAX;
 static constexpr uint8_t ENDTAKEOFF = 12, HELIENDLANDING = 18;

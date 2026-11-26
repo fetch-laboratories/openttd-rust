@@ -8,7 +8,7 @@
 struct OpenTTDSharedServices;
 struct AirportSpec; struct AirportTileSpec;
 enum VehicleType : uint8_t;
-struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct RoadStop;
+struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct OpenTTDVehicle; struct RoadStop;
 struct OpenTTDAirportResolverState {
 	Station *station; const AirportSpec *spec; const AirportTileSpec *tile_spec;
 	uint32_t tile; uint8_t layout; TownScopeResolver *town;

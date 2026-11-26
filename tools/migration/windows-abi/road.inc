@@ -19,6 +19,9 @@
 #include "rust/airport_resolver_ffi.h"
 
 #include "vehicle_tables.inc"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
+#include "abi-record-setting_addresses.h"
 
 static OpenTTDVehicle road_abi_vehicle{};
 struct RoadAbiProbe {

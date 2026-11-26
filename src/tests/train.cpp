@@ -4,6 +4,8 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../rust/train_ffi.h"
 #include "../rust/ground_vehicle_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "abi-record-setting_addresses.h"
 #include "abi-record-ground.h"
 #include "../rust/pbs_ffi.h"
 #include "../rust/train_reservation_ffi.h"

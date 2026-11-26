@@ -14,6 +14,7 @@
 #include "../roadveh.h"
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
+#include "../rust/shared_services_table.h"
 #include "../tile_type.h"
 #include "../landscape.h"
 #include "../order_type.h"

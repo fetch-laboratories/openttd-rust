@@ -17,6 +17,8 @@
 #include "../bridge_type.h"
 #include "orders_ffi.h"
 enum class WaterTileType : uint8_t;
+enum RoadTramType : bool;
+enum TransportType : uint8_t;
 struct OpenTTDIndustryTileServices;
 struct OpenTTDObjectServices;
 struct OpenTTDTownLeaves;

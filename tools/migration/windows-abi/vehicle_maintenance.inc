@@ -5,6 +5,8 @@
 #include "rust/company_identity_ffi.h"
 #include "rust/window_ffi.h"
 #include "window_type.h"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 
 
 /* The member slots' calls: one value store and one details dirty, and the renew setting's

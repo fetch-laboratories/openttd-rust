@@ -39,6 +39,7 @@
 - Use an action protocol to return control to C++ only where an exception can unwind through the call in ordinary play (script VMs, save/load errors). Reentry alone is not a reason: end every Rust borrow before the callback, then call directly.
 - Entries are synchronous calls, without async, futures, tasks or mailboxes, and allocate nothing per call.
 - Give each service its own typed `noexcept` function with real types on both sides. Use designated initializers for service tables.
+- A table of C++ functions or addresses that Rust reads lives in a `src/rust/*_table.h` header, or a generated record group of its own, that only the C++ that fills or calls it includes; `tools/table-headers.py` refuses one that a core header reaches. A pass that adds a table puts it in such a header, and a wide header keeps only a forward declaration of it.
 - Access map and shared-layout record fields by field-sized raw load or store at the original observation point. For a record still stored in C++, resolve its owner once per entry and use its shared typed field accessors.
 - Internal signatures use the original's wrapper types. FFI exports, `repr(C)` records, service tables and generated declarations pass C++ class types such as `PoolID` and `StrongType` as their base integers, because MSVC returns class types through a hidden pointer.
 - A Rust-defined `extern "C"` function or callback returns a 0-or-1 `u8`, not `bool`, and C++ compares it `!= 0`.

@@ -1,4 +1,6 @@
 #pragma once
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 #include "rust/window_ffi.h"
 #include "window_type.h"
 /* Complete typed tables exercise road cdecl calls without importing game globals.

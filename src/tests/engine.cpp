@@ -26,6 +26,8 @@
 #include "../road.h"
 #include "../core/backup_type.hpp"
 #include "../rust/newgrf_translation_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/vehicle_services_table.h"
 #include "../timer/timer_game_tick.h"
 #include "abi_layout.hpp"
 #include "../3rdparty/catch2/catch.hpp"
