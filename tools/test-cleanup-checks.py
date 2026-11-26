@@ -1374,7 +1374,6 @@ class CarryTests(unittest.TestCase):
                 ),
                 original.replace("pub fn", "pub unsafe fn"),
                 original.replace("pub fn", "fn"),
-                original.replace("pub fn", "/// changed contract\npub fn"),
             ):
                 (root / "rust/x.rs").write_text(changed)
                 predicate = partial(POLICY.unchanged_scope, site)
@@ -1385,6 +1384,18 @@ class CarryTests(unittest.TestCase):
                     self.assertFalse(
                         reviewed(proposal, [comment], "/impl", "new-head", predicate)
                     )
+            # A comment is not the item's code: a reworded contract keeps it.
+            (root / "rust/x.rs").write_text(
+                original.replace("pub fn", "/// changed contract\npub fn")
+            )
+            with (
+                patch.object(POLICY, "ROOT", root),
+                patch.object(POLICY, "git", partial(git, cwd=root)),
+            ):
+                predicate = partial(POLICY.unchanged_scope, site)
+                self.assertTrue(
+                    reviewed(proposal, [comment], "/impl", "new-head", predicate)
+                )
 
     def test_suppression_carry_and_fidelity_reasons(self) -> None:
         old = "rust/a.rs | impl Flag > const ReplaceProtection | allow non_upper_case_globals"
@@ -1488,6 +1499,29 @@ class CarryTests(unittest.TestCase):
         for rule, kept in (("non_upper_case_globals", True), ("unsafe_code", False)):
             with self.subTest(rule=rule):
                 self.check_item_binding(rule, kept)
+
+    def test_unsafe_code_acceptance_survives_a_comment_only_change(self) -> None:
+        """A reworded contract keeps the acceptance; a changed operation voids it."""
+        body = (
+            "/// Reads a live record.\n///\n/// # Safety\n/// `p` names a live record.\n"
+            "#[allow(unsafe_code)]\npub unsafe fn read(p: *const u8) -> u8 {\n"
+            "    // SAFETY: the caller's live record.\n    unsafe { *p }\n}\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"rust/x.rs": body})
+            accepted = git("rev-parse", "HEAD", cwd=root).strip()
+            (root / "rust/x.rs").write_text(
+                body.replace("names a live record.", "names a record the game keeps live,\n/// as the original's callers do.")
+                .replace("the caller's live record.", "the module contract.")
+            )
+            reworded = commit(root)
+            (root / "rust/x.rs").write_text(body.replace("unsafe { *p }", "unsafe { *p.add(1) }"))
+            changed = commit(root)
+            site = "rust/x.rs | fn read | allow unsafe_code"
+            with patch.object(POLICY, "git", partial(git, cwd=root)):
+                self.assertTrue(POLICY.unchanged_scope(site, accepted, reworded))
+                self.assertFalse(POLICY.unchanged_scope(site, accepted, changed))
 
     def check_item_binding(self, rule: str, kept_when_item_changes: bool) -> None:
         with tempfile.TemporaryDirectory() as directory:

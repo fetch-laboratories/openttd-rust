@@ -323,7 +323,7 @@ def scope_text(path: str, text: str, scope: str) -> str | None:
 
 
 def unchanged_scope(site: str, revision: str, current: str | None = None) -> bool:
-    """Whether the site's item text at `revision` equals `current`'s.
+    """Whether the site's item code at `revision` equals `current`'s, comments aside.
 
     `current` is a commit, or None for the working tree.
     """
@@ -337,11 +337,20 @@ def unchanged_scope(site: str, revision: str, current: str | None = None) -> boo
     except subprocess.CalledProcessError:
         return False
     before = scope_text(path, old, scope)
+    after = scope_text(path, new, scope) if new is not None else None
     return (
         before is not None
-        and new is not None
-        and before == scope_text(path, new, scope)
+        and after is not None
+        and item_code(path, before) == item_code(path, after)
     )
+
+
+def item_code(path: str, text: str) -> str:
+    """An item's tokens without its comments: a reworded `SAFETY` line or
+    `# Safety` section leaves the accepted body's argument where it was."""
+    code = without_comments(text, path)  # keeps doc comments, which lex as strings
+    code = re.sub(r"(?m)^\s*//[/!].*$", "", code)
+    return " ".join(code.split())
 
 
 def suppression_state(
@@ -352,7 +361,7 @@ def suppression_state(
 ) -> str:
     """Review state of a Rust item operation; never a module or lint group.
 
-    An `unsafe_code` acceptance holds only while the item's text is unchanged.
+    An `unsafe_code` acceptance holds only while the item's code is unchanged.
     """
     if not item_scoped(site):
         return MISSING
