@@ -1542,6 +1542,18 @@
     "tool": "rust"
   },
   {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "orders::previous_shared_of",
+    "reason": "Plan #1060 decisions 1 and 2: field-sized reads and writes of the live native order, list, consist and vehicle records, or calls of the C++ leaf slots, under the module's lifetime contract, scoped to the item instead of the module.",
+    "retirement_condition": "Retires when the order pools and their owners move to Rust and the records are reached without raw places.",
+    "retiring_owner": "#906",
+    "site": "rust/openttd-kernels/src/orders.rs | fn previous_shared_of | allow unsafe_code",
+    "source_contract": "`v->PreviousShared()` (src/order_cmd.cpp, src/timetable_cmd.cpp, src/order_backup.cpp, src/vehicle.cpp)",
+    "tool": "rust"
+  },
+  {
     "added": {
       "src/tests/orders.cpp": 23
     },

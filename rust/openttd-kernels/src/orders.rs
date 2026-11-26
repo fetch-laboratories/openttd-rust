@@ -1920,6 +1920,31 @@ pub(crate) fn order_list(v: VehicleRef, s: &Leaves) -> Option<OrderListRef> {
     (!shell.is_null()).then(|| OrderListRef::of(shell, s))
 }
 
+/// `v->orders`, dereferenced unchecked where the original reads it without a test.
+fn list_of(v: VehicleRef, s: &Leaves) -> OrderListRef {
+    OrderListRef::of(crate::vehicle_base::order_list(v.0.as_ptr()), s)
+}
+
+/// `v->GetOrder(index)`, dereferenced unchecked where the original reads the order without a
+/// test: the stored order `index` of the vehicle's list.
+fn order_at(v: VehicleRef, index: VehicleOrderID, s: &Leaves) -> OrderRef {
+    list_of(v, s).order(usize::from(index.0))
+}
+
+/// `v->FirstShared()`, dereferenced unchecked where the original reads it without a test.
+fn first_shared_of(v: VehicleRef, s: &Leaves) -> VehicleRef {
+    match order_list(v, s) {
+        None => v.first(),
+        Some(list) => record(list.first_shared_shell(), s),
+    }
+}
+
+/// `v->PreviousShared()`, dereferenced unchecked where the original reads it without a test.
+#[allow(unsafe_code)]
+fn previous_shared_of(v: VehicleRef, s: &Leaves) -> VehicleRef {
+    record(read_field!(vehicle_orders(v), previous_shared), s)
+}
+
 /// `v->orders = list`.
 #[allow(unsafe_code)]
 fn set_order_list(v: VehicleRef, list: Option<OrderListRef>) {
@@ -2030,8 +2055,7 @@ fn skip_to_next_real_order_index(v: VehicleRef, s: &Leaves) {
             if c.cur_real_order_index() >= get_num_orders(v, s) {
                 c.set_cur_real_order_index(VehicleOrderID(0));
             }
-            if !get_order(v, c.cur_real_order_index(), s)
-                .unwrap()
+            if !order_at(v, c.cur_real_order_index(), s)
                 .view()
                 .is_type(OrderType::OT_IMPLICIT)
             {
@@ -2066,8 +2090,7 @@ pub(crate) fn increment_implicit_order_index(v: VehicleRef, s: &Leaves) {
             c.set_cur_implicit_order_index(VehicleOrderID(0));
         }
         if c.cur_implicit_order_index() == c.cur_real_order_index()
-            || get_order(v, c.cur_implicit_order_index(), s)
-                .unwrap()
+            || order_at(v, c.cur_implicit_order_index(), s)
                 .view()
                 .is_type(OrderType::OT_IMPLICIT)
         {
@@ -2110,8 +2133,7 @@ pub(crate) fn update_real_order_index(v: VehicleRef, s: &Leaves) {
     if let Some(list) = list.filter(|list| list.get_num_manual_orders().0 > 0) {
         /* Advance to next real order */
         while list
-            .get_order_at(c.cur_real_order_index())
-            .unwrap()
+            .order(usize::from(c.cur_real_order_index().0))
             .view()
             .is_type(OrderType::OT_IMPLICIT)
         {
@@ -2339,7 +2361,7 @@ pub(crate) fn add_to_shared(v: VehicleRef, shared_chain: VehicleRef, s: &Leaves)
         write_field!(vehicle_orders(next), previous_shared, v.shell());
     }
 
-    order_list(shared_chain, s).unwrap().add_vehicle();
+    list_of(shared_chain, s).add_vehicle();
 }
 
 /// `Vehicle::RemoveFromShared`: removes the vehicle from the shared order list.
@@ -2357,16 +2379,16 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
         list_type: VehicleListType::VL_SHARED_ORDERS,
         vtype: v.vehicle_type(),
         company: v.owner(),
-        index: first_shared(v, s).unwrap().index(s.newgrf()).0,
+        index: first_shared_of(v, s).index(s.newgrf()).0,
     };
 
-    let list = order_list(v, s).unwrap();
+    let list = list_of(v, s);
     list.remove_vehicle(v);
 
     if !were_first {
         /* We are not the first shared one, so only relink our previous one. */
         write_field!(
-            vehicle_orders(previous_shared(v, s).unwrap()),
+            vehicle_orders(previous_shared_of(v, s)),
             next_shared,
             read_field!(orders, next_shared)
         );
@@ -2389,7 +2411,7 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
             0,
         );
         invalidate_vehicle_order(
-            first_shared(v, s).unwrap(),
+            first_shared_of(v, s),
             VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0,
             s,
         );
@@ -2400,7 +2422,7 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
         invalidate_window_data(
             get_window_class_for_vehicle_type(v.vehicle_type()),
             vli.to_window_number(),
-            (first_shared(v, s).unwrap().index(s.newgrf()).0 | (1u32 << 31)) as i32,
+            (first_shared_of(v, s).index(s.newgrf()).0 | (1u32 << 31)) as i32,
             false,
         );
     }
@@ -2426,8 +2448,7 @@ pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
 
     // `this->Orders()`: the span holds the list's storage, which DeleteOrder's erasure keeps
     // in place, so its slots stay live, including the retained former last order.
-    let span = orders(v, s);
-    let order = |cur: VehicleOrderID| span.unwrap().order(usize::from(cur.0)).view();
+    let order = |cur: VehicleOrderID| list_of(v, s).order(usize::from(cur.0)).view();
     let mut cur = c.cur_implicit_order_index();
     while cur != VehicleOrderID::INVALID_VEH_ORDER_ID {
         if c.cur_implicit_order_index() == c.cur_real_order_index() {
@@ -2438,7 +2459,7 @@ pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
             delete_order(v, c.cur_implicit_order_index(), s);
             /* DeleteOrder does various magic with order_indices, so resync 'order' with 'cur_implicit_order_index' */
         } else {
-            let list = order_list(v, s).unwrap();
+            let list = list_of(v, s);
             /* Skip non-implicit orders, e.g. service-orders */
             if cur < list.get_next(cur) {
                 c.set_cur_implicit_order_index(VehicleOrderID(
@@ -2533,7 +2554,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                         break;
                     }
                     target_index = target_index.wrapping_add(1);
-                    if target_index >= i32::from(order_list(v, s).unwrap().get_num_orders().0) {
+                    if target_index >= i32::from(list_of(v, s).get_num_orders().0) {
                         if get_num_manual_orders(v, s).0 == 0
                             && u32::from(get_num_orders(v, s).0) < IMPLICIT_ORDER_ONLY_CAP
                         {
@@ -2554,9 +2575,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                         invalidate_vehicle_order(v, 0, s);
                     } else {
                         /* Delete all implicit orders up to the station we just reached */
-                        let mut order = get_order(v, c.cur_implicit_order_index(), s)
-                            .unwrap()
-                            .view();
+                        let mut order = order_at(v, c.cur_implicit_order_index(), s).view();
                         while !order.is_type(OrderType::OT_IMPLICIT)
                             || order.destination().to_station_id() != v.last_station_visited()
                         {
@@ -2575,9 +2594,10 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Leaves) {
                                 next.view()
                             } else {
                                 c.set_cur_implicit_order_index(VehicleOrderID(0));
-                                let first = get_order(v, c.cur_implicit_order_index(), s);
-                                assert_with(|| first.is_some());
-                                first.unwrap().view()
+                                assert_with(|| {
+                                    get_order(v, c.cur_implicit_order_index(), s).is_some()
+                                });
+                                order_at(v, c.cur_implicit_order_index(), s).view()
                             };
                         }
                     }
@@ -2700,7 +2720,7 @@ pub(crate) fn get_order_distance(
     s: &Leaves,
 ) -> u32 {
     assert_with(|| order_list(v, s).is_some());
-    let orderlist = order_list(v, s).unwrap();
+    let orderlist = list_of(v, s);
     // `orderlist.GetOrders()` indexes the full stored span, not `GetOrderAt`'s narrowed count.
     let orders = |index: VehicleOrderID| orderlist.order(usize::from(index.0)).view();
 
@@ -2763,7 +2783,7 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
     }
 
     let mut u = first_shared(v, s);
-    delete_order_warnings(u.unwrap(), s);
+    delete_order_warnings(first_shared_of(v, s), s);
     while let Some(shared) = u {
         assert_with(|| {
             crate::vehicle_base::order_list(v.0.as_ptr())
@@ -2877,10 +2897,10 @@ fn cancel_loading_due_to_deleted_order(v: VehicleRef) {
     reason = "the original's conversions"
 )]
 pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
-    order_list(v, s).unwrap().delete_order_at(sel_ord);
+    list_of(v, s).delete_order_at(sel_ord);
 
     let mut u = first_shared(v, s);
-    delete_order_warnings(u.unwrap(), s);
+    delete_order_warnings(first_shared_of(v, s), s);
     while let Some(shared) = u {
         assert_with(|| {
             crate::vehicle_base::order_list(v.0.as_ptr())
@@ -2912,8 +2932,7 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
 
             /* Skip non-implicit orders for the implicit-order-index (e.g. if the current implicit order was deleted */
             while c.cur_implicit_order_index() != c.cur_real_order_index()
-                && !get_order(shared, c.cur_implicit_order_index(), s)
-                    .unwrap()
+                && !order_at(shared, c.cur_implicit_order_index(), s)
                     .view()
                     .is_type(OrderType::OT_IMPLICIT)
             {
@@ -3015,7 +3034,7 @@ fn check_aircraft_order_distance(v_new: VehicleRef, v_order: VehicleRef, s: &Lea
         return true;
     }
 
-    let orderlist = order_list(v_order, s).unwrap();
+    let orderlist = list_of(v_order, s);
 
     /* Iterate over all orders to check the distance between all
      * 'goto' orders and their respective next order (of any type). */
@@ -3107,7 +3126,7 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
 
         /* Check if the last and the first order are the same */
         if get_num_orders(v, s).0 > 1 {
-            let list = orders(v, s).unwrap();
+            let list = list_of(v, s);
 
             if list
                 .order(0)
@@ -3192,7 +3211,7 @@ pub(crate) fn remove_order_from_all_vehicles(
             let id = next_id;
             next_id = VehicleOrderID(id.0.wrapping_add(1));
             let list = order_list(v, s).unwrap_or(list);
-            let order = list.get_order_at(id).unwrap();
+            let order = list.order(usize::from(id.0));
             let mut ot = order.view().kind();
             if ot == OrderType::OT_GOTO_DEPOT
                 && order
@@ -3495,8 +3514,7 @@ pub(crate) fn update_order_dest(
                 update_real_order_index(v, s);
                 con.set_current_order_time(
                     con.current_order_time().wrapping_add(i32::from(
-                        get_order(v, con.cur_real_order_index(), s)
-                            .unwrap()
+                        order_at(v, con.cur_real_order_index(), s)
                             .view()
                             .timetabled_travel(),
                     )),
@@ -4243,13 +4261,13 @@ pub(crate) fn cmd_move_order(
     }
 
     if flags.test(DoCommandFlag::Execute) {
-        let list = order_list(v, s).unwrap();
+        let list = list_of(v, s);
         list.move_order(moving_order, target_order);
 
         /* Update shared list */
         let mut u = first_shared(v, s);
 
-        delete_order_warnings(u.unwrap(), s);
+        delete_order_warnings(first_shared_of(v, s), s);
 
         let remap = |index: VehicleOrderID| {
             if index == moving_order {
@@ -4371,9 +4389,8 @@ pub(crate) fn cmd_modify_order(
         return crate::command_func::cmd_error(cost);
     }
 
-    let order = get_order(v, sel_ord, s);
-    assert_with(|| order.is_some());
-    let order = order.unwrap();
+    assert_with(|| get_order(v, sel_ord, s).is_some());
+    let order = order_at(v, sel_ord, s);
     match order.view().kind() {
         OrderType::OT_GOTO_STATION => {
             if mof != ModifyOrderFlags::MOF_NON_STOP
@@ -4737,7 +4754,7 @@ pub(crate) fn cmd_modify_order(
 
         /* Update the windows and full load flags, also for vehicles that share the same order list */
         let mut u = first_shared(v, s);
-        delete_order_warnings(u.unwrap(), s);
+        delete_order_warnings(first_shared_of(v, s), s);
         while let Some(shared) = u {
             /* Toggle u->current_order "Full load" flag if it changed.
              * However, as the same flag is used for depot orders, check
@@ -5157,9 +5174,8 @@ fn change_timetable(
     timetabled: bool,
     s: &Leaves,
 ) {
-    let order = get_order(v, order_number, s);
-    assert_with(|| order.is_some());
-    let order = order.unwrap();
+    assert_with(|| get_order(v, order_number, s).is_some());
+    let order = order_at(v, order_number, s);
     let mut total_delta = 0i32;
     let mut timetable_delta = 0i32;
 
@@ -5186,7 +5202,7 @@ fn change_timetable(
 
         _ => not_reached(),
     }
-    let list = order_list(v, s).unwrap();
+    let list = list_of(v, s);
     list.update_total_duration(total_delta);
     list.update_timetable_duration(timetable_delta);
 
@@ -5618,7 +5634,7 @@ pub(crate) fn cmd_set_timetable_start(
         return;
     }
 
-    let list = order_list(v, s).unwrap();
+    let list = list_of(v, s);
     let total_duration = list.get_timetable_total_duration();
 
     let date = crate::timer_game_common::economy_date().0;
@@ -5817,9 +5833,8 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
     if c.cur_real_order_index() >= get_num_orders(v, s) {
         return;
     }
-    let real_current_order = get_order(v, c.cur_real_order_index(), s);
-    assert_with(|| real_current_order.is_some());
-    let real_current_order = real_current_order.unwrap();
+    assert_with(|| get_order(v, c.cur_real_order_index(), s).is_some());
+    let real_current_order = order_at(v, c.cur_real_order_index(), s);
 
     let mut first_manual_order = VehicleOrderID(0);
     if let Some(list) = orders(v, s) {
@@ -5956,7 +5971,7 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
      * length of a full cycle till lateness is less than the length of a timetable
      * cycle. When the timetable isn't fully filled the cycle will be Ticks::INVALID_TICKS. */
     if c.lateness_counter() > timetabled {
-        let cycle = order_list(v, s).unwrap().get_timetable_total_duration();
+        let cycle = list_of(v, s).get_timetable_total_duration();
         if cycle != INVALID_TICKS && c.lateness_counter() > cycle {
             c.set_lateness_counter(c.lateness_counter() % cycle);
         }
