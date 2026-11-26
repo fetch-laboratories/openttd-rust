@@ -1935,6 +1935,12 @@ fn order_in(list: Option<OrderListRef>, index: VehicleOrderID) -> Option<OrderRe
     list?.get_order_at(index)
 }
 
+/// `GetFirstOrder()` of a vehicle whose resolved list is `list`.
+fn first_order_in(list: Option<OrderListRef>) -> Option<OrderRef> {
+    let list = list?;
+    list.get_order_at(list.get_first_order())
+}
+
 /// `GetLastOrder()` of a vehicle whose resolved list is `list`.
 fn last_order_in(list: Option<OrderListRef>) -> Option<OrderRef> {
     let list = list?;
@@ -1958,20 +1964,6 @@ fn deref_list(list: Option<OrderListRef>, v: VehicleRef, s: &Leaves) -> OrderLis
 /// `v->orders`, dereferenced unchecked where the original reads it without a test.
 fn list_of(v: VehicleRef, s: &Leaves) -> OrderListRef {
     OrderListRef::of(crate::vehicle_base::order_list(v.0.as_ptr()), s)
-}
-
-/// `v->GetOrder(index)`, dereferenced unchecked where the original reads the order without a
-/// test: the stored order `index` of the vehicle's list.
-fn order_at(v: VehicleRef, index: VehicleOrderID, s: &Leaves) -> OrderRef {
-    list_of(v, s).order(usize::from(index.0))
-}
-
-/// `v->FirstShared()`, dereferenced unchecked where the original reads it without a test.
-fn first_shared_of(v: VehicleRef, s: &Leaves) -> VehicleRef {
-    match order_list(v, s) {
-        None => v.first(),
-        Some(list) => record(list.first_shared_shell(), s),
-    }
 }
 
 /// `v->PreviousShared()`, dereferenced unchecked where the original reads it without a test.
@@ -2007,37 +1999,14 @@ pub(crate) fn first_shared(v: VehicleRef, s: &Leaves) -> Option<VehicleRef> {
     first_shared_in(order_list(v, s), v, s)
 }
 
-/// `Vehicle::IsOrderListShared`: check if we share our orders with another vehicle.
-pub(crate) fn is_order_list_shared(v: VehicleRef, s: &Leaves) -> bool {
-    order_list(v, s).is_some_and(OrderListRef::is_shared)
-}
-
 /// `Vehicle::GetNumOrders`: get the number of orders this vehicle has.
 pub(crate) fn get_num_orders(v: VehicleRef, s: &Leaves) -> VehicleOrderID {
     num_orders(order_list(v, s))
 }
 
-/// `Vehicle::GetNumManualOrders`: get the number of manually added orders this vehicle has.
-pub(crate) fn get_num_manual_orders(v: VehicleRef, s: &Leaves) -> VehicleOrderID {
-    num_manual_orders(order_list(v, s))
-}
-
 /// `Vehicle::GetOrder`: returns order `index` of a vehicle or `None` when it doesn't exists.
 pub(crate) fn get_order(v: VehicleRef, index: VehicleOrderID, s: &Leaves) -> Option<OrderRef> {
     order_list(v, s)?.get_order_at(index)
-}
-
-/// `Vehicle::GetFirstOrder`: get the first order of the vehicles order list.
-pub(crate) fn get_first_order(v: VehicleRef, s: &Leaves) -> Option<OrderRef> {
-    let list = order_list(v, s)?;
-    get_order(v, list.get_first_order(), s)
-}
-
-/// `Vehicle::GetLastOrder`: returns the last order of a vehicle, or `None` if it doesn't
-/// exists.
-pub(crate) fn get_last_order(v: VehicleRef, s: &Leaves) -> Option<OrderRef> {
-    let list = order_list(v, s)?;
-    list.get_order_at(list.get_last_order())
 }
 
 /// `Vehicle::Orders`: the vehicle's orders, `None` for an empty span.
@@ -2080,14 +2049,18 @@ fn assign_suppress_implicit_orders(v: VehicleRef, suppress: bool) {
 /// order. `cur_implicit_order_index` is not touched.
 fn skip_to_next_real_order_index(v: VehicleRef, s: &Leaves) {
     let c = consist(v);
-    if get_num_manual_orders(v, s).0 > 0 {
+    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
+    if num_manual_orders(list).0 > 0 {
+        let list = deref_list(list, v, s);
         /* Advance to next real order */
         loop {
             c.set_cur_real_order_index(VehicleOrderID(c.cur_real_order_index().0.wrapping_add(1)));
-            if c.cur_real_order_index() >= get_num_orders(v, s) {
+            if c.cur_real_order_index() >= list.get_num_orders() {
                 c.set_cur_real_order_index(VehicleOrderID(0));
             }
-            if !order_at(v, c.cur_real_order_index(), s)
+            if !list
+                .order(usize::from(c.cur_real_order_index().0))
                 .view()
                 .is_type(OrderType::OT_IMPLICIT)
             {
@@ -2109,20 +2082,21 @@ pub(crate) fn increment_implicit_order_index(v: VehicleRef, s: &Leaves) {
         skip_to_next_real_order_index(v, s);
     }
 
-    assert_with(|| {
-        c.cur_real_order_index().0 == 0 || c.cur_real_order_index() < get_num_orders(v, s)
-    });
+    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
+    assert_with(|| c.cur_real_order_index().0 == 0 || c.cur_real_order_index() < num_orders(list));
 
     /* Advance to next implicit order */
     loop {
         c.set_cur_implicit_order_index(VehicleOrderID(
             c.cur_implicit_order_index().0.wrapping_add(1),
         ));
-        if c.cur_implicit_order_index() >= get_num_orders(v, s) {
+        if c.cur_implicit_order_index() >= num_orders(list) {
             c.set_cur_implicit_order_index(VehicleOrderID(0));
         }
         if c.cur_implicit_order_index() == c.cur_real_order_index()
-            || order_at(v, c.cur_implicit_order_index(), s)
+            || deref_list(list, v, s)
+                .order(usize::from(c.cur_implicit_order_index().0))
                 .view()
                 .is_type(OrderType::OT_IMPLICIT)
         {
@@ -2216,16 +2190,17 @@ pub(crate) fn has_unbunching_order(v: VehicleRef, s: &Leaves) -> bool {
 /// `PreviousOrderIsUnbunching`: check if the previous order is a depot unbunching order.
 fn previous_order_is_unbunching(v: VehicleRef, s: &Leaves) -> bool {
     let c = consist(v);
+    // `this->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
     /* If we are headed for the first order, we must wrap around back to the last order. */
-    let is_first_order = get_order(v, c.cur_implicit_order_index(), s).map(|o| o.view().as_ptr())
-        == get_first_order(v, s).map(|o| o.view().as_ptr());
+    let is_first_order = order_in(list, c.cur_implicit_order_index()).map(|o| o.view().as_ptr())
+        == first_order_in(list).map(|o| o.view().as_ptr());
     let previous_order = if is_first_order {
-        get_last_order(v, s)
+        last_order_in(list)
     } else {
-        get_order(
-            v,
+        order_in(
+            list,
             VehicleOrderID(c.cur_implicit_order_index().0.wrapping_sub(1)),
-            s,
         )
     };
 
@@ -2253,6 +2228,8 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     }
 
     let c = consist(v);
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
     let counter = (s.shared().tick_counter)();
     /* Set the start point for this round trip time. */
     c.set_depot_unbunching_last_departure(counter);
@@ -2268,7 +2245,7 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     let mut num_vehicles = 0i32;
     let mut total_travel_time = 0i32;
 
-    let mut u = first_shared(v, s);
+    let mut u = first_shared_in(list, v, s);
     while let Some(shared) = u {
         u = next_shared(shared, s);
         /* Ignore vehicles that are manually stopped or crashed. */
@@ -2290,7 +2267,7 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
     let next_departure = (s.shared().tick_counter)().wrapping_add(separation as u64);
 
     /* Set the departure time of all vehicles that we share orders with. */
-    let mut u = first_shared(v, s);
+    let mut u = first_shared_in(list, v, s);
     while let Some(shared) = u {
         u = next_shared(shared, s);
         /* Ignore vehicles that are manually stopped or crashed. */
@@ -2312,13 +2289,16 @@ pub(crate) fn leave_unbunching_depot(v: VehicleRef, s: &Leaves) {
 /// waiting for unbunching. True if the vehicle must continue waiting, or false if it may try
 /// to leave the depot.
 pub(crate) fn is_waiting_for_unbunching(v: VehicleRef, s: &Leaves) -> bool {
+    // `this->orders` is resolved once for the two tests; `PreviousOrderIsUnbunching` resolves
+    // it in its own body.
+    let list = order_list(v, s);
     /* Don't bother if there are no vehicles sharing orders. */
-    if !is_order_list_shared(v, s) {
+    if !list.is_some_and(OrderListRef::is_shared) {
         return false;
     }
 
     /* Don't do anything if there aren't enough orders. */
-    if get_num_orders(v, s).0 <= 1 {
+    if num_orders(list).0 <= 1 {
         return false;
     }
 
@@ -2376,13 +2356,17 @@ pub(crate) fn add_to_shared(v: VehicleRef, shared_chain: VehicleRef, s: &Leaves)
         read_field!(orders, previous_shared).is_null() && read_field!(orders, next_shared).is_null()
     });
 
-    if order_list(shared_chain, s).is_none() {
+    // `shared_chain->orders`, created here where the chain has none.
+    let list = if let Some(list) = order_list(shared_chain, s) {
+        list
+    } else {
         assert_with(|| read_field!(chain, previous_shared).is_null());
         assert_with(|| read_field!(chain, next_shared).is_null());
         let list = new_order_list(shared_chain, |_| {}, s);
         set_order_list(v, Some(list));
         set_order_list(shared_chain, Some(list));
-    }
+        list
+    };
 
     write_field!(orders, next_shared, read_field!(chain, next_shared));
     write_field!(orders, previous_shared, shared_chain.shell());
@@ -2393,7 +2377,7 @@ pub(crate) fn add_to_shared(v: VehicleRef, shared_chain: VehicleRef, s: &Leaves)
         write_field!(vehicle_orders(next), previous_shared, v.shell());
     }
 
-    list_of(shared_chain, s).add_vehicle();
+    list.add_vehicle();
 }
 
 /// `Vehicle::RemoveFromShared`: removes the vehicle from the shared order list.
@@ -2404,17 +2388,20 @@ pub(crate) fn add_to_shared(v: VehicleRef, shared_chain: VehicleRef, s: &Leaves)
 )]
 pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
     let orders = vehicle_orders(v);
+    // `this->orders` is resolved once: removing the vehicle keeps the list, whose first
+    // shared vehicle each `FirstShared()` below rereads.
+    let list = list_of(v, s);
+    let first = || record(list.first_shared_shell(), s);
     /* Remember if we were first and the old window number before RemoveVehicle()
      * as this changes first if needed. */
-    let were_first = first_shared(v, s) == Some(v);
+    let were_first = first() == v;
     let vli = VehicleListIdentifier {
         list_type: VehicleListType::VL_SHARED_ORDERS,
         vtype: v.vehicle_type(),
         company: v.owner(),
-        index: first_shared_of(v, s).index(s.newgrf()).0,
+        index: first().index(s.newgrf()).0,
     };
 
-    let list = list_of(v, s);
     list.remove_vehicle(v);
 
     if !were_first {
@@ -2443,7 +2430,7 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
             0,
         );
         invalidate_vehicle_order(
-            first_shared_of(v, s),
+            first(),
             VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0,
             s,
         );
@@ -2454,7 +2441,7 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
         invalidate_window_data(
             get_window_class_for_vehicle_type(v.vehicle_type()),
             vli.to_window_number(),
-            (first_shared_of(v, s).index(s.newgrf()).0 | (1u32 << 31)) as i32,
+            (first().index(s.newgrf()).0 | (1u32 << 31)) as i32,
             false,
         );
     }
@@ -2480,7 +2467,8 @@ pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
 
     // `this->Orders()`: the span holds the list's storage, which DeleteOrder's erasure keeps
     // in place, so its slots stay live, including the retained former last order.
-    let order = |cur: VehicleOrderID| list_of(v, s).order(usize::from(cur.0)).view();
+    let list = order_list(v, s);
+    let order = |cur: VehicleOrderID| deref_list(list, v, s).order(usize::from(cur.0)).view();
     let mut cur = c.cur_implicit_order_index();
     while cur != VehicleOrderID::INVALID_VEH_ORDER_ID {
         if c.cur_implicit_order_index() == c.cur_real_order_index() {
@@ -2491,7 +2479,7 @@ pub(crate) fn delete_unreached_implicit_orders(v: VehicleRef, s: &Leaves) {
             delete_order(v, c.cur_implicit_order_index(), s);
             /* DeleteOrder does various magic with order_indices, so resync 'order' with 'cur_implicit_order_index' */
         } else {
-            let list = list_of(v, s);
+            let list = deref_list(list, v, s);
             /* Skip non-implicit orders, e.g. service-orders */
             if cur < list.get_next(cur) {
                 c.set_cur_implicit_order_index(VehicleOrderID(
@@ -2824,9 +2812,11 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
         }
         Some(list) => list.insert_order_at(new_o, sel_ord, s),
     }
+    // `v->orders` now holds the order, and every shared vehicle holds the same list.
+    let list = list_of(v, s);
 
-    let mut u = first_shared(v, s);
-    delete_order_warnings(first_shared_of(v, s), s);
+    let mut u = list.get_first_shared_vehicle(s);
+    delete_order_warnings(record(list.first_shared_shell(), s), s);
     while let Some(shared) = u {
         assert_with(|| {
             crate::vehicle_base::order_list(v.0.as_ptr())
@@ -2841,7 +2831,7 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
         if sel_ord <= c.cur_real_order_index() {
             let cur = u32::from(c.cur_real_order_index().0) + 1;
             /* Check if we don't go out of bound */
-            if cur < u32::from(get_num_orders(shared, s).0) {
+            if cur < u32::from(list.get_num_orders().0) {
                 // `uint` stored in `VehicleOrderID`; it is below the order count.
                 c.set_cur_real_order_index(VehicleOrderID(cur as u8));
             }
@@ -2855,7 +2845,7 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
         if sel_ord <= c.cur_implicit_order_index() {
             let cur = u32::from(c.cur_implicit_order_index().0) + 1;
             /* Check if we don't go out of bound */
-            if cur < u32::from(get_num_orders(shared, s).0) {
+            if cur < u32::from(list.get_num_orders().0) {
                 // `uint` stored in `VehicleOrderID`; it is below the order count.
                 c.set_cur_implicit_order_index(VehicleOrderID(cur as u8));
             }
@@ -2874,7 +2864,7 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
 
     /* As we insert an order, the order to skip to will be 'wrong'. */
     let mut cur_order_id = VehicleOrderID(0);
-    if let Some(list) = orders(v, s) {
+    {
         for index in 0..list.len() {
             let order = list.order(index);
             if order.view().is_type(OrderType::OT_CONDITIONAL) {
@@ -2885,7 +2875,7 @@ pub(crate) fn insert_order(v: VehicleRef, new_o: Order, sel_ord: VehicleOrderID,
                 if order_id == cur_order_id {
                     // `(order_id + 1) % GetNumOrders()` in `int`, narrowed.
                     order.set_condition_skip_to_order(VehicleOrderID(
-                        ((i32::from(order_id.0) + 1) % i32::from(get_num_orders(v, s).0)) as u8,
+                        ((i32::from(order_id.0) + 1) % i32::from(list.get_num_orders().0)) as u8,
                     ));
                 }
             }
@@ -2940,10 +2930,12 @@ fn cancel_loading_due_to_deleted_order(v: VehicleRef) {
     reason = "the original's conversions"
 )]
 pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
-    list_of(v, s).delete_order_at(sel_ord);
+    // `v->orders`, which every shared vehicle holds; deleting an order keeps the list.
+    let list = list_of(v, s);
+    list.delete_order_at(sel_ord);
 
-    let mut u = first_shared(v, s);
-    delete_order_warnings(first_shared_of(v, s), s);
+    let mut u = list.get_first_shared_vehicle(s);
+    delete_order_warnings(record(list.first_shared_shell(), s), s);
     while let Some(shared) = u {
         assert_with(|| {
             crate::vehicle_base::order_list(v.0.as_ptr())
@@ -2969,20 +2961,21 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
             ));
         } else if sel_ord == c.cur_implicit_order_index() {
             /* Make sure the index is valid */
-            if c.cur_implicit_order_index() >= get_num_orders(shared, s) {
+            if c.cur_implicit_order_index() >= list.get_num_orders() {
                 c.set_cur_implicit_order_index(VehicleOrderID(0));
             }
 
             /* Skip non-implicit orders for the implicit-order-index (e.g. if the current implicit order was deleted */
             while c.cur_implicit_order_index() != c.cur_real_order_index()
-                && !order_at(shared, c.cur_implicit_order_index(), s)
+                && !list
+                    .order(usize::from(c.cur_implicit_order_index().0))
                     .view()
                     .is_type(OrderType::OT_IMPLICIT)
             {
                 c.set_cur_implicit_order_index(VehicleOrderID(
                     c.cur_implicit_order_index().0.wrapping_add(1),
                 ));
-                if c.cur_implicit_order_index() >= get_num_orders(shared, s) {
+                if c.cur_implicit_order_index() >= list.get_num_orders() {
                     c.set_cur_implicit_order_index(VehicleOrderID(0));
                 }
             }
@@ -3001,7 +2994,7 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
 
     /* As we delete an order, the order to skip to will be 'wrong'. */
     let mut cur_order_id = VehicleOrderID(0);
-    if let Some(list) = orders(v, s) {
+    {
         for index in 0..list.len() {
             let order = list.order(index);
             if order.view().is_type(OrderType::OT_CONDITIONAL) {
@@ -3010,7 +3003,7 @@ pub(crate) fn delete_order(v: VehicleRef, sel_ord: VehicleOrderID, s: &Leaves) {
                     order_id = (order_id - 1).max(0);
                 }
                 if order_id == i32::from(cur_order_id.0) {
-                    order_id = (order_id + 1) % i32::from(get_num_orders(v, s).0);
+                    order_id = (order_id + 1) % i32::from(list.get_num_orders().0);
                 }
                 // The `int` result stored in `VehicleOrderID`.
                 order.set_condition_skip_to_order(VehicleOrderID(order_id as u8));
@@ -3039,11 +3032,12 @@ pub(crate) fn delete_vehicle_orders(
 ) {
     delete_order_warnings(v, s);
 
-    if is_order_list_shared(v, s) {
+    let list = order_list(v, s);
+    if list.is_some_and(OrderListRef::is_shared) {
         /* Remove ourself from the shared order list. */
         remove_from_shared(v, s);
         set_order_list(v, None);
-    } else if let Some(list) = order_list(v, s) {
+    } else if let Some(list) = list {
         /* Remove the orders */
         list.free_chain(keep_orderlist, s);
         if !keep_orderlist {
@@ -3136,7 +3130,6 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
 
         /* Check the order list */
         let mut n_st = 0i32;
-        let airports = crate::newgrf_airport::runtime();
 
         if let Some(list) = list {
             for index in 0..list.len() {
@@ -3148,6 +3141,7 @@ pub(crate) fn check_orders(v: VehicleRef, s: &Leaves) {
                 }
                 /* Does station have a load-bay for this vehicle? */
                 if order.is_type(OrderType::OT_GOTO_STATION) {
+                    let airports = crate::newgrf_airport::runtime();
                     let st = crate::newgrf_airport::station_by_id(
                         order.destination().to_station_id().0,
                         airports,
@@ -3253,11 +3247,11 @@ pub(crate) fn remove_order_from_all_vehicles(
         };
 
         /* Clear the order from the order-list */
+        // `v->orders` is resolved once: deleting an order keeps the list.
         let mut next_id = VehicleOrderID(0);
-        while next_id < get_num_orders(v, s) {
+        while next_id < list.get_num_orders() {
             let id = next_id;
             next_id = VehicleOrderID(id.0.wrapping_add(1));
-            let list = order_list(v, s).unwrap_or(list);
             let order = list.order(usize::from(id.0));
             let mut ot = order.view().kind();
             if ot == OrderType::OT_GOTO_DEPOT
@@ -3299,7 +3293,7 @@ pub(crate) fn remove_order_from_all_vehicles(
                 order.make_dummy();
                 order.set_travel_timetabled(travel_timetabled);
 
-                let mut w = first_shared(v, s);
+                let mut w = list.get_first_shared_vehicle(s);
                 while let Some(shared) = w {
                     /* In GUI, simulate by removing the order and adding it back */
                     invalidate_vehicle_order(
@@ -3826,6 +3820,9 @@ pub(crate) fn cmd_insert_order(
     if !cost.ok() {
         return;
     }
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list until
+    // `InsertOrder`, after its last read.
+    let list = order_list(v, s);
 
     /* Validate properties we don't want to have different from default as they are set by other commands. */
     if new_order.refit_cargo() != CargoType(CARGO_NO_REFIT)
@@ -3859,7 +3856,7 @@ pub(crate) fn cmd_insert_order(
                     get_vehicle_cannot_use_station_reason(v, st_id, s),
                 );
             }
-            let mut u = first_shared(v, s);
+            let mut u = first_shared_in(list, v, s);
             while let Some(shared) = u {
                 if !can_vehicle_use_station(shared, st_id) {
                     return cost.error_extra(
@@ -4094,7 +4091,7 @@ pub(crate) fn cmd_insert_order(
 
         OrderType::OT_CONDITIONAL => {
             let skip_to = new_order.condition_skip_to_order();
-            if skip_to.0 != 0 && skip_to >= get_num_orders(v, s) {
+            if skip_to.0 != 0 && skip_to >= num_orders(list) {
                 return crate::command_func::cmd_error(cost); // Always allow jumping to the first (even when there is no order).
             }
             if new_order.condition_variable() >= OrderConditionVariable::End {
@@ -4148,14 +4145,14 @@ pub(crate) fn cmd_insert_order(
         _ => return crate::command_func::cmd_error(cost),
     }
 
-    if sel_ord > get_num_orders(v, s) {
+    if sel_ord > num_orders(list) {
         return crate::command_func::cmd_error(cost);
     }
 
-    if get_num_orders(v, s) >= MAX_VEH_ORDER_ID {
+    if num_orders(list) >= MAX_VEH_ORDER_ID {
         return cost.error(STR_ERROR_TOO_MANY_ORDERS.0);
     }
-    if order_list(v, s).is_none() && (s.list_can_allocate_item)() == 0 {
+    if list.is_none() && (s.list_can_allocate_item)() == 0 {
         return cost.error(STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
     }
 
@@ -4191,11 +4188,13 @@ pub(crate) fn cmd_delete_order(
     }
 
     /* If we did not select an order, we maybe want to de-clone the orders */
-    if sel_ord >= get_num_orders(v, s) {
+    // `v->orders` is resolved once for the two tests.
+    let list = order_list(v, s);
+    if sel_ord >= num_orders(list) {
         return declone_order(v, flags, s);
     }
 
-    if get_order(v, sel_ord, s).is_none() {
+    if order_in(list, sel_ord).is_none() {
         return crate::command_func::cmd_error(cost);
     }
 
@@ -4293,28 +4292,31 @@ pub(crate) fn cmd_move_order(
         return;
     }
 
+    // `v->orders` is resolved once: moving an order keeps the list.
+    let list = order_list(v, s);
+
     /* Don't make senseless movements */
-    if moving_order >= get_num_orders(v, s)
-        || target_order >= get_num_orders(v, s)
+    if moving_order >= num_orders(list)
+        || target_order >= num_orders(list)
         || moving_order == target_order
-        || get_num_orders(v, s).0 <= 1
+        || num_orders(list).0 <= 1
     {
         return crate::command_func::cmd_error(cost);
     }
 
     /* Don't move an empty order */
-    if get_order(v, moving_order, s).is_none() {
+    if order_in(list, moving_order).is_none() {
         return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
-        let list = list_of(v, s);
+        let list = deref_list(list, v, s);
         list.move_order(moving_order, target_order);
 
         /* Update shared list */
-        let mut u = first_shared(v, s);
+        let mut u = list.get_first_shared_vehicle(s);
 
-        delete_order_warnings(first_shared_of(v, s), s);
+        delete_order_warnings(record(list.first_shared_shell(), s), s);
 
         let remap = |index: VehicleOrderID| {
             if index == moving_order {
@@ -4364,7 +4366,7 @@ pub(crate) fn cmd_move_order(
         }
 
         /* As we move an order, the order to skip to will be 'wrong'. */
-        if let Some(list) = orders(v, s) {
+        {
             for index in 0..list.len() {
                 let order = list.order(index);
                 if order.view().is_type(OrderType::OT_CONDITIONAL) {
@@ -4431,13 +4433,16 @@ pub(crate) fn cmd_modify_order(
         return;
     }
 
+    // `v->orders` is resolved once: modifying an order keeps the list.
+    let list = order_list(v, s);
+
     /* Is it a valid order? */
-    if sel_ord >= get_num_orders(v, s) {
+    if sel_ord >= num_orders(list) {
         return crate::command_func::cmd_error(cost);
     }
 
-    assert_with(|| get_order(v, sel_ord, s).is_some());
-    let order = order_at(v, sel_ord, s);
+    assert_with(|| order_in(list, sel_ord).is_some());
+    let order = deref_list(list, v, s).order(usize::from(sel_ord.0));
     match order.view().kind() {
         OrderType::OT_GOTO_STATION => {
             if mof != ModifyOrderFlags::MOF_NON_STOP
@@ -4646,7 +4651,7 @@ pub(crate) fn cmd_modify_order(
         },
 
         ModifyOrderFlags::MOF_COND_DESTINATION => {
-            if data >= u16::from(get_num_orders(v, s).0) {
+            if data >= u16::from(num_orders(list).0) {
                 return crate::command_func::cmd_error(cost);
             }
         }
@@ -4800,8 +4805,9 @@ pub(crate) fn cmd_modify_order(
         }
 
         /* Update the windows and full load flags, also for vehicles that share the same order list */
-        let mut u = first_shared(v, s);
-        delete_order_warnings(first_shared_of(v, s), s);
+        let list = deref_list(list, v, s);
+        let mut u = list.get_first_shared_vehicle(s);
+        delete_order_warnings(record(list.first_shared_shell(), s), s);
         while let Some(shared) = u {
             /* Toggle u->current_order "Full load" flag if it changed.
              * However, as the same flag is used for depot orders, check
@@ -4890,12 +4896,17 @@ pub(crate) fn cmd_clone_order(
                 return crate::command_func::cmd_error(cost);
             }
 
+            // Each vehicle's `orders` is resolved once: nothing before the deletion below
+            // replaces either list.
+            let src_list = order_list(src, s);
+            let dst_list = order_list(dst, s);
+
             /* Is the vehicle already in the shared list? */
-            if first_shared(src, s) == first_shared(dst, s) {
+            if first_shared_in(src_list, src, s) == first_shared_in(dst_list, dst, s) {
                 return crate::command_func::cmd_error(cost);
             }
 
-            if let Some(list) = orders(src, s) {
+            if let Some(list) = src_list {
                 for index in 0..list.len() {
                     let order = list.order(index).view();
                     if !order_goes_to_station(dst, order) {
@@ -4922,7 +4933,7 @@ pub(crate) fn cmd_clone_order(
                 return cost.error(STR_ERROR_AIRCRAFT_NOT_ENOUGH_RANGE.0);
             }
 
-            if order_list(src, s).is_none() && (s.list_can_allocate_item)() == 0 {
+            if src_list.is_none() && (s.list_can_allocate_item)() == 0 {
                 return cost.error(STR_ERROR_NO_MORE_SPACE_FOR_ORDERS.0);
             }
 
@@ -4930,14 +4941,9 @@ pub(crate) fn cmd_clone_order(
                 /* If the destination vehicle had a OrderList, destroy it.
                  * We only reset the order indices, if the new orders are obviously different.
                  * (We mainly do this to keep the order indices valid and in range.) */
-                delete_vehicle_orders(
-                    dst,
-                    false,
-                    get_num_orders(dst, s) != get_num_orders(src, s),
-                    s,
-                );
+                delete_vehicle_orders(dst, false, num_orders(dst_list) != num_orders(src_list), s);
 
-                set_order_list(dst, order_list(src, s));
+                set_order_list(dst, src_list);
 
                 /* Link this vehicle in the shared-list */
                 add_to_shared(dst, src, s);
@@ -4972,9 +4978,14 @@ pub(crate) fn cmd_clone_order(
                 return;
             }
 
+            // Each vehicle's `orders` is resolved once: nothing before the deletion below
+            // replaces either list.
+            let src_list = order_list(src, s);
+            let dst_list = order_list(dst, s);
+
             /* Trucks can't copy all the orders from busses (and visa versa),
              * and neither can helicopters and aircraft. */
-            if let Some(list) = orders(src, s) {
+            if let Some(list) = src_list {
                 for index in 0..list.len() {
                     let order = list.order(index).view();
                     if !order_goes_to_station(dst, order) {
@@ -5006,15 +5017,10 @@ pub(crate) fn cmd_clone_order(
                 /* If the destination vehicle had an order list, destroy the chain but keep the OrderList.
                  * We only reset the order indices, if the new orders are obviously different.
                  * (We mainly do this to keep the order indices valid and in range.) */
-                delete_vehicle_orders(
-                    dst,
-                    true,
-                    get_num_orders(dst, s) != get_num_orders(src, s),
-                    s,
-                );
+                delete_vehicle_orders(dst, true, num_orders(dst_list) != num_orders(src_list), s);
 
                 let mut dst_orders: Vec<Order> = Vec::new();
-                if let Some(list) = orders(src, s) {
+                if let Some(list) = src_list {
                     for index in 0..list.len() {
                         dst_orders.push(list.order(index).view().copied());
                     }
@@ -5092,8 +5098,10 @@ pub(crate) fn cmd_order_refit(
     if !cost.ok() {
         return;
     }
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
 
-    let Some(order) = get_order(v, order_number, s) else {
+    let Some(order) = order_in(list, order_number) else {
         return crate::command_func::cmd_error(cost);
     };
 
@@ -5121,7 +5129,7 @@ pub(crate) fn cmd_order_refit(
             );
         }
 
-        let mut u = first_shared(v, s);
+        let mut u = first_shared_in(list, v, s);
         while let Some(shared) = u {
             /* Update any possible open window of the vehicle */
             invalidate_vehicle_order(shared, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
@@ -5221,8 +5229,10 @@ fn change_timetable(
     timetabled: bool,
     s: &Leaves,
 ) {
-    assert_with(|| get_order(v, order_number, s).is_some());
-    let order = order_at(v, order_number, s);
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
+    assert_with(|| order_in(list, order_number).is_some());
+    let order = deref_list(list, v, s).order(usize::from(order_number.0));
     let mut total_delta = 0i32;
     let mut timetable_delta = 0i32;
 
@@ -5249,11 +5259,11 @@ fn change_timetable(
 
         _ => not_reached(),
     }
-    let list = list_of(v, s);
+    let list = deref_list(list, v, s);
     list.update_total_duration(total_delta);
     list.update_timetable_duration(timetable_delta);
 
-    let mut u = first_shared(v, s);
+    let mut u = list.get_first_shared_vehicle(s);
     while let Some(v) = u {
         if consist(v).cur_real_order_index() == order_number
             && v.current_order().equals(order.view())
@@ -5326,9 +5336,11 @@ pub(crate) fn cmd_change_timetable(
     if !cost.ok() {
         return;
     }
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
 
     let Some(order) =
-        get_order(v, order_number, s).filter(|order| !order.view().is_type(OrderType::OT_IMPLICIT))
+        order_in(list, order_number).filter(|order| !order.view().is_type(OrderType::OT_IMPLICIT))
     else {
         return crate::command_func::cmd_error(cost);
     };
@@ -5437,7 +5449,7 @@ pub(crate) fn cmd_change_timetable(
         }
 
         /* Unbunching data is no longer valid for any vehicle in this shared order group. */
-        let mut u = first_shared(v, s);
+        let mut u = first_shared_in(list, v, s);
         while let Some(shared) = u {
             consist(shared).reset_depot_unbunching();
             u = next_shared(shared, s);
@@ -5477,15 +5489,17 @@ pub(crate) fn cmd_bulk_change_timetable(
     if mtf >= ModifyTimetableFlags::MTF_END {
         return crate::command_func::cmd_error(cost);
     }
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
 
-    if get_num_orders(v, s).0 == 0 {
+    if num_orders(list).0 == 0 {
         return crate::command_func::cmd_error(cost);
     }
 
     if flags.test(DoCommandFlag::Execute) {
         let mut order_number = VehicleOrderID(0);
-        while order_number < get_num_orders(v, s) {
-            let order = get_order(v, order_number, s);
+        while order_number < num_orders(list) {
+            let order = order_in(list, order_number);
             if order.is_some_and(|order| !order.view().is_type(OrderType::OT_IMPLICIT)) {
                 command_do(
                     s,
@@ -5530,9 +5544,9 @@ pub(crate) fn cmd_set_vehicle_on_time(
         veh,
         apply_to_group,
     } = args;
-    let Some(v) = vehicle_get_if_valid(veh, s)
-        .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
-    else {
+    let v = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle());
+    // `v->orders` is resolved once, in the lookup's own test.
+    let (Some(v), Some(list)) = (v, v.and_then(|v| order_list(v, s))) else {
         return crate::command_func::cmd_error(cost);
     };
     let c = consist(v);
@@ -5551,7 +5565,7 @@ pub(crate) fn cmd_set_vehicle_on_time(
     if flags.test(DoCommandFlag::Execute) {
         if apply_to_group {
             let mut most_late = 0i32;
-            let mut u = first_shared(v, s);
+            let mut u = list.get_first_shared_vehicle(s);
             while let Some(shared) = u {
                 u = next_shared(shared, s);
                 /* A vehicle can't be late if its timetable hasn't started. */
@@ -5567,7 +5581,7 @@ pub(crate) fn cmd_set_vehicle_on_time(
                 consist(shared).reset_depot_unbunching();
             }
             if most_late > 0 {
-                let mut u = first_shared(v, s);
+                let mut u = list.get_first_shared_vehicle(s);
                 while let Some(shared) = u {
                     u = next_shared(shared, s);
                     /* A vehicle can't be late if its timetable hasn't started. */
@@ -5670,9 +5684,9 @@ pub(crate) fn cmd_set_timetable_start(
         timetable_all,
         start_tick,
     } = args;
-    let Some(v) = vehicle_get_if_valid(veh_id, s)
-        .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
-    else {
+    let v = vehicle_get_if_valid(veh_id, s).filter(|v| v.is_primary_vehicle());
+    // `v->orders` is resolved once, in the lookup's own test.
+    let (Some(v), Some(list)) = (v, v.and_then(|v| order_list(v, s))) else {
         return crate::command_func::cmd_error(cost);
     };
 
@@ -5681,7 +5695,6 @@ pub(crate) fn cmd_set_timetable_start(
         return;
     }
 
-    let list = list_of(v, s);
     let total_duration = list.get_timetable_total_duration();
 
     let date = crate::timer_game_common::economy_date().0;
@@ -5801,9 +5814,9 @@ pub(crate) fn cmd_autofill_timetable(
         autofill,
         preserve_wait_time,
     } = args;
-    let Some(v) = vehicle_get_if_valid(veh, s)
-        .filter(|v| v.is_primary_vehicle() && order_list(*v, s).is_some())
-    else {
+    let v = vehicle_get_if_valid(veh, s).filter(|v| v.is_primary_vehicle());
+    // `v->orders` is resolved once, in the lookup's own test.
+    let (Some(v), Some(list)) = (v, v.and_then(|v| order_list(v, s))) else {
         return crate::command_func::cmd_error(cost);
     };
 
@@ -5839,7 +5852,7 @@ pub(crate) fn cmd_autofill_timetable(
             );
         }
 
-        let mut v2 = first_shared(v, s);
+        let mut v2 = list.get_first_shared_vehicle(s);
         while let Some(shared) = v2 {
             if shared != v {
                 let c2 = consist(shared);
@@ -5870,6 +5883,8 @@ pub(crate) fn cmd_autofill_timetable(
 pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leaves) {
     let c = consist(v);
     let time_taken = c.current_order_time();
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
 
     c.set_current_order_time(0);
 
@@ -5877,14 +5892,14 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
         return; // no timetabling of auto orders
     }
 
-    if c.cur_real_order_index() >= get_num_orders(v, s) {
+    if c.cur_real_order_index() >= num_orders(list) {
         return;
     }
-    assert_with(|| get_order(v, c.cur_real_order_index(), s).is_some());
-    let real_current_order = order_at(v, c.cur_real_order_index(), s);
+    assert_with(|| order_in(list, c.cur_real_order_index()).is_some());
+    let real_current_order = deref_list(list, v, s).order(usize::from(c.cur_real_order_index().0));
 
     let mut first_manual_order = VehicleOrderID(0);
-    if let Some(list) = orders(v, s) {
+    if let Some(list) = list {
         for index in 0..list.len() {
             if !list.order(index).view().is_type(OrderType::OT_IMPLICIT) {
                 break;
@@ -6018,13 +6033,13 @@ pub(crate) fn update_vehicle_timetable(v: VehicleRef, travelling: bool, s: &Leav
      * length of a full cycle till lateness is less than the length of a timetable
      * cycle. When the timetable isn't fully filled the cycle will be Ticks::INVALID_TICKS. */
     if c.lateness_counter() > timetabled {
-        let cycle = list_of(v, s).get_timetable_total_duration();
+        let cycle = deref_list(list, v, s).get_timetable_total_duration();
         if cycle != INVALID_TICKS && c.lateness_counter() > cycle {
             c.set_lateness_counter(c.lateness_counter() % cycle);
         }
     }
 
-    let mut u = first_shared(v, s);
+    let mut u = first_shared_in(list, v, s);
     while let Some(shared) = u {
         set_window_dirty(
             WindowClass::WC_VEHICLE_TIMETABLE,
@@ -6043,18 +6058,20 @@ fn order_backup_construct(ob: OrderBackupRef, v: VehicleRef, user: u32, s: &Leav
     ob.set_group(v.group_id(s.maintenance_groups()));
 
     copy_consist_properties_to_backup(ob, v, s);
+    // `v->orders` is resolved once: nothing below replaces the vehicle's list.
+    let list = order_list(v, s);
 
     /* If we have shared orders, store the vehicle we share the order with. */
-    if is_order_list_shared(v, s) {
-        let clone = if first_shared(v, s) == Some(v) {
+    if list.is_some_and(OrderListRef::is_shared) {
+        let clone = if first_shared_in(list, v, s) == Some(v) {
             next_shared(v, s)
         } else {
-            first_shared(v, s)
+            first_shared_in(list, v, s)
         };
         ob.set_clone(clone.map_or(ptr::null_mut(), VehicleRef::shell));
     } else {
         /* Else copy the orders */
-        let span = orders(v, s);
+        let span = list;
         // SAFETY: The backup's live vector and the vehicle's distinct live orders.
         unsafe {
             (*ob.vector).assign(
@@ -6321,10 +6338,11 @@ pub(crate) fn order_backup_clear_vehicle(v: VehicleRef, s: &Leaves) {
     for_each_backup(s, |ob| {
         if ob.clone_shell() == v.shell() {
             /* Get another item in the shared list. */
-            let clone = if first_shared(v, s) == Some(v) {
+            let first = first_shared(v, s);
+            let clone = if first == Some(v) {
                 next_shared(v, s)
             } else {
-                first_shared(v, s)
+                first
             };
             ob.set_clone(clone.map_or(ptr::null_mut(), VehicleRef::shell));
             /* But if that isn't there, remove it. */
