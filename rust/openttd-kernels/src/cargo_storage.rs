@@ -969,12 +969,13 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
             let map = (s.flow_map)(ge);
             // Rewrite an invalid source station to some random other one to avoid
             // keeping the cargo in the vehicle forever.
-            if observed.first_station == INVALID && !map.is_null() {
-                if let Some(first) = unsafe { &*map }.begin() {
-                    observed.first_station = first.0;
-                    unsafe {
-                        (*p).first_station = observed.first_station;
-                    }
+            if observed.first_station == INVALID
+                && !map.is_null()
+                && let Some(first) = unsafe { &*map }.begin()
+            {
+                observed.first_station = first.0;
+                unsafe {
+                    (*p).first_station = observed.first_station;
                 }
             }
             let flow = if map.is_null() {

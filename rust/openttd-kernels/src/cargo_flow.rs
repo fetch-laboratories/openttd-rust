@@ -196,13 +196,12 @@ impl FlowStat {
                 flow = next_share.wrapping_sub(key);
                 self.unrestricted = self.unrestricted.wrapping_add(flow);
                 break;
-            } else {
-                if key == self.unrestricted {
-                    return; // !found -> Limit not hit.
-                }
-                if station == st {
-                    found = true;
-                }
+            }
+            if key == self.unrestricted {
+                return; // !found -> Limit not hit.
+            }
+            if station == st {
+                found = true;
             }
             next_share = key;
         }
@@ -1219,6 +1218,7 @@ mod tests {
         Window(WindowClass, WindowNumber, i32, bool),
     }
     const STATIONS: usize = 4;
+    const NODES: u16 = 4;
     thread_local! {
         static LIVE: Cell<[*mut FlowStatMap; STATIONS]> = const { Cell::new([std::ptr::null_mut(); STATIONS]) };
         static EVENTS: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
@@ -1239,7 +1239,7 @@ mod tests {
             .iter()
             .position(|&map| map.cast_const().cast() == ge)
             .unwrap();
-        StationID(100 + index as u16)
+        StationID(100 + u16::try_from(index).unwrap())
     }
     extern "C" fn clear_data(ge: *mut GoodsEntry) {
         record(Event::ClearData(station_of(ge)));
@@ -1270,7 +1270,7 @@ mod tests {
         }
     }
     fn id(st: *mut BaseStation) -> StationID {
-        StationID((st.addr() - 1) as u16)
+        StationID(u16::try_from(st.addr() - 1).unwrap())
     }
     extern "C" fn is_station(_: *mut BaseStation) -> bool {
         true
@@ -1346,8 +1346,8 @@ mod tests {
         };
         unsafe {
             (*graph).last_compression = 0;
-            live::openttd_rust_live_graph_init(graph, STATIONS as u32);
-            for node in 0..STATIONS as u16 {
+            live::openttd_rust_live_graph_init(graph, u32::from(NODES));
+            for node in 0..NODES {
                 (&mut (*graph).nodes)[usize::from(node)].station = 100 + node;
             }
             live::openttd_rust_live_node_add_edge(
@@ -1387,6 +1387,53 @@ mod tests {
         map
     }
 
+    /// Station 100's cargo list: one packet from origin 7 for each of the next hops 106, 107
+    /// and 108, of 1, 2 and 3 units.
+    fn station_list() -> *mut crate::cargo_storage::List {
+        let list = crate::cargo_storage::tests::list(false);
+        for (count, via) in [(1, 106), (2, 107), (3, 108)] {
+            unsafe {
+                crate::cargo_storage::tests::append_to(
+                    list,
+                    crate::cargo_storage::tests::station_cargo(count, 7, 0),
+                    via,
+                );
+            }
+        }
+        list
+    }
+    /// The native calls of the application, in order: under manual distribution, each of the
+    /// two reroutes reads the station's flows once, for the packet it moves.
+    fn expected_events(manual: bool) -> Vec<Event> {
+        let window = |station: StationID| {
+            Event::Window(
+                WindowClass::WC_STATION_VIEW,
+                WindowNumber::from(station),
+                0,
+                false,
+            )
+        };
+        let mut expected = vec![Event::GetOrCreateDataFlows(StationID(100))];
+        if manual {
+            expected.extend([
+                Event::FlowMap(StationID(100)),
+                Event::FlowMap(StationID(100)),
+            ]);
+        }
+        expected.extend([
+            Event::DataIsEmpty(StationID(100)),
+            window(StationID(100)),
+            Event::GetOrCreateDataFlows(StationID(101)),
+            Event::DataIsEmpty(StationID(101)),
+            window(StationID(101)),
+            Event::GetOrCreateDataFlows(StationID(103)),
+            Event::DataIsEmpty(StationID(103)),
+            Event::ClearData(StationID(103)),
+            window(StationID(103)),
+        ]);
+        expected
+    }
+
     #[test]
     fn live_application_erases_before_rerouting_and_preserves_node_order() {
         for manual in [false, true] {
@@ -1400,18 +1447,7 @@ mod tests {
                 Box::into_raw(Box::default()),
                 Box::into_raw(Box::default()),
             ]);
-            // Station 100 holds one packet from origin 7 for each of the next hops 106, 107
-            // and 108, of 1, 2 and 3 units.
-            let list = crate::cargo_storage::tests::list(false);
-            for (count, via) in [(1, 106), (2, 107), (3, 108)] {
-                unsafe {
-                    crate::cargo_storage::tests::append_to(
-                        list,
-                        crate::cargo_storage::tests::station_cargo(count, 7, 0),
-                        via,
-                    );
-                }
-            }
+            let list = station_list();
             CARGO_LIST.set(list);
             OWNER.set(crate::station_service::openttd_rust_station_service_new());
             let storage = crate::cargo_storage::Services {
@@ -1470,44 +1506,18 @@ mod tests {
                     .find(StationID(102))
                     .is_some()
             );
-            let window = |station: StationID| {
-                Event::Window(
-                    WindowClass::WC_STATION_VIEW,
-                    WindowNumber::from(station),
-                    0,
-                    false,
-                )
-            };
-            let mut expected = vec![Event::GetOrCreateDataFlows(StationID(100))];
+            let mut packets = unsafe { crate::cargo_storage::tests::counts_and_keys(list) };
+            packets.sort_unstable();
             if manual {
                 // Both reroutes find no flow from origin 7, so both packets lose their hop.
-                expected.extend([
-                    Event::FlowMap(StationID(100)),
-                    Event::FlowMap(StationID(100)),
-                ]);
                 assert!(live0.find(StationID(7)).is_none());
-                let mut moved = unsafe { crate::cargo_storage::tests::counts_and_keys(list) };
-                moved.sort_unstable();
-                assert_eq!(moved, [(1, u16::MAX), (2, u16::MAX), (3, 108)]);
+                assert_eq!(packets, [(1, u16::MAX), (2, u16::MAX), (3, 108)]);
             } else {
                 let flow = live0.find(StationID(7)).unwrap();
                 assert_eq!(flow.shares, shares([(1, 106), (2, 107)]));
-                let mut kept = unsafe { crate::cargo_storage::tests::counts_and_keys(list) };
-                kept.sort_unstable();
-                assert_eq!(kept, [(1, 106), (2, 107), (3, 108)]);
+                assert_eq!(packets, [(1, 106), (2, 107), (3, 108)]);
             }
-            expected.extend([
-                Event::DataIsEmpty(StationID(100)),
-                window(StationID(100)),
-                Event::GetOrCreateDataFlows(StationID(101)),
-                Event::DataIsEmpty(StationID(101)),
-                window(StationID(101)),
-                Event::GetOrCreateDataFlows(StationID(103)),
-                Event::DataIsEmpty(StationID(103)),
-                Event::ClearData(StationID(103)),
-                window(StationID(103)),
-            ]);
-            EVENTS.with(|events| assert_eq!(*events.borrow(), expected));
+            EVENTS.with(|events| assert_eq!(*events.borrow(), expected_events(manual)));
 
             unsafe {
                 crate::linkgraph::job::openttd_rust_linkgraph_job_delete(job);
@@ -1524,6 +1534,15 @@ mod tests {
 
     #[test]
     fn merged_graph_returns_before_reading_any_station() {
+        extern "C" fn trap_goods(_: *mut GoodsEntry) {
+            unreachable!()
+        }
+        extern "C" fn trap_empty(_: *const GoodsEntry) -> bool {
+            unreachable!()
+        }
+        extern "C" fn trap_flows(_: *mut GoodsEntry) -> *mut FlowStatMap {
+            unreachable!()
+        }
         let (graph, job) = job_fixture([
             map([(1, 102, 10)]),
             FlowStatMap::default(),
@@ -1541,15 +1560,6 @@ mod tests {
             graphs,
             ..crate::test_tables::STATION_LINKS
         };
-        extern "C" fn trap_goods(_: *mut GoodsEntry) {
-            unreachable!()
-        }
-        extern "C" fn trap_empty(_: *const GoodsEntry) -> bool {
-            unreachable!()
-        }
-        extern "C" fn trap_flows(_: *mut GoodsEntry) -> *mut FlowStatMap {
-            unreachable!()
-        }
         let services = Services {
             clear_data: trap_goods,
             data_is_empty: trap_empty,
