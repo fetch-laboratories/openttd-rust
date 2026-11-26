@@ -2625,7 +2625,9 @@ fn can_vehicle_use_station(v: VehicleRef, st: StationID) -> bool {
     )
 }
 
-/// `GetVehicleCannotUseStationReason(v, Station::Get(st))`.
+/// `GetVehicleCannotUseStationReason(v, Station::Get(st))`: get reason string why this
+/// station can't be used by the given vehicle. Returns the string explaining why the vehicle
+/// cannot use the station.
 #[allow(unsafe_code)]
 fn get_vehicle_cannot_use_station_reason(v: VehicleRef, st: StationID, s: &Leaves) -> StringID {
     // SAFETY: The live vehicle shell and a station ID the caller's lookup validated.
@@ -6304,12 +6306,12 @@ fn order_backup_remove_order(
             }
             if ot == OrderType::OT_GOTO_DEPOT
                 && hangar
-                && !crate::station_map::is_hangar_tile_raw(ob.tile().0, airports)
+                && !crate::station_map::is_hangar_tile(ob.tile(), airports)
             {
                 continue; // Not an aircraft? Can't have a hangar order.
             }
             if ot == OrderType::OT_IMPLICIT
-                || (crate::station_map::is_hangar_tile_raw(ob.tile().0, airports)
+                || (crate::station_map::is_hangar_tile(ob.tile(), airports)
                     && ot == OrderType::OT_GOTO_DEPOT
                     && !hangar)
             {
