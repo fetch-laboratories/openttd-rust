@@ -140,10 +140,14 @@ pub struct Services<T> {
     shared: *const crate::services::Services,
 }
 
-/// A class of a registry, the `NewGRFClass *` that `Get` returns. C++ reads and writes the
-/// shared record in place, so the handle holds its address and reads and writes each member
-/// with a field-sized access; it is valid until the next `Reset` or `Allocate`.
-pub(crate) struct ClassRef<T>(*mut NewGRFClass<T>);
+/// A class of a registry, the `NewGRFClass *` that `Get` returns, with its Rust-only members.
+/// C++ reads and writes the shared record in place, so the handle holds its address and
+/// reads and writes each member with a field-sized access. The handle resolves the registry
+/// once, where it is made, and is valid until the next `Reset` or `Allocate`.
+pub(crate) struct ClassRef<T> {
+    record: *mut NewGRFClass<T>,
+    members: *mut ClassMembers<T>,
+}
 impl<T> Clone for ClassRef<T> {
     fn clone(&self) -> Self {
         *self
@@ -156,13 +160,13 @@ impl<T: ClassSpec> ClassRef<T> {
     #[allow(unsafe_code)]
     pub(crate) fn global_id(self) -> u32 {
         // SAFETY: The module's serialization contract; the handle names a live class.
-        unsafe { (*self.0).global_id }
+        unsafe { (*self.record).global_id }
     }
     /// Store `name`.
     #[allow(unsafe_code)]
     pub(crate) fn set_name(self, name: StringID) {
         // SAFETY: As for `global_id`.
-        unsafe { (*self.0).name = name };
+        unsafe { (*self.record).name = name };
     }
     /// `NewGRFClass::Index`.
     #[allow(
@@ -172,24 +176,15 @@ impl<T: ClassSpec> ClassRef<T> {
     #[allow(unsafe_code)]
     pub(crate) fn index(self) -> T::Index {
         // SAFETY: As for `global_id`.
-        T::Index::from_index(unsafe { (*self.0).index } as u16)
+        T::Index::from_index(unsafe { (*self.record).index } as u16)
     }
-    /// The class's Rust-only members, at its index, which an entry resolves once and reaches
-    /// by scoped accesses that end before any callback.
-    #[allow(unsafe_code)]
-    fn members(self) -> *mut ClassMembers<T> {
-        let class = usize::from(self.index().index());
-        // SAFETY: The module's serialization contract; a class's own index is in bounds.
-        unsafe { (*T::registry()).members.as_mut_ptr().add(class) }
-    }
-
     /// `NewGRFClass::Specs`: get read-only span of specs of this class, as its start and
     /// length.
     #[allow(unsafe_code)]
     pub(crate) fn specs(self) -> (*const *mut T, usize) {
-        let members = self.members();
-        // SAFETY: As for `members`; the vector's header is read, not its elements.
-        unsafe { ((*members).spec.as_ptr(), (*members).spec.len()) }
+        // SAFETY: The module's serialization contract; the handle's members are live, and
+        // the vector's header is read, not its elements.
+        unsafe { ((*self.members).spec.as_ptr(), (*self.members).spec.len()) }
     }
 
     /// `NewGRFClass::GetSpecCount`: get the number of allocated specs within the class.
@@ -197,30 +192,27 @@ impl<T: ClassSpec> ClassRef<T> {
         clippy::cast_possible_truncation,
         reason = "the size narrows to uint, as the original's static_cast"
     )]
+    #[allow(unsafe_code)]
     pub(crate) fn get_spec_count(self) -> u32 {
-        self.specs().1 as u32
+        // SAFETY: As for `specs`.
+        unsafe { (*self.members).spec.len() as u32 }
     }
 
     /// `NewGRFClass::GetUISpecCount`: get the number of potentially user-available specs
     /// within the class.
     #[allow(unsafe_code)]
     pub(crate) fn get_ui_spec_count(self) -> u32 {
-        // SAFETY: As for `members`.
-        unsafe { (*self.members()).ui_count }
+        // SAFETY: As for `specs`.
+        unsafe { (*self.members).ui_count }
     }
 
     /// `NewGRFClass::GetSpec`: get a spec from the class at a given index.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "GetSpecCount's static_cast<uint>"
-    )]
     #[allow(unsafe_code)]
     pub(crate) fn get_spec(self, index: u32) -> *const T {
-        let (spec, count) = self.specs();
         /* If the custom spec isn't defined any more, then the GRF file probably was not loaded. */
-        if index < count as u32 {
-            // SAFETY: As for `members`; `index` is below the span's length.
-            unsafe { *spec.add(index as usize) }
+        if index < self.get_spec_count() {
+            // SAFETY: As for `specs`; `index` is below the count.
+            unsafe { *self.specs().0.add(index as usize) }
         } else {
             ptr::null()
         }
@@ -235,8 +227,8 @@ impl<T: ClassSpec> ClassRef<T> {
     )]
     #[allow(unsafe_code)]
     pub(crate) unsafe fn insert(self, spec: *mut T) {
-        let members = self.members();
-        // SAFETY: As for `members`; the borrow ends with the statement.
+        let members = self.members;
+        // SAFETY: As for `specs`; the borrow ends with the statement.
         let index = unsafe {
             (*members).spec.push(spec);
             ((*members).spec.len() - 1) as u16
@@ -261,9 +253,22 @@ impl<T: ClassSpec> NewGRFClass<T> {
         // SAFETY: The module's serialization contract.
         unsafe { (*T::registry()).classes.as_mut_ptr() }
     }
-    /// The class at `class`, which the C++ class passes as its own `Index()`.
-    fn at(class: u16) -> ClassRef<T> {
-        ClassRef(Self::classes().wrapping_add(usize::from(class)))
+    /// The class at position `i` of the registry, which is also its index, with its members,
+    /// from one resolution of the registry.
+    #[allow(unsafe_code)]
+    fn at(i: usize) -> ClassRef<T> {
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vectors' headers are read.
+        let (classes, members) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+            )
+        };
+        ClassRef {
+            record: classes.wrapping_add(i),
+            members: members.wrapping_add(i),
+        }
     }
 
     /// `NewGRFClass::Reset`: reset the classes, i.e. clear everything, after installing the
@@ -290,15 +295,23 @@ impl<T: ClassSpec> NewGRFClass<T> {
         let registry = T::registry();
         // SAFETY: The module's serialization contract; the vector's header is read, and each
         // class's `global_id` with a field-sized load.
-        let classes = unsafe { (*registry).classes.as_mut_ptr() };
-        // SAFETY: As above.
-        let count = unsafe { (*registry).classes.len() };
+        let (classes, members, count) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+                (*registry).classes.len(),
+            )
+        };
         // SAFETY: As above; each position is below the count.
         let found = (0..count).find(|&i| unsafe { (*classes.add(i)).global_id } == global_id);
 
         /* Id is already allocated, so reuse it. */
         if let Some(found) = found {
-            return ClassRef(classes.wrapping_add(found)).index();
+            let found = ClassRef {
+                record: classes.wrapping_add(found),
+                members: members.wrapping_add(found),
+            };
+            return found.index();
         }
 
         /* More slots available, allocate a slot to the global id. */
@@ -348,12 +361,20 @@ impl<T: ClassSpec> NewGRFClass<T> {
         let class_index = usize::from(class_index.index());
         let registry = T::registry();
         // SAFETY: The module's serialization contract; the vector's header is read.
-        let (classes, count) =
-            unsafe { ((*registry).classes.as_mut_ptr(), (*registry).classes.len()) };
+        let (classes, members, count) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+                (*registry).classes.len(),
+            )
+        };
         crate::services_assert::assert_with(|| class_index < count);
         // A build without assertions indexes past the end, as the original's
         // `classes[class_index]`.
-        ClassRef(classes.wrapping_add(class_index))
+        ClassRef {
+            record: classes.wrapping_add(class_index),
+            members: members.wrapping_add(class_index),
+        }
     }
 
     /// `NewGRFClass::GetClassCount`: get the number of allocated classes.
@@ -376,12 +397,19 @@ impl<T: ClassSpec> NewGRFClass<T> {
     pub(crate) fn get_ui_class_count() -> u32 {
         let registry = T::registry();
         // SAFETY: The module's serialization contract; the vector's header is read.
-        let (members, count) = unsafe { ((*registry).members.as_ptr(), (*registry).classes.len()) };
-        // Each class's members are at its position, which is its index.
-        // SAFETY: As above; each position is below the count, and `ui_count` is read with a
-        // field-sized load.
+        let (classes, members, count) = unsafe {
+            (
+                (*registry).classes.as_mut_ptr(),
+                (*registry).members.as_mut_ptr(),
+                (*registry).classes.len(),
+            )
+        };
         (0..count)
-            .filter(|&i| unsafe { (*members.add(i)).ui_count } > 0)
+            .map(|i| ClassRef {
+                record: classes.wrapping_add(i),
+                members: members.wrapping_add(i),
+            })
+            .filter(|cls| cls.get_ui_spec_count() > 0)
             .count() as u32
     }
 
@@ -502,19 +530,19 @@ pub extern "C" fn openttd_rust_station_class_ui_count() -> u32 {
 pub extern "C" fn openttd_rust_station_class_specs(
     class: u16,
 ) -> *const *mut crate::station_cmd::RailSpec {
-    NewGRFClass::at(class).specs().0
+    NewGRFClass::at(usize::from(class)).specs().0
 }
 /// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_class_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::station_cmd::RailSpec>::at(class).get_spec_count()
+    NewGRFClass::<crate::station_cmd::RailSpec>::at(usize::from(class)).get_spec_count()
 }
 /// `NewGRFClass::GetUISpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_class_ui_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::station_cmd::RailSpec>::at(class).get_ui_spec_count()
+    NewGRFClass::<crate::station_cmd::RailSpec>::at(usize::from(class)).get_ui_spec_count()
 }
 /// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
@@ -523,7 +551,7 @@ pub extern "C" fn openttd_rust_station_class_spec(
     class: u16,
     index: u32,
 ) -> *const crate::station_cmd::RailSpec {
-    NewGRFClass::at(class).get_spec(index)
+    NewGRFClass::at(usize::from(class)).get_spec(index)
 }
 /// `NewGRFClass::GetByGrf`.
 #[allow(unsafe_code)]
@@ -604,19 +632,19 @@ pub extern "C" fn openttd_rust_roadstop_class_ui_count() -> u32 {
 pub extern "C" fn openttd_rust_roadstop_class_specs(
     class: u16,
 ) -> *const *mut crate::station_cmd::RoadSpec {
-    NewGRFClass::at(class).specs().0
+    NewGRFClass::at(usize::from(class)).specs().0
 }
 /// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_roadstop_class_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::station_cmd::RoadSpec>::at(class).get_spec_count()
+    NewGRFClass::<crate::station_cmd::RoadSpec>::at(usize::from(class)).get_spec_count()
 }
 /// `NewGRFClass::GetUISpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_roadstop_class_ui_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::station_cmd::RoadSpec>::at(class).get_ui_spec_count()
+    NewGRFClass::<crate::station_cmd::RoadSpec>::at(usize::from(class)).get_ui_spec_count()
 }
 /// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
@@ -625,7 +653,7 @@ pub extern "C" fn openttd_rust_roadstop_class_spec(
     class: u16,
     index: u32,
 ) -> *const crate::station_cmd::RoadSpec {
-    NewGRFClass::at(class).get_spec(index)
+    NewGRFClass::at(usize::from(class)).get_spec(index)
 }
 /// `NewGRFClass::GetByGrf`.
 #[allow(unsafe_code)]
@@ -683,13 +711,13 @@ pub extern "C" fn openttd_rust_airport_class_ui_count() -> u32 {
 pub extern "C" fn openttd_rust_airport_class_specs(
     class: u16,
 ) -> *const *mut crate::station_cmd::AirportSpec {
-    NewGRFClass::at(class).specs().0
+    NewGRFClass::at(usize::from(class)).specs().0
 }
 /// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_airport_class_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::station_cmd::AirportSpec>::at(class).get_spec_count()
+    NewGRFClass::<crate::station_cmd::AirportSpec>::at(usize::from(class)).get_spec_count()
 }
 /// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
@@ -698,7 +726,7 @@ pub extern "C" fn openttd_rust_airport_class_spec(
     class: u16,
     index: u32,
 ) -> *const crate::station_cmd::AirportSpec {
-    NewGRFClass::at(class).get_spec(index)
+    NewGRFClass::at(usize::from(class)).get_spec(index)
 }
 
 /// `NewGRFClass::Reset`.
@@ -751,19 +779,19 @@ pub extern "C" fn openttd_rust_object_class_ui_count() -> u32 {
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_class_specs(class: u16) -> *const *mut crate::objects::Spec {
-    NewGRFClass::at(class).specs().0
+    NewGRFClass::at(usize::from(class)).specs().0
 }
 /// `NewGRFClass::GetSpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_class_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::objects::Spec>::at(class).get_spec_count()
+    NewGRFClass::<crate::objects::Spec>::at(usize::from(class)).get_spec_count()
 }
 /// `NewGRFClass::GetUISpecCount` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_class_ui_spec_count(class: u16) -> u32 {
-    NewGRFClass::<crate::objects::Spec>::at(class).get_ui_spec_count()
+    NewGRFClass::<crate::objects::Spec>::at(usize::from(class)).get_ui_spec_count()
 }
 /// `NewGRFClass::GetSpec` of the C++ class whose `Index()` is `class`.
 #[allow(unsafe_code)]
@@ -772,7 +800,7 @@ pub extern "C" fn openttd_rust_object_class_spec(
     class: u16,
     index: u32,
 ) -> *const crate::objects::Spec {
-    NewGRFClass::at(class).get_spec(index)
+    NewGRFClass::at(usize::from(class)).get_spec(index)
 }
 /// `NewGRFClass::GetByGrf`.
 #[allow(unsafe_code)]
