@@ -663,6 +663,18 @@
   "after": 1,
   "before": 0,
   "kind": "suppression",
+  "operation": "newgrf_class::get",
+  "reason": "Plan #1064 decisions 1 to 3: the class registry is a process-wide Rust static that C++ reads in place, and its specs are native records reached through the class leaves, under the module's serialization contract, or the item is an export of the C++ facade; the allow is scoped to the item instead of the module.",
+  "retirement_condition": "Retires when the station, road stop, airport and object specs and the C++ class facade move to Rust, and the registry and specs are reached without raw places or exports.",
+  "retiring_owner": "#669",
+  "site": "rust/openttd-kernels/src/newgrf_class.rs | impl<T: ClassSpec> NewGRFClass<T> > fn get | allow unsafe_code",
+  "source_contract": "`NewGRFClass` (src/newgrf_class.h, src/newgrf_class_func.h)",
+  "tool": "rust"
+ },
+ {
+  "after": 1,
+  "before": 0,
+  "kind": "suppression",
   "operation": "newgrf_class::get_by_grf",
   "reason": "Plan #1064 decisions 1 to 3: the class registry is a process-wide Rust static that C++ reads in place, and its specs are native records reached through the class leaves, under the module's serialization contract, or the item is an export of the C++ facade; the allow is scoped to the item instead of the module.",
   "retirement_condition": "Retires when the station, road stop, airport and object specs and the C++ class facade move to Rust, and the registry and specs are reached without raw places or exports.",
@@ -680,6 +692,18 @@
   "retirement_condition": "Retires when the station, road stop, airport and object specs and the C++ class facade move to Rust, and the registry and specs are reached without raw places or exports.",
   "retiring_owner": "#669",
   "site": "rust/openttd-kernels/src/newgrf_class.rs | impl<T: ClassSpec> NewGRFClass<T> > fn get_class_count | allow unsafe_code",
+  "source_contract": "`NewGRFClass` (src/newgrf_class.h, src/newgrf_class_func.h)",
+  "tool": "rust"
+ },
+ {
+  "after": 1,
+  "before": 0,
+  "kind": "suppression",
+  "operation": "newgrf_class::get_ui_class_count",
+  "reason": "Plan #1064 decisions 1 to 3: the class registry is a process-wide Rust static that C++ reads in place, and its specs are native records reached through the class leaves, under the module's serialization contract, or the item is an export of the C++ facade; the allow is scoped to the item instead of the module.",
+  "retirement_condition": "Retires when the station, road stop, airport and object specs and the C++ class facade move to Rust, and the registry and specs are reached without raw places or exports.",
+  "retiring_owner": "#669",
+  "site": "rust/openttd-kernels/src/newgrf_class.rs | impl<T: ClassSpec> NewGRFClass<T> > fn get_ui_class_count | allow unsafe_code",
   "source_contract": "`NewGRFClass` (src/newgrf_class.h, src/newgrf_class_func.h)",
   "tool": "rust"
  },

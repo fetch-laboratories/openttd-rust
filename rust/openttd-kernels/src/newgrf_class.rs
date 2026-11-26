@@ -290,20 +290,20 @@ impl<T: ClassSpec> NewGRFClass<T> {
         let registry = T::registry();
         // SAFETY: The module's serialization contract; the vector's header is read, and each
         // class's `global_id` with a field-sized load.
-        let found = unsafe {
-            let (classes, count) = ((*registry).classes.as_ptr(), (*registry).classes.len());
-            (0..count).find(|&i| (*classes.add(i)).global_id == global_id)
-        };
+        let classes = unsafe { (*registry).classes.as_mut_ptr() };
+        // SAFETY: As above.
+        let count = unsafe { (*registry).classes.len() };
+        // SAFETY: As above; each position is below the count.
+        let found = (0..count).find(|&i| unsafe { (*classes.add(i)).global_id } == global_id);
 
         /* Id is already allocated, so reuse it. */
         if let Some(found) = found {
-            return Self::at_position(found).index();
+            return ClassRef(classes.wrapping_add(found)).index();
         }
 
         /* More slots available, allocate a slot to the global id. */
         // SAFETY: As above; no reference to a class is live while the vectors grow.
         unsafe {
-            let count = (*registry).classes.len();
             if count < usize::from(tmax.index()) {
                 let index = T::Index::from_index(count as u16);
                 (*registry).classes.push(NewGRFClass {
@@ -327,11 +327,6 @@ impl<T: ClassSpec> NewGRFClass<T> {
         );
         T::Index::from_index(0)
     }
-    /// The class at position `i` of `classes`.
-    fn at_position(i: usize) -> ClassRef<T> {
-        ClassRef(Self::classes().wrapping_add(i))
-    }
-
     /// `NewGRFClass::Assign`: assign a spec to one of the classes. The spec must have a valid
     /// class index set.
     /// # Safety
@@ -348,12 +343,17 @@ impl<T: ClassSpec> NewGRFClass<T> {
     }
 
     /// `NewGRFClass::Get`: get a particular class.
+    #[allow(unsafe_code)]
     pub(crate) fn get(class_index: T::Index) -> ClassRef<T> {
         let class_index = usize::from(class_index.index());
-        crate::services_assert::assert_with(|| class_index < Self::get_class_count() as usize);
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vector's header is read.
+        let (classes, count) =
+            unsafe { ((*registry).classes.as_mut_ptr(), (*registry).classes.len()) };
+        crate::services_assert::assert_with(|| class_index < count);
         // A build without assertions indexes past the end, as the original's
         // `classes[class_index]`.
-        Self::at_position(class_index)
+        ClassRef(classes.wrapping_add(class_index))
     }
 
     /// `NewGRFClass::GetClassCount`: get the number of allocated classes.
@@ -372,10 +372,16 @@ impl<T: ClassSpec> NewGRFClass<T> {
         clippy::cast_possible_truncation,
         reason = "count_if's difference narrows to the uint result"
     )]
+    #[allow(unsafe_code)]
     pub(crate) fn get_ui_class_count() -> u32 {
-        (0..Self::get_class_count() as usize)
-            .map(Self::at_position)
-            .filter(|cls| cls.get_ui_spec_count() > 0)
+        let registry = T::registry();
+        // SAFETY: The module's serialization contract; the vector's header is read.
+        let (members, count) = unsafe { ((*registry).members.as_ptr(), (*registry).classes.len()) };
+        // Each class's members are at its position, which is its index.
+        // SAFETY: As above; each position is below the count, and `ui_count` is read with a
+        // field-sized load.
+        (0..count)
+            .filter(|&i| unsafe { (*members.add(i)).ui_count } > 0)
             .count() as u32
     }
 
@@ -870,8 +876,10 @@ mod tests {
     /// `NewGRFClass::Assign` asserts the spec's class index against the class count, and then
     /// `Get` asserts it again. Under a policy that returns from the first failure and ends the
     /// process at the second, a spec whose class index is the count ends at `Get`'s
-    /// assertion, before the class is indexed or anything is stored. Without `Assign`'s own
-    /// assertion, `Get`'s is the first, and the body goes on to index the class.
+    /// assertion, before the class is indexed or anything is stored. Without either
+    /// assertion, the body goes on to insert the spec and the test fails; the class past the
+    /// count is a real record that the registry no longer counts, so that path reads only
+    /// initialised storage.
     #[test]
     #[allow(unsafe_code)] // A live stand-in spec that only the class leaves receive.
     fn assign_of_a_class_index_past_the_classes_fails_both_assertions() {
@@ -886,8 +894,17 @@ mod tests {
         // SAFETY: The table lives for the process; `AirportClass::InsertDefaults` reads none
         // of its leaves.
         unsafe { AirportClass::reset(services(ptr::null())) };
+        let count = AirportClass::get_class_count() as usize;
+        // A fifth class, which the registry then stops counting without dropping it.
+        AirportClass::allocate(u32::from_be_bytes(*b"PAST"), AirportClassID::APC_MAX);
+        let registry = <AirportSpec as ClassSpec>::registry();
+        // SAFETY: Both vectors hold `count + 1` initialised elements; the last stays in place.
+        unsafe {
+            (*registry).classes.set_len(count);
+            (*registry).members.set_len(count);
+        }
         let mut spec = StandIn {
-            class_index: u16::try_from(AirportClass::get_class_count()).unwrap(),
+            class_index: u16::try_from(count).unwrap(),
             views: 0,
         };
         // SAFETY: `spec` is live; the second failed assertion ends the process.
