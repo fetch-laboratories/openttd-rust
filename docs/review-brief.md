@@ -1,6 +1,6 @@
 # Review brief
 
-You review a PR or a plan. The message that started you names your review: a behaviour review or a porting review of a whole PR or of the commits it names, a re-check, or a plan review. Do the section your message names. A PR's behaviour and porting reviewers review it side by side; leave the other's section to it.
+You review a PR or a plan. The message that started you names your review: a behaviour review or a porting review of a whole PR or of the commits it names, a re-check, a scoped acceptance, or a plan review. Do the section your message names. A PR's behaviour and porting reviewers review it side by side; leave the other's section to it.
 
 ## Before reviewing
 
@@ -43,6 +43,15 @@ A re-check is a PR's second and last review stage ([ADR 0025](adr/0025-two-revie
 - Say for each earlier finding whether its fixing commit resolves it, or whether what the implementer's answer names allows it.
 - Raise a new finding only in a line a fixing commit changed, or for a behaviour difference on input the game can produce, wherever you see one.
 - Anything else you notice is one line under the disposition and does not change it. The implementer fixes it without a further review where the operations stay unchanged, or records it as residue in the PR body.
+
+## A scoped acceptance
+
+A scoped acceptance follows a PR's last review stage when a fix changed a cleanup record or an `unsafe_code` item ([review](workflow.md#review)). It reads the commits it names, rules on each record and `unsafe_code` item they change, and is the last review of those commits.
+
+- Accept a record whose item meets it and [lint policy](rust-migration.md#cleanup-records). An `unsafe_code` item meets it when its contract covers its unsafe operations at every call site in the tree: game, tests and fixtures.
+- Withhold an acceptance, as a finding, only for a call site in the tree that breaches the item's contract, a record that misstates its item, or a [design fault](porting.md#design-faults) the commits wrote.
+- A function that safe Rust could call in breach of its contract, where no call site does, is not a finding and does not withhold the acceptance; nor is a contract's wording that every call site meets. Give each one line under the disposition, which the implementer records on #734. Moving the `unsafe` out to callers would change their items and need another acceptance one caller further out.
+- Raise nothing in lines the commits did not change.
 
 ## A plan review
 
@@ -88,7 +97,7 @@ Post one report on the PR as a separate comment, with the PR template's review s
 - Give one line for each recorded exception you allowed: the exception and what allows it.
 - A behaviour or porting review gives one line naming every changed body it compared with its original. A body you did not compare is not reviewed; say so on that line.
 - A porting reviewer, or a behaviour reviewer that reviews alone, that accepts a growth exception, lint exception or suppression proposed in the branch's cleanup records file adds the fenced `cleanup-acceptance` block it needs to the same report ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)); without it the PR cannot queue.
-- End with the disposition and your review, such as `accepted, whole PR porting` or `findings to remediate, whole PR behaviour`. An acceptance holds only the reviewed commit, the attribution, the line of bodies compared, any allowed exceptions and acceptance blocks, and the disposition.
+- End with the disposition and your review, such as `accepted, whole PR porting`, `findings to remediate, whole PR behaviour` or `accepted, scoped acceptance`. An acceptance holds only the reviewed commit, the attribution, the line of bodies compared, any allowed exceptions and acceptance blocks, and the disposition.
 - Post the report when the source review is done; do not wait for CI.
 
 Your last line is `PR <url>, head <SHA>, checks and reviews <state>`, then the report's URL and disposition once posted, or the job ID when you end a turn to wait on one. It reaches the implementer when your turn ends.

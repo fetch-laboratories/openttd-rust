@@ -30,7 +30,7 @@ Where the plan has a speed check, count instructions at the base and the head ([
 
 ## Messaging root
 
-Message root, at the thread your spawn message names, only when the queue merges or removes the PR (one line: PR, head, outcome), for a question only root can answer, or for a stop you cannot work past. When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
+Message root, at the thread your spawn message names, only when the queue merges or removes the PR (one line: PR, head, outcome), before a PR's second [scoped acceptance](workflow.md#review), for a question only root can answer, or for a stop you cannot work past. When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
 
 ## Starting reviewers
 
@@ -44,6 +44,8 @@ A re-check, when [review](workflow.md#review) calls for one, is one reviewer for
 
 > Re-check PR <URL> under `docs/review-brief.md`. You are /root/review-<PR>-recheck. Check the fixing commits <SHAs> against the findings in <report URLs>.
 
-The scoped reviews that [review](workflow.md#review) allows after a review use the first two messages with `the commits <SHAs>` and a name that says what they cover, such as /root/review-<PR>-base-behaviour.
+The scoped behaviour reviews that [review](workflow.md#review) allows after a review use the behaviour message with `the commits <SHAs>` and a name that says what they cover, such as /root/review-<PR>-base-behaviour. A [scoped acceptance](review-brief.md#a-scoped-acceptance) has its own message:
+
+> Give PR <URL> a scoped acceptance under `docs/review-brief.md`. You are /root/review-<PR>-acceptance-<n>. Review the commits <SHAs>.
 
 Each reviewer's last message, with its report's URL and disposition, reaches you when its turn ends. A tool call cancelled with a notice to stop as such a message arrives is the host delivering it: read the message, rerun the call and carry on.
