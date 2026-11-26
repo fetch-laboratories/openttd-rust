@@ -82,14 +82,14 @@ WRITES = ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input")
 
 def read_only(args: tuple[str, ...]) -> bool:
     """Whether a gh call only reads: a REST GET, a variable list, a repo view or
-    the fixed QUEUE_STATE query (a POST that changes nothing). No mutation and no
-    pr, workflow or run subcommand is a read here."""
+    the fixed QUEUE_STATE or BASE_QUEUE query (a POST that changes nothing). No
+    mutation and no pr, workflow or run subcommand is a read here."""
     if args[:2] in (("variable", "list"), ("repo", "view")):
         return True
     if args[:1] != ("api",):
         return False
     if args[1:2] == ("graphql",):
-        return f"query={QUEUE_STATE}" in args
+        return f"query={QUEUE_STATE}" in args or f"query={BASE_QUEUE}" in args
     return not any(arg.split("=", 1)[0] in WRITES for arg in args[1:])
 
 
@@ -1118,6 +1118,24 @@ class QueueEntry(TypedDict):
     position: int
 
 
+class QueueMember(QueueEntry):
+    """A queued PR as BASE_QUEUE names it."""
+
+    number: int
+
+
+@dataclass(frozen=True)
+class BranchQueue:
+    """A branch's merge queue: the first entries and how many it holds in all."""
+
+    entries: tuple[QueueMember, ...]
+    total: int
+
+
+class QueueUnread(Exception):
+    """The merge queue could not be read, which is not an empty queue."""
+
+
 class QueueState(TypedDict):
     """The fields of QUEUE_STATE's pull request that queue_wait reads."""
 
@@ -1183,6 +1201,66 @@ def queue_state(repository: str, pr: int) -> QueueState:
         )
     )
     return answer["data"]["repository"]["pullRequest"]
+
+
+# The queue of a branch, whatever PR is asking. The queue may hold more entries
+# than the page of ten asked for, so totalCount and not the page says whether it
+# is empty.
+BASE_QUEUE = """
+query($owner: String!, $name: String!, $branch: String!) {
+  repository(owner: $owner, name: $name) {
+    mergeQueue(branch: $branch) {
+      entries(first: 10) {
+        totalCount
+        nodes { state position pullRequest { number } }
+      }
+    }
+  }
+}
+"""
+
+
+def branch_queue(repository: str, branch: str) -> BranchQueue:
+    """The merge queue of a protected branch on github.com. GraphQL answers
+    `mergeQueue: null` for a branch with no queue; for the branch asked about
+    that means the read missed, so it raises QueueUnread rather than report an
+    empty queue, as it does for any other null or missing field."""
+    owner, name = repository.split("/", 1)
+    # github.com whatever GH_HOST says: the hook asks only for github.com pushes.
+    # -f keeps each variable a string; -F would send a name like 2048 as an Int.
+    answer = json.loads(
+        gh(
+            "api",
+            "graphql",
+            "--hostname",
+            "github.com",
+            "-f",
+            f"query={BASE_QUEUE}",
+            "-f",
+            f"owner={owner}",
+            "-f",
+            f"name={name}",
+            "-f",
+            f"branch={branch}",
+        )
+    )
+    unread = QueueUnread(f"no merge queue reads for {repository} {branch}")
+    try:
+        entries = answer["data"]["repository"]["mergeQueue"]["entries"]
+        return BranchQueue(
+            tuple(
+                QueueMember(
+                    state=str(node["state"]),
+                    position=int(node["position"]),
+                    number=int(node["pullRequest"]["number"]),
+                )
+                for node in entries["nodes"]
+            ),
+            int(entries["totalCount"]),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        # A null anywhere on the path, a missing queue included, is a missed read.
+        raise unread from error
 
 
 def queue_runs(repository: str, pr: int) -> list[QueueRun]:

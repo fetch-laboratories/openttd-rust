@@ -105,23 +105,6 @@ inline DiagDirection ReverseDiagDir(DiagDirection d)
 }
 
 /**
- * Applies a difference on a DiagDirection
- *
- * This function applies a difference on a DiagDirection and returns
- * the new DiagDirection.
- *
- * @param d The DiagDirection
- * @param delta The difference to apply on
- * @return The new direction which was calculated
- */
-inline DiagDirection ChangeDiagDir(DiagDirection d, DiagDirDiff delta)
-{
-	assert(IsValidDiagDirection(d));
-	/* Cast to uint so compiler can use bitmask. Result can never be negative. */
-	return static_cast<DiagDirection>((static_cast<uint>(d) + static_cast<uint>(delta)) % 4);
-}
-
-/**
  * Convert a Direction to a DiagDirection.
  *
  * This function can be used to convert the 8-way Direction to

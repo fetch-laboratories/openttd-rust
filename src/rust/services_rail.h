@@ -38,11 +38,8 @@ inline bool RustRailPowered(EngineType engine, RailType tile) noexcept { return 
 inline bool RustRailPoweredMask(uint64_t types, RailType type) noexcept { return RustRailPowered(RailTypes(types), type); }
 inline DiagDirection RustRailDepotDirection(uint32_t tile) noexcept { return GetRailDepotDirection(TileIndex(tile)); }
 inline TrackBits RustRailTracks(uint32_t tile) noexcept { return GetTrackBits(TileIndex(tile)); }
-inline bool RustRailHasSignals(uint32_t tile) noexcept { return HasSignals(TileIndex(tile)); }
-inline bool RustRailHasSignalTrack(uint32_t tile, uint8_t track) noexcept { return HasSignalOnTrack(TileIndex(tile), static_cast<Track>(track)); }
 inline void RustRailSetSignalState(uint32_t tile, uint8_t td, uint8_t state) noexcept { SetSignalStateByTrackdir(TileIndex(tile), static_cast<Trackdir>(td), static_cast<SignalState>(state)); }
 inline Axis RustRailStationAxis(uint32_t tile) noexcept { return GetRailStationAxis(TileIndex(tile)); }
-inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoadAxis(TileIndex(tile)); }
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
 inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOtherTunnelBridgeEnd(TileIndex(tile)).base(); }
 
@@ -90,5 +87,4 @@ Result OpenTTDLegacyMapQuery(Handle, Args... args) noexcept
 }
 inline bool RustIsTunnel(uint32_t tile) noexcept { return IsTunnel(TileIndex{tile}); }
 static_assert(TRACK_END == 6);
-inline bool RustCrossingBarred(uint32_t tile) noexcept { return IsCrossingBarred(TileIndex{tile}); }
 #endif /* RUST_SERVICES_RAIL_H */

@@ -250,17 +250,6 @@ inline DepotPart GetShipDepotPart(Tile t)
 }
 
 /**
- * Get the direction of the ship depot.
- * @param t Water tile to query.
- * @return Direction of the depot.
- * @pre IsShipDepotTile(t)
- */
-inline DiagDirection GetShipDepotDirection(Tile t)
-{
-	return XYNSToDiagDir(GetShipDepotAxis(t), to_underlying(GetShipDepotPart(t)));
-}
-
-/**
  * Get the other tile of the ship depot.
  * @param t Tile to query, containing one section of a ship depot.
  * @return Tile containing the other section of the depot.

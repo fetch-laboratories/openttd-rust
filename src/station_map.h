@@ -588,16 +588,6 @@ inline DiagDirection GetDockDirection(Tile t)
 }
 
 /**
- * Check whether a dock tile is the tile on water.
- */
-inline bool IsDockWaterPart(Tile t)
-{
-	assert(IsDockTile(t));
-	StationGfx gfx = GetStationGfx(t);
-	return gfx >= GFX_DOCK_BASE_WATER_PART;
-}
-
-/**
  * Is there a custom rail station spec on this tile?
  * @param t Tile to query
  * @pre HasStationTileRail(t)

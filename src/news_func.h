@@ -18,16 +18,6 @@
 void AddNewsItem(EncodedString &&headline, NewsType type, NewsStyle style, NewsFlags flags, NewsReference ref1 = {}, NewsReference ref2 = {}, std::unique_ptr<NewsAllocatedData> &&data = nullptr, AdviceType advice_type = AdviceType::Invalid);
 
 /**
- * Adds a newsitem referencing a vehicle.
- *
- * @warning The DParams may not reference the vehicle due to autoreplace stuff. See AddVehicleAdviceNewsItem for how that can be done.
- */
-inline void AddVehicleNewsItem(EncodedString &&headline, NewsType type, VehicleID vehicle, StationID station = StationID::Invalid())
-{
-	AddNewsItem(std::move(headline), type, NewsStyle::Thin, {NewsFlag::NoTransparency, NewsFlag::Shaded}, vehicle, station == StationID::Invalid() ? NewsReference{} : station);
-}
-
-/**
  * Adds a vehicle-advice news item.
  *
  * @warning DParam 0 must reference the vehicle!

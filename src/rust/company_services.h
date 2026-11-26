@@ -29,7 +29,6 @@ inline bool RustCompanyEngineRenew(const Company *company) noexcept { return com
 inline uint32_t RustCompanyEngineRenewMoney(const Company *company) noexcept { return company->settings.engine_renew_money; }
 inline int16_t RustCompanyEngineRenewMonths(const Company *company) noexcept { return company->settings.engine_renew_months; }
 inline EngineRenew **RustCompanyRenewalHead(const Company *company) noexcept { return company->renewal_head.state; }
-inline bool RustCompanyServiceIntervalPercent(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.vehicle.servint_ispercent; }
 inline CompanySettings *RustCompanySettings(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings; }
 /** `&c->settings.vehicle`, the one member accessor of the company's vehicle defaults. */
 inline VehicleDefaultSettings *OPENTTD_RUST_CALL RustCompanyVehicleDefaultsOf(Company *c) noexcept { return &c->settings.vehicle; }
