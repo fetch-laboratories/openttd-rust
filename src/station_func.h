@@ -45,8 +45,6 @@ void UpdateAirportsNoise();
 
 bool SplitGroundSpriteForOverlay(const TileInfo *ti, SpriteID *ground, RailTrackOffset *overlay_offset);
 
-void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid2);
-
 /**
  * Calculates the maintenance cost of a number of station tiles.
  * @param num Number of station tiles.

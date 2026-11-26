@@ -1271,21 +1271,6 @@ static bool ClickTile_Station(TileIndex tile)
 }
 
 
-
-/**
- * Reroute cargo of type c at station st or in any vehicles unloading there.
- * Make sure the cargo's new next hop is neither "avoid" nor "avoid2".
- * @param st Station to be rerouted at.
- * @param cargo Type of cargo.
- * @param avoid Original next hop of cargo, avoid this.
- * @param avoid2 Another station to be avoided when rerouting.
- */
-void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid2)
-{
-	openttd_rust_station_reroute(st, cargo, avoid.base(), avoid2.base(), &_rust_station_services, &_rust_station_links);
-}
-
-
 /** Economy monthly loop for stations. */
 static const IntervalTimer<TimerGameEconomy> _economy_stations_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::STATION}, RustClockCallback{openttd_rust_clock_station_monthly, &_rust_station_services});
 

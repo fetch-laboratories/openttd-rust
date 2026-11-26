@@ -1256,26 +1256,6 @@ pub(crate) unsafe fn reroute_cargo(
         node = unsafe { loading_vehicles_next(node) };
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_reroute(
-    st: *mut BaseStation,
-    cargo: u8,
-    avoid: u16,
-    avoid2: u16,
-    world: *const World,
-    links: *const Links,
-) {
-    unsafe {
-        reroute_cargo(
-            st,
-            CargoType(cargo),
-            StationID(avoid),
-            StationID(avoid2),
-            &*world,
-            &*links,
-        );
-    }
-}
 /// `DeleteStaleLinks`: check all next hops of cargo packets in this station for existence of
 /// a valid link they may use to travel on. Reroute any cargo not having a valid link and
 /// remove timed out links found like this from the linkgraph. We're not all links here as
