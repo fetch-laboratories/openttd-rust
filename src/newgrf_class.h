@@ -38,7 +38,7 @@ public:
 	static std::span<NewGRFClass const> Classes() { return {static_cast<const NewGRFClass *>(Ops::classes()), Ops::count()}; }
 	Tindex Index() const { return static_cast<Tindex>(this->index); }
 	uint GetSpecCount() const { return Ops::spec_count(this->Index()); }
-	uint GetUISpecCount() const { return Ops::ui_spec_count(this->Index()); }
+	uint GetUISpecCount() const requires requires { Ops::ui_spec_count; } { return Ops::ui_spec_count(this->Index()); }
 	const Tspec *GetSpec(uint index) const { return Ops::spec(this->Index(), index); }
 	static const OpenTTDGRFClassServices<Tspec> &GetServices();
 	static void Reset();
@@ -48,7 +48,7 @@ public:
 	static uint GetUIClassCount() { return Ops::ui_count(); }
 	/* The inline accessor over the shared record, as the Rust NewGRFClass::get. */
 	static NewGRFClass *Get(Tindex class_index) { assert(static_cast<size_t>(class_index) < Ops::count()); return static_cast<NewGRFClass *>(Ops::classes()) + class_index; }
-	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id) { return Ops::by_grf(grfid, local_id); }
+	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id) requires requires { Ops::by_grf; } { return Ops::by_grf(grfid, local_id); }
 };
 
 #endif /* NEWGRF_CLASS_H */
