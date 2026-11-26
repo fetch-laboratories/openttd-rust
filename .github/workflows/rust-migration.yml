@@ -94,6 +94,8 @@ jobs:
         fetch-depth: 1
         persist-credentials: false
     - uses: ./.github/actions/native-environment
+      with:
+        package-cache: ${{ startsWith(vars.CI_LINUX_HEAVY, 'blacksmith-') }}
     - id: cache
       uses: ./.github/actions/native-cache
     - name: Build native Rust generators without the game
@@ -171,6 +173,8 @@ jobs:
         fetch-depth: 1
         persist-credentials: false
     - uses: ./.github/actions/native-environment
+      with:
+        package-cache: ${{ startsWith(vars.CI_LINUX_COMPARISONS, 'blacksmith-') }}
     - uses: actions/download-artifact@v4
       with:
         name: native-comparison-inputs
@@ -208,6 +212,8 @@ jobs:
         fetch-depth: 1
         persist-credentials: false
     - uses: ./.github/actions/native-environment
+      with:
+        package-cache: ${{ startsWith(vars.CI_LINUX_SIMULATION, 'blacksmith-') }}
     - uses: actions/download-artifact@v4
       with:
         name: native-build-inputs

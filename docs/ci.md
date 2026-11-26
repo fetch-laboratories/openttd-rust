@@ -105,7 +105,8 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 
 ## Caches
 
-- `ci-cache.yml` bounds total cache use to 8 GiB under GitHub's 10 GiB limit.
+- `ci-cache.yml` bounds total cache use to 8 GiB under GitHub's 10 GiB limit. That is the free runners' cache. A Blacksmith runner's cache actions read and write Blacksmith's own cache instead: 25 GB a repository, least recently used entries evicted after seven days, at no charge. `blacksmith cache list` shows its entries and their scope.
+- The paid native jobs keep the packages `apt-get` downloads in that cache (`package-cache` of the `native-environment` action). apt checks each archive against its signed index before using it.
 - Requested dispatches share the `rust-migration` ref's cache-write scope with protected pushes. That is accepted only while every PR comes from the fork's own agents; before the fork accepts outside PRs, enforce candidate cache-write separation by ref or service policy.
 
 ## Native validation

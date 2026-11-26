@@ -1689,6 +1689,65 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
         self.assertEqual(result["deleted"], [])
         self.assertTrue(result["failures"])
 
+    def test_paid_native_jobs_keep_their_packages_in_the_cache(self) -> None:
+        """Each caller keeps packages only where its own runner variable names a
+        paid runner, whose cache is beside it; a free runner's share of GitHub's
+        10 GiB stays as ci-cache.yml bounds it (#896)."""
+        action = yaml.safe_load(
+            (ROOT / ".github/actions/native-environment/action.yml").read_text()
+        )
+        steps = action["runs"]["steps"]
+        install = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("uses") == "./.github/actions/apt-install"
+        )
+        cached = [step for step in steps if "package-cache" in step.get("if", "")]
+        # Every step but the install and the toolchain setup is the cache's.
+        self.assertEqual(len(cached), len(steps) - 2)
+        for step in cached:
+            self.assertFalse(evaluate(step["if"], inputs={"package-cache": "false"}))
+        restore, save = (
+            next(
+                step for step in steps if step.get("uses") == f"actions/cache/{kind}@v4"
+            )
+            for kind in ("restore", "save")
+        )
+        self.assertLess(steps.index(restore), install)
+        self.assertGreater(steps.index(save), install)
+        self.assertEqual(restore["with"]["path"], save["with"]["path"])
+        self.assertTrue(
+            restore["with"]["key"].startswith(restore["with"]["restore-keys"])
+        )
+        directory = restore["with"]["path"].removesuffix("/*.deb")
+        self.assertIn(f'Dir::Cache::archives "{directory}";', steps[0]["run"])
+        for added, expected in (("0", False), ("3", True)):
+            saves = evaluate(
+                save["if"],
+                inputs={"package-cache": "true"},
+                steps={"packages-new": {"outputs": {"added": added}}},
+            )
+            self.assertEqual(saves, expected)
+        native = workflow("rust-migration.yml")["jobs"]
+        reference = workflow("ci-build.yml")["jobs"]["platform-reference"]
+        for body in (
+            *(native[name] for name in ("build", "comparisons", "simulation")),
+            reference,
+        ):
+            (step,) = [
+                step
+                for step in body["steps"]
+                if step.get("uses") == "./.github/actions/native-environment"
+            ]
+            variable = re.fullmatch(
+                r"\$\{\{ vars\.(\w+) \|\| 'ubuntu-24\.04' \}\}", body["runs-on"]
+            )
+            assert variable
+            self.assertEqual(
+                step["with"]["package-cache"],
+                f"${{{{ startsWith(vars.{variable[1]}, 'blacksmith-') }}}}",
+            )
+
     def test_pruning_follows_only_protected_push_runs(self) -> None:
         predicate = job("ci-cache.yml", "prune")["if"]
         for event, branch, expected in (
@@ -2482,7 +2541,13 @@ class PolicyTests(unittest.TestCase):
         ):
             for event, ref, checkout, variable, expected in (
                 ("push", protected, "", "", True),
-                ("merge_group", "refs/heads/gh-readonly-queue/x", "group", "true", True),
+                (
+                    "merge_group",
+                    "refs/heads/gh-readonly-queue/x",
+                    "group",
+                    "true",
+                    True,
+                ),
                 ("merge_group", "refs/heads/gh-readonly-queue/x", "group", "", False),
                 ("workflow_dispatch", protected, "merge", "true", False),
                 ("pull_request", "refs/pull/1/merge", "", "true", False),

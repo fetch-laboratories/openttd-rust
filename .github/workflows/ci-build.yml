@@ -118,6 +118,8 @@ jobs:
       with:
         persist-credentials: false
     - uses: ./.github/actions/native-environment
+      with:
+        package-cache: ${{ startsWith(vars.CI_LINUX_HEAVY, 'blacksmith-') }}
     - uses: ./.github/actions/native-cache
     - name: Build the pinned Linux reference
       env:
