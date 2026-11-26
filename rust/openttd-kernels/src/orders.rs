@@ -58,6 +58,7 @@ use crate::table::strings::{
 };
 use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
+use crate::timer_game_economy::EconomyDate;
 use crate::timer_game_tick::{DAY_TICKS, INVALID_TICKS, TICKS_PER_SECOND};
 use crate::vehicle::{VehicleRef, VehicleServices};
 use crate::vehicle_base::{VehState, VehStates};
@@ -741,9 +742,9 @@ impl ConsistRef {
     }
 
     /// `BaseConsist::CopyConsistPropertiesFrom`, for the members this owner holds: copy
-    /// properties of other `BaseConsist`. The caller copies `name` before and
-    /// `service_interval` between the timetable members and the order indices, which no
-    /// member here reads.
+    /// properties of other `BaseConsist`. The callers copy `name` before these members and
+    /// `service_interval` after them; the original copies `service_interval` between the
+    /// timetable members and the order indices, and no member here reads it.
     pub(crate) fn copy_consist_properties_from(self, src: Self) {
         if ptr::eq(self.0, src.0) {
             return;
@@ -2667,16 +2668,6 @@ fn station_get(st: StationID, s: &Leaves) -> *mut crate::station::BaseStation {
     (s.shared().base_station)(st.0)
 }
 
-/// `CanVehicleUseStation(v, Station::Get(st))`.
-fn can_vehicle_use_station(v: VehicleRef, st: StationID) -> bool {
-    let airports = crate::newgrf_airport::runtime();
-    crate::vehicle_func::can_vehicle_use_station(
-        v,
-        crate::newgrf_airport::station_by_id(st.0, airports),
-        airports,
-    )
-}
-
 /// `GetVehicleCannotUseStationReason(v, Station::Get(st))`: get reason string why this
 /// station can't be used by the given vehicle. Returns the string explaining why the vehicle
 /// cannot use the station.
@@ -3844,7 +3835,8 @@ pub(crate) fn cmd_insert_order(
                 }
             }
 
-            if !can_vehicle_use_station(v, st_id) {
+            let airports = crate::newgrf_airport::runtime();
+            if !crate::vehicle_func::can_vehicle_use_station(v, st, airports) {
                 return cost.error_extra(
                     STR_ERROR_CAN_T_ADD_ORDER,
                     get_vehicle_cannot_use_station_reason(v, st_id, s),
@@ -3852,7 +3844,7 @@ pub(crate) fn cmd_insert_order(
             }
             let mut u = first_shared_in(list, v, s);
             while let Some(shared) = u {
-                if !can_vehicle_use_station(shared, st_id) {
+                if !crate::vehicle_func::can_vehicle_use_station(shared, st, airports) {
                     return cost.error_extra(
                         STR_ERROR_CAN_T_ADD_ORDER_SHARED,
                         get_vehicle_cannot_use_station_reason(shared, st_id, s),
@@ -3920,11 +3912,8 @@ pub(crate) fn cmd_insert_order(
                     }
 
                     let airports = crate::newgrf_airport::runtime();
-                    if !can_vehicle_use_station(v, st_id)
-                        || !crate::station_base::airport_has_hangar(
-                            crate::newgrf_airport::station_by_id(st_id.0, airports),
-                            airports,
-                        )
+                    if !crate::vehicle_func::can_vehicle_use_station(v, st, airports)
+                        || !crate::station_base::airport_has_hangar(st, airports)
                     {
                         return crate::command_func::cmd_error(cost);
                     }
@@ -4487,13 +4476,10 @@ pub(crate) fn cmd_modify_order(
             }
 
             /* Test for invalid flags. */
-            let nonstop_flags = OrderNonStopFlags(
-                nonstop_flags.0
-                    & !(OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate)
-                        .with(OrderNonStopFlags::from_element(
-                            OrderNonStopFlag::NoDestination,
-                        ))
-                        .0),
+            let nonstop_flags = nonstop_flags.reset_all(
+                OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate).with(
+                    OrderNonStopFlags::from_element(OrderNonStopFlag::NoDestination),
+                ),
             );
             if nonstop_flags.any() {
                 return crate::command_func::cmd_error(cost);
@@ -4812,7 +4798,8 @@ pub(crate) fn cmd_modify_order(
              * so do not care and those orders should not be active
              * when this function is called.
              */
-            if sel_ord == consist(shared).cur_real_order_index()
+            let sc = consist(shared);
+            if sel_ord == sc.cur_real_order_index()
                 && (shared.current_order().is_type(OrderType::OT_GOTO_STATION)
                     || shared.current_order().is_type(OrderType::OT_LOADING))
                 && shared.current_order().load_type() != order.view().load_type()
@@ -4821,7 +4808,7 @@ pub(crate) fn cmd_modify_order(
             }
 
             /* Unbunching data is no longer valid. */
-            consist(shared).reset_depot_unbunching();
+            sc.reset_depot_unbunching();
 
             invalidate_vehicle_order(shared, VehicleInvalidateWindowData::VIWD_MODIFY_ORDERS.0, s);
             u = next_shared(shared, s);
@@ -4910,11 +4897,15 @@ pub(crate) fn cmd_clone_order(
                     /* Allow copying unreachable destinations if they were already unreachable for the source.
                      * This is basically to allow cloning / autorenewing / autoreplacing vehicles, while the stations
                      * are temporarily invalid due to reconstruction. */
-                    let st = order.destination().to_station_id();
-                    if can_vehicle_use_station(src, st) && !can_vehicle_use_station(dst, st) {
+                    let st_id = order.destination().to_station_id();
+                    let airports = crate::newgrf_airport::runtime();
+                    let st = crate::newgrf_airport::station_by_id(st_id.0, airports);
+                    if crate::vehicle_func::can_vehicle_use_station(src, st, airports)
+                        && !crate::vehicle_func::can_vehicle_use_station(dst, st, airports)
+                    {
                         return cost.error_extra(
                             STR_ERROR_CAN_T_COPY_SHARE_ORDER,
-                            get_vehicle_cannot_use_station_reason(dst, st, s),
+                            get_vehicle_cannot_use_station_reason(dst, st_id, s),
                         );
                     }
                 }
@@ -4985,11 +4976,13 @@ pub(crate) fn cmd_clone_order(
                     if !order_goes_to_station(dst, order) {
                         continue;
                     }
-                    let st = order.destination().to_station_id();
-                    if !can_vehicle_use_station(dst, st) {
+                    let st_id = order.destination().to_station_id();
+                    let airports = crate::newgrf_airport::runtime();
+                    let st = crate::newgrf_airport::station_by_id(st_id.0, airports);
+                    if !crate::vehicle_func::can_vehicle_use_station(dst, st, airports) {
                         return cost.error_extra(
                             STR_ERROR_CAN_T_COPY_SHARE_ORDER,
-                            get_vehicle_cannot_use_station_reason(dst, st, s),
+                            get_vehicle_cannot_use_station_reason(dst, st_id, s),
                         );
                     }
                 }
@@ -5142,73 +5135,61 @@ pub(crate) fn cmd_order_refit(
     }
 }
 
-/// `GetStartTickFromDate` over the current `date`, `date_fract` and tick `counter`: get the
-/// `TimerGameTick::TickCounter` tick of a given date, the first tick of `start_date`.
+/// `GetStartTickFromDate`: get the `TimerGameTick::TickCounter` tick of a given date.
+/// `start_date` is the date when the timetable starts; returns the first tick of this date.
 #[allow(
     clippy::cast_sign_loss,
     reason = "the original's conversion to `TickCounter`"
 )]
-pub(crate) fn get_start_tick_from_date(
-    start_date: i32,
-    date: i32,
-    date_fract: u16,
-    counter: u64,
-) -> u64 {
+pub(crate) fn get_start_tick_from_date(start_date: EconomyDate, s: &Leaves) -> u64 {
     /* Calculate the offset in ticks from the current date. */
-    let mut tick_offset = start_date.wrapping_sub(date).wrapping_mul(DAY_TICKS);
+    let mut tick_offset = start_date
+        .0
+        .wrapping_sub(crate::timer_game_common::economy_date().0)
+        .wrapping_mul(DAY_TICKS);
 
     /* Compensate for the current date_fract. */
-    tick_offset = tick_offset.wrapping_sub(i32::from(date_fract));
+    tick_offset = tick_offset.wrapping_sub(i32::from(crate::timer_game_common::economy_fraction()));
 
     /* Return the current tick plus the offset. */
     // `TickCounter + Ticks`: the `int32_t` offset converts to `uint64_t`.
-    counter.wrapping_add(tick_offset as u64)
+    (s.shared().tick_counter)().wrapping_add(tick_offset as u64)
 }
 
-/// `GetDateFromStartTick` over the current `date`, `date_fract` and tick `counter`: get the
-/// date when we reach the `TimerGameTick::TickCounter` `start_tick` of a timetable.
+/// `GetDateFromStartTick`: get a date from a given start tick of timetable. `start_tick` is
+/// the `TimerGameTick::TickCounter` when the timetable starts; returns the date when we reach
+/// this tick.
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the original's `Ticks` result"
 )]
-pub(crate) fn get_date_from_start_tick(
-    start_tick: u64,
-    date: i32,
-    date_fract: u16,
-    counter: u64,
-) -> i32 {
+pub(crate) fn get_date_from_start_tick(start_tick: u64, s: &Leaves) -> EconomyDate {
     /* Calculate the offset in ticks from the current counter tick. */
     // `TickCounter - TickCounter` narrowed to `Ticks`.
-    let mut tick_offset = start_tick.wrapping_sub(counter) as i32;
+    let mut tick_offset = start_tick.wrapping_sub((s.shared().tick_counter)()) as i32;
 
     /* Compensate for the current date_fract. */
-    tick_offset = tick_offset.wrapping_add(i32::from(date_fract));
+    tick_offset = tick_offset.wrapping_add(i32::from(crate::timer_game_common::economy_fraction()));
 
     /* Return the current date plus the offset in days. */
-    date.wrapping_add(tick_offset / DAY_TICKS)
+    EconomyDate(
+        crate::timer_game_common::economy_date()
+            .0
+            .wrapping_add(tick_offset / DAY_TICKS),
+    )
 }
 
 /// `GetStartTickFromDate`, for the C++ callers.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_orders_start_tick(
-    date: i32,
-    current_date: i32,
-    fract: u16,
-    counter: u64,
-) -> u64 {
-    get_start_tick_from_date(date, current_date, fract, counter)
+pub extern "C" fn openttd_rust_orders_start_tick(start_date: i32, s: &'static Leaves) -> u64 {
+    get_start_tick_from_date(EconomyDate(start_date), s)
 }
 /// `GetDateFromStartTick`, for the C++ callers.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_orders_start_date(
-    start: u64,
-    date: i32,
-    fract: u16,
-    counter: u64,
-) -> i32 {
-    get_date_from_start_tick(start, date, fract, counter)
+pub extern "C" fn openttd_rust_orders_start_date(start_tick: u64, s: &'static Leaves) -> i32 {
+    get_date_from_start_tick(start_tick, s).0
 }
 
 /// `ChangeTimetable`: change/update a particular timetable entry. `order_number` is the index
@@ -5567,12 +5548,13 @@ pub(crate) fn cmd_set_vehicle_on_time(
                     continue;
                 }
 
-                if consist(shared).lateness_counter() > most_late {
-                    most_late = consist(shared).lateness_counter();
+                let sc = consist(shared);
+                if sc.lateness_counter() > most_late {
+                    most_late = sc.lateness_counter();
                 }
 
                 /* Unbunching data is no longer valid. */
-                consist(shared).reset_depot_unbunching();
+                sc.reset_depot_unbunching();
             }
             if most_late > 0 {
                 let mut u = list.get_first_shared_vehicle(s);
@@ -5607,8 +5589,9 @@ pub(crate) fn cmd_set_vehicle_on_time(
 /// sorted in order they would reach the first station. True where `a` sorts before `b`.
 #[allow(clippy::many_single_char_names, reason = "the original's names")]
 fn vehicle_timetable_sorter(a: VehicleRef, b: VehicleRef, s: &Leaves) -> bool {
-    let mut a_order = consist(a).cur_real_order_index();
-    let mut b_order = consist(b).cur_real_order_index();
+    let (ac, bc) = (consist(a), consist(b));
+    let mut a_order = ac.cur_real_order_index();
+    let mut b_order = bc.cur_real_order_index();
     let j = i32::from(b_order.0) - i32::from(a_order.0);
 
     /* Are we currently at an ordered station (un)loading? */
@@ -5638,9 +5621,9 @@ fn vehicle_timetable_sorter(a: VehicleRef, b: VehicleRef, s: &Leaves) -> bool {
     }
 
     /* Look at the time we spent in this order; the higher, the closer to its destination. */
-    let i = consist(b)
+    let i = bc
         .current_order_time()
-        .wrapping_sub(consist(a).current_order_time());
+        .wrapping_sub(ac.current_order_time());
     if i != 0 {
         return i < 0;
     }
@@ -5691,13 +5674,8 @@ pub(crate) fn cmd_set_timetable_start(
 
     let total_duration = list.get_timetable_total_duration();
 
+    let start_date = get_date_from_start_tick(start_tick, s).0;
     let date = crate::timer_game_common::economy_date().0;
-    let start_date = get_date_from_start_tick(
-        start_tick,
-        date,
-        crate::timer_game_common::economy_fraction(),
-        (s.shared().tick_counter)(),
-    );
 
     /* Don't let a timetable start at an invalid date. */
     if !(0..=crate::timer_game_common::MAX_DATE).contains(&start_date) {

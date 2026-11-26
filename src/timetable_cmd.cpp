@@ -28,7 +28,7 @@
  */
 TimerGameTick::TickCounter GetStartTickFromDate(TimerGameEconomy::Date start_date)
 {
-	return openttd_rust_orders_start_tick(start_date.base(), TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, TimerGameTick::counter);
+	return openttd_rust_orders_start_tick(start_date.base(), &GetRustOrdersLeaves());
 }
 
 /**
@@ -38,7 +38,7 @@ TimerGameTick::TickCounter GetStartTickFromDate(TimerGameEconomy::Date start_dat
  */
 TimerGameEconomy::Date GetDateFromStartTick(TimerGameTick::TickCounter start_tick)
 {
-	return TimerGameEconomy::Date(openttd_rust_orders_start_date(start_tick, TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, TimerGameTick::counter));
+	return TimerGameEconomy::Date(openttd_rust_orders_start_date(start_tick, &GetRustOrdersLeaves()));
 }
 
 

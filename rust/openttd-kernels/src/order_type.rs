@@ -204,6 +204,11 @@ impl OrderNonStopFlags {
     pub const fn from_element(element: OrderNonStopFlag) -> Self {
         Self((1_u64 << element.0) as u8)
     }
+    /// Native `BaseBitSet::Reset` of a set, as a new set.
+    #[must_use]
+    pub const fn reset_all(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
 }
 
 /// Native `OrderDepotTypeFlags`, retaining every underlying `u8` value.
