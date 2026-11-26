@@ -3464,29 +3464,12 @@ pub(crate) fn process_conditional_order(
 /// with conditional orders, which prevents infinite loops; `pbs_look_ahead` whether we are
 /// forecasting orders for pbs reservations in advance, in which case the order indices must
 /// not be modified. Returns true if the order was a new (non-implicit) order.
-pub(crate) fn update_order_dest(
-    v: VehicleRef,
-    order: OrderView<'_>,
-    conditional_depth: i32,
-    pbs_look_ahead: bool,
-    s: &Leaves,
-) -> bool {
-    update_order_dest_in(
-        v,
-        order_list(v, s),
-        order,
-        conditional_depth,
-        pbs_look_ahead,
-        s,
-    )
-}
-
-/// [`update_order_dest`] with `list`, the vehicle's `orders`, resolved by the caller: nothing
-/// in the body or its recursion replaces the vehicle's list.
+/// `list` is the vehicle's `orders`, resolved by the caller: nothing in the body or its
+/// recursion replaces the vehicle's list.
 #[allow(clippy::too_many_lines, reason = "one function per original body")]
 #[allow(unsafe_code)]
 #[allow(clippy::cast_sign_loss, reason = "the positive `DAY_TICKS` as `uint`")]
-fn update_order_dest_in(
+pub(crate) fn update_order_dest(
     v: VehicleRef,
     list: Option<OrderListRef>,
     order: OrderView<'_>,
@@ -3649,7 +3632,7 @@ fn update_order_dest_in(
     };
 
     current_order(v).copy_assign(order.copied());
-    update_order_dest_in(
+    update_order_dest(
         v,
         list,
         order,
@@ -3815,7 +3798,7 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
         _ => not_reached(),
     }
 
-    update_order_dest_in(v, list, order, 0, false, s) && may_reverse
+    update_order_dest(v, list, order, 0, false, s) && may_reverse
 }
 
 /// `Station::Get(st)->ship_station.tile`, read in place through the station command table's

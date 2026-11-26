@@ -128,6 +128,7 @@ impl<'a> Game<'a> {
     ) -> bool {
         crate::orders::update_order_dest(
             v.vehicle(),
+            crate::orders::order_list(v.vehicle(), self.vs.orders()),
             order,
             conditional_depth,
             pbs_look_ahead,
