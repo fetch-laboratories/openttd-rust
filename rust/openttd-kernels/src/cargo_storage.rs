@@ -2694,3 +2694,1348 @@ pub unsafe extern "C" fn openttd_rust_station_cargo_list_reserve(
         )
     }
 }
+
+#[cfg(test)]
+#[allow(
+    unsafe_code,
+    reason = "the fixtures build, read and free raw lists, packets and records"
+)]
+pub(crate) mod tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+    thread_local! {
+        static CAPACITY_CALLS: RefCell<Vec<(&'static str, u8)>> = const { RefCell::new(Vec::new()) };
+        static ALLOCATE: Cell<bool> = const { Cell::new(true) };
+        static POOL: RefCell<Vec<*mut c_void>> = const { RefCell::new(Vec::new()) };
+        /// The raw draws `random_range` scales, in order; zero once they run out.
+        static DRAWS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn can_allocate() -> u8 {
+        ALLOCATE.with(|flag| u8::from(flag.get()))
+    }
+    extern "C" fn create(fields: *const CargoPacket) -> *mut c_void {
+        let shell = Box::into_raw(Box::new(unsafe { *fields })).cast();
+        POOL.with(|pool| pool.borrow_mut().push(shell));
+        shell
+    }
+    extern "C" fn owner(shell: *mut c_void) -> *mut CargoPacket {
+        shell.cast()
+    }
+    extern "C" fn destroy(shell: *mut c_void) {
+        POOL.with(|pool| pool.borrow_mut().retain(|&entry| entry != shell));
+        unsafe {
+            drop(Box::from_raw(shell.cast::<CargoPacket>()));
+        }
+    }
+    /// A goods entry is its flows in these fixtures; null has no data.
+    extern "C" fn flow_map(ge: *const GoodsEntry) -> *mut FlowStatMap {
+        ge.cast_mut().cast()
+    }
+    fn flow_fixture(via: u16) -> *mut FlowStatMap {
+        let mut map = FlowStatMap::default();
+        for origin in [10, 11] {
+            map.emplace(
+                StationID(origin),
+                crate::cargo_flow::FlowStat::new(StationID(via), 1, false),
+            );
+        }
+        Box::into_raw(Box::new(map))
+    }
+    extern "C" fn draw(_: *mut c_void) -> u32 {
+        DRAWS.with(|draws| {
+            let mut draws = draws.borrow_mut();
+            if draws.is_empty() { 0 } else { draws.remove(0) }
+        })
+    }
+    thread_local! {
+        static SHARED: crate::services::Services = crate::services::fixture(std::ptr::null_mut(), draw);
+    }
+    extern "C" fn next_packet(shell: *mut c_void) -> *mut c_void {
+        POOL.with(|pool| {
+            let pool = pool.borrow();
+            let index = if shell.is_null() {
+                0
+            } else {
+                pool.iter().position(|&entry| entry == shell).unwrap() + 1
+            };
+            pool.get(index).copied().unwrap_or(std::ptr::null_mut())
+        })
+    }
+    fn install_map() {
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 256 * 256,
+                assertions: true,
+            },
+            8,
+        );
+    }
+    pub(crate) fn services() -> Services {
+        install_map();
+        Services {
+            can_allocate,
+            create,
+            destroy,
+            flow_map,
+            packet: owner,
+            packet_next: next_packet,
+            shared: SHARED.with(std::ptr::from_ref),
+            ..crate::test_tables::CARGO_STORAGE
+        }
+    }
+    fn cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
+        let fields = CargoPacket {
+            feeder_share: feeder,
+            source_xy: 5,
+            count,
+            periods_in_transit: 2,
+            first_station: first,
+            next_hop: StationID::INVALID.0,
+            source_id: 9,
+            travelled_x: 5,
+            travelled_y: 0,
+            source_type: 0,
+            in_vehicle: 1,
+        };
+        create(&raw const fields)
+    }
+    /// A packet waiting at a station: not yet in a vehicle (`UpdateLoadingTile`'s precondition).
+    pub(crate) fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
+        let shell = cargo(count, first, feeder);
+        // SAFETY: the fixture shell was just created and owns its live packet.
+        unsafe { (*owner(shell)).in_vehicle = 0 };
+        shell
+    }
+    pub(crate) fn list(vehicle: bool) -> *mut CargoList {
+        openttd_rust_cargo_list_new(u8::from(vehicle))
+    }
+    fn vehicle(l: *mut CargoList) -> *mut VehicleCargoList {
+        VehicleCargoList::of(l)
+    }
+    fn station(l: *mut CargoList) -> *mut StationCargoList {
+        StationCargoList::of(l)
+    }
+    pub(crate) unsafe fn clean(list: *mut CargoList) {
+        let service = services();
+        unsafe {
+            openttd_rust_cargo_list_destroy(list, &raw const service);
+        }
+    }
+    /// `StationCargoList::Append` with this module's table, for another module's fixture.
+    pub(crate) unsafe fn append_to(list: *mut CargoList, shell: *mut c_void, key: u16) {
+        unsafe { StationCargoList::append(station(list), &services(), shell, StationID(key)) }
+    }
+    /// `VehicleCargoList::Append` of `shell` to keep.
+    unsafe fn keep(list: *mut CargoList, s: &Services, shell: *mut c_void) {
+        unsafe { VehicleCargoList::append(vehicle(list), s, shell, MoveToAction::MTA_KEEP) }
+    }
+    /// The list's nodes, in list order.
+    unsafe fn nodes(list: *const CargoList) -> Vec<Node> {
+        let l = unsafe { &*list };
+        let mut out = Vec::new();
+        let mut it = l.front();
+        while let Some(current) = it {
+            it = l.after(current.token);
+            out.push(current);
+        }
+        out
+    }
+    /// The record of the fixture shell `shell`.
+    unsafe fn packet(shell: *mut c_void) -> CargoPacket {
+        unsafe { *owner(shell) }
+    }
+    unsafe fn fields(list: *const CargoList) -> Fields {
+        unsafe { (*list).fields }
+    }
+    /// Each packet's count and key, in list order.
+    pub(crate) unsafe fn counts_and_keys(list: *const CargoList) -> Vec<(u16, u16)> {
+        unsafe { nodes(list) }
+            .iter()
+            .map(|node| (unsafe { packet(node.shell) }.count, node.key.0))
+            .collect()
+    }
+
+    extern "C" fn deny_allocation() -> u8 {
+        CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("packet", 0)));
+        0
+    }
+
+    extern "C" fn unexpected_allocation(_: *const CargoPacket) -> *mut c_void {
+        panic!("denied Split must return before allocating a packet")
+    }
+
+    #[test]
+    fn split_denied_preserves_packet_before_share_arithmetic() {
+        // Captured from the unchanged 15.3 CargoPacket::Split body at
+        // 14ec60f248547d4d062a1160f0fc26d742319888 using the retiring
+        // cargo-split-reference.cpp reference branch, before its deletion.
+        let service = Services {
+            can_allocate: deny_allocation,
+            create: unexpected_allocation,
+            ..services()
+        };
+        let mut cases = 0;
+        for row in include_str!("cargo_storage/split-denied-oracle.txt").lines() {
+            let row: Vec<i64> = row.split_whitespace().map(|v| v.parse().unwrap()).collect();
+            let [count, feeder, amount, calls] = row[..] else {
+                panic!("invalid original split observation")
+            };
+            let mut packet = CargoPacket {
+                count: u16::try_from(count).unwrap(),
+                feeder_share: feeder,
+                ..CargoPacket::default()
+            };
+            CAPACITY_CALLS.with(|log| log.borrow_mut().clear());
+            // SAFETY: The stack packet and synchronous fixture table remain live.
+            let part = unsafe {
+                CargoPacket::split(&raw mut packet, &service, u32::try_from(amount).unwrap())
+            };
+            assert!(part.is_null());
+            assert_eq!(i64::from(packet.count), count);
+            assert_eq!(packet.feeder_share, feeder);
+            CAPACITY_CALLS
+                .with(|log| assert_eq!(i64::try_from(log.borrow().len()).unwrap(), calls));
+            cases += 1;
+        }
+        assert_eq!(cases, 48);
+    }
+
+    thread_local! {
+        static FAILED_CHECKS: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn record_failed_check(condition: bool) {
+        if !condition {
+            FAILED_CHECKS.with(|failed| failed.set(failed.get() + 1));
+        }
+    }
+    /// Failed native checks while running `operation`. None may fail between two
+    /// operations: the count is zero on entry, and taking it resets it.
+    fn failed_checks(operation: impl FnOnce()) -> u32 {
+        assert_eq!(
+            FAILED_CHECKS.get(),
+            0,
+            "a native check failed outside an operation"
+        );
+        operation();
+        FAILED_CHECKS.replace(0)
+    }
+
+    /// Runs in an isolated child, the only process whose policy counts failed checks.
+    #[test]
+    fn cargo_packet_preconditions_call_the_native_check_once() {
+        if crate::services_assert::isolate_test_check(
+            "cargo_storage::tests::cargo_packet_preconditions_call_the_native_check_once",
+            record_failed_check,
+        ) {
+            return;
+        }
+        let service = services();
+        let shared = service.shared();
+        let mut packet = CargoPacket {
+            count: 4,
+            feeder_share: 8,
+            ..CargoPacket::default()
+        };
+        let p = &raw mut packet;
+        // SAFETY: the stack packet and the fixture map outlive each synchronous call.
+        unsafe {
+            // `Reduce`: count < this->count.
+            assert_eq!(failed_checks(|| (*p).reduce(3)), 0);
+            assert_eq!(((*p).count, (*p).feeder_share), (1, 2));
+            assert_eq!(failed_checks(|| (*p).reduce(1)), 1);
+            (*p).count = 4;
+            // `GetDistance`: a valid source, then in a vehicle.
+            let at = 3 + 4 * 256;
+            let both = failed_checks(|| {
+                openttd_rust_cargo_packet_distance(p, &raw const service, at);
+            });
+            assert_eq!(both, 2);
+            // `UpdateUnloadingTile`: in a vehicle.
+            assert_eq!(
+                failed_checks(|| (*p).update_unloading_tile(shared, TileIndex(at))),
+                1
+            );
+            // `UpdateLoadingTile`: not yet in a vehicle; it sets the missing source.
+            assert_eq!(
+                failed_checks(|| (*p).update_loading_tile(shared, TileIndex(at))),
+                0
+            );
+            assert_eq!(((*p).source_xy, (*p).in_vehicle), (at, 1));
+            let distance = Cell::new(u32::MAX);
+            assert_eq!(
+                failed_checks(|| {
+                    distance.set(openttd_rust_cargo_packet_distance(
+                        p,
+                        &raw const service,
+                        at,
+                    ));
+                }),
+                0
+            );
+            assert_eq!(
+                failed_checks(|| (*p).update_loading_tile(shared, TileIndex(at))),
+                1
+            );
+            assert_eq!(distance.get(), 0);
+            // The split constructor: count != 0.
+            (*p).count = 0;
+            let copy = Cell::new(std::ptr::null_mut());
+            assert_eq!(
+                failed_checks(|| copy.set(openttd_rust_cargo_packet_new(p))),
+                1
+            );
+            openttd_rust_cargo_packet_destroy(copy.get());
+        }
+        assert_eq!(FAILED_CHECKS.get(), 0);
+    }
+
+    /// The list assertions the port restored, each reaching the native check at the
+    /// original's point, with the failures each original body gives. Runs in an isolated
+    /// child, the only process whose policy counts failed checks.
+    #[test]
+    fn list_assertions_reach_the_native_check() {
+        if crate::services_assert::isolate_test_check(
+            "cargo_storage::tests::list_assertions_reach_the_native_check",
+            record_failed_check,
+        ) {
+            return;
+        }
+        let s = services();
+        let no_unload = |list: *mut CargoList| {
+            let args = StageArgs {
+                accepted: false,
+                current_station: StationID(200),
+                next_station: &[],
+                unload_type: OrderUnloadType::NoUnload,
+                ge: std::ptr::null(),
+                cargo: CargoType(0),
+                payment: std::ptr::null_mut(),
+                current_tile: TileIndex(5),
+            };
+            // SAFETY: The caller's live list.
+            unsafe { VehicleCargoList::stage(vehicle(list), &s, &args) };
+        };
+        // SAFETY: Each list and packet is the test's, live until cleaned.
+        unsafe {
+            // The kept paths: an append to keep, a stage and a truncation, no failure.
+            let valid = list(true);
+            assert_eq!(
+                failed_checks(|| {
+                    keep(valid, &s, cargo(8, 10, 0));
+                    no_unload(valid);
+                    VehicleCargoList::truncate(vehicle(valid), &s, 3);
+                }),
+                0
+            );
+            assert_eq!(fields(valid).count, 5);
+            clean(valid);
+
+            // `Append`: a packet to keep while the list holds a reserved one; the merge with
+            // the reserved packet then needs no other check.
+            let reserved = list(true);
+            VehicleCargoList::append(
+                vehicle(reserved),
+                &s,
+                cargo(8, 10, 0),
+                MoveToAction::MTA_LOAD,
+            );
+            assert_eq!(failed_checks(|| keep(reserved, &s, cargo(8, 10, 0))), 1);
+            clean(reserved);
+
+            // `Stage` on a consistent list with a reserved packet: `action_counts[MTA_LOAD] ==
+            // 0` at entry, and the closing `AssertCountConsistency` once the packet is kept
+            // beside its uncleared reservation.
+            let reserved = list(true);
+            VehicleCargoList::append(
+                vehicle(reserved),
+                &s,
+                cargo(8, 10, 0),
+                MoveToAction::MTA_LOAD,
+            );
+            assert_eq!(failed_checks(|| no_unload(reserved)), 2);
+            clean(reserved);
+
+            // `CargoReturn`: a returned packet larger than the station's reserved count.
+            let from = list(true);
+            let to = list(false);
+            VehicleCargoList::append(vehicle(from), &s, cargo(8, 10, 0), MoveToAction::MTA_LOAD);
+            (*to).fields.reserved_count = 3;
+            assert_eq!(
+                failed_checks(|| {
+                    VehicleCargoList::return_(
+                        vehicle(from),
+                        &s,
+                        8,
+                        station(to),
+                        StationID(100),
+                        TileIndex(5),
+                    );
+                }),
+                1
+            );
+            assert_eq!((fields(from).count, fields(to).count), (0, 8));
+            clean(from);
+            clean(to);
+
+            // `VehicleCargoReroute`'s constructor, which `Reroute` clamps before: more than the
+            // transfer count.
+            let rerouted = list(true);
+            keep(rerouted, &s, cargo(8, 10, 0));
+            assert_eq!(
+                failed_checks(|| {
+                    VehicleCargoReroute::new(
+                        &s,
+                        vehicle(rerouted),
+                        vehicle(rerouted),
+                        5,
+                        StationID(70),
+                        StationID::INVALID,
+                        std::ptr::null_mut(),
+                    );
+                }),
+                1
+            );
+
+            // `RemoveFromMeta`: 5 from keep, which holds 3 of the packet's 8 after 5 were
+            // designated for delivery. The count is within the packet, so `RemoveFromCache`
+            // passes; keep wraps to `UINT_MAX - 1` and the sum wraps to the 3 left, so both
+            // `AssertCountConsistency` pass: one failure, `count <= action_counts[action]`.
+            VehicleCargoList::reassign(
+                vehicle(rerouted),
+                &s,
+                MoveToAction::MTA_KEEP,
+                MoveToAction::MTA_DELIVER,
+                5,
+            );
+            let cp = owner(nodes(rerouted)[0].shell);
+            assert_eq!(
+                failed_checks(|| (*vehicle(rerouted)).remove_from_meta(
+                    &*cp,
+                    MoveToAction::MTA_KEEP,
+                    5
+                )),
+                1
+            );
+            assert_eq!(fields(rerouted).count, 3);
+            assert_eq!(fields(rerouted).action_counts[2], u32::MAX - 1);
+            clean(rerouted);
+        }
+        assert_eq!(FAILED_CHECKS.get(), 0);
+    }
+
+    #[test]
+    fn canonical_packet_defaults_and_rectangular_map_coordinates() {
+        let service = services();
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 512 * 256,
+                assertions: true,
+            },
+            9,
+        );
+        let shared = service.shared();
+        // SAFETY: null selects default construction without reading an input packet.
+        let packet = unsafe { openttd_rust_cargo_packet_new(std::ptr::null()) };
+        // SAFETY: this test owns the live packet until its final destruction.
+        let observed = unsafe { *packet };
+        assert_eq!(observed.source_xy, u32::MAX);
+        assert_eq!(observed.first_station, StationID::INVALID.0);
+        assert_eq!(observed.next_hop, StationID::INVALID.0);
+        assert_eq!(observed.source_id, Source::Invalid);
+        assert_eq!(observed.count, 0);
+        assert_eq!(observed.periods_in_transit, 0);
+        assert_eq!(observed.feeder_share, 0);
+        assert_eq!(observed.source_type, 0);
+        assert_eq!(observed.in_vehicle, 0);
+        assert_eq!((observed.travelled_x, observed.travelled_y), (0, 0));
+        // A station transfer covers (20, 20) without travel in a vehicle.
+        // SAFETY: the test owns the live packet and the installed rectangular map.
+        unsafe {
+            (*packet).update_loading_tile(shared, TileIndex(5 + 10 * 512));
+            (*packet).update_unloading_tile(shared, TileIndex(20 + 30 * 512));
+            (*packet).update_loading_tile(shared, TileIndex(40 + 50 * 512));
+        }
+        // SAFETY: the owned packet remains live; this read retains no borrow.
+        let observed = unsafe { *packet };
+        assert_eq!(observed.source_xy, 5 + 10 * 512);
+        assert_eq!((observed.travelled_x, observed.travelled_y), (25, 30));
+        // SAFETY: packet, service table and map remain live for the synchronous read.
+        let distance = unsafe {
+            openttd_rust_cargo_packet_distance(packet, &raw const service, 100 + 100 * 512)
+        };
+        assert_eq!(distance, 145);
+        // Paid distance cannot exceed the direct source-to-destination distance.
+        // SAFETY: the same packet, service table and map remain live.
+        let distance =
+            unsafe { openttd_rust_cargo_packet_distance(packet, &raw const service, 5 + 10 * 512) };
+        assert_eq!(distance, 0);
+        // SAFETY: this test destroys its owned packet exactly once, after all reads.
+        unsafe { openttd_rust_cargo_packet_destroy(packet) };
+    }
+
+    #[test]
+    fn partial_reserve_load_return_and_feeder_rounding() {
+        let s = services();
+        let st = list(false);
+        let veh = list(true);
+        let next = [StationID(100)];
+        unsafe {
+            append_to(st, station_cargo(17, 10, 23), 100);
+            assert_eq!(
+                StationCargoList::reserve(station(st), &s, 7, vehicle(veh), &next, TileIndex(5)),
+                7
+            );
+            assert_eq!(fields(st).reserved_count, 7);
+            assert_eq!(fields(st).count, 10);
+            assert_eq!(fields(veh).action_counts, [0, 0, 0, 7]);
+            assert_eq!(fields(veh).feeder_share, 9);
+            assert_eq!(
+                StationCargoList::load(station(st), &s, 3, vehicle(veh), &next, TileIndex(5)),
+                3
+            );
+            assert_eq!(fields(veh).action_counts, [0, 0, 3, 4]);
+            assert_eq!(
+                VehicleCargoList::return_(
+                    vehicle(veh),
+                    &s,
+                    4,
+                    station(st),
+                    StationID(100),
+                    TileIndex(5)
+                ),
+                4
+            );
+            assert_eq!(fields(veh).count, 3);
+            assert_eq!(fields(st).count, 14);
+            assert_eq!(fields(st).reserved_count, 0);
+            clean(veh);
+            clean(st);
+        }
+    }
+
+    /// The live payment `stage` and `CargoDelivery` pay through, its tables, and what its
+    /// leaves saw.
+    mod payment {
+        use super::*;
+        use crate::cargo_payment::{Delivery, NativePayment, Payment};
+        thread_local! {
+            /// The list whose total the income callback reads.
+            pub(super) static LIST: Cell<*mut CargoList> = const { Cell::new(std::ptr::null_mut()) };
+            /// Each income callback: final delivery, pieces, the list's total at the call.
+            pub(super) static INCOME: RefCell<Vec<(bool, u32, u32)>> = const { RefCell::new(Vec::new()) };
+            /// Whether `GetCargoDeliveryState()` was requested.
+            pub(super) static DELIVERY: Cell<bool> = const { Cell::new(false) };
+            static STATE: RefCell<Delivery> = RefCell::new(Delivery::default());
+            static STATION: Cell<*mut crate::station_service::Service> = const { Cell::new(std::ptr::null_mut()) };
+            static FINANCES: Cell<*mut crate::company::Finances> = const { Cell::new(std::ptr::null_mut()) };
+            static TOWN: Cell<*mut crate::town::State> = const { Cell::new(std::ptr::null_mut()) };
+            static SUBSIDIES: Cell<*const crate::subsidy::Services> = const { Cell::new(std::ptr::null()) };
+            static CATCHMENT: Cell<*const crate::station::CatchmentServices> = const { Cell::new(std::ptr::null()) };
+        }
+        /// Payment 1024 and the profit callback answering 7: `1024 * 7 * pieces / 8192`.
+        extern "C" fn spec(_: u8, out: *mut crate::cargo_payment::Spec) {
+            unsafe {
+                out.write(crate::cargo_payment::Spec {
+                    payment: 1024,
+                    valid: 1,
+                    callback: 1,
+                    periods1: 0,
+                    periods2: 0,
+                });
+            }
+        }
+        extern "C" fn registry_spec(_: u8) -> *const crate::cargotype::CargoSpec {
+            std::ptr::null()
+        }
+        extern "C" fn callback_frame(
+            _: *const crate::cargotype::CargoSpec,
+            _: u16,
+            _: u32,
+            var18: u32,
+            _: *mut i32,
+            _: usize,
+        ) -> u16 {
+            // Reentry observes the list before Stage's action count commit, and after final
+            // delivery's metadata removal, as the native payment getters did.
+            let total = unsafe { (*LIST.get()).fields.count };
+            INCOME.with(|calls| {
+                calls
+                    .borrow_mut()
+                    .push((DELIVERY.get(), (var18 >> 16) & 0xFF, total));
+            });
+            7
+        }
+        extern "C" fn town_acceptance_effect(_: *const crate::cargotype::CargoSpec) -> u8 {
+            0
+        }
+        extern "C" fn feeder_payment_share() -> u8 {
+            100
+        }
+        extern "C" fn payment_state(payment: *mut NativePayment) -> *mut Payment {
+            payment.cast()
+        }
+        extern "C" fn cargo_delivery_state() -> *mut Delivery {
+            DELIVERY.set(true);
+            STATE.with(RefCell::as_ptr)
+        }
+        extern "C" fn subsidies() -> *const crate::subsidy::Services {
+            SUBSIDIES.get()
+        }
+        extern "C" fn station(_: u16) -> *const crate::station::Station {
+            std::ptr::dangling()
+        }
+        extern "C" fn no_source_flag(_: Source, _: crate::subsidy_type::PartOfSubsidy) -> bool {
+            false
+        }
+        extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
+            CATCHMENT.get()
+        }
+        extern "C" fn station_owner(id: StationID) -> *mut crate::station_service::Service {
+            assert_eq!(id, StationID(200));
+            STATION.get()
+        }
+        extern "C" fn station_company(
+            _: *const crate::station::Station,
+        ) -> crate::company_type::CompanyID {
+            crate::company_type::CompanyID(0)
+        }
+        extern "C" fn station_town(
+            _: *const crate::station::Station,
+        ) -> *const crate::town_type::TownHandle {
+            std::ptr::dangling()
+        }
+        extern "C" fn town_owner(
+            _: *const crate::town_type::TownHandle,
+        ) -> *mut crate::town::State {
+            TOWN.get()
+        }
+        extern "C" fn monitor_town(_: *const crate::station::Station) -> u16 {
+            0
+        }
+        extern "C" fn monitor_check(condition: bool) {
+            assert!(condition);
+        }
+        extern "C" fn company_finances(company: u8) -> *mut crate::company::Finances {
+            assert_eq!(company, 0);
+            FINANCES.get()
+        }
+
+        /// The storage table `s` with the payment's tables, and a payment for station 200 by
+        /// a fresh front record. Station 200 always accepts cargo 0 and has no industry near.
+        pub(super) fn fixture(
+            s: &Services,
+        ) -> (
+            Services,
+            *mut Payment,
+            *mut crate::vehicle_base::VehicleRecord,
+        ) {
+            INCOME.with(|calls| calls.borrow_mut().clear());
+            DELIVERY.set(false);
+            let mut shared = crate::services::fixture(std::ptr::null_mut(), draw);
+            shared.station_catchment = station_catchment;
+            shared.town_owner = town_owner;
+            let shared: &'static crate::services::Services = Box::leak(Box::new(shared));
+            CATCHMENT.set(Box::leak(Box::new(crate::station::CatchmentServices {
+                shared,
+                station_owner,
+                ..crate::test_tables::CATCHMENT
+            })));
+            SUBSIDIES.set(Box::leak(Box::new(crate::subsidy::Services {
+                shared,
+                station,
+                has_source_flag: no_source_flag,
+                ..crate::test_tables::SUBSIDY
+            })));
+            let owner = crate::station_service::openttd_rust_station_service_new();
+            unsafe {
+                (*crate::station_service::openttd_rust_station_service_fields(owner))
+                    .always_accepted = 1
+            };
+            STATION.set(owner);
+            FINANCES.set(crate::company::openttd_rust_company_state_create());
+            TOWN.set(crate::town::openttd_rust_town_new());
+            let mut registry = crate::cargo_registry::TEST_TABLE;
+            registry.spec = registry_spec;
+            registry.callback_frame = callback_frame;
+            registry.town_acceptance_effect = town_acceptance_effect;
+            let registry: &'static _ = Box::leak(Box::new(registry));
+            let finance: &'static _ = Box::leak(Box::new(crate::company::FinanceServices {
+                company_finances,
+                ..crate::test_tables::FINANCE
+            }));
+            let payment: &'static _ = Box::leak(Box::new(crate::cargo_payment::Services {
+                spec,
+                registry,
+                station_company,
+                station_town,
+                subsidies,
+                finance,
+                feeder_payment_share,
+                shared,
+                ..crate::test_tables::CARGO
+            }));
+            let monitors: &'static _ = Box::leak(Box::new(crate::cargomonitor::Services {
+                station_town: monitor_town,
+                check: monitor_check,
+            }));
+            let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
+                std::ptr::dangling_mut(),
+                crate::vehicle_type::VehicleType::TRAIN,
+            );
+            // Company 0's vehicle.
+            unsafe { (*front).owner = crate::company_type::CompanyID(0) };
+            let state =
+                crate::cargo_payment::openttd_rust_cargo_payment_new(front.cast(), StationID(200));
+            (
+                Services {
+                    cargo_delivery_state,
+                    monitors,
+                    payment,
+                    payment_state,
+                    ..*s
+                },
+                state,
+                front,
+            )
+        }
+        /// The finances' delivered count of cargo 0.
+        pub(super) fn delivered() -> u32 {
+            crate::raw_field::read_field!(FINANCES.get(), cur_economy.delivered_cargo[0])
+        }
+    }
+
+    #[test]
+    fn stage_order_and_payment_getter_reentry() {
+        let (service, state, front) = payment::fixture(&services());
+        let veh = list(true);
+        let st = list(false);
+        payment::LIST.set(veh);
+        let mut map = FlowStatMap::default();
+        for (origin, via) in [(10, 100), (11, 200), (12, 300)] {
+            map.emplace(
+                StationID(origin),
+                crate::cargo_flow::FlowStat::new(StationID(via), 1, false),
+            );
+        }
+        let flows = Box::into_raw(Box::new(map));
+        let native: *mut crate::cargo_payment::NativePayment = state.cast();
+        unsafe {
+            for first in [10, 11, 12] {
+                keep(veh, &service, cargo(8, first, 0));
+            }
+            let next = [StationID(100)];
+            let args = StageArgs {
+                accepted: true,
+                current_station: StationID(200),
+                next_station: &next,
+                unload_type: OrderUnloadType::UnloadIfPossible,
+                ge: flows.cast(),
+                cargo: CargoType(0),
+                payment: native,
+                current_tile: TileIndex(5),
+            };
+            assert!(VehicleCargoList::stage(vehicle(veh), &service, &args));
+            assert_eq!(fields(veh).action_counts, [8, 8, 8, 0]);
+            let order: Vec<u16> = nodes(veh)
+                .iter()
+                .map(|node| packet(node.shell).first_station)
+                .collect();
+            assert_eq!(order, [12, 11, 10]);
+            // The transfer of 8 at distance 0 earns `1024 * 7 * 8 / 8192`, all of it shared.
+            assert_eq!(fields(veh).feeder_share, 7);
+            assert_eq!((*state).fields.visual_transfer, 7);
+            // A transfer leaves the delivery state unrequested.
+            assert!(!payment::DELIVERY.get());
+            assert_eq!(
+                VehicleCargoList::unload(
+                    vehicle(veh),
+                    &service,
+                    12,
+                    station(st),
+                    CargoType(0),
+                    native,
+                    TileIndex(5)
+                ),
+                12
+            );
+            assert_eq!(fields(veh).action_counts, [0, 4, 8, 0]);
+            assert_eq!(fields(st).count, 8);
+            payment::INCOME.with(|calls| {
+                assert_eq!(*calls.borrow(), [(false, 8, 24), (true, 4, 12)]);
+            });
+            // The station always accepts: all 4 delivered, earning `1024 * 7 * 4 / 8192`.
+            assert_eq!(payment::delivered(), 4);
+            assert_eq!(
+                ((*state).fields.route_profit, (*state).fields.visual_profit),
+                (3, 3)
+            );
+            clean(veh);
+            clean(st);
+            drop(Box::from_raw(flows));
+            crate::cargo_payment::openttd_rust_cargo_payment_destroy(state, std::ptr::null(), 1);
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(front);
+        }
+    }
+    #[test]
+    fn same_list_reroute_and_partial_packet_identity() {
+        let s = services();
+        unsafe {
+            for via in [10_u16, 90] {
+                let flows = flow_fixture(via);
+                let st = list(false);
+                append_to(st, station_cargo(8, 10, 0), 70);
+                append_to(st, station_cargo(8, 11, 0), 70);
+                assert_eq!(
+                    StationCargoList::reroute(
+                        station(st),
+                        &s,
+                        10,
+                        station(st),
+                        StationID(70),
+                        StationID::INVALID,
+                        flows.cast()
+                    ),
+                    10
+                );
+                let selected: u32 = nodes(st)
+                    .iter()
+                    .filter(|node| node.key == StationID(via))
+                    .map(|node| u32::from(packet(node.shell).count))
+                    .sum();
+                assert_eq!(selected, 10);
+                assert_eq!(fields(st).count, 16);
+                clean(st);
+                drop(Box::from_raw(flows));
+            }
+            let veh = list(true);
+            let original = cargo(8, 10, 0);
+            (*owner(original)).next_hop = 70;
+            keep(veh, &s, original);
+            (*veh).fields.action_counts = [8, 0, 0, 0];
+            let via = 90_u16;
+            let flows = flow_fixture(via);
+            assert_eq!(
+                VehicleCargoList::reroute(
+                    vehicle(veh),
+                    &s,
+                    3,
+                    vehicle(veh),
+                    StationID(70),
+                    StationID::INVALID,
+                    flows.cast()
+                ),
+                3
+            );
+            assert_eq!((*owner(original)).next_hop, 90);
+            assert_eq!(packet(nodes(veh)[0].shell).next_hop, 70);
+            assert_eq!(fields(veh).action_counts, [8, 0, 0, 0]);
+            clean(veh);
+            drop(Box::from_raw(flows));
+        }
+    }
+    #[test]
+    fn merge_age_invalidation_and_pool_failure_fallback() {
+        let s = services();
+        unsafe {
+            let st = list(false);
+            let veh = list(true);
+            append_to(st, station_cargo(8, 10, 3), 100);
+            append_to(st, station_cargo(9, 10, 4), 100);
+            assert_eq!(nodes(st).len(), 1);
+            let next = [StationID(100)];
+            StationCargoList::load(station(st), &s, 17, vehicle(veh), &next, TileIndex(5));
+            VehicleCargoList::age_cargo::<false>(vehicle(veh), &s);
+            assert_eq!(fields(veh).cargo_periods_in_transit, 51);
+            openttd_rust_cargo_invalidate(&raw const s, 9, 0);
+            assert_eq!(packet(nodes(veh)[0].shell).source_id, Source::Invalid);
+            ALLOCATE.with(|flag| flag.set(false));
+            let destination = list(true);
+            assert_eq!(
+                VehicleCargoList::shift(vehicle(veh), &s, 3, vehicle(destination)),
+                3
+            );
+            assert_eq!(fields(veh).count, 0);
+            assert_eq!(fields(destination).count, 17); // original whole-packet fallback
+            ALLOCATE.with(|flag| flag.set(true));
+            clean(destination);
+            clean(veh);
+            clean(st);
+        }
+    }
+    #[test]
+    fn all_forced_unloading_selectors() {
+        let (s, state, front) = payment::fixture(&services());
+        for (unload_type, action) in [
+            (OrderUnloadType::NoUnload, MoveToAction::MTA_KEEP),
+            (OrderUnloadType::Unload, MoveToAction::MTA_DELIVER),
+            (OrderUnloadType::Transfer, MoveToAction::MTA_TRANSFER),
+        ] {
+            let veh = list(true);
+            payment::LIST.set(veh);
+            unsafe {
+                keep(veh, &s, cargo(8, 10, 0));
+                let args = StageArgs {
+                    accepted: true,
+                    current_station: StationID(200),
+                    next_station: &[],
+                    unload_type,
+                    ge: std::ptr::null(),
+                    cargo: CargoType(0),
+                    payment: state.cast(),
+                    current_tile: TileIndex(5),
+                };
+                VehicleCargoList::stage(vehicle(veh), &s, &args);
+                let meta = fields(veh);
+                assert_eq!(meta.action_counts[usize::from(action.0)], 8);
+                assert_eq!(meta.action_counts.iter().sum::<u32>(), 8);
+                clean(veh);
+            }
+        }
+        unsafe {
+            crate::cargo_payment::openttd_rust_cargo_payment_destroy(state, std::ptr::null(), 1);
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(front);
+        }
+    }
+
+    /// `StationCargoList::Truncate` with a per-source map. Four packets from origins 10 and
+    /// 11, of 1, 5, 3 and 2 units, 8 of 11 to move, so a draw below 3 skips a packet. The
+    /// first loop skips the packets of 10 (1), 10 (3) and 11 (2), counting them, and removes
+    /// 11 (5); the second removes 10 (1), subtracting all of it, and reduces 10 (3) by the 2
+    /// left, subtracting those, and returns. The map holds what is left by origin.
+    #[test]
+    fn truncate_fills_the_per_source_map() {
+        let s = services();
+        unsafe {
+            let st = list(false);
+            for (count, first, via) in [(1, 10, 100), (5, 11, 200), (3, 10, 300), (2, 11, 400)] {
+                append_to(st, station_cargo(count, first, 0), via);
+            }
+            // `RandomRange(11)` scales a draw: 0 gives 0, `UINT32_MAX` gives 10.
+            DRAWS.with(|draws| {
+                *draws.borrow_mut() = vec![0, u32::MAX, 0, 0, u32::MAX, u32::MAX];
+            });
+            let mut map = StationCargoAmountMap::new();
+            assert_eq!(
+                StationCargoList::truncate(station(st), &s, 8, Some(&mut map)),
+                8
+            );
+            DRAWS.with(|draws| assert!(draws.borrow().is_empty()));
+            assert_eq!(
+                map.into_iter().collect::<Vec<_>>(),
+                [(StationID(10), 1), (StationID(11), 2)]
+            );
+            assert_eq!(counts_and_keys(st), [(1, 300), (2, 400)]);
+            assert_eq!(fields(st).count, 3);
+            clean(st);
+        }
+    }
+
+    /// One train part: its shell-side cargo fields and its canonical record.
+    struct Part {
+        id: u8,
+        list: *mut CargoList,
+        cargo: u8,
+        record: *mut crate::vehicle_base::VehicleRecord,
+        train: Box<crate::train_state::TrainState>,
+    }
+    /// The part whose record is `v`.
+    unsafe fn part_of(v: *mut crate::vehicle::OpenTTDVehicle) -> &'static Part {
+        unsafe { &*VehicleRef::of(v).shell().cast::<Part>() }
+    }
+    /// `v->cargo`, the read the typed path makes once for each part it visits.
+    unsafe extern "C" fn capacity_owner(
+        v: *mut crate::vehicle::OpenTTDVehicle,
+    ) -> *const VehicleCargoList {
+        let part = unsafe { part_of(v) };
+        CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("read", part.id)));
+        vehicle(part.list)
+    }
+    unsafe extern "C" fn capacity_cargo_type(v: *mut crate::vehicle::OpenTTDVehicle) -> u8 {
+        unsafe { part_of(v) }.cargo
+    }
+    thread_local! {
+        static STORAGE: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
+    }
+    unsafe extern "C" fn capacity_storage() -> *const Services {
+        STORAGE.get()
+    }
+    /// The vehicle resolver the two autoreplace bodies read `v->cargo` and the storage through.
+    fn capacity_services(s: &Services) -> crate::newgrf_vehicle::Services {
+        STORAGE.set(s);
+        crate::newgrf_vehicle::test_table_with_members(
+            crate::test_tables::unreachable1,
+            capacity_cargo_type,
+            crate::test_tables::unreachable1,
+            capacity_owner,
+        )
+        .with_cargo_services(capacity_storage)
+    }
+    // The record keeps the boxed part address as its shell.
+    #[allow(clippy::unnecessary_box_returns)]
+    fn part(cap: u16) -> Box<Part> {
+        let mut part = Box::new(Part {
+            id: 0,
+            list: list(true),
+            cargo: 0,
+            record: std::ptr::null_mut(),
+            train: Box::default(),
+        });
+        let shell = std::ptr::from_mut(&mut *part).cast();
+        part.record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            shell,
+            crate::vehicle_type::VehicleType::TRAIN,
+        );
+        unsafe {
+            (*part.record).cargo_cap = cap;
+            (*part.record).train = &raw mut *part.train;
+        }
+        part
+    }
+    fn link(parts: &[Box<Part>]) {
+        for pair in parts.windows(2) {
+            unsafe { crate::vehicle_base::set_next(pair[0].record, pair[1].record) };
+        }
+    }
+    fn articulate(part: &Part) {
+        unsafe {
+            (*part.record).subtype |=
+                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
+        }
+    }
+    fn front_engine(part: &Part) {
+        unsafe {
+            (*part.record).subtype |=
+                1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_FRONT.0;
+        }
+    }
+    fn head(part: &Part) -> VehicleRef {
+        VehicleRef::of(part.record)
+    }
+    fn release(part: &Part) {
+        unsafe {
+            clean(part.list);
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(part.record);
+        }
+    }
+    #[test]
+    fn destination_count_keeps_empty_imported_keys() {
+        unsafe {
+            let st = list(false);
+            openttd_rust_cargo_list_insert(st, 100, std::ptr::null_mut());
+            openttd_rust_cargo_list_insert(st, 200, std::ptr::null_mut());
+            openttd_rust_cargo_list_insert(st, 100, std::ptr::null_mut());
+            assert_eq!(openttd_rust_cargo_list_key_count(st), 2);
+            assert_eq!(openttd_rust_cargo_list_count(st), 0);
+            assert!(!(*station(st)).has_cargo_for(&[]));
+            assert!((*station(st)).has_cargo_for(&[StationID(200), StationID(100)]));
+            openttd_rust_cargo_list_insert(st, StationID::INVALID.0, std::ptr::null_mut());
+            assert_eq!(openttd_rust_cargo_list_key_count(st), 3);
+            assert!((*station(st)).has_cargo_for(&[]));
+            openttd_rust_cargo_list_clear(st);
+            assert_eq!(openttd_rust_cargo_list_key_count(st), 0);
+            clean(st);
+        }
+    }
+
+    #[test]
+    fn capacity_autoreplace_single_engine_skips_foreign_parts_in_order() {
+        let service = services();
+        let resolver = capacity_services(&service);
+        let mut source: Vec<_> = (0..5).map(|_| part(1)).collect();
+        let mut destination: Vec<_> = (0..5).map(|_| part(1)).collect();
+        for parts in [&source, &destination] {
+            link(parts);
+            let (front, rear) = (parts[0].record, parts[4].record);
+            unsafe { (*(*front).train).other_multiheaded_part = rear };
+            articulate(&parts[1]);
+            articulate(&parts[3]);
+        }
+        for (index, entry) in source.iter_mut().enumerate() {
+            entry.id = index as u8 + 1;
+        }
+        for (index, entry) in destination.iter_mut().enumerate() {
+            entry.id = index as u8 + 11;
+        }
+        unsafe {
+            for (index, entry) in source.iter().enumerate() {
+                keep(entry.list, &service, cargo(1, index as u16 + 10, 0));
+            }
+            CAPACITY_CALLS.with(|calls| calls.borrow_mut().clear());
+            assert!(!transfer_cargo(
+                head(&source[0]),
+                head(&destination[0]),
+                false,
+                &resolver
+            ));
+            assert_eq!(
+                source
+                    .iter()
+                    .map(|entry| fields(entry.list).count)
+                    .collect::<Vec<_>>(),
+                [0, 0, 1, 1, 0]
+            );
+            assert_eq!(
+                destination
+                    .iter()
+                    .map(|entry| fields(entry.list).count)
+                    .collect::<Vec<_>>(),
+                [1, 1, 0, 0, 1]
+            );
+            // Foreign engines skip to after their last articulated part: 3 skips 4, 13 skips 14.
+            CAPACITY_CALLS.with(|calls| {
+                assert_eq!(
+                    calls.borrow().iter().map(|&(_, id)| id).collect::<Vec<_>>(),
+                    [1, 11, 2, 11, 12, 3, 5, 11, 12, 13, 15]
+                );
+            });
+        }
+        for entry in source.iter().chain(&destination) {
+            release(entry);
+        }
+    }
+
+    #[test]
+    fn capacity_shrink_and_autoreplace_consist_transfer() {
+        let service = services();
+        let resolver = capacity_services(&service);
+        let source = [part(3), part(6)];
+        link(&source);
+        unsafe {
+            keep(source[0].list, &service, cargo(8, 10, 8));
+            keep(source[1].list, &service, cargo(1, 11, 1));
+            check_cargo_capacity(Some(head(&source[0])), &resolver);
+            assert_eq!(fields(source[0].list).count, 3);
+            assert_eq!(fields(source[1].list).count, 6);
+            let mut replacement = [part(4), part(4)];
+            link(&replacement);
+            // `TransferCargo` of a chain asserts that the new head is a primary vehicle.
+            front_engine(&replacement[0]);
+            assert!(transfer_cargo(
+                head(&source[0]),
+                head(&replacement[0]),
+                true,
+                &resolver
+            ));
+            assert_eq!(fields(source[0].list).count, 0);
+            assert_eq!(fields(source[1].list).count, 1);
+            assert_eq!(fields(replacement[0].list).count, 4);
+            assert_eq!(fields(replacement[1].list).count, 4);
+            (*replacement[0].record).cargo_cap = 2;
+            replacement[1].cargo = 1;
+            check_cargo_capacity(Some(head(&replacement[0])), &resolver);
+            assert_eq!(fields(replacement[0].list).count, 2);
+            assert_eq!(fields(replacement[1].list).count, 4);
+            for entry in source.iter().chain(&replacement) {
+                release(entry);
+            }
+        }
+    }
+}
+
+/// The behavioural checks of the retired `tools/simulation/cargo-list-scaling.cpp` (#736 F):
+/// lists of 1000 to 64000 packets, far larger than the play corpus, keep packet identity,
+/// order and counts through `NoUnload` staging, first-hit appends, reverse removal, keyed
+/// loads and next-hop queries, reading each appended or loaded packet a bounded number of
+/// times. Expected values are the probe's own checks; its timings were not observations.
+#[cfg(test)]
+#[allow(
+    unsafe_code,
+    reason = "the fixtures build, read and free raw lists and packets"
+)]
+mod scaling_tests {
+    use super::*;
+    use crate::test_tables::{CARGO_STORAGE, SHARED};
+    use std::cell::Cell;
+
+    thread_local! {
+        static READS: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn packet_of(shell: *mut c_void) -> *mut CargoPacket {
+        READS.set(READS.get() + 1);
+        shell.cast()
+    }
+    extern "C" fn destroy_packet(shell: *mut c_void) {
+        // SAFETY: Every shell in these lists is a packet from `openttd_rust_cargo_packet_new`.
+        unsafe { openttd_rust_cargo_packet_destroy(shell.cast()) };
+    }
+    extern "C" fn no_flows(_: *const GoodsEntry) -> *mut FlowStatMap {
+        std::ptr::null_mut()
+    }
+    extern "C" fn collect(context: *mut c_void, _: u16, shell: *mut c_void) {
+        if !shell.is_null() {
+            // SAFETY: `snapshot`'s own vector.
+            unsafe { (*context.cast::<Vec<*mut c_void>>()).push(shell) };
+        }
+    }
+    fn snapshot(list: *const CargoList) -> Vec<*mut c_void> {
+        let mut shells = Vec::new();
+        // SAFETY: A live list; the callback writes only the local vector.
+        unsafe { openttd_rust_cargo_list_snapshot(list, (&raw mut shells).cast(), collect) };
+        shells
+    }
+    fn packet_aged(periods: u32) -> *mut c_void {
+        // SAFETY: A null input allocates a default packet.
+        let packet = unsafe { openttd_rust_cargo_packet_new(std::ptr::null()) };
+        // SAFETY: Allocated above; the list takes it.
+        unsafe {
+            (*packet).count = 1;
+            (*packet).periods_in_transit = periods as u16;
+        }
+        packet.cast()
+    }
+    fn exported(list: *const CargoList) -> Fields {
+        let mut fields = Fields::default();
+        // SAFETY: A live list and a local output.
+        unsafe { openttd_rust_cargo_list_export(list, &raw mut fields) };
+        fields
+    }
+    fn imported(list: *mut CargoList, count: u32, periods: u64, keep: u32) {
+        let mut fields = Fields {
+            count,
+            cargo_periods_in_transit: periods,
+            ..Fields::default()
+        };
+        fields.action_counts[2] = keep;
+        // SAFETY: A live list and a local input.
+        unsafe { openttd_rust_cargo_list_import(list, &raw const fields) };
+    }
+
+    /// The vehicle list: 7 `NoUnload` stages keep the order; 1024 first-hit appends merge
+    /// into the newest packet with 2 reads each; a reverse removal empties the list.
+    fn check_vehicle(s: &Services, size: u32) {
+        let list = openttd_rust_cargo_list_new(1);
+        let vehicle = VehicleCargoList::of(list);
+        let args = StageArgs {
+            accepted: false,
+            current_station: StationID(0),
+            next_station: &[],
+            unload_type: OrderUnloadType::NoUnload,
+            ge: std::ptr::null(),
+            cargo: CargoType(0),
+            payment: std::ptr::null_mut(),
+            current_tile: TileIndex(0),
+        };
+        // SAFETY: The list is live until destroyed at the end; every shell is a fresh packet.
+        unsafe {
+            for i in 0..size {
+                openttd_rust_cargo_list_insert(list, 0, packet_aged(i));
+            }
+            imported(list, size, u64::from(size) * u64::from(size - 1) / 2, size);
+            let expected = snapshot(list);
+            for round in 0..7 {
+                VehicleCargoList::stage(vehicle, s, &args);
+                assert!(snapshot(list) == expected, "{size}: stage {round} order");
+            }
+            READS.set(0);
+            for _ in 0..1024 {
+                VehicleCargoList::append(vehicle, s, packet_aged(size - 1), MoveToAction::MTA_KEEP);
+            }
+            // `Append` resolves the new packet once and the list's newest packet once, and
+            // merges into it.
+            assert_eq!(READS.get(), 2048, "{size}: first-hit append reads");
+            assert!(snapshot(list) == expected, "{size}: append order");
+            let fields = exported(list);
+            assert_eq!(
+                (fields.count, fields.action_counts[2]),
+                (size + 1024, size + 1024)
+            );
+            VehicleCargoList::truncate(vehicle, s, size + 1024);
+            assert!(
+                snapshot(list).is_empty(),
+                "{size}: removal empties the list"
+            );
+            let fields = exported(list);
+            assert_eq!(
+                (
+                    fields.count,
+                    fields.action_counts[2],
+                    fields.cargo_periods_in_transit
+                ),
+                (0, 0, 0),
+                "{size}: removed counts"
+            );
+            openttd_rust_cargo_list_destroy(list, s);
+        }
+    }
+
+    /// The station list: keyed next-hop queries, 1024 first-hit appends with 2 reads each,
+    /// and a 1025-piece keyed load of only the front packet with 2 reads.
+    fn check_station(s: &Services, size: u32) {
+        let list = openttd_rust_cargo_list_new(0);
+        let station = StationCargoList::of(list);
+        // SAFETY: Both lists are live until destroyed at the end; every shell is a fresh packet.
+        unsafe {
+            openttd_rust_cargo_list_insert(list, 0, packet_aged(size));
+            for i in 0..size {
+                openttd_rust_cargo_list_insert(list, (i + 2) as u16, packet_aged(i));
+            }
+            let periods = u64::from(size) * u64::from(size - 1) / 2 + u64::from(size);
+            imported(list, size + 1, periods, 0);
+            let mut expected = snapshot(list);
+            let (last_key, missing_key) = (StationID((size + 1) as u16), StationID(1));
+            for _ in 0..1024 {
+                assert!((*station).has_cargo_for(&[last_key]));
+                assert!(!(*station).has_cargo_for(&[missing_key]));
+            }
+            openttd_rust_cargo_list_insert(list, u16::MAX, std::ptr::null_mut());
+            assert!((*station).has_cargo_for(&[]));
+            READS.set(0);
+            for _ in 0..1024 {
+                StationCargoList::append(station, s, packet_aged(size), StationID(0));
+            }
+            // `Append` resolves the new packet once and the key's last packet once, and merges
+            // into it.
+            assert_eq!(READS.get(), 2048, "{size}: station first-hit append reads");
+            assert!(snapshot(list) == expected, "{size}: station append order");
+            let vehicle_list = openttd_rust_cargo_list_new(1);
+            READS.set(0);
+            let moved = StationCargoList::load(
+                station,
+                s,
+                1025,
+                VehicleCargoList::of(vehicle_list),
+                &[StationID(0)],
+                TileIndex(0),
+            );
+            // `CargoLoad` resolves the packet once, and the vehicle's `Append` once more.
+            assert_eq!((moved, READS.get()), (1025, 2), "{size}: keyed load, reads");
+            assert!(
+                snapshot(vehicle_list) == [expected[0]],
+                "{size}: loaded packet"
+            );
+            expected.remove(0);
+            assert!(snapshot(list) == expected, "{size}: station remainder");
+            assert_eq!(exported(list).count, size, "{size}: station count");
+            openttd_rust_cargo_list_destroy(vehicle_list, s);
+            openttd_rust_cargo_list_destroy(list, s);
+        }
+    }
+
+    #[test]
+    fn large_lists_keep_identity_order_and_bounded_reads() {
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 65536,
+                assertions: false,
+            },
+            8,
+        );
+        let mut shared = SHARED;
+        shared.map = crate::map_func::fixture::statics();
+        let mut s = CARGO_STORAGE;
+        s.packet = packet_of;
+        s.destroy = destroy_packet;
+        s.flow_map = no_flows;
+        s.shared = &raw const shared;
+        for size in [1000, 4000, 16000, 64000] {
+            check_vehicle(&s, size);
+            check_station(&s, size);
+        }
+    }
+}

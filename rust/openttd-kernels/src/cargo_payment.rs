@@ -794,22 +794,53 @@ mod income_tests {
     /// `PayTransfer` of 65535 of a 65535-piece packet, distance 250 and 45 periods, with the
     /// income loop's last spec: (inputs, "profit `visual_transfer` calls argument").
     fn transfer_cases(s: &Services) -> Vec<(String, String)> {
+        extern "C" fn draw(_: *mut std::ffi::c_void) -> u32 {
+            0
+        }
+        // A 256 by 256 map: the packet was loaded on tile (0, 0) and is paid on (250, 0).
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: ptr::null(),
+                extended: ptr::null(),
+                count: 256 * 256,
+                assertions: true,
+            },
+            8,
+        );
+        let shared = crate::services::fixture(ptr::null_mut(), draw);
         let radices = [SHARES.len(), EXTREMES.len(), EXTREMES.len()];
         (0..radices.iter().product())
             .map(|index| {
                 let [share, feeder, initial] = digits(index, radices);
-                transfer_case(s, EXTREMES[initial], EXTREMES[feeder], SHARES[share])
+                transfer_case(
+                    s,
+                    &shared,
+                    EXTREMES[initial],
+                    EXTREMES[feeder],
+                    SHARES[share],
+                )
             })
             .collect()
     }
-    fn transfer_case(s: &Services, initial: i64, feeder: i64, share: u8) -> (String, String) {
+    fn transfer_case(
+        s: &Services,
+        shared: &crate::services::Services,
+        initial: i64,
+        feeder: i64,
+        share: u8,
+    ) -> (String, String) {
         SHARE.set(share);
         CALLS.set(0);
         let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
-        let packet = crate::cargo_storage::Packet {
+        // Loaded on tile 0 (`travelled` holds its coordinates, zero) and in transit 45 periods,
+        // so `GetDistance` on tile 250 is 250.
+        let packet = crate::cargo_storage::CargoPacket {
             feeder_share: feeder,
+            source_xy: 0,
             count: 65535,
-            ..crate::cargo_storage::Packet::default()
+            periods_in_transit: 45,
+            in_vehicle: 1,
+            ..crate::cargo_storage::CargoPacket::default()
         };
         // SAFETY: Allocated above and released below; the packet is a local.
         let (profit, fields) = unsafe {
@@ -819,14 +850,14 @@ mod income_tests {
                 visual_profit: i64::MAX,
                 visual_transfer: initial,
             };
-            let profit = openttd_rust_cargo_payment_transfer(
+            let profit = pay_transfer(
                 payment,
                 s,
-                0,
+                shared,
+                CargoType(0),
                 &raw const packet,
                 65535,
-                250,
-                45,
+                crate::tile_type::TileIndex(250),
             );
             let fields = (*payment).fields;
             openttd_rust_cargo_payment_destroy(payment, ptr::null(), 1);

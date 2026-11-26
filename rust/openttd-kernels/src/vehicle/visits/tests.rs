@@ -9,7 +9,7 @@
 //! is the record itself, with its own orders and consist owners; the tables are leaked for
 //! the test's thread, and the leaves record what the bodies ask of them.
 use super::*;
-use crate::cargo_storage::List;
+use crate::cargo_storage::VehicleCargoList;
 use crate::orders::Order;
 use crate::vehicle::OpenTTDVehicle;
 use crate::window_func::testing::Effect as Window;
@@ -44,7 +44,7 @@ enum Call {
 
 thread_local! {
     static CALLS: RefCell<Vec<Call>> = const { RefCell::new(Vec::new()) };
-    static CARGO_LIST: Cell<*const List> = const { Cell::new(std::ptr::null()) };
+    static CARGO_LIST: Cell<*const VehicleCargoList> = const { Cell::new(std::ptr::null()) };
     static CARGO_TYPE: Cell<u8> = const { Cell::new(0) };
     static CARGO_SUBTYPE: Cell<u8> = const { Cell::new(0) };
     static ENGINE: Cell<*mut crate::engine_type::OpenTTDEngine> =
@@ -75,7 +75,7 @@ unsafe extern "C" fn cargo_type(_: *mut OpenTTDVehicle) -> u8 {
 unsafe extern "C" fn cargo_subtype(_: *mut OpenTTDVehicle) -> u8 {
     CARGO_SUBTYPE.get()
 }
-unsafe extern "C" fn cargo_owner(_: *mut OpenTTDVehicle) -> *const List {
+unsafe extern "C" fn cargo_owner(_: *mut OpenTTDVehicle) -> *const VehicleCargoList {
     CARGO_LIST.get()
 }
 extern "C" fn newgrf() -> *const crate::newgrf_vehicle::Services {
@@ -438,7 +438,9 @@ fn percent_filled_asserts_that_a_colour_needs_a_valid_station() {
         return;
     }
     let s = visits(|_, station, _| station.get = no_station);
-    CARGO_LIST.set(crate::cargo_storage::openttd_rust_cargo_list_new(1));
+    CARGO_LIST.set(crate::cargo_storage::VehicleCargoList::of(
+        crate::cargo_storage::openttd_rust_cargo_list_new(1),
+    ));
     // A part without capacity: the colour loop reads no station.
     let v = vehicle(
         VehicleType::VEH_SHIP,
@@ -491,7 +493,7 @@ fn leave_station_stores_the_fill_as_the_signed_trip_occupancy() {
     let list = crate::cargo_storage::openttd_rust_cargo_list_new(1);
     // SAFETY: The fresh list; the test owns it.
     unsafe { (*list).fields.count = 200 };
-    CARGO_LIST.set(list);
+    CARGO_LIST.set(crate::cargo_storage::VehicleCargoList::of(list));
     // No loading and no unloading: no link refresh, no last loading station.
     let v = vehicle(
         VehicleType::VEH_SHIP,

@@ -308,6 +308,7 @@ test_leaves! {
     with_cache: cache: unsafe extern "C" fn(V) -> *mut Cache;
     with_capabilities: capabilities: &'static crate::engine_capabilities::Services;
     with_cargo_owner: cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::VehicleCargoList;
+    with_cargo_services: cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services;
     with_cargo_type: cargo_type: unsafe extern "C" fn(V) -> u8;
     with_engine_by_id: engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine;
     with_id: id: unsafe extern "C" fn(V) -> u32;

@@ -676,8 +676,8 @@ mod tests {
             running: Option<bool>,
             sound_changes: u8,
             packet_reloads: bool,
-            cargo: *mut cargo_storage::List,
-            packet: cargo_storage::Packet,
+            cargo: *mut cargo_storage::VehicleCargoList,
+            packet: cargo_storage::CargoPacket,
             part: *mut VehicleRecord,
             front: *mut VehicleRecord,
         }
@@ -689,7 +689,7 @@ mod tests {
                     sound_changes: 0,
                     packet_reloads: false,
                     cargo: null_mut(),
-                    packet: cargo_storage::Packet {
+                    packet: cargo_storage::CargoPacket {
                         feeder_share: 0,
                         source_xy: 0,
                         count: 1,
@@ -788,7 +788,9 @@ mod tests {
             }
         }
 
-        unsafe extern "C" fn cargo_owner(v: *mut VehicleRecord) -> *const cargo_storage::List {
+        unsafe extern "C" fn cargo_owner(
+            v: *mut VehicleRecord,
+        ) -> *const cargo_storage::VehicleCargoList {
             observed(|o| {
                 assert_eq!(v, o.part);
                 o.events.push("age-owner");
@@ -828,7 +830,7 @@ mod tests {
             false
         }
         /// The cargo list's packet lookup; a reloading packet changes the part's period.
-        extern "C" fn packet(_: *mut c_void) -> *mut cargo_storage::Packet {
+        extern "C" fn packet(_: *mut c_void) -> *mut cargo_storage::CargoPacket {
             observed(|o| {
                 if o.packet_reloads {
                     // SAFETY: The pair's live part; no reference to it is live.
@@ -842,14 +844,12 @@ mod tests {
         extern "C" fn can_allocate() -> u8 {
             1
         }
-        extern "C" fn create(_: *const cargo_storage::Packet) -> *mut c_void {
+        extern "C" fn create(_: *const cargo_storage::CargoPacket) -> *mut c_void {
             null_mut()
         }
-        extern "C" fn pay(_: *mut c_void, _: u8, _: u8, _: *const c_void, _: u32, _: u32) -> i64 {
-            0
-        }
-        extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-        extern "C" fn flow_map(_: *const c_void) -> *mut crate::cargo_flow::FlowStatMap {
+        extern "C" fn flow_map(
+            _: *const crate::station_base::GoodsEntry,
+        ) -> *mut crate::cargo_flow::FlowStatMap {
             null_mut()
         }
         extern "C" fn packet_next(_: *mut c_void) -> *mut c_void {
@@ -859,13 +859,11 @@ mod tests {
             cargo_storage::Services {
                 can_allocate,
                 create,
-                packet,
                 destroy,
-                pay,
-                origin,
                 flow_map,
-                shared: null(),
+                packet,
                 packet_next,
+                ..crate::test_tables::CARGO_STORAGE
             }
         }
         fn events() -> Vec<&'static str> {
@@ -896,15 +894,15 @@ mod tests {
             let list = cargo_storage::openttd_rust_cargo_list_new(1);
             // SAFETY: The fresh list; its one packet's shell is never dereferenced.
             unsafe {
-                cargo_storage::openttd_rust_cargo_list_append(
-                    list,
-                    &raw const cargo_services,
+                cargo_storage::VehicleCargoList::append(
+                    cargo_storage::VehicleCargoList::of(list),
+                    &cargo_services,
                     pair.part.cast(),
-                    u16::from(crate::cargopacket::MoveToAction::MTA_KEEP.0),
+                    crate::cargopacket::MoveToAction::MTA_KEEP,
                 );
             };
             observed(|o| {
-                o.cargo = list;
+                o.cargo = cargo_storage::VehicleCargoList::of(list);
                 o.packet_reloads = true;
             });
             pair.run();
@@ -1602,9 +1600,12 @@ mod tests {
         }
 
         /// The cargo list of a road part whose post-`Tick` body ages its cargo.
-        unsafe extern "C" fn ageing_cargo(v: *mut VehicleRecord) -> *const cargo_storage::List {
+        unsafe extern "C" fn ageing_cargo(
+            v: *mut VehicleRecord,
+        ) -> *const cargo_storage::VehicleCargoList {
             thread_local! {
-                static LIST: *mut cargo_storage::List = cargo_storage::openttd_rust_cargo_list_new(1);
+                static LIST: *mut cargo_storage::VehicleCargoList =
+                    cargo_storage::VehicleCargoList::of(cargo_storage::openttd_rust_cargo_list_new(1));
             }
             let id = index_of(VehicleRef::of(v));
             STEPS.with(|s| s.borrow_mut().push(Step::AgeCargo(id)));

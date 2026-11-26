@@ -1237,7 +1237,7 @@ mod tests {
         static LIVE: Cell<[*mut FlowStatMap; STATIONS]> = const { Cell::new([std::ptr::null_mut(); STATIONS]) };
         static EVENTS: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
         static MANUAL: Cell<bool> = const { Cell::new(false) };
-        static CARGO_LIST: Cell<*mut crate::cargo_storage::List> = const { Cell::new(std::ptr::null_mut()) };
+        static CARGO_LIST: Cell<*mut crate::cargo_storage::CargoList> = const { Cell::new(std::ptr::null_mut()) };
         static OWNER: Cell<*mut crate::station_service::Service> = const { Cell::new(std::ptr::null_mut()) };
     }
     fn record(event: Event) {
@@ -1274,8 +1274,8 @@ mod tests {
         unsafe_code,
         reason = "reads the fixture's live map and cargo list at the call"
     )]
-    extern "C" fn flow_map(ge: *const std::ffi::c_void) -> *mut FlowStatMap {
-        let station = station_of(ge.cast());
+    extern "C" fn flow_map(ge: *const GoodsEntry) -> *mut FlowStatMap {
+        let station = station_of(ge);
         let origin_7 = unsafe { &*ge.cast::<FlowStatMap>() }
             .find(StationID(7))
             .is_some();
@@ -1318,9 +1318,12 @@ mod tests {
     extern "C" fn automatic_distribution(_: u8) -> bool {
         !MANUAL.get()
     }
-    extern "C" fn cargo_owner(st: *mut BaseStation, _: u8) -> *const crate::cargo_storage::List {
+    extern "C" fn cargo_owner(
+        st: *mut BaseStation,
+        _: u8,
+    ) -> *const crate::cargo_storage::StationCargoList {
         if id(st) == StationID(100) {
-            CARGO_LIST.get()
+            crate::cargo_storage::StationCargoList::of(CARGO_LIST.get())
         } else {
             std::ptr::null()
         }
@@ -1422,7 +1425,7 @@ mod tests {
     /// Station 100's cargo list: one packet from origin 7 for each of the next hops 106, 107
     /// and 108, of 1, 2 and 3 units.
     #[allow(unsafe_code, reason = "fills the raw cargo list")]
-    fn station_list() -> *mut crate::cargo_storage::List {
+    fn station_list() -> *mut crate::cargo_storage::CargoList {
         let list = crate::cargo_storage::tests::list(false);
         for (count, via) in [(1, 106), (2, 107), (3, 108)] {
             unsafe {
