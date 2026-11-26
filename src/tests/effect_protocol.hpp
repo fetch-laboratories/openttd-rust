@@ -12,6 +12,9 @@
 #include "../rust/vehicle_record_ffi.h"
 #include "../rust/vehicle_ffi.h"
 #include "../rust/newgrf_vehicle_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/vehicle_services_table.h"
+#include "abi-record-setting_addresses.h"
 #include <array>
 #include <memory>
 

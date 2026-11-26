@@ -8,6 +8,8 @@
 #include "rust/spec_services_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/station_service_ffi.h"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 #include <cstdlib>
 #include <cstdio>
 #include <memory>

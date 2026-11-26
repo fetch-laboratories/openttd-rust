@@ -6,6 +6,8 @@
 
 #include "vehicle_tables.inc"
 #include "controller-orders.hpp"
+#include "rust/shared_services_table.h"
+#include "rust/vehicle_services_table.h"
 
 /* Direct callbacks reenter with the same live scalar allocation. Deletion models
  * Aircraft::PreDestructor releasing airport blocks before freeing that owner. */

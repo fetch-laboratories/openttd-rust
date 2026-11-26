@@ -37,6 +37,7 @@
 #include "../tree_map.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
+#include "../rust/shared_services_table.h"
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
 #include "world_generation_probe.hpp"

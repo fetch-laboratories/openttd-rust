@@ -15,6 +15,7 @@
 #include "../rust/command_services.h"
 #include "../rust/station_command_ffi.h"
 #include "../rust/vehicle_ffi.h"
+#include "../rust/vehicle_services_table.h"
 #include "../rust/vehicle_record_ffi.h"
 #include "../company_func.h"
 #include "../core/backup_type.hpp"

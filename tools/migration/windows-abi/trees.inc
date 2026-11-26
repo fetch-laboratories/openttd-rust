@@ -4,6 +4,8 @@
 #include "rust/company_ffi.h"
 #include "tree_map.h"
 #include "../../simulation/session-fixture.hpp"
+#include "rust/shared_services_table.h"
+#include "abi-record-setting_addresses.h"
 
 // ABI probe, not simulation evidence. The full game harness compares map/DATE.
 struct TreeProbe {

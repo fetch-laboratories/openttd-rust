@@ -348,6 +348,8 @@ jobs:
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/orphan-exports.py --base-ref "$BASE_REF"
+    - name: Keep Rust's tables out of core headers
+      run: python3 tools/table-headers.py
     - name: Reject new residue in finished files
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}

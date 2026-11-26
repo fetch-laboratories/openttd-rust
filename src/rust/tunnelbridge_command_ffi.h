@@ -13,6 +13,8 @@
 #include "company_ffi.h"
 #include "object_ffi.h"
 #include "../bridge_type.h"
+enum RailType : uint8_t;
+enum TransportType : uint8_t;
 /* The game-state mutex serializes calls. Costs are live native stack slots;
  * tables are immutable, map/pool identities remain native. No world reference
  * survives reentry. Direct noexcept leaves terminate on environmental failure;

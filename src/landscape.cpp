@@ -47,6 +47,7 @@
 #include <unordered_set>
 
 #include "rust/ffi.h"
+#include "rust/shared_services_table.h"
 #include "rust/snow_line_ffi.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/station_lifecycle_ffi.h"

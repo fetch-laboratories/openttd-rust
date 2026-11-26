@@ -20,7 +20,7 @@ crate::abi::shared_records! {
         pub build_object_frame_burst: u16,
     }
     /// Process-lifetime addresses of canonical settings, shared by simulation owners.
-    "OpenTTDSettingAddresses" ["settings"] => pub struct SettingAddresses {
+    "OpenTTDSettingAddresses" ["setting_addresses"] => pub struct SettingAddresses {
         pub allow_town_level_crossings: *const bool,
         pub allow_town_roads: *const bool,
         pub ambient: *const bool,

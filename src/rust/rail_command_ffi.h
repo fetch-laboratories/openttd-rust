@@ -19,6 +19,8 @@
  * uint8_t, DepotID uint16_t, TownID uint16_t; enums as their uint8_t value. No entry draws
  * Random. */
 struct OpenTTDTrainServices;
+enum RoadBits : uint8_t;
+enum RoadType : uint8_t;
 struct OpenTTDCrossingRoad { RoadBits bits; RoadType road_type, tram_type; uint16_t town; uint8_t road_owner, tram_owner; };
 struct OpenTTDRailCommandServices {
 	const OpenTTDSharedServices *shared;

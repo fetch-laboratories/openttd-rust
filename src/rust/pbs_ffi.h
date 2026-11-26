@@ -11,6 +11,7 @@
 #include "services_ffi.h"
 #include "train_ffi.h"
 struct BaseStation;
+enum TrackBits : uint8_t;
 struct OpenTTDPbsTrainOutput;
 /** `PBSTileInfo` as the PBS entries return it, with a train beside it. */
 struct OpenTTDPbsTileInfo {

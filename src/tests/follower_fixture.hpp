@@ -6,6 +6,8 @@
 #include "../rust/vehicle_record_ffi.h"
 #include "fixture_map.hpp"
 #include "../rust/ground_vehicle_ffi.h"
+#include "../rust/shared_services_table.h"
+#include "../rust/vehicle_services_table.h"
 #include "../rust/train_ffi.h"
 #include "../rust/pbs_ffi.h"
 #include "../tile_storage_type.h"

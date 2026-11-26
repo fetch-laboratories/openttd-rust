@@ -36,6 +36,7 @@
 #include "../openttd.h"
 #include "../rust/movement_ffi.h"
 #include "../rust/objectives_ffi.h"
+#include "../rust/shared_services_table.h"
 #include "../window_func.h"
 #include "../network/network_type.h"
 #include "../safeguards.h"

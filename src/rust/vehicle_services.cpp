@@ -8,6 +8,8 @@
 /** @file vehicle_services.cpp Shared typed vehicle and map services for Rust ports. */
 #include "../stdafx.h"
 #include "vehicle_ffi.h"
+#include "vehicle_services_table.h"
+#include "vehicle_scheduler_table.h"
 #include "vehicle_services.h"
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
@@ -181,6 +183,10 @@ const OpenTTDVehicleServices &GetRustVehicleServices() noexcept
 {
 	return _rust_vehicle_services;
 }
+
+const OpenTTDGroundServices _rust_ground_services{
+	.physics = &GetRustGroundPhysicsServices(),
+};
 
 
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept
