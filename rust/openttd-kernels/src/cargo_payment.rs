@@ -437,12 +437,8 @@ pub(crate) fn trigger_industry_production_of_deliveries(s: &Services) {
     /* Call the production machinery of industries */
     // The list is read again at each step: the production callbacks run between them.
     let mut index = 0;
-    loop {
-        // SAFETY: The list's only borrow, which ends with the read.
-        let Some(iid) = (unsafe { (&*CARGO_DELIVERY_DESTINATIONS.get()).get(index).copied() })
-        else {
-            break;
-        };
+    // SAFETY: Each read is the list's only borrow and ends with the copy, before the body.
+    while let Some(iid) = unsafe { (&*CARGO_DELIVERY_DESTINATIONS.get()).get(index).copied() } {
         // SAFETY: A live industry of the list; no borrow of the list is alive across the call.
         unsafe {
             crate::industry::trigger_industry_production(
