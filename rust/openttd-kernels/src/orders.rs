@@ -553,8 +553,6 @@ pub struct Leaves {
     // Lookups still stored in C++ pools (#634, #638).
     /// `BaseStation::GetIfValid(index)`, null where invalid.
     pub base_station_get_if_valid: extern "C" fn(index: u16) -> *mut crate::station::BaseStation,
-    /// `Depot::Get(index)`'s `xy`.
-    pub depot_get: extern "C" fn(index: u16) -> u32,
     /// `Waypoint::GetIfValid(index)`, null where invalid.
     pub waypoint_get_if_valid: extern "C" fn(index: u16) -> *mut crate::station::BaseStation,
 
@@ -2710,6 +2708,15 @@ fn delete_order_warnings(v: VehicleRef, s: &Leaves) {
     crate::news_func::delete_vehicle_news(v.index(s.newgrf()), AdviceType::Order);
 }
 
+/// `Depot::Get(id)->xy`: the strict pool lookup, which asserts natively on an invalid
+/// index, and the member read from the depot it returns.
+#[allow(unsafe_code)]
+fn depot_get_xy(id: crate::depot_type::DepotID, s: &Leaves) -> TileIndex {
+    let d = (s.depots().get)(id);
+    // SAFETY: `Depot::Get` returns the live depot of a valid index.
+    TileIndex(unsafe { (s.depots().xy)(d) })
+}
+
 /// `Order::GetLocation`: returns a tile somewhat representing the order destination (not
 /// suitable for pathfinding). `airport` gets the airport tile and not the station location
 /// for aircraft. Returns the destination of the order, or `INVALID_TILE` if none.
@@ -2736,7 +2743,7 @@ pub(crate) fn get_location(
             if v.vehicle_type() == VehicleType::VEH_AIRCRAFT {
                 TileIndex((s.shared().station_xy)(order.destination().0))
             } else {
-                TileIndex((s.depot_get)(order.destination().0))
+                depot_get_xy(order.destination().to_depot_id(), s)
             }
         }
         _ => TileIndex::INVALID,
@@ -3526,7 +3533,7 @@ pub(crate) fn update_order_dest(
                 } else {
                     crate::vehicle_base::set_dest_tile(
                         v,
-                        TileIndex((s.depot_get)(order.destination().0)),
+                        depot_get_xy(order.destination().to_depot_id(), s),
                     );
                 }
                 return true;
@@ -7090,7 +7097,6 @@ crate::abi::layouts! {
         vehicle_set_name,
         vehicle_set_service_interval,
         base_station_get_if_valid,
-        depot_get,
         waypoint_get_if_valid,
         debug_check_sanity,
         get_vehicle_cannot_use_station_reason,

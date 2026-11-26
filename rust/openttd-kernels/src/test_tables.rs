@@ -1978,7 +1978,6 @@ pub(crate) const ORDERS: crate::orders::Leaves = crate::orders::Leaves {
     vehicle_set_name: unreachable2,
     vehicle_set_service_interval: unreachable2,
     base_station_get_if_valid: unreachable1,
-    depot_get: unreachable1,
     waypoint_get_if_valid: unreachable1,
     debug_check_sanity: unreachable1,
     get_vehicle_cannot_use_station_reason: unreachable2,

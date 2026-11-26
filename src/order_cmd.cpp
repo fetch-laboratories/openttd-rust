@@ -109,7 +109,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.vehicle_set_name = RustOpaqueVehicleCopyName<OrderBackup>,
 	.vehicle_set_service_interval = RustOpaqueVehicleInvoke<RustVehicleSetServiceInterval, uint16_t>,
 	.base_station_get_if_valid = [](uint16_t index) noexcept { return BaseStation::GetIfValid(StationID(index)); },
-	.depot_get = [](uint16_t index) noexcept { return Depot::Get(DepotID(index))->xy.base(); },
 	.waypoint_get_if_valid = [](uint16_t index) noexcept -> BaseStation * { return Waypoint::GetIfValid(StationID(index)); },
 	.debug_check_sanity = RustOrderListDebugCheckSanity,
 	.get_vehicle_cannot_use_station_reason = [](void *v, uint16_t st) noexcept -> uint32_t { return GetVehicleCannotUseStationReason(static_cast<const Vehicle *>(v), Station::Get(StationID(st))); },

@@ -16,6 +16,7 @@ struct OpenTTDDepotServices {
 	const OpenTTDCommandCostServices *costs;
 	const OpenTTDRailCommandServices *rail;
 	Depot *(*depot)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);
+	Depot *(*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
 	uint32_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
 	uint32_t (*xy)(const Depot *) noexcept OPENTTD_SERVICE_DEFAULT(xy);
 	OpenTTDByteSpan (*name)(const Depot *) noexcept OPENTTD_SERVICE_DEFAULT(name);

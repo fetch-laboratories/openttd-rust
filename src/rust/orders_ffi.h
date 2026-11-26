@@ -79,7 +79,6 @@ struct OpenTTDOrdersLeaves {
 	void (*vehicle_set_service_interval)(void *v, uint16_t interval) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_set_service_interval);
 	/* Lookups still stored in C++ pools (#634, #638). */
 	BaseStation *(*base_station_get_if_valid)(uint16_t index) noexcept OPENTTD_SERVICE_DEFAULT(base_station_get_if_valid);
-	uint32_t (*depot_get)(uint16_t index) noexcept OPENTTD_SERVICE_DEFAULT(depot_get);
 	BaseStation *(*waypoint_get_if_valid)(uint16_t index) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_get_if_valid);
 	/* Unported bodies. */
 	void (*debug_check_sanity)(void *list) noexcept OPENTTD_SERVICE_DEFAULT(debug_check_sanity);

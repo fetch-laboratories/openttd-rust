@@ -51,6 +51,7 @@ const OpenTTDDepotServices &GetRustDepotServices() noexcept
 		.costs = &GetRustCommandCostServices(),
 		.rail = &GetRustRailCommandServices(),
 		.depot = [](uint16_t id) noexcept { return Depot::GetIfValid(DepotID(id)); },
+		.get = [](uint16_t id) noexcept { return Depot::Get(DepotID(id)); },
 		.pool_size = []() noexcept { return static_cast<uint32_t>(Depot::GetPoolSize()); },
 		.xy = [](const Depot *d) noexcept { return d->xy.base(); },
 		.name = [](const Depot *d) noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(d->name.data()), d->name.size()}; },
