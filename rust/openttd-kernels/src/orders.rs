@@ -5744,7 +5744,7 @@ pub(crate) fn cmd_set_timetable_start(
         if num_vehs >= 2 {
             // The sorter is a strict total order over the shared vehicles, whose unit numbers
             // differ, so every correct sort gives `std::sort`'s result.
-            vehs.sort_by(|a, b| {
+            vehs.sort_unstable_by(|a, b| {
                 if vehicle_timetable_sorter(*a, *b, s) {
                     std::cmp::Ordering::Less
                 } else if vehicle_timetable_sorter(*b, *a, s) {
