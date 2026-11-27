@@ -9,11 +9,15 @@
 //! C++ signal in its own exception frame. The C++ view and `tail` leave when #669's
 //! "`NewGRF` configuration/common publication/actions delivery" line ports those handlers.
 //!
-//! Both readers meet one contract, which their constructors take: the buffer, or the
-//! native reader and the table of its operations, stay valid, readable and unchanged,
-//! and the native reader exclusively borrowed, for the reader's lifetime.
+//! Both readers meet one contract, which their constructors take. For [`ByteReader`], the
+//! buffer stays readable and its bytes unchanged for the reader's lifetime. For
+//! [`ByteReaderRef`], the native reader stays live and exclusively borrowed, and its
+//! input bytes and the table of its operations unchanged, for the view's lifetime; the
+//! read and skip operations advance that reader's cursor.
 
 use crate::consumer::{self, SeparatorUsage};
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_badge_type::BadgeID;
 
 /// `OTTDByteReaderSignal`: a read past the end of the buffer.
 #[derive(Clone, Copy, Debug)]
@@ -193,12 +197,13 @@ impl<'a> ByteReaderRef<'a> {
     /// `badges` is a valid native badge vector, exclusively borrowed for the call.
     pub(crate) unsafe fn assign_badge_list(
         &mut self,
-        feature: u8,
+        feature: GrfSpecFeature,
         badges: *mut BadgeList,
     ) -> Result<(), OTTDByteReaderSignal> {
         let ids = self.read_badge_list(feature)?;
-        // SAFETY: the caller's contract for `badges`; `ids` holds `len` IDs.
-        unsafe { (self.services.assign_badges)(badges, ids.as_ptr(), ids.len()) };
+        // SAFETY: the caller's contract for `badges`; `ids` holds `len` IDs, which
+        // `BadgeID` lays out as the native `uint32_t` it wraps.
+        unsafe { (self.services.assign_badges)(badges, ids.as_ptr().cast(), ids.len()) };
         Ok(())
     }
 
@@ -206,19 +211,19 @@ impl<'a> ByteReaderRef<'a> {
     /// allocation. On failure the destination stays untouched and native badge effects remain.
     pub(crate) fn read_badge_list(
         &mut self,
-        feature: u8,
-    ) -> Result<Vec<u32>, OTTDByteReaderSignal> {
+        feature: GrfSpecFeature,
+    ) -> Result<Vec<BadgeID>, OTTDByteReaderSignal> {
         let count = self.read_word()?;
-        let mut ids = Vec::with_capacity(usize::from(count));
+        let mut ids = Vec::<BadgeID>::with_capacity(usize::from(count));
         let mut len = 0;
         // SAFETY: the constructor's contract; `ids` has room for the `count` IDs the
         // leaf writes at most.
         if unsafe {
             (self.services.read_badge_ids)(
                 self.native,
-                feature,
+                feature.0,
                 count,
-                ids.as_mut_ptr(),
+                ids.as_mut_ptr().cast(),
                 &raw mut len,
             )
         } {

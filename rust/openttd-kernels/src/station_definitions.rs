@@ -420,7 +420,7 @@ unsafe fn station_change_info(
                 }
                 // Badge list
                 0x1f => reader.assign_badge_list(
-                    GrfSpecFeature::GSF_STATIONS.0,
+                    GrfSpecFeature::GSF_STATIONS,
                     (s.shared().specs().station().badge_list)(spec),
                 )?,
                 // Minimum bridge height (extended) and disallowed bridge pillars
@@ -584,7 +584,7 @@ unsafe fn road_stop_change_info(
                 }
                 // Badge list
                 0x16 => reader.assign_badge_list(
-                    GrfSpecFeature::GSF_ROADSTOPS.0,
+                    GrfSpecFeature::GSF_ROADSTOPS,
                     (s.shared().specs().road_stop().badge_list)(spec),
                 )?,
                 _ => result = ChangeInfoResult::CIR_UNKNOWN,

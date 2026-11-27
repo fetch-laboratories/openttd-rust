@@ -331,7 +331,7 @@ unsafe fn airport_change_info(
 
                 // Badge list
                 0x12 => buf.assign_badge_list(
-                    crate::newgrf::GrfSpecFeature::GSF_AIRPORTS.0,
+                    crate::newgrf::GrfSpecFeature::GSF_AIRPORTS,
                     (s.shared().specs().airport().badge_list)(r#as),
                 )?,
 
@@ -466,7 +466,7 @@ unsafe fn airport_tiles_change_info(
                 // Badge list. AirportTilesChangeInfo uses the tram feature for badge-seen
                 // bookkeeping.
                 0x12 => buf.assign_badge_list(
-                    crate::newgrf::GrfSpecFeature::GSF_TRAMTYPES.0,
+                    crate::newgrf::GrfSpecFeature::GSF_TRAMTYPES,
                     (s.shared().specs().airport_tile().badge_list)(tsp),
                 )?,
 

@@ -493,8 +493,10 @@ unsafe fn train(
             (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x33 => unsafe {
-            let badges = r.read_badge_list(VEH_TRAIN)?;
-            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
+            let badges = r.read_badge_list(crate::newgrf::GrfSpecFeature::GSF_TRAINS)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(
+                badges.into_iter().map(|id| id.0).collect(),
+            );
         },
         0x34 => {
             let count = r.read_byte()?;
@@ -613,8 +615,10 @@ unsafe fn road(
             (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x2a => unsafe {
-            let badges = r.read_badge_list(VEH_ROAD)?;
-            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
+            let badges = r.read_badge_list(crate::newgrf::GrfSpecFeature::GSF_ROADVEHICLES)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(
+                badges.into_iter().map(|id| id.0).collect(),
+            );
         },
         _ => return common(s, e, prop, r),
     }
@@ -698,8 +702,10 @@ unsafe fn ship(
             (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x26 => unsafe {
-            let badges = r.read_badge_list(VEH_SHIP)?;
-            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
+            let badges = r.read_badge_list(crate::newgrf::GrfSpecFeature::GSF_SHIPS)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(
+                badges.into_iter().map(|id| id.0).collect(),
+            );
         },
         _ => return common(s, e, prop, r),
     }
@@ -802,8 +808,10 @@ unsafe fn aircraft(
             (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x24 => unsafe {
-            let badges = r.read_badge_list(VEH_AIRCRAFT)?;
-            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
+            let badges = r.read_badge_list(crate::newgrf::GrfSpecFeature::GSF_AIRCRAFT)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(
+                badges.into_iter().map(|id| id.0).collect(),
+            );
         },
         _ => return common(s, e, prop, r),
     }
