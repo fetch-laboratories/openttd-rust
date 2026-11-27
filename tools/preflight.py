@@ -5,6 +5,8 @@ The steps come from .github/workflows/ci-quick.yml itself, so the two cannot
 drift. Unlike CI, every step runs even after a failure, and the result lists
 each failed step. The steps read the tree and write nothing a later step reads,
 so --jobs of them run at once, the longest of the last run first (#1069).
+Quick's Rust checks start before them, and their failure stops the run, since
+the Rust code must change first; --keep-going runs every step anyway (#1103).
 
 --fast runs, in seconds, the pre-push hook's fast tier (the pinned commit
 checker, cargo fmt --check and Quick's Ruff lines) and Quick's ty line, and
@@ -26,7 +28,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, TypedDict
+from typing import IO, Any, NamedTuple, TypedDict
 
 import preflight_stamp
 import quick_workflow
@@ -64,6 +66,10 @@ BASE_EXPRESSION = re.compile(r"\s*\$\{\{(.*?)\}\}\s*", re.DOTALL)
 TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
+# Quick's Rust checks: about a minute, started first, and their failure stops
+# the run unless --keep-going (#1103). They failed 11 of the 16 failed runs of
+# root's session of 2026-11-26, each of which waited out every slower step.
+RUST_CHECKS = "Rust formatting, check, warnings and tests"
 # Steps at once by default: half the host's threads, at most four. The probe
 # compile, the longest step, sizes its own compiler pool to the free threads.
 JOBS = min(4, max(1, (os.cpu_count() or 2) // 2))
@@ -238,6 +244,10 @@ def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
             with PRINTING:
                 ACTIVE.discard(process)
     elapsed = time.monotonic() - started
+    if code and STOPPING.is_set():
+        with PRINTING:
+            print(f"stopped {elapsed:.0f}s {step.name}", flush=True)
+        return False, elapsed
     lines = []
     if code:
         tail = log.read_text(errors="replace").splitlines()[-TAIL_LINES:]
@@ -442,46 +452,77 @@ def report_runs(since: str) -> int:
     return 0
 
 
+class Verdicts(NamedTuple):
+    """The failed steps, and the steps a failure of the Rust checks stopped."""
+
+    failed: list[str]
+    stopped: list[str]
+
+
+def halt(pool: ThreadPoolExecutor) -> None:
+    """Cancel the queued steps and terminate the running ones."""
+    with PRINTING:
+        STOPPING.set()
+        running = list(ACTIVE)
+    pool.shutdown(wait=False, cancel_futures=True)
+    stop(running)
+    # A step still launching stops itself on STOPPING; wait for it.
+    pool.shutdown()
+
+
 def run_steps(
-    steps: list[Step], env: dict[str, str], logs: Path, jobs: int
-) -> list[str]:
-    """Run every step, jobs at a time, longest first; the failed names in step order.
+    steps: list[Step],
+    env: dict[str, str],
+    logs: Path,
+    jobs: int,
+    keep_going: bool = False,
+) -> Verdicts:
+    """Run every step, jobs at a time, the Rust checks and then the longest
+    first; the failed and stopped names in step order.
 
     A verdict belongs to the step's position, not its name, which need not be
     unique. Each step keeps its workflow number for its log. A step with no
     recorded time starts first, since it may be the longest. On an interrupt,
-    queued steps are cancelled and running ones terminated.
+    queued steps are cancelled and running ones terminated; so they are when
+    the Rust checks fail, unless keep_going, and each step that had not ended
+    is stopped.
     """
     last = last_timings()
-    order = sorted(range(len(steps)), key=lambda i: -last.get(steps[i].name, INF))
+    order = sorted(
+        range(len(steps)),
+        key=lambda i: (steps[i].name != RUST_CHECKS, -last.get(steps[i].name, INF)),
+    )
     STOPPING.clear()
     pool = ThreadPoolExecutor(max(1, jobs))
+    ended = set(range(len(steps)))
     try:
         futures = {
             index: pool.submit(timed, steps[index], env, logs / f"{index + 1:02}.log")
             for index in order
         }
-        results = [futures[index].result() for index in range(len(steps))]
+        gate = bool(steps) and steps[order[0]].name == RUST_CHECKS and not keep_going
+        if gate and not futures[order[0]].result()[0]:
+            ended = {index for index, future in futures.items() if future.done()}
+            halt(pool)
+        results = {
+            index: futures[index].result()
+            for index in range(len(steps))
+            if index in ended
+        }
     except BaseException:
-        with PRINTING:
-            STOPPING.set()
-            running = list(ACTIVE)
-        pool.shutdown(wait=False, cancel_futures=True)
-        stop(running)
-        # A step still launching stops itself on STOPPING; wait for it.
-        pool.shutdown()
+        halt(pool)
         raise
     finally:
         STOPPING.clear()
     pool.shutdown()
+    # A stopped step's time is not its length, so its last full time stays.
     save_timings(
-        {step.name: seconds for step, (_, seconds) in zip(steps, results, strict=True)}
+        {steps[index].name: seconds for index, (_, seconds) in results.items()}
     )
-    return [
-        step.name
-        for step, (passed, _) in zip(steps, results, strict=True)
-        if not passed
-    ]
+    return Verdicts(
+        [steps[i].name for i in sorted(results) if not results[i][0]],
+        [step.name for i, step in enumerate(steps) if i not in ended],
+    )
 
 
 def selected(names: list[str], patterns: list[str] | None) -> list[str]:
@@ -519,6 +560,11 @@ def arguments() -> argparse.Namespace:
         type=int,
         default=JOBS,
         help=f"steps run at once (default {JOBS}); 1 runs them in workflow order",
+    )
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help=f"run every step after {RUST_CHECKS!r} fails, instead of stopping",
     )
     parser.add_argument("--list", action="store_true", help="list the steps and exit")
     parser.add_argument(
@@ -564,10 +610,21 @@ def uncommitted() -> str:
     return ""
 
 
-def summary(chosen: list[Step], failed: list[str], seconds: float, warning: str) -> int:
-    print(f"{len(chosen) - len(failed)}/{len(chosen)} passed in {seconds:.0f}s")
+def summary(
+    chosen: list[Step], verdicts: Verdicts, seconds: float, warning: str
+) -> int:
+    failed, stopped = verdicts
+    passed = len(chosen) - len(failed) - len(stopped)
+    print(f"{passed}/{len(chosen)} passed in {seconds:.0f}s")
     for name in failed:
         print(f"failed: {name}; rerun: python3 tools/preflight.py --step {name!r}")
+    if stopped:
+        print(
+            f"stopped {len(stopped)} steps when {RUST_CHECKS!r} failed: fix it, "
+            "then run preflight again; --keep-going runs every step after it fails"
+        )
+        for name in stopped:
+            print(f"stopped: {name}")
     if warning:
         print(warning)
     return 1 if failed else 0
@@ -626,20 +683,29 @@ def execute(
     env: dict[str, str],
     logs: Path,
     head: str,
-) -> list[str]:
+) -> Verdicts:
     """Run the chosen steps, in workflow order with --jobs 1; log a full run."""
     started = time.monotonic()
     if options.jobs == 1:
-        failed = [
-            step.name
-            for number, step in enumerate(chosen, 1)
-            if not run(step, env, logs / f"{number:02}.log")
-        ]
+        verdicts = serial(chosen, env, logs, options.keep_going)
     else:
-        failed = run_steps(chosen, env, logs, options.jobs)
+        verdicts = run_steps(chosen, env, logs, options.jobs, options.keep_going)
     if not options.step:
-        record_run(head, options.jobs, time.monotonic() - started, failed)
-    return failed
+        record_run(head, options.jobs, time.monotonic() - started, verdicts.failed)
+    return verdicts
+
+
+def serial(
+    chosen: list[Step], env: dict[str, str], logs: Path, keep_going: bool
+) -> Verdicts:
+    """Each step in workflow order; a failure of the Rust checks stops the rest."""
+    failed: list[str] = []
+    for number, step in enumerate(chosen, 1):
+        if not run(step, env, logs / f"{number:02}.log"):
+            failed.append(step.name)
+            if step.name == RUST_CHECKS and not keep_going:
+                return Verdicts(failed, [later.name for later in chosen[number:]])
+    return Verdicts(failed, [])
 
 
 def interrupt(number: int, _frame: object) -> None:
@@ -687,10 +753,10 @@ def check(options: argparse.Namespace) -> int:
         env = environment()
         started = time.monotonic()
         chosen = [step for step in steps if step.name in names]
-        failed = execute(options, chosen, env, logs, head)
+        verdicts = execute(options, chosen, env, logs, head)
         # A step can change tracked files; the summary describes the end state too.
         warning = warning or uncommitted()
-        if not failed:
+        if not verdicts.failed:
             print(stamp(options, base, head, warning), flush=True)
     except (
         OSError,
@@ -702,7 +768,7 @@ def check(options: argparse.Namespace) -> int:
     ) as error:
         print(error, file=sys.stderr)
         return 1
-    return summary(chosen, failed, time.monotonic() - started, warning)
+    return summary(chosen, verdicts, time.monotonic() - started, warning)
 
 
 if __name__ == "__main__":

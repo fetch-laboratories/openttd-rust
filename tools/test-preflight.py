@@ -315,7 +315,9 @@ class RunTests(unittest.TestCase):
             ):
                 steps = steps_of(("a", "true"), ("b", "true"))
                 if overlaps:
-                    self.assertEqual(preflight.run_steps(steps, {}, Path(), jobs), [])
+                    self.assertEqual(
+                        preflight.run_steps(steps, {}, Path(), jobs).failed, []
+                    )
                 else:
                     with self.assertRaises(threading.BrokenBarrierError):
                         preflight.run_steps(steps, {}, Path(), jobs)
@@ -333,11 +335,13 @@ class RunTests(unittest.TestCase):
             for jobs in (1, 2):
                 same = steps_of(("Same", "false"), ("Same", "true"))
                 self.assertEqual(
-                    preflight.run_steps(same, {}, Path(directory), jobs), ["Same"]
+                    preflight.run_steps(same, {}, Path(directory), jobs).failed,
+                    ["Same"],
                 )
                 three = steps_of(("a", "false"), ("b", "true"), ("c", "false"))
                 self.assertEqual(
-                    preflight.run_steps(three, {}, Path(directory), jobs), ["a", "c"]
+                    preflight.run_steps(three, {}, Path(directory), jobs).failed,
+                    ["a", "c"],
                 )
 
     def test_an_interrupt_or_stop_signal_stops_every_running_step(self) -> None:
@@ -522,10 +526,90 @@ class RunTests(unittest.TestCase):
             patch.object(preflight, "timed", side_effect=record),
         ):
             preflight.save_timings({"a": 1.0, "b": 30.0, "c": 2.0})
-            failed = preflight.run_steps(steps, {}, Path(directory), 1)
+            verdicts = preflight.run_steps(steps, {}, Path(directory), 1)
         # d has no time, so it may be the longest; then b, c and a.
         self.assertEqual(started, ["d", "b", "c", "a"])
-        self.assertEqual(failed, [])
+        self.assertEqual(verdicts, ([], []))
+
+    def test_the_rust_checks_start_first_and_their_failure_stops_the_rest(
+        self,
+    ) -> None:
+        """A failure of the Rust checks cancels the queued steps and terminates
+        the running ones, which keep their last times; --keep-going runs all.
+        With two jobs the Rust checks fail only once the slow step runs."""
+        rust = preflight.RUST_CHECKS
+        for jobs, keep_going in ((1, False), (2, False), (2, True)):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                slow = "true" if keep_going else f"touch {root}/slow; sleep 60"
+                wait = f"until [ -e {root}/slow ]; do sleep 0.05; done; "
+                steps = [
+                    preflight.Step("Slow", ["sh", "-c", slow]),
+                    preflight.Step(rust, ["sh", "-c", (wait * (jobs == 2)) + "false"]),
+                    preflight.Step("Quick", ["true"]),
+                ]
+                with (
+                    patch.object(preflight.migration, "COMMON_LOCAL", root),
+                    patch("builtins.print"),
+                ):
+                    preflight.save_timings({"Slow": 90.0, "Quick": 5.0})
+                    if keep_going:
+                        (root / "slow").touch()
+                    began = time.monotonic()
+                    verdicts = preflight.run_steps(steps, {}, root, jobs, keep_going)
+                    took = time.monotonic() - began
+                    saved = preflight.last_timings()
+                self.assertEqual(verdicts.failed, [rust])
+                if keep_going:
+                    self.assertEqual(verdicts.stopped, [])
+                    self.assertLess(saved["Slow"], 90.0)
+                    continue
+                self.assertEqual(verdicts.stopped, ["Slow", "Quick"])
+                self.assertLess(took, preflight.STOP_SECONDS + 5)
+                # The stopped steps keep their last full times.
+                self.assertEqual((saved["Slow"], saved["Quick"]), (90.0, 5.0))
+                self.assertIn(rust, saved)
+
+    def test_a_stopped_run_lists_the_stopped_steps_and_records_no_stamp(
+        self,
+    ) -> None:
+        rust = preflight.RUST_CHECKS
+        quick = workflow(
+            {"name": rust, "run": "false"}, {"name": "Second", "run": "true"}
+        )
+        # The commit checker and the Rust checks run; the other two only
+        # with --keep-going.
+        for extra, commands_run in (([], 2), (["--keep-going"], 4)):
+            popen, commands = fake_popen()
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+                patch.object(preflight, "git", return_value="sha"),
+                patch.object(preflight, "stamp") as stamp,
+                patch.object(preflight.yaml, "safe_load", return_value=quick),
+                patch.object(preflight.migration, "LOCAL", Path(directory)),
+                patch.object(preflight.migration, "COMMON_LOCAL", Path(directory)),
+                patch.object(preflight.subprocess, "Popen", popen),
+                patch.object(sys, "argv", ["preflight.py", "--jobs", "1", *extra]),
+                patch("builtins.print") as printed,
+            ):
+                self.assertEqual(preflight.main(), 1)
+                runs, _ = preflight.read_runs(Path(directory) / preflight.RUNS)
+            stamp.assert_not_called()
+            self.assertEqual(len(commands), commands_run)
+            self.assertEqual([run["failed"] for run in runs], [[rust]])
+            lines = "\n".join(str(call.args[0]) for call in printed.call_args_list)
+            if extra:
+                self.assertNotIn("stopped", lines)
+            else:
+                self.assertIn("1/4 passed in", lines)
+                self.assertIn("stopped: Second\n", lines)
+                self.assertIn(f"stopped: {preflight.PROBES}", lines)
+
+    def test_the_rust_checks_are_a_step_of_quick(self) -> None:
+        quick = preflight.yaml.safe_load(preflight.WORKFLOW.read_text())
+        names = [step.name for step in preflight.workflow_steps(quick, "base")]
+        self.assertIn(preflight.RUST_CHECKS, names)
 
     def test_every_step_runs_and_any_failure_fails(self) -> None:
         quick = workflow(
