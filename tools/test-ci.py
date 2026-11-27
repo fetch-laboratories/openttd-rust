@@ -7445,6 +7445,30 @@ class ReviewerTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("a second re-check", err)
 
+    def test_a_records_review_judges_the_records_not_the_fixes(self) -> None:
+        agents = ["review-170-behaviour", "review-170-porting", "review-170-recheck"]
+        with tempfile.TemporaryDirectory() as directory:
+            code, out, err = self.run_reviewer(
+                agents, "records", "--commits", "c1", "c2", ledger=Path(directory)
+            )
+            self.assertEqual(code, 0, err)
+            self.assertEqual(
+                json.loads(out)["task"],
+                f"Do a records review of PR {self.URL} under `docs/review-brief.md`. "
+                "You are /root/review-170-records-porting, on gpt-6.2-sol at high "
+                "effort. Judge the cleanup records and `unsafe_code` items the "
+                "commits c1 c2 change.",
+            )
+            # The other scoped reviews keep their review of the commits.
+            code, out, err = self.run_reviewer(
+                agents, "base", "--commits", "c3", ledger=Path(directory)
+            )
+            self.assertEqual(code, 0, err)
+            self.assertTrue(
+                json.loads(out)["task"].endswith("Review the commits c3."),
+                json.loads(out)["task"],
+            )
+
     def test_a_third_scoped_review_goes_to_root_first(self) -> None:
         agents = [
             "review-170-behaviour",
@@ -7663,7 +7687,7 @@ class ReviewerTests(unittest.TestCase):
                 [], "records", "--again", "review-170-records-porting", ledger=ledger
             )
             self.assertEqual(code, 0)
-            self.assertIn("commits a.", json.loads(out)["task"])
+            self.assertIn("the commits a change.", json.loads(out)["task"])
 
     def test_a_ledger_entry_without_a_usable_call_is_refused(self) -> None:
         entry = {
