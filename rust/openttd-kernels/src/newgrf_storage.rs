@@ -275,11 +275,11 @@ pub fn switch_mode(mode: PersistentStorageMode, ignore_prev_mode: bool) {
     }
 
     /* Discard all temporary changes */
-    // The set is taken out, which leaves it empty as the original's `clear()` after
-    // the loop does: neither `ClearChanges` nor `Debug` touches the set.
-    // SAFETY: game state, under the mutex; the borrow ends with the take.
-    let changed = std::mem::take(unsafe { &mut *CHANGED_STORAGE_ARRAYS.get() });
-    for it in changed.into_values() {
+    // Each entry leaves the set as it is visited, in the set's order, which leaves the
+    // set empty as the original's `clear()` after the loop does: neither `ClearChanges`
+    // nor `Debug` touches the set.
+    // SAFETY: game state, under the mutex; each borrow ends with its removal.
+    while let Some((_, it)) = unsafe { (*CHANGED_STORAGE_ARRAYS.get()).pop_first() } {
         // SAFETY: each entry names a live array, which its destructor erases.
         let base = unsafe { &*it.array };
         // SAFETY: the array's storage table lives for the process.
