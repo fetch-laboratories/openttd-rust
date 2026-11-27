@@ -81,7 +81,8 @@ pub struct ResolverServices {
         *mut c_void,
     ) -> *mut crate::newgrf_storage::PersistentStorageArray<256>,
     /// `Industry::psa = psa`.
-    pub set_psa: unsafe extern "C" fn(*mut c_void, *mut c_void),
+    pub set_psa:
+        unsafe extern "C" fn(*mut c_void, *mut crate::newgrf_storage::BasePersistentStorageArray),
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub existing_town: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
@@ -151,10 +152,6 @@ impl ResolverServices {
     fn resolver_callback(&self, ro: *const c_void) -> CallbackID {
         CallbackID(unsafe { (self.callback_id)(ro) })
     }
-}
-/// `Industry::location.tile`.
-fn location_tile(i: *const Industry) -> TileIndex {
-    TileIndex(unsafe { (*i).metadata.tile })
 }
 /// `Town::xy`.
 fn town_xy(town: *const TownHandle, s: &ResolverServices) -> TileIndex {
@@ -308,7 +305,8 @@ fn get_closest_industry(
             continue;
         }
         let other = unsafe { (s.get)(industry.0) };
-        best_dist = best_dist.min(map.distance_manhattan(tile, location_tile(other.owner)));
+        best_dist = best_dist
+            .min(map.distance_manhattan(tile, unsafe { super::location_tile(other.owner) }));
     }
     best_dist
 }
@@ -358,7 +356,7 @@ fn get_count_and_distance_of_closest_instance(
         return 0xFFFF;
     }
     let map = s.map();
-    let tile = location_tile(current.owner);
+    let tile = unsafe { super::location_tile(current.owner) };
     let mut count: u8 = 0;
     let mut closest_dist = u32::MAX;
     if layout_filter == 0 && !town_filter {
@@ -382,8 +380,8 @@ fn get_count_and_distance_of_closest_instance(
                 || unsafe { (*i.owner).metadata.selected_layout } == layout_filter)
                 && (!town_filter || i.town == current.town)
             {
-                closest_dist =
-                    closest_dist.min(map.distance_manhattan(tile, location_tile(i.owner)));
+                closest_dist = closest_dist
+                    .min(map.distance_manhattan(tile, unsafe { super::location_tile(i.owner) }));
                 count = count.wrapping_add(1);
             }
         }
@@ -548,7 +546,7 @@ fn industries_get_variable(
         0x47 => u32::from(unsafe { (*i).fields.ctlflags }),
         // Get industry ID at offset param
         0x60 => get_industry_id_at_offset(
-            s.get_nearby_tile(parameter as u8, location_tile(i), false),
+            s.get_nearby_tile(parameter as u8, unsafe { super::location_tile(i) }, false),
             c.index(),
             s.resolver_grffile(ro).grfid(),
             s,
@@ -675,8 +673,8 @@ fn industries_get_variable(
             }
         }
         // Industry structure access
-        0x80 => location_tile(i).0,
-        0x81 => gb(location_tile(i).0, 8, 8),
+        0x80 => unsafe { super::location_tile(i) }.0,
+        0x81 => gb(unsafe { super::location_tile(i) }.0, 8, 8),
         // Pointer to the town the industry is associated with
         0x82 => u32::from(town_index(c.town, s).0),
         // not supported
@@ -804,7 +802,7 @@ fn industry_tile_get_variable(
             )
         }
         // Relative position
-        0x43 => get_relative_position(c.tile(), location_tile(c.owner), s.map()),
+        0x43 => get_relative_position(c.tile(), unsafe { super::location_tile(c.owner) }, s.map()),
         // Animation frame. Like house variable 46 but can contain anything 0..FF.
         0x44 => {
             if s.is_industry_tile(c.tile()) {
@@ -890,7 +888,7 @@ pub(crate) unsafe fn store_psa(
             storage,
             indsp.grf_prop.grfid,
             GrfSpecFeature::GSF_INDUSTRIES,
-            location_tile(c.owner),
+            unsafe { super::location_tile(c.owner) },
         );
         // SAFETY: the caller's contract; `psa` is the storage just created.
         unsafe { (s.set_psa)(c.industry, psa.shell()) };
@@ -1222,7 +1220,7 @@ pub(crate) unsafe fn industry_temporarily_refuses_cargo(
         // SAFETY: A spec's file is live until the loader's next reset.
         let grffile = unsafe { GRFFileRef::of(s.shared(), (*indspec).grf_prop.grffile.cast()) };
         let parameter = grffile.cargo_map(cargo_type);
-        let tile = location_tile(owner);
+        let tile = unsafe { super::location_tile(owner) };
         let res = unsafe {
             (s.callback)(
                 CallbackID::CBID_INDUSTRY_REFUSE_CARGO.0,
@@ -1304,7 +1302,10 @@ mod tests {
         PSA_READS.set(PSA_READS.get() + 1);
         PSA.get()
     }
-    extern "C" fn set_psa(_: *mut c_void, shell: *mut c_void) {
+    extern "C" fn set_psa(
+        _: *mut c_void,
+        shell: *mut crate::newgrf_storage::BasePersistentStorageArray,
+    ) {
         PSA.set(fixture::array_of(shell));
     }
     static FAILED_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);

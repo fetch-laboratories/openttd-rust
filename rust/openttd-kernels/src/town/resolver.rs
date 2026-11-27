@@ -454,7 +454,7 @@ pub(crate) unsafe fn town_store_psa(
     let storage = unsafe { &*s.storage };
     crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
     // SAFETY: a town scope with a town has its live owner.
-    let xy = TileIndex(unsafe { (*scope.owner).simulation.xy });
+    let xy = unsafe { super::position(scope.owner) };
     let psa = PersistentStorageRef::new(storage, grfid, GrfSpecFeature::GSF_FAKE_TOWNS, xy);
     psa.store_value(pos, value);
     // SAFETY: the town command table lives for the process.
@@ -1069,7 +1069,10 @@ mod tests {
         PSA_LIST.with(|l| l.borrow()[index])
     }
     #[allow(unsafe_code, reason = "a load of a live stand-in storage")]
-    extern "C" fn psa_list_push(_: *mut crate::services::TownHandle, shell: *mut c_void) {
+    extern "C" fn psa_list_push(
+        _: *mut crate::services::TownHandle,
+        shell: *mut crate::newgrf_storage::BasePersistentStorageArray,
+    ) {
         let array = fixture::array_of(shell);
         // SAFETY: the storage the body just created.
         PUSHED_VALUES.with(|v| {
