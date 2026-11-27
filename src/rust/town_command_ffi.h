@@ -5,7 +5,9 @@
 #include "town_founding_ffi.h"
 #include "cargo_storage_ffi.h"
 #include "../object_type.h"
+struct BasePersistentStorageArray;
 struct OpenTTDObjectServices;
+struct OpenTTDStorage256;
 struct OpenTTDSubsidyServices;
 struct OpenTTDRailMapServices;
 struct BaseStation;
@@ -46,6 +48,8 @@ struct OpenTTDTownCommandServices {
 	void (*delete_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(delete_town);
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);
 	size_t (*storage_count)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(storage_count);
+	OpenTTDStorage256 *(*psa_list)(Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(psa_list);
+	void (*psa_list_push)(Town *, BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(psa_list_push);
 	void (*delete_storage)(Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_storage);
 	void (*clear_storage)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(clear_storage);
 	bool assertions;

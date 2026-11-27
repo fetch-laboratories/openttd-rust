@@ -27,6 +27,7 @@
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
 #include "rust/settings_services.h"
+#include "rust/town_command_ffi.h"
 #include "rust/environment_services.h"
 
 #include "safeguards.h"
@@ -59,6 +60,7 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.towns = &GetRustTownServices(),
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
+		.commands = &GetRustTownCommandServices(),
 		.larger_towns = OpenTTDLargerTowns,
 
 

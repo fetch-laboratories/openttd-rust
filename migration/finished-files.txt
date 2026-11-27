@@ -92,6 +92,7 @@ rust/openttd-kernels/src/network_lifecycle.rs
 rust/openttd-kernels/src/network_socket.rs
 rust/openttd-kernels/src/network_tcp.rs
 rust/openttd-kernels/src/newgrf.rs
+rust/openttd-kernels/src/newgrf_bytereader.rs
 rust/openttd-kernels/src/newgrf_callbacks.rs
 rust/openttd-kernels/src/newgrf_class.rs
 rust/openttd-kernels/src/newgrf_commons.rs
@@ -102,7 +103,11 @@ rust/openttd-kernels/src/newgrf_internal.rs
 rust/openttd-kernels/src/newgrf_layout.rs
 rust/openttd-kernels/src/newgrf_properties.rs
 rust/openttd-kernels/src/newgrf_sound.rs
+rust/openttd-kernels/src/newgrf_specs.rs
+rust/openttd-kernels/src/newgrf_storage.rs
+rust/openttd-kernels/src/newgrf_storage/evidence_tests.rs
 rust/openttd-kernels/src/newgrf_townname.rs
+rust/openttd-kernels/src/newgrf_translation.rs
 rust/openttd-kernels/src/node_hash.rs
 rust/openttd-kernels/src/order_func.rs
 rust/openttd-kernels/src/orders.rs

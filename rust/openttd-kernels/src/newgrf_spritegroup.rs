@@ -16,12 +16,45 @@
     clippy::too_many_lines
 )]
 use crate::debug::debug;
+use crate::game_state::GameState;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_RANDOM_TRIGGER};
-use crate::newgrf_storage::{
-    openttd_rust_storage_temp_clear, openttd_rust_storage_temp_get, openttd_rust_storage_temp_store,
-};
+use crate::newgrf_storage::TemporaryStorageArray;
 use std::ffi::c_void;
 use std::ptr;
+
+/// `ResolverObject::temp_store`.
+static TEMP_STORE: GameState<TemporaryStorageArray<0x110>> =
+    GameState::new(TemporaryStorageArray::new());
+
+/// `ResolverObject::GetRegister`: gets the value of a so-called newgrf "register".
+/// @param i index of the register
+/// @return the value of the register
+/// @pre i < 0x110
+pub(crate) fn get_register(i: u32) -> i32 {
+    // SAFETY: game state, under the mutex; the borrow ends with the load.
+    unsafe { (*TEMP_STORE.get()).get_value(i) }
+}
+
+/// `ResolverObject::SetRegister`: sets the value of a so-called newgrf "register".
+/// @param i index of the register
+/// @param value the value of the register
+/// @pre i < 0x110
+pub(crate) fn set_register(i: u32, value: i32) {
+    // SAFETY: game state, under the mutex; the borrow ends with the store.
+    unsafe { (*TEMP_STORE.get()).store_value(i, value) };
+}
+
+/// `ResolverObject::GetRegister`, for C++ resolvers.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_storage_temp_get(i: u32) -> i32 {
+    get_register(i)
+}
+
+/// `ResolverObject::SetRegister`, for C++ resolvers.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_storage_temp_store(i: u32, value: i32) {
+    set_register(i, value);
+}
 /// `VarSpriteGroupScope`, shared by deterministic and random groups.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -535,15 +568,13 @@ impl<'a> Invocation<'a> {
         unsafe {
             match scope.binding.kind {
                 0..=2 | 4 | 5 | 9 | 10 | 11 | 12 => {}
-                3 => {
-                    let industry = (*scope.binding.data.industry).industry;
-                    crate::newgrf_storage::openttd_rust_storage_industry(
-                        &*self.s.storage,
-                        industry,
-                        reg,
-                        value,
-                    );
-                }
+                3 => crate::industry::resolver::store_psa(
+                    &*self.s.industry,
+                    &*self.s.storage,
+                    *scope.binding.data.industry,
+                    reg,
+                    value,
+                ),
                 6 => crate::town::resolver::town_store_psa(
                     &*self.s.house,
                     scope.binding.data.town,
@@ -551,10 +582,10 @@ impl<'a> Invocation<'a> {
                     reg,
                     value,
                 ),
-                7 => crate::newgrf_storage::openttd_rust_storage_airport(
-                    &*self.s.storage,
-                    (*scope.binding.data.airport).station.cast(),
-                    self.file,
+                7 => crate::newgrf_airport::store_psa(
+                    &*self.s.airport,
+                    (*scope.binding.data.airport).station,
+                    self.file.cast(),
                     reg,
                     value,
                 ),
@@ -590,7 +621,7 @@ impl<'a> Invocation<'a> {
                 0x18 => (*self.state).callback_param2,
                 0x1C => (*self.state).last_value,
                 0x5F => self.random_bits(scope).wrapping_shl(8) | self.random_triggers(scope),
-                0x7D => openttd_rust_storage_temp_get(parameter) as u32,
+                0x7D => get_register(parameter) as u32,
                 0x7F => crate::newgrf::GRFFileRef::new(&*(*self.s.global).shared, self.file.cast())
                     .map_or(0, |grffile| grffile.get_param(parameter)),
                 _ => {
@@ -814,9 +845,7 @@ impl<'a> Invocation<'a> {
             DSGA_OP_OR => last | value,
             DSGA_OP_XOR => last ^ value,
             DSGA_OP_STO => {
-                unsafe {
-                    openttd_rust_storage_temp_store(unsigned(value), signed(last));
-                }
+                set_register(unsigned(value), signed(last));
                 last
             }
             DSGA_OP_STOP => {
@@ -941,7 +970,7 @@ pub(crate) unsafe fn do_resolve(
     file: Handle,
 ) -> ResultValue {
     unsafe {
-        openttd_rust_storage_temp_clear();
+        (*TEMP_STORE.get()).clear_changes();
         (*state).last_value = 0;
         (*state).used_random_triggers = 0;
         (*state).reseed = [0; 3];
@@ -984,7 +1013,7 @@ pub(crate) unsafe fn resolve_callback(
         while (i as usize) < count {
             registers
                 .add(i as usize)
-                .write(openttd_rust_storage_temp_get(0x100_u32.wrapping_add(i)));
+                .write(get_register(0x100_u32.wrapping_add(i)));
             i = i.wrapping_add(1);
         }
         result.callback

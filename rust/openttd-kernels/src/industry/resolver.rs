@@ -14,12 +14,13 @@ use crate::industrytype::{
     IndustryBehaviour, get_industry_spec, get_industry_tile_spec, spec_behaviour,
     spec_callback_mask,
 };
-use crate::newgrf::GRFFileRef;
+use crate::newgrf::{GRFFileRef, GrfSpecFeature};
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
 };
 use crate::newgrf_industries::IndustryAvailabilityCallType;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
+use crate::newgrf_storage::PersistentStorageRef;
 use crate::tile_type::{TILE_HEIGHT, TileIndex};
 use crate::timer_game_common::{DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR};
 use crate::town_type::TownID;
@@ -75,8 +76,13 @@ pub struct ResolverServices {
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub founder_info: unsafe extern "C" fn(u8) -> FounderInfo,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub storage_owner:
-        unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload<256>,
+    /// `Industry::psa`.
+    pub psa: unsafe extern "C" fn(
+        *mut c_void,
+    ) -> *mut crate::newgrf_storage::PersistentStorageArray<256>,
+    /// `Industry::psa = psa`.
+    pub set_psa:
+        unsafe extern "C" fn(*mut c_void, *mut crate::newgrf_storage::BasePersistentStorageArray),
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub existing_town: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
@@ -134,14 +140,18 @@ impl ResolverServices {
     fn get_industry_random_bits(&self, tile: TileIndex) -> u8 {
         unsafe { (self.lifecycle().random_bits)(tile.0) }
     }
+    /// `industry->psa`.
+    ///
+    /// # Safety
+    /// `industry` is a live industry, whose storage stays live while the handle is used.
+    unsafe fn psa(&self, industry: *mut c_void) -> Option<PersistentStorageRef> {
+        // SAFETY: the caller's contract.
+        unsafe { PersistentStorageRef::of((self.psa)(industry)) }
+    }
     /// `ResolverObject::callback` of the native resolver.
     fn resolver_callback(&self, ro: *const c_void) -> CallbackID {
         CallbackID(unsafe { (self.callback_id)(ro) })
     }
-}
-/// `Industry::location.tile`.
-fn location_tile(i: *const Industry) -> TileIndex {
-    TileIndex(unsafe { (*i).metadata.tile })
 }
 /// `Town::xy`.
 fn town_xy(town: *const TownHandle, s: &ResolverServices) -> TileIndex {
@@ -295,7 +305,8 @@ fn get_closest_industry(
             continue;
         }
         let other = unsafe { (s.get)(industry.0) };
-        best_dist = best_dist.min(map.distance_manhattan(tile, location_tile(other.owner)));
+        best_dist = best_dist
+            .min(map.distance_manhattan(tile, unsafe { super::location_tile(other.owner) }));
     }
     best_dist
 }
@@ -320,7 +331,7 @@ fn get_count_and_distance_of_closest_instance(
     s: &ResolverServices,
 ) -> u32 {
     // Get the GRFID of the definition to look for in register 100h
-    let mut grf_id = unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
+    let mut grf_id = crate::newgrf_spritegroup::get_register(0x100) as u32;
     // Determine what will be the industry type to look for
     let industry_type = if grf_id == 0 {
         // this is a default industry type
@@ -345,7 +356,7 @@ fn get_count_and_distance_of_closest_instance(
         return 0xFFFF;
     }
     let map = s.map();
-    let tile = location_tile(current.owner);
+    let tile = unsafe { super::location_tile(current.owner) };
     let mut count: u8 = 0;
     let mut closest_dist = u32::MAX;
     if layout_filter == 0 && !town_filter {
@@ -369,8 +380,8 @@ fn get_count_and_distance_of_closest_instance(
                 || unsafe { (*i.owner).metadata.selected_layout } == layout_filter)
                 && (!town_filter || i.town == current.town)
             {
-                closest_dist =
-                    closest_dist.min(map.distance_manhattan(tile, location_tile(i.owner)));
+                closest_dist = closest_dist
+                    .min(map.distance_manhattan(tile, unsafe { super::location_tile(i.owner) }));
                 count = count.wrapping_add(1);
             }
         }
@@ -422,7 +433,7 @@ fn industries_get_variable(
         match variable {
             0x7A => {
                 let badges = unsafe { (*get_industry_spec(c.industry_type())).badges.badge_view() };
-                return badges.resolve(s.shared(), ro, parameter);
+                return badges.get_badge_variable_result(s.shared(), ro, parameter);
             }
             0x80 => return c.tile().0,
             0x81 => return gb(c.tile().0, 8, 8),
@@ -535,7 +546,7 @@ fn industries_get_variable(
         0x47 => u32::from(unsafe { (*i).fields.ctlflags }),
         // Get industry ID at offset param
         0x60 => get_industry_id_at_offset(
-            s.get_nearby_tile(parameter as u8, location_tile(i), false),
+            s.get_nearby_tile(parameter as u8, unsafe { super::location_tile(i) }, false),
             c.index(),
             s.resolver_grffile(ro).grfid(),
             s,
@@ -606,8 +617,7 @@ fn industries_get_variable(
             let mut layout_filter = 0;
             let mut town_filter = false;
             if variable == 0x68 {
-                let reg =
-                    (unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x101) }) as u32;
+                let reg = crate::newgrf_spritegroup::get_register(0x101) as u32;
                 layout_filter = gb(reg, 0, 8) as u8;
                 town_filter = has_bit(reg, 8);
             }
@@ -652,24 +662,19 @@ fn industries_get_variable(
         }
         0x7A => {
             let badges = unsafe { (*get_industry_spec(c.industry_type())).badges.badge_view() };
-            badges.resolve(s.shared(), ro, parameter)
+            badges.get_badge_variable_result(s.shared(), ro, parameter)
         }
         // Get a variable from the persistent storage
         0x7C => {
-            // Resolve the native shell association once, then read the canonical
-            // Rust payload directly. Temporary invalid-ID scopes can read PSA;
-            // the invalid-ID gate belongs only to the storage write operation.
-            let psa = unsafe { (s.storage_owner)(c.industry) };
-            if psa.is_null() {
-                0
-            } else {
-                (unsafe { crate::newgrf_storage::openttd_rust_storage256_get(psa, parameter) })
-                    as u32
+            // SAFETY: the industry's storage is live while it resolves.
+            match unsafe { s.psa(c.industry) } {
+                Some(psa) => psa.get_value(parameter) as u32,
+                None => 0,
             }
         }
         // Industry structure access
-        0x80 => location_tile(i).0,
-        0x81 => gb(location_tile(i).0, 8, 8),
+        0x80 => unsafe { super::location_tile(i) }.0,
+        0x81 => gb(unsafe { super::location_tile(i) }.0, 8, 8),
         // Pointer to the town the industry is associated with
         0x82 => u32::from(town_index(c.town, s).0),
         // not supported
@@ -797,7 +802,7 @@ fn industry_tile_get_variable(
             )
         }
         // Relative position
-        0x43 => get_relative_position(c.tile(), location_tile(c.owner), s.map()),
+        0x43 => get_relative_position(c.tile(), unsafe { super::location_tile(c.owner) }, s.map()),
         // Animation frame. Like house variable 46 but can contain anything 0..FF.
         0x44 => {
             if s.is_industry_tile(c.tile()) {
@@ -836,7 +841,7 @@ fn industry_tile_get_variable(
         0x7A => {
             let gfx = crate::industry_map::get_industry_gfx(s.shared(), c.tile());
             let badges = unsafe { (*get_industry_tile_spec(gfx)).badges.badge_view() };
-            badges.resolve(s.shared(), ro, parameter)
+            badges.get_badge_variable_result(s.shared(), ro, parameter)
         }
         _ => unhandled_variable(
             variable,
@@ -847,6 +852,66 @@ fn industry_tile_get_variable(
             s,
         ),
     }
+}
+
+/// `IndustriesScopeResolver::StorePSA`.
+///
+/// # Safety
+/// `c` is a live scope's context, whose industry and storage stay live for the call.
+pub(crate) unsafe fn store_psa(
+    s: &ResolverServices,
+    storage: &crate::newgrf_storage::Services,
+    c: ResolverContext,
+    pos: u32,
+    value: i32,
+) {
+    // SAFETY: the catchment table lives for the process, and the industry for the call.
+    let index = unsafe { ((*(s.shared().station_catchment)()).industry_id)(c.industry.cast()) };
+    if index == IndustryID::INVALID {
+        return;
+    }
+
+    // SAFETY: the caller's contract.
+    let psa = if let Some(psa) = unsafe { s.psa(c.industry) } {
+        psa
+    } else {
+        /* There is no need to create a storage if the value is zero. */
+        if value == 0 {
+            return;
+        }
+
+        /* Create storage on first modification. */
+        // SAFETY: a valid industry's owner and spec are live.
+        let indsp = unsafe { &*get_industry_spec(super::industry_type(c.owner)) };
+        crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
+        let psa = PersistentStorageRef::new(
+            storage,
+            indsp.grf_prop.grfid,
+            GrfSpecFeature::GSF_INDUSTRIES,
+            unsafe { super::location_tile(c.owner) },
+        );
+        // SAFETY: the caller's contract; `psa` is the storage just created.
+        unsafe { (s.set_psa)(c.industry, psa.shell()) };
+        psa
+    };
+
+    psa.store_value(pos, value);
+}
+
+/// `IndustriesScopeResolver::StorePSA`, for the C++ scope resolver.
+///
+/// # Safety
+/// As [`store_psa`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage_industry(
+    s: &ResolverServices,
+    storage: &crate::newgrf_storage::Services,
+    c: *const ResolverContext,
+    pos: u32,
+    value: i32,
+) {
+    // SAFETY: the caller's contract.
+    unsafe { store_psa(s, storage, *c, pos, value) }
 }
 
 /// # Safety
@@ -1155,7 +1220,7 @@ pub(crate) unsafe fn industry_temporarily_refuses_cargo(
         // SAFETY: A spec's file is live until the loader's next reset.
         let grffile = unsafe { GRFFileRef::of(s.shared(), (*indspec).grf_prop.grffile.cast()) };
         let parameter = grffile.cargo_map(cargo_type);
-        let tile = location_tile(owner);
+        let tile = unsafe { super::location_tile(owner) };
         let res = unsafe {
             (s.callback)(
                 CallbackID::CBID_INDUSTRY_REFUSE_CARGO.0,
@@ -1194,11 +1259,147 @@ crate::abi::layouts! {
         town_id,
         founder_info,
         callback_id,
-        storage_owner,
+        psa,
+        set_psa,
         unhandled,
         base_scope,
         existing_town,
         make_town,
         callback,
         callback_error,    };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResolverContext, ResolverServices, store_psa};
+    use crate::industry_type::{IndustryID, IndustryType};
+    use crate::industrytype::get_industry_spec;
+    use crate::newgrf_storage::PersistentStorageArray;
+    use crate::newgrf_storage::evidence_tests::fixture;
+    use crate::test_tables::{
+        unreachable1, unreachable2, unreachable3, unreachable4, unreachable6,
+    };
+    use std::cell::Cell;
+    use std::ffi::c_void;
+    use std::ptr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    thread_local! {
+        static PSA: Cell<*mut PersistentStorageArray<256>> = const { Cell::new(ptr::null_mut()) };
+        static PSA_READS: Cell<usize> = const { Cell::new(0) };
+        /// The live `Industry::index`.
+        static INDEX: Cell<IndustryID> = const { Cell::new(IndustryID(4)) };
+    }
+    extern "C" fn industry_id(_: *mut crate::industry::tile::ShellHandle) -> IndustryID {
+        INDEX.get()
+    }
+    static CATCHMENT: std::sync::atomic::AtomicPtr<crate::station::CatchmentServices> =
+        std::sync::atomic::AtomicPtr::new(ptr::null_mut());
+    extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
+        CATCHMENT.load(Ordering::SeqCst)
+    }
+    extern "C" fn psa(_: *mut c_void) -> *mut PersistentStorageArray<256> {
+        PSA_READS.set(PSA_READS.get() + 1);
+        PSA.get()
+    }
+    extern "C" fn set_psa(
+        _: *mut c_void,
+        shell: *mut crate::newgrf_storage::BasePersistentStorageArray,
+    ) {
+        PSA.set(fixture::array_of(shell));
+    }
+    static FAILED_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// `IndustriesScopeResolver::StorePSA`: an industry whose live index is invalid stores
+    /// nothing and reads no storage, whatever index its scope captured; a zero value
+    /// creates none; the first other value creates the storage with the spec's GRFID,
+    /// `GSF_INDUSTRIES` and the industry's tile and publishes it in `psa`, even at a
+    /// position past the array, which stores nothing; a later value goes to that storage.
+    #[test]
+    #[allow(
+        unsafe_code,
+        reason = "a stand-in industry owner and spec in an isolated child"
+    )]
+    fn store_psa_creates_the_storage_on_the_first_nonzero_value() {
+        const NAME: &str =
+            "industry::resolver::tests::store_psa_creates_the_storage_on_the_first_nonzero_value";
+        if crate::services_assert::isolate_test_check(NAME, record_assertion) {
+            return;
+        }
+        let owner = crate::industry::openttd_rust_industry_new();
+        // SAFETY: a live owner, and the spec table, which only this child reads.
+        unsafe {
+            (*owner).metadata.kind = 3;
+            (*owner).metadata.tile = 0x0102;
+            (*get_industry_spec(IndustryType(3))).grf_prop.grfid = 0x4142_4344;
+        }
+        CATCHMENT.store(
+            Box::leak(Box::new(crate::station::CatchmentServices {
+                industry_id,
+                ..crate::test_tables::CATCHMENT
+            })),
+            Ordering::SeqCst,
+        );
+        let shared = Box::leak(Box::new(crate::services::Services {
+            station_catchment,
+            ..crate::test_tables::SHARED
+        }));
+        let s = ResolverServices {
+            shared,
+            lifecycle: ptr::null(),
+            tile: ptr::null(),
+            get: unreachable1,
+            clean_gfx: unreachable1,
+            nearby: unreachable3,
+            water_distance: unreachable2,
+            town_tile: unreachable1,
+            town_id: unreachable1,
+            founder_info: unreachable1,
+            callback_id: unreachable1,
+            psa,
+            set_psa,
+            unhandled: unreachable4,
+            base_scope: unreachable3,
+            existing_town: unreachable1,
+            make_town: unreachable3,
+            callback: unreachable6,
+            callback_error: unreachable3,
+        };
+        let context = |id: IndustryID| ResolverContext {
+            owner,
+            industry: ptr::dangling_mut(),
+            town: ptr::null_mut(),
+            tile: 0,
+            random_bits: 0,
+            id: id.0,
+            kind: 3,
+        };
+        // SAFETY (each call): the context's owner lives for the test, and each storage
+        // the fixture creates lives for the process.
+        // A scope that captured a valid index, of an industry whose index is now invalid.
+        INDEX.set(IndustryID::INVALID);
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 7) };
+        assert_eq!(PSA_READS.get(), 0);
+        INDEX.set(IndustryID(4));
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 0) };
+        assert_eq!((PSA_READS.get(), PSA.get()), (1, ptr::null_mut()));
+        assert_eq!(fixture::created(), []);
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 256, 7) };
+        assert_eq!(fixture::created(), [(0x4142_4344, 10, 0x0102)]);
+        assert!(!PSA.get().is_null());
+        // SAFETY: the storage just created.
+        let get =
+            |pos| unsafe { crate::newgrf_storage::openttd_rust_storage256_get(PSA.get(), pos) };
+        assert_eq!(get(256), 0);
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 7) };
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 16, -1) };
+        assert_eq!(fixture::created(), []);
+        assert_eq!((get(15), get(16), PSA_READS.get()), (7, -1, 4));
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
+    }
 }

@@ -14,7 +14,6 @@
 #include "newgrf.h"
 #include "tile_type.h"
 #include "rust/newgrf_storage_ffi.h"
-#include "rust/services_assert.h"
 
 /**
  * Mode switches to the behaviour of persistent storage array.
@@ -55,34 +54,16 @@ struct PersistentStorageArray : BasePersistentStorageArray {
 
 	static_assert(std::is_same_v<TYPE, int32_t> && (SIZE == 16 || SIZE == 256));
 	using RustStorage = std::conditional_t<SIZE == 16, OpenTTDStorage16, OpenTTDStorage256>;
-	RustStorage *rust_storage = RustStorageNew(std::integral_constant<uint, SIZE>{}, this);
+	RustStorage *rust_storage = RustStorageNew(std::integral_constant<uint, SIZE>{}, this, &GetRustStorageServices());
 	StorageType &storage = *reinterpret_cast<StorageType *>(RustStorageData(this->rust_storage)); ///< Canonical save/debug alias.
 
 	PersistentStorageArray() = default;
 	PersistentStorageArray(const PersistentStorageArray &) = delete;
 	PersistentStorageArray &operator=(const PersistentStorageArray &) = delete;
 	~PersistentStorageArray() override { RustStorageDelete(this->rust_storage); }
-	void StoreValue(uint pos, int32_t value) { RustStorageStore(this->rust_storage, pos, value, RustAssertCondition); }
+	void StoreValue(uint pos, int32_t value) { RustStorageStore(this->rust_storage, pos, value); }
 	TYPE GetValue(uint pos) const { return RustStorageGet(this->rust_storage, pos); }
 	void ClearChanges() { RustStorageClear(this->rust_storage); }
-};
-
-
-/**
- * Class for temporary storage of data.
- * On #ClearChanges that data is always zero-ed.
- * @tparam TYPE the type of variable to store.
- * @tparam SIZE the size of the array.
- */
-template <typename TYPE, uint SIZE>
-struct TemporaryStorageArray {
-	using StorageType = std::array<TYPE, SIZE>;
-	using StorageInitType = std::array<uint16_t, SIZE>;
-
-	static_assert(std::is_same_v<TYPE, int32_t> && SIZE == 0x110);
-	void StoreValue(uint pos, int32_t value) { openttd_rust_storage_temp_store(pos, value); }
-	TYPE GetValue(uint pos) const { return openttd_rust_storage_temp_get(pos); }
-	void ClearChanges() { openttd_rust_storage_temp_clear(); }
 };
 
 

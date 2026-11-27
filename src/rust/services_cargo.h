@@ -35,8 +35,6 @@ inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByC
 /* Raw inverse-map reads retain the native file and cargo-index preconditions;
  * they do not apply GetCargoTranslation's version or nullable-file policy. */
 inline uint8_t RustGRFCargoMap(const GRFFile *file, CargoType cargo) noexcept { return file->cargo_map[cargo]; }
-template <typename Spec>
-inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return RustGRFCargoMap(RustSpecGRFFile(spec), cargo); }
 inline OpenTTDNewGRFCargoLabel RustCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label) noexcept
 {
 	return std::visit([](auto value) { if constexpr (std::is_same_v<decltype(value), CargoLabel>) return OpenTTDNewGRFCargoLabel{value.base(), false}; else return OpenTTDNewGRFCargoLabel{value, true}; }, label);

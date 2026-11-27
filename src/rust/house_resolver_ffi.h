@@ -8,6 +8,7 @@
 #include "town_ffi.h"
 #include "house_ffi.h"
 #include "newgrf_storage_ffi.h"
+struct OpenTTDTownCommandServices;
 struct ResolverObject;
 struct ScopeResolver;
 struct SpriteGroup;
@@ -45,6 +46,7 @@ struct OpenTTDHouseResolverServices {
 	const OpenTTDTownLeaves *towns;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
+	const OpenTTDTownCommandServices *commands;
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
 	uint8_t (*stage)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(stage);
 	int32_t (*age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age);

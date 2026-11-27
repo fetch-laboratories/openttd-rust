@@ -32,10 +32,8 @@ rebound | RustAirportTileSpec | src/newgrf_airport.cpp | tile_spec
 rebound | RustAirportTileSpec | src/rust/airport_definitions.cpp | tile_base
 rebound | RustAnimationRailSpec | src/animated_tile.cpp | rail_spec
 rebound | RustAnimationRailSpec | src/rust/station_command_services.hpp | rail_spec
-rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert
 rebound | RustAssertCondition | src/newgrf_airport.cpp | check
-rebound | RustAssertCondition | src/rust/newgrf_storage_services.cpp | check
 rebound | RustAssertCondition | src/signal.cpp | assert_condition
 rebound | RustBaseStationByTile | src/newgrf_roadstop.cpp | by_tile
 rebound | RustBaseStationByTile | src/pbs.cpp | station
@@ -168,8 +166,6 @@ rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
-rebound | RustTownStorageCount | src/rust/newgrf_storage_services.cpp | town_count
-rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type

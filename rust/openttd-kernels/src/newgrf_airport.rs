@@ -26,6 +26,7 @@ use crate::game_state::GameState;
 use crate::newgrf_class::{ClassSpec, Registry};
 use crate::newgrf_specs::{SpecServices, Specs};
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
+use crate::newgrf_storage::{PersistentStorageArray, PersistentStorageRef};
 use crate::table::strings::{
     STR_AIRPORT_CLASS_HELIPORTS, STR_AIRPORT_CLASS_HUB, STR_AIRPORT_CLASS_LARGE,
     STR_AIRPORT_CLASS_SMALL,
@@ -50,6 +51,11 @@ pub struct State {
 pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
+    /// `st->airport.psa`.
+    airport_psa: extern "C" fn(*const BaseStation) -> *mut PersistentStorageArray<256>,
+    /// `st->airport.psa = psa`.
+    set_airport_psa:
+        extern "C" fn(*mut BaseStation, *mut crate::newgrf_storage::BasePersistentStorageArray),
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
@@ -122,6 +128,8 @@ impl Services {
         Self {
             shared: ptr::null(),
             storage: ptr::null(),
+            airport_psa: unreachable1,
+            set_airport_psa: unreachable2,
             vehicles: ptr::null(),
             by_tile: unreachable1,
             station_id,
@@ -176,6 +184,13 @@ impl Services {
     }
     pub(crate) fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
+    }
+    /// `st->airport.psa`.
+    ///
+    /// # Safety
+    /// `st` is a live station, whose storage stays live while the handle is used.
+    unsafe fn airport_psa(&self, st: *const BaseStation) -> Option<PersistentStorageRef> {
+        unsafe { PersistentStorageRef::of((self.airport_psa)(st)) }
     }
     pub(crate) fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
         unsafe { &*(self.shared().station_commands)() }
@@ -324,10 +339,11 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_init(
         (&raw mut (*parent).spec).write(spec);
         (&raw mut (*parent).layout).write(layout);
     }
-    (s.shared().specs().airport_tile().standard().sprite_group)(
-        tile.tile_spec,
-        !tile.station.is_null(),
-    )
+    (s.shared()
+        .specs()
+        .airport_tile()
+        .standard()
+        .get_sprite_group)(tile.tile_spec, !tile.station.is_null())
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_root(
@@ -337,12 +353,13 @@ pub unsafe extern "C" fn openttd_rust_airport_root(
     let c = unsafe { *state };
     let s = unsafe { &*s };
     if c.tile_spec.is_null() {
-        (s.shared().specs().airport().standard().sprite_group)(c.spec, !c.station.is_null())
+        (s.shared().specs().airport().standard().get_sprite_group)(c.spec, !c.station.is_null())
     } else {
-        (s.shared().specs().airport_tile().standard().sprite_group)(
-            c.tile_spec,
-            !c.station.is_null(),
-        )
+        (s.shared()
+            .specs()
+            .airport_tile()
+            .standard()
+            .get_sprite_group)(c.tile_spec, !c.station.is_null())
     }
 }
 #[unsafe(no_mangle)]
@@ -396,6 +413,61 @@ pub unsafe extern "C" fn openttd_rust_airport_scope(
     }
     (unsafe { &*s }.base_scope)(resolver, scope, relative)
 }
+/// `AirportScopeResolver::StorePSA`: store a value into the object's persistent storage.
+/// @param pos Position in the persistent storage to use.
+/// @param value Value to store.
+///
+/// # Safety
+/// A non-null `st` is a live station, and a non-null `grffile` the resolver's live file.
+pub(crate) unsafe fn store_psa(
+    s: &Services,
+    st: *mut BaseStation,
+    grffile: *const crate::newgrf::GRFFile,
+    pos: u32,
+    value: i32,
+) {
+    if st.is_null() {
+        return;
+    }
+
+    let psa = if let Some(psa) = unsafe { s.airport_psa(st) } {
+        psa
+    } else {
+        /* There is no need to create a storage if the value is zero. */
+        if value == 0 {
+            return;
+        }
+
+        /* Create storage on first modification. */
+        let grfid = unsafe { crate::newgrf::GRFFileRef::new(s.shared(), grffile) }
+            .map_or(0, crate::newgrf::GRFFileRef::grfid);
+        let storage = unsafe { &*s.storage };
+        crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
+        let psa = PersistentStorageRef::new(
+            storage,
+            grfid,
+            crate::newgrf::GrfSpecFeature::GSF_AIRPORTS,
+            TileIndex((s.commands().airport_tile)(st)),
+        );
+        (s.set_airport_psa)(st, psa.shell());
+        psa
+    };
+    psa.store_value(pos, value);
+}
+/// `AirportScopeResolver::StorePSA`, for the C++ scope resolver.
+///
+/// # Safety
+/// As [`store_psa`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage_airport(
+    s: &Services,
+    st: *mut BaseStation,
+    grffile: *const crate::newgrf::GRFFile,
+    pos: u32,
+    value: i32,
+) {
+    unsafe { store_psa(s, st, grffile, pos, value) }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_variable(
     state: *const State,
@@ -411,7 +483,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
     match variable {
         0x40 => return u32::from(c.layout),
         0x7a => {
-            return (s.shared().specs().airport().badges)(c.spec).resolve(
+            return (s.shared().specs().airport().badges)(c.spec).get_badge_variable_result(
                 s.shared(),
                 resolver,
                 parameter,
@@ -426,15 +498,10 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
         return u32::MAX;
     }
     match variable {
-        0x7c => {
-            let owner = (unsafe { &*s.storage }.airport)(c.station.cast());
-            if owner.is_null() {
-                0
-            } else {
-                (unsafe { crate::newgrf_storage::openttd_rust_storage256_get(owner, parameter) })
-                    as u32
-            }
-        }
+        0x7c => match unsafe { s.airport_psa(c.station) } {
+            Some(psa) => psa.get_value(parameter) as u32,
+            None => 0,
+        },
         0xf0 => u32::from((s.facilities)(c.station)),
         0xfa => (s.build_date)(c.station)
             .wrapping_sub(crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR)
@@ -482,7 +549,7 @@ fn id_at_offset(tile: u32, st: *mut BaseStation, grfid: u32, s: &Services) -> u3
         }
     } else {
         0xff00
-            | u32::from((s.shared().specs().airport_tile().substitute().substitute)(
+            | u32::from((s.shared().specs().airport_tile().substitute().subst_id)(
                 spec,
             ))
     }
@@ -542,7 +609,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             (s.shared().resolver_grf_file_id)(resolver),
             s,
         ),
-        0x7a => (s.shared().specs().airport_tile().badges)(c.tile_spec).resolve(
+        0x7a => (s.shared().specs().airport_tile().badges)(c.tile_spec).get_badge_variable_result(
             s.shared(),
             resolver,
             parameter,
@@ -619,7 +686,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id,   fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, airport_psa, set_airport_psa, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id,   fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]
@@ -694,5 +761,113 @@ impl ClassSpec for crate::station_cmd::AirportSpec {
             .set_name(STR_AIRPORT_CLASS_HUB);
         AirportClass::get(AirportClass::allocate(u32::from_be_bytes(*b"HELI"), max))
             .set_name(STR_AIRPORT_CLASS_HELIPORTS);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BaseStation, Services, store_psa};
+    use crate::newgrf::GrfSpecFeature;
+    use crate::newgrf_storage::evidence_tests::fixture;
+    use crate::newgrf_storage::{PersistentStorageArray, openttd_rust_storage256_get};
+    use std::cell::Cell;
+    use std::ffi::c_void;
+    use std::ptr;
+    use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+
+    thread_local! {
+        static PSA: Cell<*mut PersistentStorageArray<256>> = const { Cell::new(ptr::null_mut()) };
+        static PSA_READS: Cell<usize> = const { Cell::new(0) };
+    }
+    extern "C" fn airport_psa(_: *const BaseStation) -> *mut PersistentStorageArray<256> {
+        PSA_READS.set(PSA_READS.get() + 1);
+        PSA.get()
+    }
+    extern "C" fn set_airport_psa(
+        _: *mut BaseStation,
+        shell: *mut crate::newgrf_storage::BasePersistentStorageArray,
+    ) {
+        PSA.set(fixture::array_of(shell));
+    }
+    extern "C" fn airport_tile(_: *const BaseStation) -> u32 {
+        0x0506
+    }
+    static COMMANDS: AtomicPtr<crate::station_cmd::CommandServicesTable> =
+        AtomicPtr::new(ptr::null_mut());
+    extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
+        COMMANDS.load(Ordering::SeqCst)
+    }
+    #[allow(unsafe_code, reason = "a load of the test's live file")]
+    extern "C" fn grf_file_id(grffile: *const c_void) -> u32 {
+        // SAFETY: each file is the test's live `u32` GRFID.
+        unsafe { grffile.cast::<u32>().read() }
+    }
+    static FAILED_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// `AirportScopeResolver::StorePSA`: no station stores nothing and reads no storage;
+    /// a zero value creates none; the first other value creates the storage with the
+    /// file's GRFID, or 0 without a file, `GSF_AIRPORTS` and the airport's tile and
+    /// publishes it in `airport.psa`, even at a position past the array, which stores
+    /// nothing; a later value goes to that storage.
+    #[test]
+    #[allow(unsafe_code, reason = "stand-in station and file in an isolated child")]
+    fn store_psa_creates_the_storage_on_the_first_nonzero_value() {
+        const NAME: &str =
+            "newgrf_airport::tests::store_psa_creates_the_storage_on_the_first_nonzero_value";
+        if crate::services_assert::isolate_test_check(NAME, record_assertion) {
+            return;
+        }
+        COMMANDS.store(
+            Box::leak(Box::new(crate::station_cmd::CommandServicesTable {
+                airport_tile,
+                ..crate::test_tables::STATION_COMMANDS
+            })),
+            Ordering::SeqCst,
+        );
+        let shared = Box::leak(Box::new(crate::services::Services {
+            station_commands,
+            grf_file_id,
+            ..crate::test_tables::SHARED
+        }));
+        let s = Services {
+            shared,
+            storage: &raw const fixture::STORAGE,
+            airport_psa,
+            set_airport_psa,
+            ..Services::with_station_id(crate::test_tables::unreachable1)
+        };
+        let own = 0x3931_2345_u32;
+        let file: *const crate::newgrf::GRFFile = (&raw const own).cast();
+        let st: *mut BaseStation = ptr::dangling_mut();
+        // SAFETY (each call): the station stand-in reaches only the leaves above, and the
+        // file is live.
+        unsafe { store_psa(&s, ptr::null_mut(), file, 0, 7) };
+        assert_eq!(PSA_READS.get(), 0);
+        unsafe { store_psa(&s, st, file, 0, 0) };
+        assert_eq!((PSA_READS.get(), PSA.get()), (1, ptr::null_mut()));
+        assert_eq!(fixture::created(), []);
+        unsafe { store_psa(&s, st, ptr::null(), 256, 7) };
+        assert_eq!(
+            fixture::created(),
+            [(0, GrfSpecFeature::GSF_AIRPORTS.0, 0x0506)]
+        );
+        assert!(!PSA.get().is_null());
+        PSA.set(ptr::null_mut());
+        unsafe { store_psa(&s, st, file, 255, 393) };
+        assert_eq!(
+            fixture::created(),
+            [(own, GrfSpecFeature::GSF_AIRPORTS.0, 0x0506)]
+        );
+        unsafe { store_psa(&s, st, file, 254, -1) };
+        assert_eq!(fixture::created(), []);
+        // SAFETY: the storage just created.
+        let get = |pos| unsafe { openttd_rust_storage256_get(PSA.get(), pos) };
+        assert_eq!((get(255), get(254)), (393, -1));
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
     }
 }

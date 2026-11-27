@@ -240,7 +240,7 @@ unsafe fn variable(
             } else {
                 u32::from(crate::type_registry::openttd_rust_road_reverse(
                     rt,
-                    (s.shared().specs().road_stop().file)(c.spec),
+                    (s.shared().specs().road_stop().grffile)(c.spec).cast(),
                 ))
             };
         }
@@ -367,7 +367,7 @@ unsafe fn variable(
             return res;
         }
         0x7a => {
-            return (s.shared().specs().road_stop().badges)(c.spec).resolve(
+            return (s.shared().specs().road_stop().badges)(c.spec).get_badge_variable_result(
                 s.shared(),
                 ro,
                 parameter,

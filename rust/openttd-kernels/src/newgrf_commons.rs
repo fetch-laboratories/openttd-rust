@@ -75,16 +75,6 @@ pub(crate) fn industry_tile_check_valid_new_id(testid: u16) -> bool {
     testid != 0xFF
 }
 
-/// Metadata read together by substitute-spec publication.
-#[repr(C)]
-pub struct SubstituteSpecIdentity {
-    /// GRF owning this definition.
-    pub grfid: u32,
-    /// GRF-local specification ID.
-    pub local: u16,
-    /// Original specification used as the substitute.
-    pub substitute: u16,
-}
 /// `AirportTileOverrideManager::CheckValidNewID`.
 pub(crate) fn airport_tile_check_valid_new_id(testid: u16) -> bool {
     testid != 0xFF

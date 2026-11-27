@@ -370,19 +370,6 @@ impl World<'_> {
         native(unsafe { openttd_rust_world_handle_abort_abi(self.s, self.frame) != 0 })?;
         Err(Failure::Abort)
     }
-    fn storage_mode(&self, mode: u8, ignore: bool) {
-        let landscape = unsafe { &*self.s.landscape };
-        // SAFETY: the shared table is immutable for the process lifetime.
-        let discard = unsafe { (*landscape.shared).storage_discard };
-        unsafe {
-            crate::newgrf_storage::openttd_rust_storage_switch_mode(
-                mode,
-                ignore,
-                landscape.assert_condition,
-                discard,
-            );
-        }
-    }
     fn clear_tiles(&self) -> Result<(), Failure> {
         let a = unsafe { &*self.s.landscape };
         let shared = unsafe { &*a.shared };
@@ -524,7 +511,10 @@ impl World<'_> {
         self.set_progress(GWP_MAP_INIT, 2)?;
         (s.place_cursor)();
         (s.randomizers)();
-        self.storage_mode(crate::newgrf_storage::PSM_ENTER_GAMELOOP, false);
+        crate::newgrf_storage::switch_mode(
+            crate::newgrf_storage::PersistentStorageMode::PSM_ENTER_GAMELOOP,
+            false,
+        );
         self.increase(GWP_MAP_INIT)?;
         let company = unsafe { &*s.company };
         crate::company::startup_economy(unsafe { &*company.services }, (s.industry_builder)());
@@ -603,7 +593,10 @@ impl World<'_> {
                 write_field!(INFO.get(), generating, false);
             }
         }
-        self.storage_mode(crate::newgrf_storage::PSM_LEAVE_GAMELOOP, false);
+        crate::newgrf_storage::switch_mode(
+            crate::newgrf_storage::PersistentStorageMode::PSM_LEAVE_GAMELOOP,
+            false,
+        );
         (s.reset_object)();
         (s.trash_company)(self.frame);
         // `_current_company = _local_company = GenWorldInfo::lc`.
@@ -652,7 +645,10 @@ fn run(s: &WorldServices, frame: *mut Frame) -> u8 {
         Err(Failure::Native) if (s.exception_kind)(frame) != 1 => 2,
         Err(_) => {
             world.cleanup();
-            world.storage_mode(crate::newgrf_storage::PSM_LEAVE_GAMELOOP, true);
+            crate::newgrf_storage::switch_mode(
+                crate::newgrf_storage::PersistentStorageMode::PSM_LEAVE_GAMELOOP,
+                true,
+            );
             if (s.company_valid)(frame) {
                 (s.restore_company)(frame);
             }

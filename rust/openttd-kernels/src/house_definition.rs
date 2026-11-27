@@ -27,7 +27,7 @@ use crate::house_type::HouseID;
 use crate::landscape_type::LandscapeType;
 use crate::newgrf::GRFFileRef;
 use crate::newgrf_animation_type::AnimationStatus;
-use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
+use crate::newgrf_bytereader::{ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_callbacks::HouseCallbackMasks;
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::timer_game_common::{MAX_YEAR, MIN_YEAR, ORIGINAL_BASE_YEAR};
@@ -35,12 +35,6 @@ use crate::{newgrf_loading, override_manager};
 use std::ffi::c_void;
 type Spec = *const c_void;
 type File = *mut c_void;
-#[repr(C)]
-pub struct Identity {
-    grfid: u32,
-    pub(crate) local: u16,
-    substitute: u16,
-}
 #[repr(C)]
 pub struct Validity {
     availability: u16,
@@ -80,7 +74,6 @@ pub struct Services {
     clear_local: extern "C" fn(File),
     copy_substitute: extern "C" fn(File, u16, Spec) -> Spec,
     set_identity: extern "C" fn(Spec, File, u16, u16),
-    identity: extern "C" fn(Spec) -> Identity,
     validity: extern "C" fn(Spec) -> Validity,
     part: extern "C" fn(Spec) -> Part,
     flags: extern "C" fn(Spec) -> u8,
@@ -94,7 +87,6 @@ pub struct Services {
     watched: extern "C" fn(Spec) -> u64,
     map_string: extern "C" fn(Spec, u16),
     set_animation: extern "C" fn(Spec, u8, u8),
-    badges: extern "C" fn(Spec) -> *mut BadgeList,
     resize_specs: extern "C" fn(usize),
     move_spec: extern "C" fn(Spec, u16),
     set_override: extern "C" fn(Spec, u16),
@@ -125,39 +117,41 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDHouseDefinitionIdentity" ["house_definition"] => Identity { grfid, local, substitute };
     "OpenTTDHouseDefinitionValidity" ["house_definition"] => Validity { availability, substitute, flags };
     "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 /// Ignore a house property, retaining its original byte consumption.
-fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<ChangeInfoResult, ReadError> {
+fn ignore_property(
+    prop: i32,
+    reader: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     match prop {
         0x09 | 0x0b..=0x0f | 0x11 | 0x14..=0x16 | 0x18..=0x1d | 0x1f => {
-            reader.byte()?;
+            reader.read_byte()?;
         }
         0x0a | 0x10 | 0x12 | 0x13 | 0x21 | 0x22 => {
-            reader.word()?;
+            reader.read_word()?;
         }
         0x1e => {
-            reader.dword()?;
+            reader.read_dword()?;
         }
         0x17 => {
             for _ in 0..4 {
-                reader.byte()?;
+                reader.read_byte()?;
             }
         }
         0x20 => {
-            let count = reader.byte()?;
+            let count = reader.read_byte()?;
             for _ in 0..count {
-                reader.byte()?;
+                reader.read_byte()?;
             }
         }
         0x23 => {
-            let count = reader.byte()?;
+            let count = reader.read_byte()?;
             reader.skip(usize::from(count) * 2)?;
         }
         _ => return Ok(ChangeInfoResult::CIR_UNKNOWN),
@@ -172,8 +166,8 @@ fn property(
     first: u32,
     last: u32,
     prop: i32,
-    reader: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    reader: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     if last > u32::from(NUM_HOUSES_PER_GRF) {
         grf_msg!(
             1,
@@ -201,7 +195,7 @@ fn property(
         match prop {
             // Substitute building type and definition of a new house.
             0x08 => {
-                let substitute = reader.byte()?;
+                let substitute = reader.read_byte()?;
                 if substitute == 0xff {
                     // A substitute ID of 0xFF disables the old house with the current ID
                     // instead of defining a new house.
@@ -268,10 +262,10 @@ fn property(
                 }
             }
             // Building flags.
-            0x09 => (s.set_flags)(spec, BuildingFlags(reader.byte()?).0),
+            0x09 => (s.set_flags)(spec, BuildingFlags(reader.read_byte()?).0),
             // Availability years.
             0x0a => {
-                let years = reader.word()?;
+                let years = reader.read_word()?;
                 let year = |v: u32| {
                     if v > 150 {
                         MAX_YEAR
@@ -283,14 +277,14 @@ fn property(
                 (s.set_max_year)(spec, year(gb(u32::from(years), 8, 8)));
             }
             // Population.
-            0x0b => (s.set_population)(spec, reader.byte()?),
+            0x0b => (s.set_population)(spec, reader.read_byte()?),
             // Mail generation multiplier.
-            0x0c => (s.set_mail)(spec, reader.byte()?),
+            0x0c => (s.set_mail)(spec, reader.read_byte()?),
             // Passenger acceptance and mail acceptance.
-            0x0d | 0x0e => (s.set_acceptance)(spec, (prop - 0x0d) as u8, reader.byte()?),
+            0x0d | 0x0e => (s.set_acceptance)(spec, (prop - 0x0d) as u8, reader.read_byte()?),
             // Goods/candy, food/fizzy drinks acceptance.
             0x0f => {
-                let mut goods = i16::from(reader.byte()? as i8);
+                let mut goods = i16::from(reader.read_byte()? as i8);
                 // Negative goods acceptance means food, or fizzy drinks in toyland.
                 // Nonnegative values mean goods, or candy in toyland.
                 let toyland =
@@ -314,22 +308,22 @@ fn property(
                 (s.set_acceptance)(spec, 2, goods.unsigned_abs() as u8);
             }
             // Local authority rating decrease on removal.
-            0x10 => (s.set_rating)(spec, reader.word()?),
+            0x10 => (s.set_rating)(spec, reader.read_word()?),
             // Removal cost multiplier.
-            0x11 => (s.set_removal)(spec, reader.byte()?),
+            0x11 => (s.set_removal)(spec, reader.read_byte()?),
             // Building name ID.
-            0x12 => (s.map_string)(spec, reader.word()?),
+            0x12 => (s.map_string)(spec, reader.read_word()?),
             // Building availability mask.
-            0x13 => (s.set_availability)(spec, HouseZones(reader.word()?).0),
+            0x13 => (s.set_availability)(spec, HouseZones(reader.read_word()?).0),
             // House callback mask.
             0x14 => {
                 let mut mask = u32::from(HouseCallbackMasks((s.callbacks)(spec)).0);
-                crate::bitmath_func::sb(&mut mask, 0, 8, u32::from(reader.byte()?));
+                crate::bitmath_func::sb(&mut mask, 0, 8, u32::from(reader.read_byte()?));
                 (s.set_callbacks)(spec, HouseCallbackMasks(mask as u16).0);
             }
             // House override byte.
             0x15 => {
-                let target = reader.byte()?;
+                let target = reader.read_byte()?;
                 // The house being overridden must be an original house.
                 if u16::from(target) >= NEW_HOUSE_OFFSET {
                     grf_msg!(
@@ -349,20 +343,20 @@ fn property(
                 }
             }
             // Periodic refresh multiplier.
-            0x16 => (s.set_processing)(spec, reader.byte()?.min(63)),
+            0x16 => (s.set_processing)(spec, reader.read_byte()?.min(63)),
             // Four random colours to use.
             0x17 => {
                 for index in 0..4 {
-                    (s.set_colour)(spec, index, gb(u32::from(reader.byte()?), 0, 4) as u8);
+                    (s.set_colour)(spec, index, gb(u32::from(reader.read_byte()?), 0, 4) as u8);
                 }
             }
             // Relative probability of appearing.
-            0x18 => (s.set_probability)(spec, reader.byte()?),
+            0x18 => (s.set_probability)(spec, reader.read_byte()?),
             // Extra flags.
-            0x19 => (s.set_extra)(spec, HouseExtraFlags(reader.byte()?).0),
+            0x19 => (s.set_extra)(spec, HouseExtraFlags(reader.read_byte()?).0),
             // Animation frames.
             0x1a => {
-                let info = reader.byte()?;
+                let info = reader.read_byte()?;
                 (s.set_animation)(
                     spec,
                     gb(u32::from(info), 0, 7) as u8,
@@ -374,22 +368,24 @@ fn property(
                 );
             }
             // Animation speed.
-            0x1b => (s.set_animation_speed)(spec, reader.byte()?.clamp(2, 16)),
+            0x1b => (s.set_animation_speed)(spec, reader.read_byte()?.clamp(2, 16)),
             // Class of the building type.
             0x1c => {
-                let class =
-                    crate::town::resolver::allocate_house_class_id(reader.byte()?, grffile.grfid());
+                let class = crate::town::resolver::allocate_house_class_id(
+                    reader.read_byte()?,
+                    grffile.grfid(),
+                );
                 (s.set_class_id)(spec, class);
             }
             // Callback mask part 2.
             0x1d => {
                 let mut mask = u32::from(HouseCallbackMasks((s.callbacks)(spec)).0);
-                crate::bitmath_func::sb(&mut mask, 8, 8, u32::from(reader.byte()?));
+                crate::bitmath_func::sb(&mut mask, 8, 8, u32::from(reader.read_byte()?));
                 (s.set_callbacks)(spec, HouseCallbackMasks(mask as u16).0);
             }
             // Accepted cargo types.
             0x1e => {
-                let cargos = reader.dword()?;
+                let cargos = reader.read_dword()?;
                 // Check whether the cargo types should stay unchanged.
                 if cargos == u32::MAX {
                     continue;
@@ -408,22 +404,22 @@ fn property(
                 }
             }
             // Minimum life span.
-            0x1f => (s.set_minimum_life)(spec, reader.byte()?),
+            0x1f => (s.set_minimum_life)(spec, reader.read_byte()?),
             // Cargo acceptance watch list.
             0x20 => {
-                let count = reader.byte()?;
+                let count = reader.read_byte()?;
                 for _ in 0..count {
-                    let cargo = get_cargo_translation(reader.byte()?, grffile, false).0;
+                    let cargo = get_cargo_translation(reader.read_byte()?, grffile, false).0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_watched)(spec, set_bit64(&mut (s.watched)(spec), cargo));
                     }
                 }
             }
             // Long introduction year.
-            0x21 => (s.set_min_year)(spec, i32::from(reader.word()?)),
+            0x21 => (s.set_min_year)(spec, i32::from(reader.read_word()?)),
             // Long maximum year.
             0x22 => {
-                let year = reader.word()?;
+                let year = reader.read_word()?;
                 (s.set_max_year)(
                     spec,
                     if year == u16::MAX {
@@ -435,7 +431,7 @@ fn property(
             }
             // Variable length cargo types accepted.
             0x23 => {
-                let count = reader.byte()?;
+                let count = reader.read_byte()?;
                 if count > HOUSE_NUM_ACCEPTS {
                     unsafe {
                         newgrf_loading::disable_list_property(loading, prop as u32);
@@ -449,9 +445,9 @@ fn property(
                         (s.set_cargo)(
                             spec,
                             index,
-                            get_cargo_translation(reader.byte()?, grffile, false).0,
+                            get_cargo_translation(reader.read_byte()?, grffile, false).0,
                         );
-                        (s.set_acceptance)(spec, index, reader.byte()?);
+                        (s.set_acceptance)(spec, index, reader.read_byte()?);
                     } else {
                         (s.set_cargo)(spec, index, INVALID_CARGO);
                         (s.set_acceptance)(spec, index, 0);
@@ -463,9 +459,9 @@ fn property(
             }
             // Badge list.
             0x24 => unsafe {
-                reader.badges(
-                    crate::newgrf::GrfSpecFeature::GSF_HOUSES.0,
-                    (s.badges)(spec),
+                reader.assign_badge_list(
+                    crate::newgrf::GrfSpecFeature::GSF_HOUSES,
+                    (s.shared().specs().house().badge_list)(spec.cast_mut().cast()),
                 )?;
             },
             _ => result = ChangeInfoResult::CIR_UNKNOWN,
@@ -482,9 +478,9 @@ pub unsafe extern "C" fn openttd_rust_house_definition_property(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
 ) -> u8 {
-    let mut reader = unsafe { Reader::new(native, &*reads) };
+    let mut reader = unsafe { ByteReaderRef::new(native, &*reads) };
     let s = unsafe { &*s };
     property(
         s,
@@ -531,7 +527,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
                 1,
                 "FinaliseHouseArray: {} defines house {} as multitile, but no suitable tiles follow. Disabling house.",
                 Bytes(filename),
-                (s.identity)(spec).local
+                (s.shared().specs().house().local_id)(spec.cast())
             );
         }
         return false;
@@ -551,7 +547,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
                 1,
                 "FinaliseHouseArray: {} defines multitile house {} with non-zero population on additional tiles. Disabling house.",
                 Bytes(filename),
-                (s.identity)(spec).local
+                (s.shared().specs().house().local_id)(spec.cast())
             );
         }
         return false;
@@ -569,7 +565,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
             1,
             "FinaliseHouseArray: {} defines house {} with different house size then it's substitute type. Disabling house.",
             Bytes(filename),
-            (s.identity)(spec).local
+            (s.shared().specs().house().local_id)(spec.cast())
         );
         return false;
     }
@@ -585,7 +581,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
                 1,
                 "FinaliseHouseArray: {} defines house {} without a size but marked it as available. Disabling house.",
                 Bytes(filename),
-                (s.identity)(spec).local
+                (s.shared().specs().house().local_id)(spec.cast())
             );
         }
         return false;
@@ -635,13 +631,14 @@ pub fn reset(s: &Services) {
 }
 pub fn publish(s: &Services, spec: Spec) {
     let manager = override_manager::house_mngr();
-    let identity = (s.identity)(spec);
+    let house = s.shared().specs().house();
+    let (local_id, grfid) = ((house.local_id)(spec.cast()), (house.grfid)(spec.cast()));
     let id = unsafe {
         override_manager::house_add_entity_id(
             manager,
-            identity.local,
-            identity.grfid,
-            identity.substitute,
+            local_id,
+            grfid,
+            (house.substitute().subst_id)(spec.cast()),
         )
     };
     if id == INVALID_HOUSE_ID {
@@ -657,8 +654,8 @@ pub fn publish(s: &Services, spec: Spec) {
     (s.move_spec)(spec, id);
     for original in 0..NEW_HOUSE_OFFSET {
         let overridden = (s.get)(original);
-        if unsafe { (*manager).entity_overrides(original) } != identity.local
-            || unsafe { (*manager).grfid_overrides(original) } != identity.grfid
+        if unsafe { (*manager).entity_overrides(original) } != local_id
+            || unsafe { (*manager).grfid_overrides(original) } != grfid
         {
             continue;
         }

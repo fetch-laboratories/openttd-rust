@@ -174,7 +174,8 @@ impl Fixture {
             (*state).skip_sprites = 0;
         }
         for action in actions {
-            let mut reader = ByteReader::new(action.as_ptr(), action.len());
+            // SAFETY: `action` outlives the reader and is not written.
+            let mut reader = unsafe { ByteReader::new(action.as_ptr(), action.len()) };
             if unsafe { feature_town_name(&self.loading, &mut reader) }.is_err() {
                 return false;
             }

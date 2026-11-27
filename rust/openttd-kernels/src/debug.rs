@@ -241,14 +241,15 @@ pub(crate) mod tests {
     extern "C" fn record_grf(severity: c_int, data: *const u8, size: usize) {
         record(b"GrfMsgI".as_ptr(), 7, severity, data, size);
     }
-    /// Fixed levels shared by every test thread: grf 5, misc 0, net 9, others 1.
+    /// Fixed levels shared by every test thread: desync 2, grf 5, misc 0, net 9, others 1.
+    static DESYNC: c_int = 2;
     static GRF: c_int = 5;
     static MISC: c_int = 0;
     static NET: c_int = 9;
     static OTHER: c_int = 1;
     static TABLE: Services = Services {
         console: &raw const OTHER,
-        desync: &raw const OTHER,
+        desync: &raw const DESYNC,
         driver: &raw const OTHER,
         fontcache: &raw const OTHER,
         gamelog: &raw const OTHER,
@@ -265,7 +266,8 @@ pub(crate) mod tests {
         yapf: &raw const OTHER,
     };
     /// Bind the recording table once; return and clear this thread's recorded lines.
-    /// `GrfMsg` lines carry the category `GrfMsgI`; recorded levels: grf 5, misc 0, net 9.
+    /// `GrfMsg` lines carry the category `GrfMsgI`; recorded levels: desync 2, grf 5,
+    /// misc 0, net 9.
     pub(crate) fn take() -> Vec<(String, c_int, Vec<u8>)> {
         static BIND: Once = Once::new();
         BIND.call_once(|| unsafe { super::openttd_rust_debug_bind(&raw const TABLE) });

@@ -732,7 +732,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.river = RustIsRiver,
 		.set_snow_line = RustSetSnowLineHeight,
 		.river_debug = RustRiverYapfDebug,
-		.assert_condition = RustAssertCondition,
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
 		.sea_destroy = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Destroy(); },
 		.sea_insert = [](OpenTTDGenerationFrame *f, uint32_t tile) noexcept { f->sea.Insert(tile); },

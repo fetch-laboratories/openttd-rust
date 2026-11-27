@@ -31,6 +31,7 @@
 #include "table/strings.h"
 
 #include "../rust/newgrf_global_ffi.h"
+#include "../rust/engine_loading_ffi.h"
 #include "../rust/newgrf_translation_ffi.h"
 #include "../rust/services_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
@@ -50,14 +51,18 @@ template <typename T, typename TGetTableFunc>
 static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &buf, TGetTableFunc gettable, std::string_view name)
 {
 	(void)gettable;
+	using Table = std::vector<T>;
 	static const OpenTTDTranslationServices services = {
-		.reset = [](GRFFile *file, uint32_t last) noexcept { auto &table = TGetTableFunc{}(*file); table.clear(); table.reserve(last); },
-		.append = [](GRFFile *file, uint32_t label) noexcept { TGetTableFunc{}(*file).push_back(T(label)); },
-		.copy = [](GRFFile *target, const GRFFile *source) noexcept { TGetTableFunc{}(*target) = TGetTableFunc{}(*const_cast<GRFFile *>(source)); },
-		.override_file = []() noexcept { return GetCurrentGRFOverride(); },
+		.reader = &GetRustByteReaderServices(),
 		.shared = &_rust_shared_services,
+		.gettable = [](GRFFile *file) noexcept { return reinterpret_cast<OpenTTDTranslationTable *>(&TGetTableFunc{}(*file)); },
+		.clear = [](OpenTTDTranslationTable *table) noexcept { reinterpret_cast<Table *>(table)->clear(); },
+		.reserve = [](OpenTTDTranslationTable *table, uint32_t last) noexcept { reinterpret_cast<Table *>(table)->reserve(last); },
+		.push_back = [](OpenTTDTranslationTable *table, uint32_t label) noexcept { reinterpret_cast<Table *>(table)->push_back(T(label)); },
+		.assign = [](OpenTTDTranslationTable *table, const OpenTTDTranslationTable *source) noexcept { *reinterpret_cast<Table *>(table) = *reinterpret_cast<const Table *>(source); },
+		.engine_loading = &GetRustEngineLoadingServices(),
 	};
-	int32_t result = openttd_rust_load_translation(&services, &GetRustByteReaderServices(), _cur_gps.grffile, first, last, &buf, name.data(), name.size());
+	int32_t result = openttd_rust_load_translation(&services, _cur_gps.grffile, first, last, &buf, name.data(), name.size());
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }

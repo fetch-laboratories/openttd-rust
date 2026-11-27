@@ -166,15 +166,6 @@ void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
 }
 
 /**
- * Get overridden GRF for current GRF if present.
- * @return Overridden GRFFile if present, or nullptr.
- */
-GRFFile *GetCurrentGRFOverride()
-{
-	return const_cast<GRFFile *>(openttd_rust_engine_current_override(&GetRustEngineLoadingServices(), _cur_gps.grffile));
-}
-
-/**
  * Returns the engine associated to a certain internal_id, resp. allocates it.
  * @param file NewGRF that wants to change the engine.
  * @param type Vehicle type.

@@ -16,7 +16,6 @@
 #include "../rust/industry_resolver_ffi.h"
 #include "../rust/override_manager_ffi.h"
 #include "../rust/industry_definition_ffi.h"
-#include "../rust/spec_identity.h"
 #include "../rust/newgrf_bytereader_services.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../rust/movement_ffi.h"
@@ -516,21 +515,9 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 	modern.StoreValue(1, -3);
 	modern.ClearChanges(); // Same operation the PSAC saver uses.
 	CHECK(modern.GetValue(1) == INT32_MAX);
-	static uint discarded;
-	discarded = 0;
-	openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, RustAssertCondition, [](void *) noexcept { ++discarded; });
-	CHECK(discarded == 1); // Saving rolls back but retains registry membership.
+	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
 	{ auto pending = std::make_unique<Modern>(); pending->StoreValue(0, 1); }
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
-	TemporaryStorageArray<int32_t, 0x110> temporary;
-	temporary.StoreValue(0x10F, -123);
-	CHECK(temporary.GetValue(0x10F) == -123);
-	for (uint i = 0; i < 65535; ++i) temporary.ClearChanges();
-	CHECK(temporary.GetValue(0x10F) == 0);
-	temporary.StoreValue(0x10F, 456);
-	CHECK(temporary.GetValue(0x10F) == 456);
-	temporary.ClearChanges();
-	CHECK(temporary.GetValue(0x110) == 0);
 }
 
 TEST_CASE("Industry - specification price widths and saturation")

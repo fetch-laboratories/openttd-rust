@@ -19,8 +19,8 @@ impl ChangeInfoResult {
     pub const CIR_INVALID_ID: Self = Self(4);
 }
 
-// Raw values for the exports of the files no pass has finished (`newgrf_translation.rs`,
-// `engine_loading/properties.rs`); #734's closure removes them.
+// Raw values for the exports of `engine_loading/properties.rs`, which no pass has
+// finished; #734's closure removes them.
 /// `CIR_SUCCESS`.
 pub const CIR_SUCCESS: i32 = ChangeInfoResult::CIR_SUCCESS.0 as i32;
 /// `CIR_UNKNOWN`.

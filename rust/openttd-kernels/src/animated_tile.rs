@@ -418,7 +418,16 @@ pub(crate) fn trigger_station_animation(
         let spec = (a.rail_spec)(t);
         if !spec.is_null() && (a.rail_spec_triggers)(spec) & (1 << trigger) != 0 {
             let extra = if cargo < NUM_CARGO {
-                (u16::from((a.shared().specs().station().cargo_map)(spec, cargo)) << 8) as u8
+                {
+                    // SAFETY: a spec with Action 3 sprites has its live file.
+                    let grffile = unsafe {
+                        crate::newgrf::GRFFileRef::of(
+                            a.shared(),
+                            (a.shared().specs().station().grffile)(spec).cast(),
+                        )
+                    };
+                    (u16::from(grffile.cargo_map(crate::cargo_type::CargoType(cargo))) << 8) as u8
+                }
             } else {
                 0
             };
@@ -453,7 +462,16 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
             unsafe { crate::newgrf_roadstop::openttd_rust_roadstop_spec(t, a.roadstop_resolver) };
         if !spec.is_null() && (a.road_spec_triggers)(spec) & (1 << trigger) != 0 {
             let extra = if cargo < NUM_CARGO {
-                (u16::from((a.shared().specs().road_stop().cargo_map)(spec, cargo)) << 8) as u8
+                {
+                    // SAFETY: a spec with Action 3 sprites has its live file.
+                    let grffile = unsafe {
+                        crate::newgrf::GRFFileRef::of(
+                            a.shared(),
+                            (a.shared().specs().road_stop().grffile)(spec).cast(),
+                        )
+                    };
+                    (u16::from(grffile.cargo_map(crate::cargo_type::CargoType(cargo))) << 8) as u8
+                }
             } else {
                 0
             };
@@ -541,11 +559,20 @@ pub extern "C" fn openttd_rust_trigger_airport_abi(st: *mut Station, trigger: u8
             return;
         }
         let spec = crate::newgrf_airport::tile_spec_by_tile(t, unsafe { &*a.airport_runtime });
-        if !(a.shared().specs().airport_tile().has_file)(spec) {
+        if !(a.shared().specs().airport_tile().has_grf_file)(spec) {
             return;
         }
         let extra = if cargo < NUM_CARGO {
-            (u16::from((a.shared().specs().airport_tile().cargo_map)(spec, cargo)) << 8) as u8
+            {
+                // SAFETY: a spec with Action 3 sprites has its live file.
+                let grffile = unsafe {
+                    crate::newgrf::GRFFileRef::of(
+                        a.shared(),
+                        (a.shared().specs().airport_tile().grffile)(spec).cast(),
+                    )
+                };
+                (u16::from(grffile.cargo_map(crate::cargo_type::CargoType(cargo))) << 8) as u8
+            }
         } else {
             0
         };

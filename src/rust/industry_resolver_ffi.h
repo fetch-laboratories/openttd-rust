@@ -10,6 +10,7 @@ enum class HouseZone : uint8_t;
 struct ResolverObject;
 struct ScopeResolver;
 struct TownScopeResolver;
+struct Industry;
 struct Town;
 struct IndustrySpec;
 struct IndustryTileSpec;
@@ -37,7 +38,8 @@ struct OpenTTDIndustryResolverServices {
 	uint16_t (*town_id)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_id);
 	OpenTTDIndustryFounderInfo (*founder_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(founder_info);
 	uint16_t (*callback_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(callback_id);
-	OpenTTDStorage256 *(*storage_owner)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(storage_owner);
+	OpenTTDStorage256 *(*psa)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(psa);
+	void (*set_psa)(Industry *, BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(set_psa);
 	void (*unhandled)(uint8_t, bool, bool, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	TownScopeResolver *(*existing_town)(ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(existing_town);
@@ -47,6 +49,7 @@ struct OpenTTDIndustryResolverServices {
 };
 const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept;
 extern "C" {
+void openttd_rust_storage_industry(const OpenTTDIndustryResolverServices *, const OpenTTDStorageServices *, const OpenTTDIndustryResolverContext *, uint32_t, int32_t);
 uint32_t openttd_rust_industry_variable(const OpenTTDIndustryResolverContext *, const ResolverObject *, uint8_t, uint32_t, bool *, OpenTTDIndustryBuilder *, const OpenTTDIndustryResolverServices *);
 uint32_t openttd_rust_industry_tile_variable(const OpenTTDIndustryResolverContext *, const ResolverObject *, uint8_t, uint32_t, bool *, const OpenTTDIndustryResolverServices *);
 uint32_t openttd_rust_industry_resolver_random(const OpenTTDIndustryResolverContext *);

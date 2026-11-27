@@ -4,7 +4,6 @@
 #define RUST_AIRPORT_DEFINITIONS_FFI_H
 #include "newgrf_bytereader_ffi.h"
 #include "override_manager_ffi.h"
-#include "spec_identity.h"
 #include "../newgrf_airport.h"
 struct AirportSpec;
 struct AirportTileSpec;

@@ -656,17 +656,6 @@ impl<'a> Session<'a> {
     fn landscaping(&self) {
         crate::company::update_landscaping_limits(unsafe { &*self.s.company });
     }
-    fn storage(&self, mode: u8) {
-        let world = self.world();
-        unsafe {
-            crate::newgrf_storage::openttd_rust_storage_switch_mode(
-                mode,
-                false,
-                (*world.landscape).assert_condition,
-                (*(*world.landscape).shared).storage_discard,
-            );
-        }
-    }
     fn tile_loop(&self) {
         let s = self.s;
         let call = unsafe { &*(s.tile_loop_begin)(self.frame) };
@@ -774,11 +763,17 @@ impl<'a> Session<'a> {
         }
 
         if mode() == GameMode::EDITOR {
-            self.storage(crate::newgrf_storage::PSM_ENTER_GAMELOOP);
+            crate::newgrf_storage::switch_mode(
+                crate::newgrf_storage::PersistentStorageMode::PSM_ENTER_GAMELOOP,
+                false,
+            );
             self.tile_loop();
             self.vehicles(false);
             self.landscape_tick()?;
-            self.storage(crate::newgrf_storage::PSM_LEAVE_GAMELOOP);
+            crate::newgrf_storage::switch_mode(
+                crate::newgrf_storage::PersistentStorageMode::PSM_LEAVE_GAMELOOP,
+                false,
+            );
             self.landscaping();
             (s.window_tick)();
             (s.news)();
@@ -791,7 +786,10 @@ impl<'a> Session<'a> {
             }
             (s.check_caches)();
             (s.company_begin)(self.frame);
-            self.storage(crate::newgrf_storage::PSM_ENTER_GAMELOOP);
+            crate::newgrf_storage::switch_mode(
+                crate::newgrf_storage::PersistentStorageMode::PSM_ENTER_GAMELOOP,
+                false,
+            );
             crate::animated_tile::run();
             let exception = (s.console_exception)(self.frame);
             let advanced = unsafe { crate::timer_game_calendar::elapsed(&*s.clock, exception) };
@@ -807,7 +805,10 @@ impl<'a> Session<'a> {
             self.tile_loop();
             self.vehicles(false);
             self.landscape_tick()?;
-            self.storage(crate::newgrf_storage::PSM_LEAVE_GAMELOOP);
+            crate::newgrf_storage::switch_mode(
+                crate::newgrf_storage::PersistentStorageMode::PSM_LEAVE_GAMELOOP,
+                false,
+            );
             if (s.scripts_enabled)() {
                 let mut storage = MaybeUninit::uninit();
                 // SAFETY: As above; the guard drops at the end of this block.

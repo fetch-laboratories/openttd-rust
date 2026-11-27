@@ -818,7 +818,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
         let mut count = i32::from(relative & 15);
         if !self_v.is_null() && (relative != (*state).cached_relative_count || count == 0) {
             if count == 0 {
-                count = crate::newgrf_storage::openttd_rust_storage_temp_get(0x100);
+                count = crate::newgrf_spritegroup::get_register(0x100);
             }
             let v = match relative >> 6 {
                 0 => self_v,
@@ -1524,7 +1524,7 @@ unsafe fn variable(
                 {
                     let u = crate::vehicle::VehicleRef::move_by(
                         v,
-                        crate::newgrf_storage::openttd_rust_storage_temp_get(0x10f),
+                        crate::newgrf_spritegroup::get_register(0x10f),
                     );
                     if u.is_null() {
                         return 0;
@@ -1540,7 +1540,7 @@ unsafe fn variable(
                         grf,
                         callback,
                         parameter as u8,
-                        crate::newgrf_storage::openttd_rust_storage_temp_get(0x10e) as u32,
+                        crate::newgrf_spritegroup::get_register(0x10e) as u32,
                         available,
                     );
                 }
@@ -1626,7 +1626,7 @@ unsafe fn variable(
             0x64 => {
                 if kind() != 0 {
                     return crate::engine::bindings::badges((s.vehicle.engine)(h).0.as_ptr())
-                        .resolve(s.shared, ro, parameter);
+                        .get_badge_variable_result(s.shared, ro, parameter);
                 }
                 if u64::from(parameter) >= (s.badge_count)(grf) as u64 {
                     return u32::MAX;
@@ -1650,18 +1650,18 @@ unsafe fn variable(
             0x65 => match kind() {
                 0 => {
                     return (s.rail_badge)(((&*(s.ground)()).rail_type)((h).tile_raw()))
-                        .resolve(s.shared, ro, parameter);
+                        .get_badge_variable_result(s.shared, ro, parameter);
                 }
                 1 => {
                     let rtt = crate::road::get_road_tram_type((s.roadtype)(v));
                     return (s.road_badge)((s.tile_roadtype)((h).tile_raw(), rtt))
-                        .resolve(s.shared, ro, parameter);
+                        .get_badge_variable_result(s.shared, ro, parameter);
                 }
                 _ => return u32::MAX,
             },
             0x7a => {
                 return crate::engine::bindings::badges((s.vehicle.engine)(h).0.as_ptr())
-                    .resolve(s.shared, ro, parameter);
+                    .get_badge_variable_result(s.shared, ro, parameter);
             }
             0xfe | 0xff => {
                 let mut flags = 0u32;
@@ -1961,7 +1961,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
             0x49 => crate::timer_game_common::calendar_year().0 as u32,
             0x4b => crate::timer_game_common::calendar_date().0 as u32,
             0x7a => crate::engine::bindings::badges((s.engine_by_id)((*scope).self_type))
-                .resolve(s.shared, ro, parameter),
+                .get_badge_variable_result(s.shared, ro, parameter),
             0x92 => service_date(crate::timer_game_common::calendar_date().0),
             0x93 => service_date(crate::timer_game_common::calendar_date().0) >> 8,
             0xc4 => old_year(crate::timer_game_common::calendar_year().0),

@@ -15,7 +15,9 @@ use crate::industrytype::{
     get_industry_tile_spec,
 };
 use crate::newgrf::{GRFFile, GrfSpecFeature};
-use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
+use crate::newgrf_bytereader::{
+    ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read, Services as ReaderServices,
+};
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::newgrf_text_type::GRFStringID;
 use crate::table::strings::STR_NULL;
@@ -60,17 +62,17 @@ fn file_tile(file: *const GRFFile, id: u32) -> *mut IndustryTileSpec {
 /// Ignore an industry tile property.
 fn ignore_industry_tile_property(
     prop: i32,
-    buf: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    buf: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     match prop {
         0x09 | 0x0D | 0x0E | 0x10..=0x12 => {
-            buf.byte()?;
+            buf.read_byte()?;
         }
         0x0A..=0x0C | 0x0F => {
-            buf.word()?;
+            buf.read_word()?;
         }
         0x13 => {
-            let count = buf.byte()?;
+            let count = buf.read_byte()?;
             buf.skip(usize::from(count) * 2)?;
         }
         _ => return Ok(ChangeInfoResult::CIR_UNKNOWN),
@@ -80,38 +82,38 @@ fn ignore_industry_tile_property(
 /// Ignore an industry property.
 fn ignore_industry_property(
     prop: i32,
-    buf: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    buf: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     match prop {
         0x09 | 0x0B | 0x0F | 0x12..=0x14 | 0x17..=0x19 | 0x21 | 0x22 => {
-            buf.byte()?;
+            buf.read_byte()?;
         }
         // 0x10: INDUSTRY_ORIGINAL_NUM_OUTPUTS bytes
         0x0C..=0x0E | 0x10 | 0x1B | 0x1F | 0x24 => {
-            buf.word()?;
+            buf.read_word()?;
         }
         // 0x11: INDUSTRY_ORIGINAL_NUM_INPUTS bytes + 1
         0x11 | 0x1A | 0x1C..=0x1E | 0x20 | 0x23 => {
-            buf.dword()?;
+            buf.read_dword()?;
         }
         0x0A => {
-            let num_table = buf.byte()?;
+            let num_table = buf.read_byte()?;
             for _ in 0..num_table {
                 let mut k = 0_u32;
                 loop {
-                    let x = buf.byte()?;
+                    let x = buf.read_byte()?;
                     if x == 0xFE && k == 0 {
-                        buf.byte()?;
-                        buf.byte()?;
+                        buf.read_byte()?;
+                        buf.read_byte()?;
                         break;
                     }
-                    let y = buf.byte()?;
+                    let y = buf.read_byte()?;
                     if x == 0 && y == 0x80 {
                         break;
                     }
-                    let gfx = buf.byte()?;
+                    let gfx = buf.read_byte()?;
                     if gfx == 0xFE {
-                        buf.word()?;
+                        buf.read_word()?;
                     }
                     k = k.wrapping_add(1);
                 }
@@ -119,20 +121,20 @@ fn ignore_industry_property(
         }
         0x16 => {
             for _ in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
-                buf.byte()?;
+                buf.read_byte()?;
             }
         }
         0x15 | 0x25..=0x27 => {
-            let count = buf.byte()?;
+            let count = buf.read_byte()?;
             buf.skip(usize::from(count))?;
         }
         0x28 => {
-            let num_inputs = buf.byte()?;
-            let num_outputs = buf.byte()?;
+            let num_inputs = buf.read_byte()?;
+            let num_outputs = buf.read_byte()?;
             buf.skip(usize::from(num_inputs) * usize::from(num_outputs) * 2)?;
         }
         // Badge list
-        0x29 => buf.skip_badges()?,
+        0x29 => buf.skip_badge_list()?,
         _ => return Ok(ChangeInfoResult::CIR_UNKNOWN),
     }
     Ok(ChangeInfoResult::CIR_SUCCESS)
@@ -164,12 +166,12 @@ unsafe fn read_industry_layouts(
     id: u32,
     indsp: *mut IndustrySpec,
     c: &Context,
-    buf: &mut Reader<'_>,
+    buf: &mut ByteReaderRef<'_>,
     s: &Services,
     loading: &newgrf_loading::Services,
-) -> Result<ChangeInfoResult, ReadError> {
-    let new_num_layouts = buf.byte()?;
-    let mut definition_size = buf.dword()?;
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
+    let new_num_layouts = buf.read_byte()?;
+    let mut definition_size = buf.read_dword()?;
     let mut bytes_read = 0_u32;
     let mut new_layouts = Vec::new();
     let mut layout = Vec::new();
@@ -189,7 +191,7 @@ unsafe fn read_industry_layouts(
             let mut it = LayoutTile {
                 ti: crate::map_type::TileIndexDiffC {
                     // Offsets from northernmost tile
-                    x: i16::from(buf.byte()?),
+                    x: i16::from(buf.read_byte()?),
                     y: 0,
                 },
                 gfx: 0,
@@ -197,8 +199,8 @@ unsafe fn read_industry_layouts(
             bytes_read = bytes_read.wrapping_add(1);
             if it.ti.x == 0xFE && k == 0 {
                 // This means we have to borrow the layout from an old industry
-                let kind = IndustryType(buf.byte()?);
-                let laynbr = buf.byte()?;
+                let kind = IndustryType(buf.read_byte()?);
+                let laynbr = buf.read_byte()?;
                 bytes_read = bytes_read.wrapping_add(2);
                 // `lengthof(_origin_industry_specs)` is `NEW_INDUSTRYOFFSET`.
                 if kind >= IndustryType::NEW_INDUSTRYOFFSET {
@@ -229,17 +231,17 @@ unsafe fn read_industry_layouts(
                 break;
             }
             // Or table definition finalisation
-            it.ti.y = i16::from(buf.byte()?);
+            it.ti.y = i16::from(buf.read_byte()?);
             bytes_read = bytes_read.wrapping_add(1);
             if it.ti.x == 0 && it.ti.y == 0x80 {
                 // Terminator, remove and finish up
                 break;
             }
-            it.gfx = u16::from(buf.byte()?);
+            it.gfx = u16::from(buf.read_byte()?);
             bytes_read = bytes_read.wrapping_add(1);
             if it.gfx == 0xFE {
                 // Use a new tile from this GRF
-                let local_tile_id = buf.word()?;
+                let local_tile_id = buf.read_word()?;
                 bytes_read = bytes_read.wrapping_add(2);
                 // Read the ID from the _industile_mngr.
                 let tempid = IndustryGfx(unsafe {
@@ -302,9 +304,9 @@ unsafe fn industrytiles_change_info(
     ids: std::ops::Range<u32>,
     prop: i32,
     c: &Context,
-    buf: &mut Reader<'_>,
+    buf: &mut ByteReaderRef<'_>,
     loading: &newgrf_loading::Services,
-) -> Result<ChangeInfoResult, ReadError> {
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     let last = ids.end;
     if last > u32::from(IndustryGfx::NUM_INDUSTRYTILES_PER_GRF.0) {
         grf_msg!(
@@ -331,7 +333,7 @@ unsafe fn industrytiles_change_info(
         match prop {
             // Substitute industry tile type
             0x08 => {
-                let subs_id = buf.byte()?;
+                let subs_id = buf.read_byte()?;
                 if IndustryGfx(u16::from(subs_id)) >= IndustryGfx::NEW_INDUSTRYTILEOFFSET {
                     // The substitute id must be one of the original industry tile.
                     grf_msg!(
@@ -373,7 +375,7 @@ unsafe fn industrytiles_change_info(
             }
             // Industry tile override
             0x09 => {
-                let ovrid = buf.byte()?;
+                let ovrid = buf.read_byte()?;
                 // The industry being overridden must be an original industry.
                 if IndustryGfx(u16::from(ovrid)) >= IndustryGfx::NEW_INDUSTRYTILEOFFSET {
                     grf_msg!(
@@ -390,7 +392,7 @@ unsafe fn industrytiles_change_info(
             }
             // Tile acceptance
             0x0A..=0x0C => {
-                let acctp = u32::from(buf.word()?);
+                let acctp = u32::from(buf.read_word()?);
                 let slot = (prop - 0x0A) as usize;
                 let cargo = get_cargo_translation(
                     gb(acctp, 0, 8) as u8,
@@ -405,32 +407,32 @@ unsafe fn industrytiles_change_info(
             }
             // Land shape flags
             0x0D => unsafe {
-                (*tsp).slopes_refused = buf.byte()?;
+                (*tsp).slopes_refused = buf.read_byte()?;
             },
             // Callback mask
             0x0E => unsafe {
-                (*tsp).callback_mask = buf.byte()?;
+                (*tsp).callback_mask = buf.read_byte()?;
             },
             // Animation information
             0x0F => unsafe {
-                (*tsp).animation.frames = buf.byte()?;
-                (*tsp).animation.status = buf.byte()?;
+                (*tsp).animation.frames = buf.read_byte()?;
+                (*tsp).animation.status = buf.read_byte()?;
             },
             // Animation speed
             0x10 => unsafe {
-                (*tsp).animation.speed = buf.byte()?;
+                (*tsp).animation.speed = buf.read_byte()?;
             },
             // Triggers for callback 25
             0x11 => unsafe {
-                (*tsp).animation.triggers = buf.byte()?;
+                (*tsp).animation.triggers = buf.read_byte()?;
             },
             // Special flags
             0x12 => unsafe {
-                (*tsp).special_flags = buf.byte()?;
+                (*tsp).special_flags = buf.read_byte()?;
             },
             // variable length cargo acceptance
             0x13 => {
-                let num_cargoes = usize::from(buf.byte()?);
+                let num_cargoes = usize::from(buf.read_byte()?);
                 if num_cargoes > INDUSTRY_NUM_INPUTS {
                     unsafe {
                         newgrf_loading::disable_list_property(loading, prop as u32);
@@ -439,12 +441,15 @@ unsafe fn industrytiles_change_info(
                 }
                 for i in 0..INDUSTRY_NUM_INPUTS {
                     if i < num_cargoes {
-                        let cargo =
-                            get_cargo_translation(buf.byte()?, c.grffile(loading.shared()), false);
+                        let cargo = get_cargo_translation(
+                            buf.read_byte()?,
+                            c.grffile(loading.shared()),
+                            false,
+                        );
                         unsafe { (*tsp).accepts_cargo[i] = cargo.0 };
                         // Tile acceptance can be negative to counteract the
                         // IndustryTileSpecialFlag::AcceptsAllCargo flag
-                        let acceptance = buf.byte()? as i8;
+                        let acceptance = buf.read_byte()? as i8;
                         unsafe { (*tsp).acceptance[i] = acceptance };
                     } else {
                         unsafe {
@@ -459,8 +464,10 @@ unsafe fn industrytiles_change_info(
             }
             // Badge list
             0x14 => {
-                let ids = buf.badge_ids(GrfSpecFeature::GSF_INDUSTRYTILES.0)?;
-                unsafe { (*tsp).badges = NativeVec::from_vec(ids) };
+                let ids = buf.read_badge_list(GrfSpecFeature::GSF_INDUSTRYTILES)?;
+                unsafe {
+                    (*tsp).badges = NativeVec::from_vec(ids.into_iter().map(|id| id.0).collect());
+                }
             }
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
         }
@@ -481,9 +488,9 @@ unsafe fn industries_change_info(
     ids: std::ops::Range<u32>,
     prop: i32,
     c: &Context,
-    buf: &mut Reader<'_>,
+    buf: &mut ByteReaderRef<'_>,
     loading: &newgrf_loading::Services,
-) -> Result<ChangeInfoResult, ReadError> {
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     let last = ids.end;
     if last > u32::from(IndustryType::NUM_INDUSTRYTYPES_PER_GRF.0) {
         grf_msg!(
@@ -512,7 +519,7 @@ unsafe fn industries_change_info(
         match prop {
             // Substitute industry type
             0x08 => {
-                let subs_id = buf.byte()?;
+                let subs_id = buf.read_byte()?;
                 if subs_id == 0xFF {
                     // Instead of defining a new industry, a substitute industry id
                     // of 0xFF disables the old industry with the current id.
@@ -548,7 +555,7 @@ unsafe fn industries_change_info(
             }
             // Industry type override
             0x09 => {
-                let ovrid = buf.byte()?;
+                let ovrid = buf.read_byte()?;
                 // The industry being overridden must be an original industry.
                 if IndustryType(ovrid) >= IndustryType::NEW_INDUSTRYOFFSET {
                     grf_msg!(
@@ -573,32 +580,32 @@ unsafe fn industries_change_info(
             }
             // Industry production flags
             0x0B => unsafe {
-                (*indsp).life_type = buf.byte()?;
+                (*indsp).life_type = buf.read_byte()?;
             },
             // Industry closure message
             0x0C => unsafe {
                 (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
+                    GRFStringID(u32::from(buf.read_word()?)),
                     (&raw mut (*indsp).closure_text).cast(),
                 );
             },
             // Production increase message
             0x0D => unsafe {
                 (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
+                    GRFStringID(u32::from(buf.read_word()?)),
                     (&raw mut (*indsp).production_up_text).cast(),
                 );
             },
             // Production decrease message
             0x0E => unsafe {
                 (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
+                    GRFStringID(u32::from(buf.read_word()?)),
                     (&raw mut (*indsp).production_down_text).cast(),
                 );
             },
             // Fund cost multiplier
             0x0F => unsafe {
-                (*indsp).cost_multiplier = buf.byte()?;
+                (*indsp).cost_multiplier = buf.read_byte()?;
             },
             // 0x10: production cargo types; 0x11: acceptance cargo types
             0x10 | 0x11 => {
@@ -609,7 +616,7 @@ unsafe fn industries_change_info(
                     INDUSTRY_ORIGINAL_NUM_INPUTS
                 };
                 for j in 0..count {
-                    let cargo = get_cargo_translation(buf.byte()?, c.grffile(shared), false);
+                    let cargo = get_cargo_translation(buf.read_byte()?, c.grffile(shared), false);
                     if produced {
                         unsafe {
                             (*indsp).produced_cargo[j] = cargo.0;
@@ -624,58 +631,58 @@ unsafe fn industries_change_info(
                 }
                 if !produced {
                     // Unnused, eat it up
-                    buf.byte()?;
+                    buf.read_byte()?;
                 }
             }
             // Production multipliers
             0x12 | 0x13 => unsafe {
-                (*indsp).production_rate[(prop - 0x12) as usize] = buf.byte()?;
+                (*indsp).production_rate[(prop - 0x12) as usize] = buf.read_byte()?;
             },
             // Minimal amount of cargo distributed
             0x14 => unsafe {
-                (*indsp).minimal_cargo = buf.byte()?;
+                (*indsp).minimal_cargo = buf.read_byte()?;
             },
             // Random sound effects
             0x15 => {
-                let num_sounds = buf.byte()?;
+                let num_sounds = buf.read_byte()?;
                 let mut sounds = Vec::with_capacity(usize::from(num_sounds));
                 for _ in 0..num_sounds {
-                    sounds.push(buf.byte()?);
+                    sounds.push(buf.read_byte()?);
                 }
                 unsafe { (*indsp).random_sounds = NativeVec::from_vec(sounds) };
             }
             // Conflicting industry types
             0x16 => {
                 for j in 0..3 {
-                    unsafe { (*indsp).conflicting[j] = buf.byte()? };
+                    unsafe { (*indsp).conflicting[j] = buf.read_byte()? };
                 }
             }
             // Probability in random game
             0x17 => unsafe {
-                (*indsp).appear_creation[usize::from(c.climate)] = buf.byte()?;
+                (*indsp).appear_creation[usize::from(c.climate)] = buf.read_byte()?;
             },
             // Probability during gameplay
             0x18 => unsafe {
-                (*indsp).appear_ingame[usize::from(c.climate)] = buf.byte()?;
+                (*indsp).appear_ingame[usize::from(c.climate)] = buf.read_byte()?;
             },
             // Map colour
             0x19 => unsafe {
-                (*indsp).map_colour = buf.byte()?;
+                (*indsp).map_colour = buf.read_byte()?;
             },
             // Special industry flags to define special behavior
             0x1A => unsafe {
-                (*indsp).behaviour = buf.dword()?;
+                (*indsp).behaviour = buf.read_dword()?;
             },
             // New industry text ID
             0x1B => unsafe {
                 (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
+                    GRFStringID(u32::from(buf.read_word()?)),
                     (&raw mut (*indsp).new_industry_text).cast(),
                 );
             },
             // Input cargo multipliers for the three input cargo types
             0x1C..=0x1E => {
-                let multiples = buf.dword()?;
+                let multiples = buf.read_dword()?;
                 let input = (prop - 0x1C) as usize;
                 unsafe {
                     (*indsp).input_cargo_multiplier[input][0] = gb(multiples, 0, 16) as u16;
@@ -685,13 +692,13 @@ unsafe fn industries_change_info(
             // Industry name
             0x1F => unsafe {
                 (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
+                    GRFStringID(u32::from(buf.read_word()?)),
                     (&raw mut (*indsp).name).cast(),
                 );
             },
             // Prospecting success chance
             0x20 => unsafe {
-                (*indsp).prospecting_chance = buf.dword()?;
+                (*indsp).prospecting_chance = buf.read_dword()?;
             },
             // 0x21: callback mask; 0x22: callback additional mask
             0x21 | 0x22 => {
@@ -700,17 +707,17 @@ unsafe fn industries_change_info(
                     &mut mask,
                     ((prop - 0x21) * 8) as u8,
                     8,
-                    u32::from(buf.byte()?),
+                    u32::from(buf.read_byte()?),
                 );
                 unsafe { (*indsp).callback_mask = mask as u16 };
             }
             // removal cost multiplier
             0x23 => unsafe {
-                (*indsp).removal_cost_multiplier = buf.dword()?;
+                (*indsp).removal_cost_multiplier = buf.read_dword()?;
             },
             // name for nearby station
             0x24 => {
-                let str = buf.word()?;
+                let str = buf.read_word()?;
                 if str == 0 {
                     unsafe { (*indsp).station_name = STR_NULL.0 };
                 } else {
@@ -725,7 +732,7 @@ unsafe fn industries_change_info(
             // 0x25: variable length produced cargoes; 0x26: variable length accepted cargoes
             0x25 | 0x26 => {
                 let produced = prop == 0x25;
-                let num_cargoes = usize::from(buf.byte()?);
+                let num_cargoes = usize::from(buf.read_byte()?);
                 let size = if produced {
                     INDUSTRY_NUM_OUTPUTS
                 } else {
@@ -744,7 +751,7 @@ unsafe fn industries_change_info(
                 };
                 for i in 0..size {
                     let cargo = if i < num_cargoes {
-                        get_cargo_translation(buf.byte()?, c.grffile(shared), false)
+                        get_cargo_translation(buf.read_byte()?, c.grffile(shared), false)
                     } else {
                         CargoType::INVALID_CARGO
                     };
@@ -764,7 +771,7 @@ unsafe fn industries_change_info(
             }
             // variable length production rates
             0x27 => {
-                let num_cargoes = usize::from(buf.byte()?);
+                let num_cargoes = usize::from(buf.read_byte()?);
                 if num_cargoes > INDUSTRY_NUM_OUTPUTS {
                     unsafe {
                         newgrf_loading::disable_list_property(loading, prop as u32);
@@ -772,14 +779,14 @@ unsafe fn industries_change_info(
                     return Ok(ChangeInfoResult::CIR_DISABLED);
                 }
                 for i in 0..INDUSTRY_NUM_OUTPUTS {
-                    let rate = if i < num_cargoes { buf.byte()? } else { 0 };
+                    let rate = if i < num_cargoes { buf.read_byte()? } else { 0 };
                     unsafe { (*indsp).production_rate[i] = rate };
                 }
             }
             // variable size input/output production multiplier table
             0x28 => {
-                let num_inputs = usize::from(buf.byte()?);
-                let num_outputs = usize::from(buf.byte()?);
+                let num_inputs = usize::from(buf.read_byte()?);
+                let num_outputs = usize::from(buf.read_byte()?);
                 if num_inputs > INDUSTRY_NUM_INPUTS || num_outputs > INDUSTRY_NUM_OUTPUTS {
                     unsafe {
                         newgrf_loading::disable_list_property(loading, prop as u32);
@@ -789,7 +796,7 @@ unsafe fn industries_change_info(
                 for i in 0..INDUSTRY_NUM_INPUTS {
                     for j in 0..INDUSTRY_NUM_OUTPUTS {
                         let mult = if i < num_inputs && j < num_outputs {
-                            buf.word()?
+                            buf.read_word()?
                         } else {
                             0
                         };
@@ -799,8 +806,10 @@ unsafe fn industries_change_info(
             }
             // Badge list
             0x29 => {
-                let ids = buf.badge_ids(GrfSpecFeature::GSF_INDUSTRIES.0)?;
-                unsafe { (*indsp).badges = NativeVec::from_vec(ids) };
+                let ids = buf.read_badge_list(GrfSpecFeature::GSF_INDUSTRIES)?;
+                unsafe {
+                    (*indsp).badges = NativeVec::from_vec(ids.into_iter().map(|id| id.0).collect());
+                }
             }
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
         }
@@ -808,7 +817,7 @@ unsafe fn industries_change_info(
     Ok(ret)
 }
 /// Store a completed property's `ChangeInfoResult`; a short read reports failure.
-fn finish(status: &Result<ChangeInfoResult, ReadError>, result: *mut i32) -> bool {
+fn finish(status: &Result<ChangeInfoResult, OTTDByteReaderSignal>, result: *mut i32) -> bool {
     match status {
         Ok(value) => {
             unsafe {
@@ -816,7 +825,7 @@ fn finish(status: &Result<ChangeInfoResult, ReadError>, result: *mut i32) -> boo
             }
             true
         }
-        Err(ReadError) => false,
+        Err(OTTDByteReaderSignal) => false,
     }
 }
 /// `GrfChangeInfoHandler<GSF_INDUSTRIES>::Activation`.
@@ -825,14 +834,14 @@ pub unsafe extern "C" fn openttd_rust_industry_properties_abi(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
     c: *const Context,
     reads: *const ReaderServices,
     loading: *const newgrf_loading::Services,
     result: *mut i32,
 ) -> u8 {
     let (c, reads, loading) = unsafe { (&*c, &*reads, &*loading) };
-    let mut reader = unsafe { Reader::new(native, reads) };
+    let mut reader = unsafe { ByteReaderRef::new(native, reads) };
     u8::from(finish(
         &unsafe { industries_change_info(first..last, prop, c, &mut reader, loading) },
         result,
@@ -844,14 +853,14 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties_abi(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
     c: *const Context,
     reads: *const ReaderServices,
     loading: *const newgrf_loading::Services,
     result: *mut i32,
 ) -> u8 {
     let (c, reads, loading) = unsafe { (&*c, &*reads, &*loading) };
-    let mut reader = unsafe { Reader::new(native, reads) };
+    let mut reader = unsafe { ByteReaderRef::new(native, reads) };
     u8::from(finish(
         &unsafe { industrytiles_change_info(first..last, prop, c, &mut reader, loading) },
         result,

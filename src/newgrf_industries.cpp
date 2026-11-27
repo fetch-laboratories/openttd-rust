@@ -62,7 +62,7 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
 
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
-	openttd_rust_storage_industry(&GetRustStorageServices(), this->context.industry, pos, value);
+	openttd_rust_storage_industry(&GetIndustryResolverServices(), &GetRustStorageServices(), &this->context, pos, value);
 }
 
 /**
@@ -258,7 +258,8 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 			return {company == nullptr ? uint8_t{0} : RustCompanyRecolour(company, true), company != nullptr && company->is_ai};
 		},
 		.callback_id = RustResolverCallback,
-		.storage_owner = RustIndustryStorageOwner,
+		.psa = [](Industry *industry) noexcept { return industry->psa == nullptr ? nullptr : industry->psa->rust_storage; },
+		.set_psa = [](Industry *industry, BasePersistentStorageArray *psa) noexcept { industry->psa = static_cast<PersistentStorage *>(psa); },
 		.unhandled = [](uint8_t variable, bool tile, bool missing, uint16_t callback) noexcept {
 			if (missing) Debug(grf, 1, "Unhandled variable 0x{:X} (no available industry) in callback 0x{:x}", variable, callback);
 			else if (tile) Debug(grf, 1, "Unhandled industry tile variable 0x{:X}", variable);

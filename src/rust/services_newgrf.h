@@ -10,7 +10,6 @@
 #define RUST_SERVICES_NEWGRF_H
 #include "../command_type.h"
 #include "newgrf_class_ffi.h"
-#include "spec_identity.h"
 #include "spec_services_ffi.h"
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
@@ -151,7 +150,6 @@ template <typename Spec> inline uint16_t RustSpecOverride(const Spec *spec) noex
 template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) noexcept { return spec->grf_prop.subst_id; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
-template <typename Spec> inline OpenTTDSubstituteSpecIdentity RustSpecSubstituteIdentity(const Spec *spec) noexcept { return {RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
 inline const SpriteGroup *RustHouseSpriteGroup(uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); }
 inline uint16_t RustHouseLocalID(uint16_t house) noexcept { return RustSpecLocalID(RustHouseSpec(house)); }

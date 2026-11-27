@@ -128,3 +128,10 @@
 - C++ keeps: the type records and the stores Rust calls, `GRFFile` storage behind `GRFFileRef`'s six type readers, `AddStringForMapping` behind one shared binding, the RAIL and ROTT chunk handlers, and the availability table's engine iteration and company stores.
 - Limits: the lookup by label resolves each element through a slot call, which no retained profile observes, since none loads a NewGRF. `engine_loading` keeps two raw adapters (`railtype_list_raw`, `rail_label_raw`) until its pass (#734).
 - PRs: #1098.
+
+## Byte reader, storage arrays, spec leaves and translation tables (#1064 part 3)
+
+- Rust owns: `ByteReader` over the pseudo-sprite buffer of the actions Rust interprets, with `ReadExtendedByte` and `ReadVarSize` written once for it and for the view of a C++ reader; `PersistentStorageArray`'s storage, backup and bodies, the three mode flags, `_changed_storage_arrays` and `SwitchMode` with its discard message; `TemporaryStorageArray`, whose one instance, `ResolverObject::temp_store`, is in `newgrf_spritegroup.rs` behind `get_register` and `set_register`; the three `StorePSA` bodies of industries, airports and towns in their features' files; `LoadTranslationTable`.
+- C++ keeps: the `ByteReader` the unported handlers build, which Rust reads through `ByteReaderRef` until #669 ports those handlers; the `PersistentStorage` pool and the shell that holds `grfid`, `feature`, `tile` and the saver's `storage` alias; the six spec records behind the spec table; the translation vectors of `GRFFile` (#669).
+- Limits: the `PersistentStorage` pool and its shell move with #638; the C++ reader view and the translation vectors with #669.
+- PRs: #1102.
