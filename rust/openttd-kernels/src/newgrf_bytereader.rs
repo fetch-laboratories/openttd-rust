@@ -63,8 +63,8 @@ impl ByteReader {
     /// Read a NUL-terminated string.
     /// @returns String read from the buffer.
     pub(crate) fn read_string(&mut self) -> (*const u8, usize) {
+        let data = self.position();
         let left = self.left();
-        let data = left.as_ptr();
         /* Terminating NUL may be missing at the end of sprite. */
         let result = consumer::until(left, &[0], SeparatorUsage::SKIP_ONE_SEPARATOR);
         self.pos += result.consumed_length;
@@ -79,8 +79,12 @@ impl ByteReader {
     /// The bytes not yet read, which an unported handler reads with its own C++
     /// reader. It has no original: the original's handlers take the reader itself.
     pub(crate) fn tail(&self) -> (*const u8, usize) {
-        let left = self.left();
-        (left.as_ptr(), left.len())
+        (self.position(), self.remaining())
+    }
+
+    /// The address of the cursor, which a view at the end of the buffer starts at.
+    fn position(&self) -> *const u8 {
+        self.data.wrapping_add(self.pos)
     }
 }
 
@@ -401,8 +405,9 @@ mod tests {
         let (text, len) = reader.read_string();
         assert_eq!((text, len), (data[3..].as_ptr(), 2));
         assert_eq!(reader.remaining(), 0);
-        assert_eq!(reader.read_string().1, 0);
-        assert_eq!(reader.tail().1, 0);
+        let end = data.as_ptr().wrapping_add(data.len());
+        assert_eq!(reader.read_string(), (end, 0));
+        assert_eq!(reader.tail(), (end, 0));
     }
 
     /// `ReadVarSize`'s `default: NOT_REACHED()`: a size of 3 ends at the native
