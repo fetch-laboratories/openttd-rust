@@ -1,6 +1,6 @@
 # Review brief
 
-You review a PR or a plan. The message that started you names your review: a behaviour review or a porting review of a whole PR or of the commits it names, a re-check, or a plan review. Do the section your message names. A PR's behaviour and porting reviewers review it side by side; leave the other's section to it.
+You review a PR or a plan. The message that started you names your review: a behaviour review or a porting review of a whole PR or of the commits it names, a re-check, a records review, or a plan review. Do the section your message names. A PR's behaviour and porting reviewers review it side by side; leave the other's section to it.
 
 ## Before reviewing
 
@@ -43,6 +43,15 @@ A re-check is a PR's second and last review stage ([ADR 0025](adr/0025-two-revie
 - Say for each earlier finding whether its fixing commit resolves it, or whether what the implementer's answer names allows it.
 - Raise a new finding only in a line a fixing commit changed, or for a behaviour difference on input the game can produce, wherever you see one.
 - Anything else you notice is one line under the disposition and does not change it. The implementer fixes it without a further review where the operations stay unchanged, or records it as residue in the PR body.
+
+## A records review
+
+A records review gives back the acceptance that a fix took from a cleanup record or an `unsafe_code` item ([review](workflow.md#review)). It is not a further review of the fixes: no reviewer reads them after the re-check.
+
+- Judge each record the commits change as a porting review judges [cleanup records](#a-porting-review), and each `unsafe_code` item they change as [where `unsafe` sits](porting.md#where-unsafe-sits) reviews one: whether the item needs the allow and the allow covers only items that need it, and each obligation Rust adds beyond the original. These are your findings; accept each record that holds.
+- Raise a finding about other lines only for a behaviour difference on input the game can produce.
+- Anything else you notice is one line under the disposition, as in a re-check. It does not change the disposition or withhold an acceptance.
+- Report as a porting review does, with its acceptance block. Your line of bodies compared names the items you judged.
 
 ## A plan review
 

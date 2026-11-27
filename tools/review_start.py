@@ -63,7 +63,7 @@ review row of docs/team.md with the fixed message of docs/implementer-brief.md,
 or refuse a review beyond the PR's limits and print the line to send root.
 KIND is behaviour or porting (the first stage), recheck, or a scoped review:
 base (a base update's conflicts), simulation (a CI-found simulation fix) or
-records (a cleanup record or unsafe_code item a fix changed)."""
+records (the acceptance of a cleanup record or unsafe_code item a fix changed)."""
 
 
 def review_row(team: Path = TEAM) -> dict[str, tuple[str, str]]:
@@ -433,6 +433,13 @@ def message(url: str, start: Start, row: tuple[str, str]) -> str:
         return (
             f"Re-check PR {url} under `docs/review-brief.md`. {you} Check the fixing "
             f"commits {commits} against the findings in {' '.join(start.findings)}."
+        )
+    if start.kind == "records":
+        # An acceptance, not a third review of the fixes (#1073).
+        return (
+            f"Do a records review of PR {url} under `docs/review-brief.md`. {you} "
+            f"Judge the cleanup records and `unsafe_code` items the commits {commits} "
+            "change."
         )
     review = SCOPED.get(start.kind, start.kind)
     scope = f"the commits {commits}" if start.kind in SCOPED else "the whole PR"
