@@ -1122,9 +1122,13 @@ impl<'a> World<'a> {
                         );
                         if result.callback != CALLBACK_FAILED {
                             let r = resolver_services(self.s);
-                            result.version = ((*r.shared).grf_file_version)(
-                                ((*r.shared).specs().object().grffile)(spec).cast(),
-                            );
+                            let shared = &*r.shared;
+                            // The callback resolved, so the spec has its live file.
+                            result.version = crate::newgrf::GRFFileRef::of(
+                                shared,
+                                (shared.specs().object().grffile)(spec),
+                            )
+                            .grf_version();
                         }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
@@ -1966,13 +1970,14 @@ pub extern "C" fn openttd_rust_object_scope_init(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_file(spec: *const Spec) -> *const std::ffi::c_void {
+pub unsafe extern "C" fn openttd_rust_object_file(
+    spec: *const Spec,
+) -> *const crate::newgrf::GRFFile {
     unsafe {
         ((*resolver_services(invocation_services()).shared)
             .specs()
             .object()
             .grffile)(spec)
-        .cast()
     }
 }
 #[unsafe(no_mangle)]

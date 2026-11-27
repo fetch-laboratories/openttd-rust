@@ -882,7 +882,7 @@ pub(crate) unsafe fn store_psa(
 
         /* Create storage on first modification. */
         // SAFETY: a valid industry's owner and spec are live.
-        let indsp = unsafe { &*get_industry_spec(IndustryType((*c.owner).metadata.kind)) };
+        let indsp = unsafe { &*get_industry_spec(super::industry_type(c.owner)) };
         crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
         let psa = PersistentStorageRef::new(
             storage,

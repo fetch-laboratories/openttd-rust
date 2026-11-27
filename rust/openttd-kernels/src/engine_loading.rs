@@ -846,7 +846,9 @@ pub(crate) fn get_current_grf_override<'a>(
     s: &'a Services,
     file: crate::newgrf::GRFFileRef<'_>,
 ) -> Option<crate::newgrf::GRFFileRef<'a>> {
-    let found = unsafe { &*OVERRIDES.get() }.get(&file.grfid()).copied()?;
+    let grfid = file.grfid();
+    // SAFETY: game state, under the mutex; the borrow ends with the lookup.
+    let found = unsafe { &*OVERRIDES.get() }.get(&grfid).copied()?;
     // SAFETY: `GetFileByGRFID` returns a live file or null.
     unsafe { crate::newgrf::GRFFileRef::new(&*s.shared, (s.find_file)(found).cast()) }
 }
