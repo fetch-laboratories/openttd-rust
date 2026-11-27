@@ -575,6 +575,7 @@ class RunTests(unittest.TestCase):
                 verdicts, took, saved, lines = self.stopping_run(root, slow, jobs)
                 self.assertEqual(verdicts, ([rust], ["Sibling", "Queued"]))
                 self.assertFalse((root / "queued ran").exists())
+                self.assertFalse((root / "03.log").exists())  # no log, no start
                 self.assertLess(took, preflight.STOP_SECONDS + 5)
                 self.assertEqual((saved["Sibling"], saved["Queued"]), (90.0, 5.0))
                 self.assertIn(rust, saved)
@@ -616,6 +617,40 @@ class RunTests(unittest.TestCase):
         while Path(f"/proc/{pid}").exists() and "Z" not in self.state(pid):
             self.assertLess(time.monotonic(), deadline, "the detached sleep survived")
             time.sleep(0.05)
+
+    def test_a_stop_ends_a_process_started_in_its_own_session_while_stopping(
+        self,
+    ) -> None:
+        """A step that starts a detached process when terminated."""
+        detach = (
+            "import signal, subprocess, sys, time\n"
+            "def detach(*_):\n"
+            "    child = subprocess.Popen(['sleep', '60'], start_new_session=True)\n"
+            "    open(sys.argv[1] + ' pid', 'w').write(str(child.pid))\n"
+            "    sys.exit(1)\n"
+            "signal.signal(signal.SIGTERM, detach)\n"
+            "open(sys.argv[1], 'w').close()\n"
+            "time.sleep(60)\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="pre flight ") as directory:
+            root = Path(directory)
+            sibling = [sys.executable, "-c", detach]
+            verdicts, _, _, _ = self.stopping_run(root, sibling, 2)
+            pid = int((root / "sibling started pid").read_text())
+        self.assertEqual(verdicts.stopped, ["Sibling", "Queued"])
+        self.assertFalse(Path(f"/proc/{pid}").exists(), "the detached sleep survived")
+
+    def test_a_step_that_failed_before_the_rust_checks_keeps_its_failure(
+        self,
+    ) -> None:
+        failing = [*preflight.SHELL, 'touch "$1"; exit 23', "sh"]
+        with tempfile.TemporaryDirectory(prefix="pre flight ") as directory:
+            verdicts, _, saved, lines = self.stopping_run(Path(directory), failing, 2)
+        # Sibling's worker takes Queued before the Rust checks fail.
+        self.assertEqual(verdicts.failed, ["Sibling", preflight.RUST_CHECKS])
+        self.assertNotIn("Sibling", verdicts.stopped)
+        self.assertIn("exit 23", lines)
+        self.assertLess(saved["Sibling"], 90.0)
 
     @staticmethod
     def state(pid: int) -> str:

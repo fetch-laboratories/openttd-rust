@@ -14,6 +14,8 @@ records no stamp.
 """
 
 import argparse
+import contextlib
+import ctypes
 import datetime
 import json
 import os
@@ -28,7 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, NamedTuple, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 import preflight_stamp
 import quick_workflow
@@ -80,6 +82,11 @@ RUNS = "preflight/runs.jsonl"
 # Guards printing and the set of running step processes.
 PRINTING = threading.Lock()
 ACTIVE: set[subprocess.Popen[bytes]] = set()
+# The running steps a stop selected; a step is stopped only if it is in here.
+CANCELLED: set[subprocess.Popen[bytes]] = set()
+# prctl(2): orphaned descendants become this process's children, so a stop
+# reaches the ones a step started in sessions of their own.
+PR_SET_CHILD_SUBREAPER = 36
 # Seconds a terminated step has to exit before it is killed.
 STOP_SECONDS = 5
 INF = float("inf")
@@ -233,28 +240,33 @@ def run(step: Step, env: dict[str, str], log: Path) -> bool:
     return timed(step, env, log).passed
 
 
-def timed(step: Step, env: dict[str, str], log: Path) -> Outcome:
+def timed(step: Step, env: dict[str, str], log: Path, gate: bool = False) -> Outcome:
     """Run one step into its log; print its start, and its result in one block.
 
-    A step that exits non-zero while the run is stopping was stopped, and is
-    printed and counted so; one that exits zero then passed."""
-    with PRINTING:
-        print(f"--> {step.name}", flush=True)
+    A step that a stop selected and that exits non-zero was stopped; it is
+    printed and counted so. A step that a stop finds about to start does not
+    start. When a gate step fails, the run is marked as stopping before its
+    result prints."""
     started = time.monotonic()
-    with log.open("w") as output:
-        process = launch(step, env, output)
-        try:
-            # A stop signal held back during the launch arrives here.
-            unblock()
-            code = process.wait()
-        except BaseException:
-            stop([process])
-            raise
-        finally:
-            with PRINTING:
-                ACTIVE.discard(process)
+    process = launch(step, env, log)
+    if process is None:
+        return Outcome(False, 0.0, stopped=True)
+    try:
+        # A stop signal held back during the launch arrives here.
+        unblock()
+        code = process.wait()
+    except BaseException:
+        stop([process])
+        raise
+    finally:
+        with PRINTING:
+            ACTIVE.discard(process)
+            cancelled = process in CANCELLED
+            CANCELLED.discard(process)
+            if gate and process.returncode:
+                STOPPING.set()
     elapsed = time.monotonic() - started
-    if code and STOPPING.is_set():
+    if code and cancelled:
         with PRINTING:
             print(f"stopped {elapsed:.0f}s {step.name}", flush=True)
         return Outcome(False, elapsed, stopped=True)
@@ -270,32 +282,38 @@ def timed(step: Step, env: dict[str, str], log: Path) -> Outcome:
     return Outcome(code == 0, elapsed)
 
 
-def launch(step: Step, env: dict[str, str], output: IO[str]) -> subprocess.Popen[bytes]:
-    """Start a step in its own process group, so stop() reaches its children,
-    and register it before any stop can miss it.
+def launch(
+    step: Step, env: dict[str, str], log: Path
+) -> subprocess.Popen[bytes] | None:
+    """Print a step's start and start it in its own process group, so stop()
+    reaches its children, registered before any stop can miss it.
 
-    On the main thread the stop signals wait until the caller unblocks them; on
-    a worker, a stop that began during the launch stops the step at once.
+    On a worker, the check for a stop, the start and the registration hold the
+    print lock, so a step a stop finds about to start never starts: there is no
+    process, log or start line, and the result is None. On the main thread the
+    stop signals wait until the caller unblocks them.
     """
-    if on_main_thread():
+    main = on_main_thread()
+    if main:
         signal.pthread_sigmask(signal.SIG_BLOCK, STOPS_AND_INT)
     try:
-        process = subprocess.Popen(
-            step.command,
-            cwd=migration.ROOT,
-            env=env | step.env,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        with PRINTING:
+            if STOPPING.is_set() and not main:
+                return None
+            print(f"--> {step.name}", flush=True)
+            with log.open("w") as output:
+                process = subprocess.Popen(
+                    step.command,
+                    cwd=migration.ROOT,
+                    env=env | step.env,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            ACTIVE.add(process)
     except BaseException:
         unblock()
         raise
-    with PRINTING:
-        ACTIVE.add(process)
-        stopping = STOPPING.is_set() and not on_main_thread()
-    if stopping:
-        stop([process])
     return process
 
 
@@ -318,39 +336,10 @@ def signal_group(process: subprocess.Popen[bytes], number: int) -> None:
         pass
 
 
-def descendants(pid: int) -> list[int]:
-    """Every process below pid, read from /proc: a step's tests can start
-    processes in sessions of their own, which its process group misses."""
-    children: dict[int, list[int]] = {}
-    for entry in Path("/proc").glob("[0-9]*"):
-        try:
-            parent = int((entry / "stat").read_text().rsplit(")", 1)[1].split()[1])
-        except (OSError, IndexError, ValueError):
-            continue
-        children.setdefault(parent, []).append(int(entry.name))
-    found, unread = [], [pid]
-    while unread:
-        below = children.get(unread.pop(), [])
-        found += below
-        unread += below
-    return found
-
-
-def signal_each(pids: list[int], number: int) -> None:
-    for pid in pids:
-        try:
-            os.kill(pid, number)
-        except ProcessLookupError:
-            pass
-
-
 def stop(processes: list[subprocess.Popen[bytes]]) -> None:
-    """Terminate the given steps' process groups and every process below them,
-    and reap the steps, killing stragglers."""
-    below = [pid for p in processes if p.pid > 0 for pid in descendants(p.pid)]
+    """Terminate the given steps' process groups and reap them, killing stragglers."""
     for process in processes:
         signal_group(process, signal.SIGTERM)
-    signal_each(below, signal.SIGTERM)
     deadline = time.monotonic() + STOP_SECONDS
     for process in processes:
         try:
@@ -359,7 +348,42 @@ def stop(processes: list[subprocess.Popen[bytes]]) -> None:
             pass
         signal_group(process, signal.SIGKILL)
         process.wait()
-    signal_each(below, signal.SIGKILL)
+
+
+def adopt_orphans() -> None:
+    """Become the parent of the steps' orphaned descendants, where Linux can."""
+    try:
+        ctypes.CDLL(None).prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
+    except (OSError, AttributeError):
+        pass
+
+
+def children() -> list[int]:
+    """This process's child processes, read from /proc; none elsewhere."""
+    found = []
+    for entry in Path("/proc").glob("[0-9]*"):
+        try:
+            parent = int((entry / "stat").read_text().rsplit(")", 1)[1].split()[1])
+        except (OSError, IndexError, ValueError):
+            continue
+        if parent == os.getpid():
+            found.append(int(entry.name))
+    return found
+
+
+def end_orphans() -> None:
+    """Kill and reap every child left once the steps have been reaped: the
+    orphans adopt_orphans gave this process, and theirs in turn. A child is
+    not reaped until here, so its process ID cannot have been reused."""
+    for _ in range(100):
+        orphans = children()
+        if not orphans:
+            return
+        for pid in orphans:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+            with contextlib.suppress(ChildProcessError):
+                os.waitpid(pid, 0)
 
 
 def timings_path() -> Path:
@@ -500,14 +524,17 @@ class Verdicts(NamedTuple):
 
 
 def halt(pool: ThreadPoolExecutor) -> None:
-    """Cancel the queued steps and terminate the running ones."""
+    """Cancel the queued steps, terminate the running ones and end what they
+    left running."""
     with PRINTING:
         STOPPING.set()
         running = list(ACTIVE)
+        CANCELLED.update(running)
     pool.shutdown(wait=False, cancel_futures=True)
     stop(running)
-    # A step still launching stops itself on STOPPING; wait for it.
+    # No step starts once STOPPING is set; wait for the workers to return.
     pool.shutdown()
+    end_orphans()
 
 
 def run_steps(
@@ -524,8 +551,8 @@ def run_steps(
     unique. Each step keeps its workflow number for its log. A step with no
     recorded time starts first, since it may be the longest. On an interrupt,
     queued steps are cancelled and running ones terminated. So they are when
-    the Rust checks fail, unless keep_going: their worker marks the run as
-    stopping before it takes another step, so no queued step starts after.
+    the Rust checks fail, unless keep_going: the run is marked as stopping
+    before their result prints, and no step starts after that.
     """
     last = last_timings()
     order = sorted(
@@ -534,16 +561,12 @@ def run_steps(
     )
     gate = bool(steps) and steps[order[0]].name == RUST_CHECKS and not keep_going
 
-    def job(index: int) -> Outcome | None:
-        if STOPPING.is_set():
-            return None
-        outcome = timed(steps[index], env, logs / f"{index + 1:02}.log")
-        if gate and index == order[0] and not outcome.passed:
-            with PRINTING:
-                STOPPING.set()
-        return outcome
+    def job(index: int) -> Outcome:
+        log = logs / f"{index + 1:02}.log"
+        return timed(steps[index], env, log, gate and index == order[0])
 
     STOPPING.clear()
+    adopt_orphans()
     pool = ThreadPoolExecutor(max(1, jobs))
     try:
         futures = {index: pool.submit(job, index) for index in order}
