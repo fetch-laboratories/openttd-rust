@@ -564,11 +564,14 @@ pub(crate) fn exchange_services(s: *const Services) -> *const Services {
 }
 
 /// The handle of a file an FFI entry or `_raw` adapter receives, or `None` for the null file
-/// the original tests for.
+/// the original tests for. A null file resolves no table, as the original's test reads none.
 #[allow(unsafe_code, reason = "the caller's live file")]
 fn grf_file(file: Handle) -> Option<GRFFileRef<'static>> {
+    if file.is_null() {
+        return None;
+    }
     // SAFETY: Each FFI entry and `_raw` adapter receives a null or live `GRFFile` (its callers'
-    // contract).
+    // contract), and this one is not null.
     unsafe { GRFFileRef::new(services().shared(), file.cast::<GRFFile>()) }
 }
 
