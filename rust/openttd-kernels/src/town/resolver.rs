@@ -1181,7 +1181,7 @@ mod tests {
         );
         PSA_LIST.with(|l| l.borrow_mut().push(foreign));
         set_register(0x100, -1);
-        store(&own_file, false, 0, 0);
+        store(&own_file, false, 256, 0);
         assert_eq!(
             fixture::created(),
             [(own, GrfSpecFeature::GSF_FAKE_TOWNS.0, 0x0304)]

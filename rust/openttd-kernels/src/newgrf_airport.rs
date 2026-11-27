@@ -807,8 +807,9 @@ mod tests {
 
     /// `AirportScopeResolver::StorePSA`: no station stores nothing and reads no storage;
     /// a zero value creates none; the first other value creates the storage with the
-    /// file's GRFID, or 0 without a file, `GSF_AIRPORTS` and the airport's tile, publishes
-    /// it in `airport.psa` and stores into it; a later value goes to that storage.
+    /// file's GRFID, or 0 without a file, `GSF_AIRPORTS` and the airport's tile and
+    /// publishes it in `airport.psa`, even at a position past the array, which stores
+    /// nothing; a later value goes to that storage.
     #[test]
     #[allow(unsafe_code, reason = "stand-in station and file in an isolated child")]
     fn store_psa_creates_the_storage_on_the_first_nonzero_value() {
@@ -846,11 +847,12 @@ mod tests {
         unsafe { store_psa(&s, st, file, 0, 0) };
         assert_eq!((PSA_READS.get(), PSA.get()), (1, ptr::null_mut()));
         assert_eq!(fixture::created(), []);
-        unsafe { store_psa(&s, st, ptr::null(), 255, 7) };
+        unsafe { store_psa(&s, st, ptr::null(), 256, 7) };
         assert_eq!(
             fixture::created(),
             [(0, GrfSpecFeature::GSF_AIRPORTS.0, 0x0506)]
         );
+        assert!(!PSA.get().is_null());
         PSA.set(ptr::null_mut());
         unsafe { store_psa(&s, st, file, 255, 393) };
         assert_eq!(
