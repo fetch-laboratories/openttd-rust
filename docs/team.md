@@ -20,9 +20,9 @@ At most two implementers exist at once ([ADR 0049](adr/0049-two-implementers-wai
 
 ## Spawning
 
-- Root starts each planner with this fixed message:
+- Root starts each planner with this fixed message, and adds only facts the entry and the docs do not hold, never repeating rules from the docs:
   > Plan the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/planner-brief.md`. You are <name>, on <model> at <effort> effort. Root's thread is <thread ID>.
-- Root starts each implementer with this fixed message, and adds only facts the plan and the docs do not hold, such as a base change since the plan was written:
+- Root starts each implementer with this fixed message, and adds only facts the plan and the docs do not hold, such as a base change since the plan was written, never repeating rules from the docs:
   > Implement the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/implementer-brief.md`. You are <name>, on <model> at <effort> effort. Complete the whole task. Root's thread is <thread ID>.
 - Root, a steering review or a navigation review starts a [fathom](skills/fathom/SKILL.md) agent for a case as a thread of its own and does not wait on it: `t3_thread_launch` with the role table's model and effort as `modelSelection`, `workspaceStrategy: {type: "root"}`, a title that names the case, a stable `clientRequestId` and the prompt `/fathom <case issue URL>`.
 - Spawn a fresh agent named for each task; its name is its attribution.
