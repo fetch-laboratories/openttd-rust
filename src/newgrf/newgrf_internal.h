@@ -89,7 +89,6 @@ extern GrfProcessingState _cur_gps;
 extern GrfMiscBits _misc_grf_features;
 
 void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid);
-GRFFile *GetCurrentGRFOverride();
 
 void SkipBadgeList(ByteReader &buf);
 

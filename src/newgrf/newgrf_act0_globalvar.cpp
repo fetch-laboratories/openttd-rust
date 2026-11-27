@@ -31,6 +31,7 @@
 #include "table/strings.h"
 
 #include "../rust/newgrf_global_ffi.h"
+#include "../rust/engine_loading_ffi.h"
 #include "../rust/newgrf_translation_ffi.h"
 #include "../rust/services_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
@@ -59,7 +60,7 @@ static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &
 		.reserve = [](OpenTTDTranslationTable *table, uint32_t last) noexcept { reinterpret_cast<Table *>(table)->reserve(last); },
 		.push_back = [](OpenTTDTranslationTable *table, uint32_t label) noexcept { reinterpret_cast<Table *>(table)->push_back(T(label)); },
 		.assign = [](OpenTTDTranslationTable *table, const OpenTTDTranslationTable *source) noexcept { *reinterpret_cast<Table *>(table) = *reinterpret_cast<const Table *>(source); },
-		.get_current_grf_override = []() noexcept { return GetCurrentGRFOverride(); },
+		.engine_loading = &GetRustEngineLoadingServices(),
 	};
 	int32_t result = openttd_rust_load_translation(&services, _cur_gps.grffile, first, last, &buf, name.data(), name.size());
 	if (result < 0) RustGRFRethrowReadError();

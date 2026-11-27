@@ -36,12 +36,12 @@ pub struct Services {
     push_back: extern "C" fn(*mut TranslationTable, u32),
     /// `override_table = translation_table`.
     assign: extern "C" fn(*mut TranslationTable, *const TranslationTable),
-    /// `GetCurrentGRFOverride()`.
-    get_current_grf_override: extern "C" fn() -> *mut GRFFile,
+    /// The engine loader, which holds the GRF overrides.
+    engine_loading: *const crate::engine_loading::Services,
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTranslationServices" ["engine"] => Services { reader, shared, gettable, clear, reserve, push_back, assign, get_current_grf_override };
+    "OpenTTDTranslationServices" ["engine"] => Services { reader, shared, gettable, clear, reserve, push_back, assign, engine_loading };
 }
 
 /// Load a cargo- or railtype-translation table.
@@ -77,7 +77,7 @@ fn load_translation_table(
         (s.push_back)(translation_table, buf.read_dword()?.swap_bytes());
     }
 
-    let grf_override = s.get_current_grf_override();
+    let grf_override = s.get_current_grf_override(file);
     if let Some(grf_override) = grf_override {
         /* GRF override is present, copy the translation table to the overridden GRF as well. */
         grf_msg!(
@@ -104,10 +104,10 @@ impl Services {
         unsafe { &*self.shared }
     }
 
-    /// `GetCurrentGRFOverride()`, or `None` without an override.
-    fn get_current_grf_override(&self) -> Option<GRFFileRef<'_>> {
-        // SAFETY: `GetCurrentGRFOverride` returns a live file or null.
-        unsafe { GRFFileRef::new(self.shared(), (self.get_current_grf_override)()) }
+    /// `GetCurrentGRFOverride()` for `file`, `_cur_gps.grffile`.
+    fn get_current_grf_override(&self, file: GRFFileRef<'_>) -> Option<GRFFileRef<'_>> {
+        // SAFETY: the engine loader's table lives for the process.
+        crate::engine_loading::get_current_grf_override(unsafe { &*self.engine_loading }, file)
     }
 }
 

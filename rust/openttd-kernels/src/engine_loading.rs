@@ -839,12 +839,16 @@ pub unsafe extern "C" fn openttd_rust_engine_set_override(s: &Services, source: 
     }
     (s.override_log)(source, target);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_current_override(s: &Services, file: File) -> File {
-    let target = unsafe { &*OVERRIDES.get() }
-        .get(&(unsafe { &*s.shared }.grf_file_id)(file))
-        .copied();
-    target.map_or(ptr::null(), |target| (s.find_file)(target).cast_const())
+/// `GetCurrentGRFOverride`: get overridden GRF for current GRF if present, where `file`
+/// is `_cur_gps.grffile`.
+/// @return Overridden `GRFFile` if present, or nullptr.
+pub(crate) fn get_current_grf_override<'a>(
+    s: &'a Services,
+    file: crate::newgrf::GRFFileRef<'_>,
+) -> Option<crate::newgrf::GRFFileRef<'a>> {
+    let found = unsafe { &*OVERRIDES.get() }.get(&file.grfid()).copied()?;
+    // SAFETY: `GetFileByGRFID` returns a live file or null.
+    unsafe { crate::newgrf::GRFFileRef::new(&*s.shared, (s.find_file)(found).cast()) }
 }
 pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     let mut from = 0;
