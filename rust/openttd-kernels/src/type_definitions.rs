@@ -585,6 +585,10 @@ fn change_info_result(result: Result<ChangeInfoResult, ReadError>) -> i32 {
  * which pass the loader's reader table, its current file and its reader. */
 
 /// Shim for `RailTypeChangeInfo`.
+///
+/// # Safety
+/// `reads` and `native` are the loader's live reader table and reader, and `file` is
+/// `_cur_gps.grffile`, live while the loader reads the file's properties.
 #[allow(
     unsafe_code,
     reason = "export; the loader's live reader and current file"
@@ -606,6 +610,10 @@ pub unsafe extern "C" fn openttd_rust_rail_change(
 }
 
 /// Shim for `RailTypeReserveInfo`.
+///
+/// # Safety
+/// `reads` and `native` are the loader's live reader table and reader, and `file` is
+/// `_cur_gps.grffile`, live while the loader reads the file's properties.
 #[allow(
     unsafe_code,
     reason = "export; the loader's live reader and current file"
@@ -626,6 +634,10 @@ pub unsafe extern "C" fn openttd_rust_rail_reserve(
 }
 
 /// Shim for `RoadTypeChangeInfo`.
+///
+/// # Safety
+/// `reads` and `native` are the loader's live reader table and reader, and `file` is
+/// `_cur_gps.grffile`, live while the loader reads the file's properties.
 #[allow(
     unsafe_code,
     reason = "export; the loader's live reader and current file"
@@ -649,6 +661,10 @@ pub unsafe extern "C" fn openttd_rust_road_change(
 }
 
 /// Shim for `RoadTypeReserveInfo`.
+///
+/// # Safety
+/// `reads` and `native` are the loader's live reader table and reader, and `file` is
+/// `_cur_gps.grffile`, live while the loader reads the file's properties.
 #[allow(
     unsafe_code,
     reason = "export; the loader's live reader and current file"

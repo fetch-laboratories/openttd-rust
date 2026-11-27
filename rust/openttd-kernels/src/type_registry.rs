@@ -1191,6 +1191,9 @@ pub extern "C" fn openttd_rust_road_reverse(rt: u8, file: Handle) -> u8 {
 }
 
 /// Shim for `ConvertRailTypes`.
+///
+/// # Safety
+/// The tables are the caller's process-lifetime tables, and the map is in place.
 #[allow(
     unsafe_code,
     reason = "export and the caller's process-lifetime tables"
@@ -1206,6 +1209,9 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
 }
 
 /// Shim for `ConvertRoadTypes`.
+///
+/// # Safety
+/// The tables are the caller's process-lifetime tables, and the map is in place.
 #[allow(unsafe_code, reason = "export and the caller's process-lifetime table")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_saved_convert(shared: *const Shared, count: u32) {
