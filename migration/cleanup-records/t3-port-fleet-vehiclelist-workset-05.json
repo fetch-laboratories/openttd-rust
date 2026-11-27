@@ -964,9 +964,9 @@
     "before": 0,
     "kind": "suppression",
     "operation": "fleet::tests::vehicle",
-    "reason": "Plan #1060 part 2, Evidence: the fixture builds and reads its group and statistics owners and its vehicle record in place, or binds the native fatal-path policy.",
-    "retirement_condition": "Retires when the group pool moves to Rust (#907) and the fixture owns its records without raw places.",
-    "retiring_owner": "#907",
+    "reason": "Plan #1060 part 2, Evidence: the fixture writes a fresh vehicle record's owner, subtype and orders pointer in place before publishing it; the orders part is the receiver `Vehicle::NextShared` reads during list selection.",
+    "retirement_condition": "Retires when the vehicle pool moves to Rust (#656) and the fixture owns its vehicle records without raw places.",
+    "retiring_owner": "#656",
     "site": "rust/openttd-kernels/src/fleet/tests.rs | fn vehicle | allow unsafe_code",
     "source_contract": "`Vehicle` (src/vehicle_base.h)",
     "tool": "rust"

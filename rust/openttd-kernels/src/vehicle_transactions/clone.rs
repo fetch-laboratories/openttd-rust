@@ -218,7 +218,7 @@ unsafe fn cmd_clone_vehicle(
     v = original;
     let mut w: *mut ();
     let mut front: *mut () = ptr::null_mut();
-    let mut rear: *mut () = ptr::null_mut();
+    let mut rear: Option<crate::vehicle::VehicleRef> = None;
     let mut new_id = invalid;
     loop {
         /* we build the rear ends of multiheaded trains with the front ones */
@@ -319,7 +319,8 @@ unsafe fn cmd_clone_vehicle(
                             flags,
                             super::rail::CmdMoveRailVehicle {
                                 src_veh: new.index(b.groups.vehicles.newgrf()),
-                                dest_veh: crate::fleet::record(b.groups, rear)
+                                dest_veh: rear
+                                    .unwrap_or_else(|| crate::services_assert::not_reached())
                                     .index(b.groups.vehicles.newgrf()),
                                 move_chain: true,
                             },
@@ -342,7 +343,7 @@ unsafe fn cmd_clone_vehicle(
                     front = w;
                     (s.copy_service)(v, w);
                 }
-                rear = w; // trains needs to know the last car in the train, so they can add more in next loop
+                rear = Some(new); // trains needs to know the last car in the train, so they can add more in next loop
             }
         }
         if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN {

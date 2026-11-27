@@ -290,17 +290,13 @@ unsafe fn direct_refit(
     w: &Services,
     out: *mut (),
     temporary: *mut (),
-    v: *mut (),
+    veh_id: crate::vehicle_type::VehicleID,
     cargo: u8,
     subtype: u8,
 ) {
     let s = (w.refit_services)();
     let b = s.common.base;
-    let id = {
-        crate::fleet::record(b.groups, v)
-            .index(b.groups.vehicles.newgrf())
-            .0
-    };
+    let id = veh_id.0;
     crate::command::nested(
         b.commands,
         b.shared,
@@ -672,12 +668,19 @@ unsafe fn build(
     if cargo != NO_REFIT {
         let subtype = unsafe { (w.subtype)(old, new, cargo) };
         unsafe {
-            direct_refit(w, costs.temporary, costs.copy, new, cargo, subtype);
+            direct_refit(
+                w,
+                costs.temporary,
+                costs.copy,
+                new_record.index(gw.vehicles.newgrf()),
+                cargo,
+                subtype,
+            );
             (w.cost_add)(cost, costs.temporary);
         }
         check!(w, unsafe { (w.success)(cost) });
     }
-    if new_record.vehicle_type_raw() == 0
+    if new_record.vehicle_type() == crate::vehicle_type::VehicleType::TRAIN
         && crate::train::Handle::from_vehicle(unsafe {
             vehicle_ref_for_build(old, (w.common)().vehicles)
         })
