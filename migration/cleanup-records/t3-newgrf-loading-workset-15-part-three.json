@@ -478,5 +478,17 @@
   "site": "rust/openttd-kernels/src/town/resolver.rs | mod tests > fn store_psa_and_read_go_to_the_storage_of_the_grfid | allow unsafe_code",
   "source_contract": "`TownScopeResolver::StorePSA`, `TownScopeResolver::GetVariable` (src/newgrf_town.cpp)",
   "tool": "rust"
+ },
+ {
+  "after": 1,
+  "before": 0,
+  "kind": "suppression",
+  "operation": "newgrf_specs::AnimationServices",
+  "reason": "Plan #1064 part 3 decision 7: each store of the animation table takes its member's name (`set_frames` for `animation.frames`, as `set_speed`, `set_status` and `set_triggers`), so every field shares the `set_` prefix; the allow is scoped to the item instead of the module.",
+  "retirement_condition": "Retires when the spec records with `AnimationInfo` move to Rust and the animation members are stored in place.",
+  "retiring_owner": "#669",
+  "site": "rust/openttd-kernels/src/newgrf_specs.rs | struct AnimationServices | allow clippy::struct_field_names",
+  "source_contract": "`AnimationInfo` (src/newgrf_animation_type.h)",
+  "tool": "rust"
  }
 ]
