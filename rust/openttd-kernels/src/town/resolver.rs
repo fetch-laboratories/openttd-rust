@@ -1174,7 +1174,11 @@ mod tests {
         assert_eq!(count(), 0);
 
         // An existing storage of another file stays untouched.
-        let foreign = fixture::storage(other, GrfSpecFeature::GSF_FAKE_TOWNS.0, 0);
+        let foreign = fixture::storage(
+            other,
+            GrfSpecFeature::GSF_FAKE_TOWNS.0,
+            crate::tile_type::TileIndex(0),
+        );
         PSA_LIST.with(|l| l.borrow_mut().push(foreign));
         set_register(0x100, -1);
         store(&own_file, false, 0, 0);

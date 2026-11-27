@@ -15,6 +15,7 @@ use crate::game_state::GameState;
 use crate::services_assert;
 use std::collections::BTreeMap;
 use std::ffi::c_void;
+use std::ptr::NonNull;
 
 /// Mode switches to the behaviour of persistent storage array.
 #[repr(transparent)]
@@ -299,7 +300,7 @@ pub fn switch_mode(mode: PersistentStorageMode, ignore_prev_mode: bool) {
 /// A `PersistentStorage`, as its array. A leaf that reads a storage member returns the
 /// array; one that stores a storage takes the shell, which the handle reads from it.
 #[derive(Clone, Copy)]
-pub(crate) struct PersistentStorageRef(*mut PersistentStorageArray<256>);
+pub(crate) struct PersistentStorageRef(NonNull<PersistentStorageArray<256>>);
 #[allow(unsafe_code, reason = "field loads and leaf calls of a live storage")]
 impl PersistentStorageRef {
     /// The storage of an array a leaf returns, or `None` for a null member.
@@ -308,7 +309,7 @@ impl PersistentStorageRef {
     /// A non-null `array` is a live storage's array, which stays live while the
     /// handle is used.
     pub(crate) unsafe fn of(array: *mut PersistentStorageArray<256>) -> Option<Self> {
-        (!array.is_null()).then_some(Self(array))
+        NonNull::new(array).map(Self)
     }
 
     /// The storage of an array the original dereferences without a test, such as an
@@ -317,7 +318,8 @@ impl PersistentStorageRef {
     /// # Safety
     /// `array` is a live storage's array, which stays live while the handle is used.
     pub(crate) unsafe fn of_live(array: *mut PersistentStorageArray<256>) -> Self {
-        Self(array)
+        // SAFETY: the caller's contract: a live array is not null.
+        Self(unsafe { NonNull::new_unchecked(array) })
     }
 
     /// `new PersistentStorage(grfid, feature, tile)`.
@@ -327,7 +329,8 @@ impl PersistentStorageRef {
         feature: crate::newgrf::GrfSpecFeature,
         tile: crate::tile_type::TileIndex,
     ) -> Self {
-        Self((services.new)(grfid, feature.0, tile.0))
+        // SAFETY: `new PersistentStorage` returns its live array.
+        unsafe { Self::of_live((services.new)(grfid, feature.0, tile.0)) }
     }
 
     /// `PersistentStorage::CanAllocateItem()`.
@@ -338,25 +341,28 @@ impl PersistentStorageRef {
     /// The C++ `PersistentStorage`, as a `BasePersistentStorageArray`.
     pub(crate) fn shell(self) -> *mut c_void {
         // SAFETY: the handle's contract.
-        unsafe { (*self.0).base.shell }
+        unsafe { (*self.0.as_ptr()).base.shell }
     }
 
     /// `grfid`.
     pub(crate) fn grfid(self) -> u32 {
         // SAFETY: the handle's contract; the storage table lives for the process.
-        unsafe { ((*(*self.0).base.services).grfid)((*self.0).base.shell) }
+        unsafe {
+            let base = &raw const (*self.0.as_ptr()).base;
+            ((*(*base).services).grfid)((*base).shell)
+        }
     }
 
     /// `StoreValue(pos, value)`.
     pub(crate) fn store_value(self, pos: u32, value: i32) {
         // SAFETY: the handle's contract.
-        unsafe { PersistentStorageArray::store_value(self.0, pos, value) }
+        unsafe { PersistentStorageArray::store_value(self.0.as_ptr(), pos, value) }
     }
 
     /// `GetValue(pos)`.
     pub(crate) fn get_value(self, pos: u32) -> i32 {
         // SAFETY: the handle's contract.
-        unsafe { PersistentStorageArray::get_value(self.0, pos) }
+        unsafe { PersistentStorageArray::get_value(self.0.as_ptr(), pos) }
     }
 }
 

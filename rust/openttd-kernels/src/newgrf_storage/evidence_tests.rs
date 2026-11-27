@@ -7,6 +7,7 @@
 //! original. The shells below stand in for the C++ `PersistentStorage` records: the
 //! storage table's member leaves read them, as the C++ leaves read the real records.
 use super::*;
+use crate::tile_type::TileIndex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A C++ `BasePersistentStorageArray`'s members, which the leaves read.
@@ -14,7 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 struct Shell {
     grfid: u32,
     feature: u8,
-    tile: u32,
+    tile: TileIndex,
 }
 extern "C" fn unused_can_allocate_item() -> bool {
     unreachable!("the policy test creates no pool item")
@@ -35,7 +36,7 @@ extern "C" fn shell_feature(shell: *const c_void) -> u8 {
 #[allow(unsafe_code, reason = "a load of the test's live shell")]
 extern "C" fn shell_tile(shell: *const c_void) -> u32 {
     // SAFETY: as `shell_grfid`.
-    unsafe { (*shell.cast::<Shell>()).tile }
+    unsafe { (*shell.cast::<Shell>()).tile.0 }
 }
 static SERVICES: Services = Services {
     can_allocate_item: unused_can_allocate_item,
@@ -67,7 +68,7 @@ fn message(shell: &Shell) -> String {
         "warning: discarding persistent storage changes: Feature {}, GrfID {:08X}, Tile {}",
         shell.feature,
         shell.grfid.swap_bytes(),
-        shell.tile
+        shell.tile.0
     )
 }
 
@@ -94,12 +95,12 @@ fn store_rollback_and_ownership_policy() {
         Shell {
             grfid: 0x1234_5678,
             feature: 10,
-            tile: 7,
+            tile: TileIndex(7),
         },
         Shell {
             grfid: 0x0102_0304,
             feature: 13,
-            tile: 9,
+            tile: TileIndex(9),
         },
     ];
     let shell = |index: usize| (&raw const shells[index]).cast_mut().cast::<c_void>();
@@ -212,6 +213,7 @@ pub(crate) mod fixture {
         PersistentStorageArray, Services, Shell, openttd_rust_storage256_new, shell_feature,
         shell_grfid, shell_tile,
     };
+    use crate::tile_type::TileIndex;
     use std::cell::RefCell;
     use std::ffi::c_void;
 
@@ -229,7 +231,7 @@ pub(crate) mod fixture {
     }
     extern "C" fn new(grfid: u32, feature: u8, tile: u32) -> *mut PersistentStorageArray<256> {
         CREATED.with(|c| c.borrow_mut().push((grfid, feature, tile)));
-        storage(grfid, feature, tile)
+        storage(grfid, feature, TileIndex(tile))
     }
     /// The storage table over the stand-in records.
     pub(crate) static STORAGE: Services = Services {
@@ -240,7 +242,11 @@ pub(crate) mod fixture {
         tile: shell_tile,
     };
     /// A storage with these members, which lives for the process, as its array.
-    pub(crate) fn storage(grfid: u32, feature: u8, tile: u32) -> *mut PersistentStorageArray<256> {
+    pub(crate) fn storage(
+        grfid: u32,
+        feature: u8,
+        tile: TileIndex,
+    ) -> *mut PersistentStorageArray<256> {
         let record = Box::leak(Box::new(Record {
             shell: Shell {
                 grfid,
