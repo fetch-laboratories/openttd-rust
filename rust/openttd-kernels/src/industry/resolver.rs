@@ -867,7 +867,9 @@ pub(crate) unsafe fn store_psa(
     pos: u32,
     value: i32,
 ) {
-    if c.index() == IndustryID::INVALID {
+    // SAFETY: the catchment table lives for the process, and the industry for the call.
+    let index = unsafe { ((*(s.shared().station_catchment)()).industry_id)(c.industry.cast()) };
+    if index == IndustryID::INVALID {
         return;
     }
 
@@ -1287,6 +1289,16 @@ mod tests {
     thread_local! {
         static PSA: Cell<*mut PersistentStorageArray<256>> = const { Cell::new(ptr::null_mut()) };
         static PSA_READS: Cell<usize> = const { Cell::new(0) };
+        /// The live `Industry::index`.
+        static INDEX: Cell<IndustryID> = const { Cell::new(IndustryID(4)) };
+    }
+    extern "C" fn industry_id(_: *mut crate::industry::tile::ShellHandle) -> IndustryID {
+        INDEX.get()
+    }
+    static CATCHMENT: std::sync::atomic::AtomicPtr<crate::station::CatchmentServices> =
+        std::sync::atomic::AtomicPtr::new(ptr::null_mut());
+    extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
+        CATCHMENT.load(Ordering::SeqCst)
     }
     extern "C" fn psa(_: *mut c_void) -> *mut PersistentStorageArray<256> {
         PSA_READS.set(PSA_READS.get() + 1);
@@ -1302,10 +1314,11 @@ mod tests {
         }
     }
 
-    /// `IndustriesScopeResolver::StorePSA`: an industry with the invalid index stores
-    /// nothing and reads no storage; a zero value creates none; the first other value
-    /// creates the storage with the spec's GRFID, `GSF_INDUSTRIES` and the industry's
-    /// tile, publishes it in `psa` and stores into it; a later value goes to that storage.
+    /// `IndustriesScopeResolver::StorePSA`: an industry whose live index is invalid stores
+    /// nothing and reads no storage, whatever index its scope captured; a zero value
+    /// creates none; the first other value creates the storage with the spec's GRFID,
+    /// `GSF_INDUSTRIES` and the industry's tile and publishes it in `psa`, even at a
+    /// position past the array, which stores nothing; a later value goes to that storage.
     #[test]
     #[allow(
         unsafe_code,
@@ -1324,8 +1337,19 @@ mod tests {
             (*owner).metadata.tile = 0x0102;
             (*get_industry_spec(IndustryType(3))).grf_prop.grfid = 0x4142_4344;
         }
+        CATCHMENT.store(
+            Box::leak(Box::new(crate::station::CatchmentServices {
+                industry_id,
+                ..crate::test_tables::CATCHMENT
+            })),
+            Ordering::SeqCst,
+        );
+        let shared = Box::leak(Box::new(crate::services::Services {
+            station_catchment,
+            ..crate::test_tables::SHARED
+        }));
         let s = ResolverServices {
-            shared: ptr::null(),
+            shared,
             lifecycle: ptr::null(),
             tile: ptr::null(),
             get: unreachable1,
@@ -1356,20 +1380,25 @@ mod tests {
         };
         // SAFETY (each call): the context's owner lives for the test, and each storage
         // the fixture creates lives for the process.
-        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID::INVALID), 15, 7) };
+        // A scope that captured a valid index, of an industry whose index is now invalid.
+        INDEX.set(IndustryID::INVALID);
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 7) };
         assert_eq!(PSA_READS.get(), 0);
+        INDEX.set(IndustryID(4));
         unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 0) };
         assert_eq!((PSA_READS.get(), PSA.get()), (1, ptr::null_mut()));
         assert_eq!(fixture::created(), []);
-        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 7) };
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 256, 7) };
         assert_eq!(fixture::created(), [(0x4142_4344, 10, 0x0102)]);
+        assert!(!PSA.get().is_null());
         // SAFETY: the storage just created.
         let get =
             |pos| unsafe { crate::newgrf_storage::openttd_rust_storage256_get(PSA.get(), pos) };
-        assert_eq!(get(15), 7);
+        assert_eq!(get(256), 0);
+        unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 7) };
         unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 16, -1) };
         assert_eq!(fixture::created(), []);
-        assert_eq!((get(15), get(16), PSA_READS.get()), (7, -1, 3));
+        assert_eq!((get(15), get(16), PSA_READS.get()), (7, -1, 4));
         assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
     }
 }
