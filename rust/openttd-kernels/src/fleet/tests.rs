@@ -455,10 +455,38 @@ impl Drop for World {
     }
 }
 
-/// Every group's members, name and children, and every statistics record's members.
+/// A statistics record's members and engine counts.
+fn statistics(s: &Stats) -> String {
+    let f = s.fields;
+    format!(
+        "{} {} {} {} {} {} {:?}",
+        f.profit_last_year,
+        f.profit_last_year_min_age,
+        f.num_vehicle,
+        f.num_vehicle_min_age,
+        f.autoreplace_defined,
+        f.autoreplace_finished,
+        s.num_engines
+    )
+}
+
+/// Every group's members, name, children and statistics, the company's `group_all` and
+/// `group_default` statistics, and its renewal list head.
 #[allow(unsafe_code, reason = "the fixture's owners, built and read in place")]
 fn snapshot() -> Vec<String> {
     let mut out = Vec::new();
+    for (i, stats) in COMPANY_STATS
+        .with_borrow(Vec::clone)
+        .into_iter()
+        .enumerate()
+    {
+        // SAFETY: The fixture's live company statistics owners, borrowed for the copy only.
+        out.push(format!(
+            "company {i} {}",
+            statistics(unsafe { &*stats.cast::<Stats>() })
+        ));
+    }
+    out.push(format!("renewals {:?}", RENEWALS.get()));
     for (i, slot) in POOL.with_borrow(Vec::clone).into_iter().enumerate() {
         let Some(slot) = slot else {
             out.push(format!("{i} free"));
@@ -482,7 +510,7 @@ fn snapshot() -> Vec<String> {
             f.number,
             g.name,
             g.children,
-            s.fields.num_vehicle
+            statistics(s)
         ));
     }
     out
@@ -641,7 +669,7 @@ fn group_command_windows() {
                 ),
             ])
         );
-        assert_eq!(snapshot()[0] == "0 free", executed);
+        assert_eq!(snapshot().iter().any(|l| l == "0 free"), executed);
     }
 }
 
@@ -747,13 +775,20 @@ fn group_command_guards() {
     let name32: &'static [u8] = &[b'a'; 32];
     // Each row: its name, its command, whether the pool is full, the result and, where it
     // shows the guards' order, the slot calls.
-    // `VehicleListIdentifier{}`, the shared orders of the absent vehicle 9, and company 0's ships.
+    // `VehicleListIdentifier{}`, the shared orders of the absent vehicle 9 and of vehicle 0,
+    // and company 0's ships.
     let no_list = VehicleListIdentifier::default();
     let shared_list = VehicleListIdentifier {
         r#type: VehicleListType::VL_SHARED_ORDERS,
         vtype: road,
         company: CompanyID(0),
         index: 9,
+    };
+    let own_list = VehicleListIdentifier {
+        r#type: VehicleListType::VL_SHARED_ORDERS,
+        vtype: road,
+        company: CompanyID(0),
+        index: 0,
     };
     let ship_list = VehicleListIdentifier {
         r#type: VehicleListType::VL_STANDARD,
@@ -921,6 +956,14 @@ fn group_command_guards() {
             Command::Add(GroupID::DEFAULT_GROUP, VehicleID::INVALID, ship_list),
             false,
             ERROR,
+            None,
+        ),
+        // A command that ignored the list and looked up the invalid vehicle would fail.
+        (
+            "add shared list",
+            Command::Add(GroupID(0), VehicleID::INVALID, own_list),
+            false,
+            None,
             None,
         ),
         (
@@ -1109,10 +1152,26 @@ fn group_command_guards() {
 #[allow(unsafe_code, reason = "the fixture's owners, built and read in place")]
 fn vehicle(kind: VehicleType, subtype: u8) -> VehicleRef {
     let record = crate::vehicle_base::openttd_rust_vehicle_record_new(ptr::null_mut(), kind);
+    // Its orders part, alone in its shared order chain.
+    let orders = Box::leak(Box::new(crate::orders::VehicleOrders {
+        current_order: std::mem::MaybeUninit::new(crate::orders::Order {
+            r#type: crate::order_type::OrderType::OT_NOTHING.0,
+            flags: 0,
+            dest: 0,
+            refit_cargo: crate::cargo_type::CARGO_NO_REFIT,
+            wait_time: 0,
+            travel_time: 0,
+            max_speed: u16::MAX,
+        }),
+        orders: ptr::null_mut(),
+        next_shared: ptr::null_mut(),
+        previous_shared: ptr::null_mut(),
+    }));
     // SAFETY: The fresh record.
     unsafe {
         (*record).owner = CompanyID(0);
         (*record).subtype = subtype;
+        (*record).orders = orders;
     }
     VehicleRef::of(record)
 }

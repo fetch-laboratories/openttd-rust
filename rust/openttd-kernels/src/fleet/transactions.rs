@@ -193,7 +193,12 @@ unsafe fn move_vehicle(
     }
 }
 
-unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
+unsafe fn direct_build(
+    w: &Services,
+    costs: Costs,
+    old: *mut (),
+    engine: u16,
+) -> Option<crate::vehicle::VehicleRef> {
     let s = (w.build_services)();
     let b = s.refit.common.base;
     let v = unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) };
@@ -224,9 +229,8 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
             &b.groups.vehicles.orders().scheduler().pool(),
             crate::vehicle_type::VehicleID(result.id),
         )
-        .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
     } else {
-        std::ptr::null_mut()
+        None
     }
 }
 unsafe fn vehicle_ref_for_build(
@@ -656,10 +660,15 @@ unsafe fn build(
         }
         return ptr::null_mut();
     }
-    let new = unsafe { direct_build(w, costs, old, engine) };
+    let new_record = unsafe { direct_build(w, costs, old, engine) };
     if !unsafe { (w.success)(cost) } {
         return ptr::null_mut();
     }
+    /* Vehicle::Get(_new_vehicle_id) */
+    let Some(new_record) = new_record else {
+        crate::services_assert::not_reached()
+    };
+    let new: *mut () = new_record.shell().cast();
     if cargo != NO_REFIT {
         let subtype = unsafe { (w.subtype)(old, new, cargo) };
         unsafe {
@@ -668,7 +677,7 @@ unsafe fn build(
         }
         check!(w, unsafe { (w.success)(cost) });
     }
-    if crate::fleet::record(gw, new).vehicle_type_raw() == 0
+    if new_record.vehicle_type_raw() == 0
         && crate::train::Handle::from_vehicle(unsafe {
             vehicle_ref_for_build(old, (w.common)().vehicles)
         })
@@ -680,12 +689,7 @@ unsafe fn build(
                 vehicle_ref_for_build(old, (w.common)().vehicles),
             )
         }
-        && !unsafe {
-            crate::newgrf_vehicle::reverse_probability(
-                (w.common)().vehicles,
-                vehicle_ref_for_build(new, (w.common)().vehicles),
-            )
-        }
+        && !unsafe { crate::newgrf_vehicle::reverse_probability((w.common)().vehicles, new_record) }
     {
         unsafe { (w.reverse)(new) };
     }

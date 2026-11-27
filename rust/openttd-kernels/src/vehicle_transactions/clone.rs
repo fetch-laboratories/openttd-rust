@@ -185,20 +185,15 @@ unsafe fn cmd_clone_vehicle(
      * w is the car/vehicle currently being cloned
      * rear (w_rear) is the rear end of the cloned train. It's used to add more cars and is only used by trains
      */
-    unsafe {
-        b.commands
-            .ownership(temporary, crate::fleet::record(b.groups, v).owner().0, 0);
-    };
+    unsafe { b.commands.ownership(temporary, handle.owner().0, 0) };
     if !(b.cost.success)(temporary) {
         total.take(Cost(temporary, b.cost));
         return invalid;
     }
     /* Crashed trains can only be cloned before cleanup begins. */
-    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN
-        && (!crate::fleet::record(b.groups, v).is_front_engine()
-            || crate::train::Handle::from_vehicle(unsafe { super::vehicle_ref(v, c.vehicles) })
-                .crash_anim_pos()
-                >= 4400)
+    if handle.vehicle_type() == VehicleType::TRAIN
+        && (!handle.is_front_engine()
+            || crate::train::Handle::from_vehicle(handle).crash_anim_pos() >= 4400)
     {
         total.error(STR_ERROR_VEHICLE_IS_DESTROYED.0);
         return invalid;
@@ -281,11 +276,13 @@ unsafe fn cmd_clone_vehicle(
             }
             total.add_money((b.cost.money)(part));
             if flags.test(DoCommandFlag::Execute) {
-                w = crate::vehicle_base::get_asserted(
+                let Some(new) = crate::vehicle_base::get_asserted(
                     &b.groups.vehicles.orders().scheduler().pool(),
                     VehicleID(new_id),
-                )
-                .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast());
+                ) else {
+                    crate::services_assert::not_reached()
+                };
+                w = new.shell().cast();
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {
                     /* Only copy the reverse state if neither old or new vehicle implements reverse-on-build probability callback. */
                     let old_train = crate::train::Handle::from_vehicle(unsafe {
@@ -300,16 +297,9 @@ unsafe fn cmd_clone_vehicle(
                                 super::vehicle_ref(v, c.vehicles),
                             )
                         }
-                        && !unsafe {
-                            crate::newgrf_vehicle::reverse_probability(
-                                c.vehicles,
-                                super::vehicle_ref(w, c.vehicles),
-                            )
-                        }
+                        && !unsafe { crate::newgrf_vehicle::reverse_probability(c.vehicles, new) }
                     {
-                        let new_train = crate::train::Handle::from_vehicle(unsafe {
-                            super::vehicle_ref(w, c.vehicles)
-                        });
+                        let new_train = crate::train::Handle::from_vehicle(new);
                         new_train.set_flags(
                             new_train
                                 .flags()
@@ -328,16 +318,9 @@ unsafe fn cmd_clone_vehicle(
                             part,
                             flags,
                             super::rail::CmdMoveRailVehicle {
-                                src_veh: VehicleID(
-                                    crate::fleet::record(b.groups, w)
-                                        .index(b.groups.vehicles.newgrf())
-                                        .0,
-                                ),
-                                dest_veh: VehicleID(
-                                    crate::fleet::record(b.groups, rear)
-                                        .index(b.groups.vehicles.newgrf())
-                                        .0,
-                                ),
+                                src_veh: new.index(b.groups.vehicles.newgrf()),
+                                dest_veh: crate::fleet::record(b.groups, rear)
+                                    .index(b.groups.vehicles.newgrf()),
                                 move_chain: true,
                             },
                         )

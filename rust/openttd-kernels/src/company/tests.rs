@@ -3012,6 +3012,11 @@ mod evidence_tests {
         1
     }
     extern "C" fn set_unitnumber(_: crate::vehicle::VehicleRef, _: u16) {}
+    /// `_current_company`, traced: `CheckOwnership` reads it once per validation.
+    extern "C" fn traced_current() -> u8 {
+        trace(format!("current {}", CURRENT.get()));
+        CURRENT.get()
+    }
     thread_local! {
         static TAKEOVER: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
         static TAKEOVER_SETTINGS: Cell<*const crate::settings_table::Services> =
@@ -3047,6 +3052,7 @@ mod evidence_tests {
                 train: &crate::test_tables::TRAIN_LEAVES,
                 ..MOVEMENT
             }),
+            current_company: traced_current,
             ..*base.shared
         });
         let groups = leak(crate::fleet::GroupServices {
@@ -3175,17 +3181,24 @@ mod evidence_tests {
         change_ownership_of_company_items(s, &ownership(), CompanyID(1), CompanyID(0));
         let intervals: Vec<String> = traced()
             .into_iter()
-            .filter(|t| t.starts_with("interval") || t.starts_with("resolve"))
+            .filter(|t| t.starts_with("interval") || t.starts_with("current"))
             .collect();
         // Company 0's road vehicle default is 200, its percent flag set; the walk first
-        // copies both to company 1's defaults, which the command reads. Outside a command
-        // the nested call is top-level: its test pass and its execution each take the
-        // vehicle's record from the pool and resolve no shell. The custom vehicle 1 runs no
-        // command.
+        // copies both to company 1's defaults, which the command reads. The takeover reads
+        // the current company once (`current 0`) before it switches to company 1. Outside a
+        // command the nested call is top-level: its test pass and its execution each check
+        // the vehicle's ownership against the current company 1 (one `current 1` each) before
+        // the execute gate, and only the execution stores. The custom vehicle 1 and company
+        // 2's vehicle 2 run no command, so no check falls between them.
         assert_eq!(
             intervals,
             [
+                "current 0",
+                "current 1",
+                "current 1",
                 "interval 0 200 false true current 1",
+                "current 1",
+                "current 1",
                 "interval 3 200 false true current 1",
             ]
         );

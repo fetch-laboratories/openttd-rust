@@ -1378,7 +1378,6 @@ pub(crate) struct CmdAddVehicleGroup {
 
 /// `CmdAddVehicleGroup`: add a vehicle to a group. The cost of this operation or an error is
 /// written to `cost`; returns the group the vehicles were added to, or `GroupID::INVALID`.
-#[allow(unsafe_code, reason = "the scheduler's live vehicle pool descriptor")]
 pub(crate) fn cmd_add_vehicle_group(
     w: &GroupServices,
     cost: Cost<'_>,

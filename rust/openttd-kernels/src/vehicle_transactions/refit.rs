@@ -244,7 +244,7 @@ unsafe fn truncate(s: &Services, v: *mut (), cap: u16) {
 #[derive(Clone, Copy)]
 struct RefitVehicleArgs {
     /// The vehicle to refit.
-    v: *mut (),
+    v: crate::vehicle::VehicleRef,
     /// Whether to only refit this vehicle, or to check the rest of them.
     only_this: bool,
     /// Number of vehicles to refit (not counting articulated parts). Zero means the whole chain.
@@ -271,7 +271,7 @@ unsafe fn refit_vehicle(
     args: RefitVehicleArgs,
 ) -> Capacity {
     let RefitVehicleArgs {
-        mut v,
+        v: handle,
         only_this,
         num_vehicles,
         new_cargo_type,
@@ -288,20 +288,15 @@ unsafe fn refit_vehicle(
     );
     let c = s.common;
     let b = c.base;
-    (b.cost.expense_money)(
-        cost,
-        unsafe { super::vehicle_ref(v, s.common.vehicles) }
-            .get_expense_type(false)
-            .0,
-        0,
-    );
+    let mut v: *mut () = handle.shell().cast();
+    (b.cost.expense_money)(cost, handle.get_expense_type(false).0, 0);
     let mut total = Capacity::default();
     let mut mail_total = 0_u32;
     let mut transaction = Transaction::new();
     if !only {
         vehicle_set(
             s.selection,
-            unsafe { super::vehicle_ref(v, s.common.vehicles) },
+            handle,
             if count == 0 { u8::MAX } else { count },
             |id| {
                 if !transaction.0.selection.contains(&id.0) {
@@ -680,7 +675,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
             cost,
             temp,
             RefitVehicleArgs {
-                v,
+                v: record,
                 only_this,
                 num_vehicles,
                 new_cargo_type,
@@ -739,7 +734,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         if !free_wagon {
             invalidate_window_data(
                 WindowClass::WC_VEHICLE_DETAILS,
-                WindowNumber::from(VehicleID(front_handle.index(b.groups.vehicles.newgrf()).0)),
+                WindowNumber::from(front_handle.index(b.groups.vehicles.newgrf())),
                 0,
                 false,
             );
