@@ -83,7 +83,8 @@ pub struct CommandServices {
         usize,
     ) -> *mut crate::newgrf_storage::PersistentStorageArray<256>,
     /// `t->psa_list.push_back(psa)`.
-    pub psa_list_push: extern "C" fn(*mut TownHandle, *mut std::ffi::c_void),
+    pub psa_list_push:
+        extern "C" fn(*mut TownHandle, *mut crate::newgrf_storage::BasePersistentStorageArray),
     pub delete_storage: extern "C" fn(*mut TownHandle, usize),
     pub clear_storage: extern "C" fn(*mut TownHandle),
     pub assertions: bool,

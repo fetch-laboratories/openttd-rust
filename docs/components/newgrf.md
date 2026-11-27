@@ -133,5 +133,5 @@
 
 - Rust owns: `ByteReader` over the pseudo-sprite buffer of the actions Rust interprets, with `ReadExtendedByte` and `ReadVarSize` written once for it and for the view of a C++ reader; `PersistentStorageArray`'s storage, backup and bodies, the three mode flags, `_changed_storage_arrays` and `SwitchMode` with its discard message; `TemporaryStorageArray`, whose one instance, `ResolverObject::temp_store`, is in `newgrf_spritegroup.rs` behind `get_register` and `set_register`; the three `StorePSA` bodies of industries, airports and towns in their features' files; `LoadTranslationTable`.
 - C++ keeps: the `ByteReader` the unported handlers build, which Rust reads through `ByteReaderRef` until #669 ports those handlers; the `PersistentStorage` pool and the shell that holds `grfid`, `feature`, `tile` and the saver's `storage` alias; the six spec records behind the spec table; the translation vectors of `GRFFile` (#669).
-- Limits: `store_value`, `get_register` and the `StorePSA` bodies run only for a loaded NewGRF, which no retained profile loads.
-- PRs: (this pass).
+- Limits: the `PersistentStorage` pool and its shell move with #638; the C++ reader view and the translation vectors with #669.
+- PRs: #1102.

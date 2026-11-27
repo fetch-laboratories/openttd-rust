@@ -1122,12 +1122,9 @@ impl<'a> World<'a> {
                         );
                         if result.callback != CALLBACK_FAILED {
                             let r = resolver_services(self.s);
-                            result.version = ((*r.shared).grf_file_version)(((*r.shared)
-                                .specs()
-                                .object()
-                                .grffile)(
-                                spec
-                            ));
+                            result.version = ((*r.shared).grf_file_version)(
+                                ((*r.shared).specs().object().grffile)(spec).cast(),
+                            );
                         }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
@@ -1402,7 +1399,7 @@ impl World<'_> {
                             );
                             result == CALLBACK_FAILED
                                 || !(self.shared.grf_boolean_callback)(
-                                    (self.shared.specs().object().grffile)(spec),
+                                    (self.shared.specs().object().grffile)(spec).cast(),
                                     CBID_OBJECT_AUTOSLOPE,
                                     result,
                                 )
@@ -1975,6 +1972,7 @@ pub unsafe extern "C" fn openttd_rust_object_file(spec: *const Spec) -> *const s
             .specs()
             .object()
             .grffile)(spec)
+        .cast()
     }
 }
 #[unsafe(no_mangle)]

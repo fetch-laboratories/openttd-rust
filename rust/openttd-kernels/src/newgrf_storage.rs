@@ -14,7 +14,6 @@ use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::services_assert;
 use std::collections::BTreeMap;
-use std::ffi::c_void;
 use std::ptr::NonNull;
 
 /// Mode switches to the behaviour of persistent storage array.
@@ -40,28 +39,34 @@ impl PersistentStorageMode {
 /// `BasePersistentStorageArray` shell that holds an array.
 #[repr(C)]
 pub struct Services {
-    /// `PersistentStorage::CanAllocateItem()`.
-    can_allocate_item: extern "C" fn() -> bool,
+    /// `PersistentStorage::CanAllocateItem()`, 0 or 1.
+    can_allocate_item: extern "C" fn() -> u8,
     /// `new PersistentStorage(grfid, feature, tile)`: the new storage's array.
     new: extern "C" fn(u32, u8, u32) -> *mut PersistentStorageArray<256>,
     /// `BasePersistentStorageArray::grfid`.
-    grfid: extern "C" fn(*const c_void) -> u32,
+    grfid: extern "C" fn(*const BasePersistentStorageArray) -> u32,
     /// `BasePersistentStorageArray::feature`.
-    feature: extern "C" fn(*const c_void) -> u8,
+    feature: extern "C" fn(*const BasePersistentStorageArray) -> u8,
     /// `BasePersistentStorageArray::tile`.
-    tile: extern "C" fn(*const c_void) -> u32,
+    tile: extern "C" fn(*const BasePersistentStorageArray) -> u32,
 }
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStorageServices" ["storage"] => Services { can_allocate_item, new => new_storage, grfid, feature, tile };
 }
-/// `BasePersistentStorageArray`: what every array holds whatever its size, which
-/// [`PersistentStorageArray`] starts with.
+/// The C++ `BasePersistentStorageArray`, the shell that owns an array.
 #[repr(C)]
-struct BasePersistentStorageArray {
+pub struct BasePersistentStorageArray {
+    _opaque: [u8; 0],
+}
+
+/// What every array holds whatever its size, which [`PersistentStorageArray`] starts
+/// with: the part of the original's `BasePersistentStorageArray` that is not the shell.
+#[repr(C)]
+struct ArrayBase {
     /// The C++ `BasePersistentStorageArray` that owns this array. It has no original:
     /// the original's array is that object.
-    shell: *mut c_void,
+    shell: *mut BasePersistentStorageArray,
     /// The storage table, which reads the shell's members.
     services: *const Services,
 }
@@ -70,7 +75,7 @@ struct BasePersistentStorageArray {
 /// On `ClearChanges` that data is either reverted or saved.
 #[repr(C)]
 pub struct PersistentStorageArray<const SIZE: usize> {
-    base: BasePersistentStorageArray,
+    base: ArrayBase,
     /// Memory for the storage array
     storage: [i32; SIZE],
     /// Temporary memory to store previous state so it can be reverted, e.g. for command tests.
@@ -80,8 +85,8 @@ pub struct PersistentStorageArray<const SIZE: usize> {
 /// A changed array in `_changed_storage_arrays`, with its `ClearChanges`.
 #[derive(Clone, Copy)]
 struct ChangedArray {
-    array: *mut BasePersistentStorageArray,
-    clear_changes: unsafe fn(*mut BasePersistentStorageArray),
+    array: *mut ArrayBase,
+    clear_changes: unsafe fn(*mut ArrayBase),
 }
 
 /// `BasePersistentStorageArray::gameloop`.
@@ -127,9 +132,9 @@ fn add_changed_persistent_storage(storage: ChangedArray) {
 )]
 impl<const SIZE: usize> PersistentStorageArray<SIZE> {
     /// The array a shell constructs.
-    fn new(shell: *mut c_void, services: *const Services) -> Self {
+    fn new(shell: *mut BasePersistentStorageArray, services: *const Services) -> Self {
         Self {
-            base: BasePersistentStorageArray { shell, services },
+            base: ArrayBase { shell, services },
             storage: [0; SIZE],
             prev_storage: None,
         }
@@ -203,7 +208,7 @@ impl<const SIZE: usize> PersistentStorageArray<SIZE> {
     }
 
     /// [`Self::clear_changes`] of the array a changed-set entry names.
-    unsafe fn clear_changes_of(array: *mut BasePersistentStorageArray) {
+    unsafe fn clear_changes_of(array: *mut ArrayBase) {
         // SAFETY: the entry was made by `store_value` of a live array of this size,
         // which its destructor erases before it frees the array.
         unsafe { Self::clear_changes(array.cast()) }
@@ -335,11 +340,11 @@ impl PersistentStorageRef {
 
     /// `PersistentStorage::CanAllocateItem()`.
     pub(crate) fn can_allocate_item(services: &Services) -> bool {
-        (services.can_allocate_item)()
+        (services.can_allocate_item)() != 0
     }
 
     /// The C++ `PersistentStorage`, as a `BasePersistentStorageArray`.
-    pub(crate) fn shell(self) -> *mut c_void {
+    pub(crate) fn shell(self) -> *mut BasePersistentStorageArray {
         // SAFETY: the handle's contract.
         unsafe { (*self.0.as_ptr()).base.shell }
     }
@@ -429,7 +434,7 @@ impl<const SIZE: usize> TemporaryStorageArray<SIZE> {
 #[allow(unsafe_code, reason = "export; the shell's constructor")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_storage16_new(
-    shell: *mut c_void,
+    shell: *mut BasePersistentStorageArray,
     services: *const Services,
 ) -> *mut PersistentStorageArray<16> {
     Box::into_raw(Box::new(PersistentStorageArray::new(shell, services)))
@@ -498,7 +503,7 @@ pub unsafe extern "C" fn openttd_rust_storage16_clear(array: *mut PersistentStor
 #[allow(unsafe_code, reason = "export; the shell's constructor")]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_storage256_new(
-    shell: *mut c_void,
+    shell: *mut BasePersistentStorageArray,
     services: *const Services,
 ) -> *mut PersistentStorageArray<256> {
     Box::into_raw(Box::new(PersistentStorageArray::new(shell, services)))

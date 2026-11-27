@@ -54,7 +54,8 @@ pub struct Services {
     /// `st->airport.psa`.
     airport_psa: extern "C" fn(*const BaseStation) -> *mut PersistentStorageArray<256>,
     /// `st->airport.psa = psa`.
-    set_airport_psa: extern "C" fn(*mut BaseStation, *mut c_void),
+    set_airport_psa:
+        extern "C" fn(*mut BaseStation, *mut crate::newgrf_storage::BasePersistentStorageArray),
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
@@ -421,7 +422,7 @@ pub unsafe extern "C" fn openttd_rust_airport_scope(
 pub(crate) unsafe fn store_psa(
     s: &Services,
     st: *mut BaseStation,
-    grffile: *const c_void,
+    grffile: *const crate::newgrf::GRFFile,
     pos: u32,
     value: i32,
 ) {
@@ -438,7 +439,7 @@ pub(crate) unsafe fn store_psa(
         }
 
         /* Create storage on first modification. */
-        let grfid = unsafe { crate::newgrf::GRFFileRef::new(s.shared(), grffile.cast()) }
+        let grfid = unsafe { crate::newgrf::GRFFileRef::new(s.shared(), grffile) }
             .map_or(0, crate::newgrf::GRFFileRef::grfid);
         let storage = unsafe { &*s.storage };
         crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
@@ -461,7 +462,7 @@ pub(crate) unsafe fn store_psa(
 pub unsafe extern "C" fn openttd_rust_storage_airport(
     s: &Services,
     st: *mut BaseStation,
-    grffile: *const c_void,
+    grffile: *const crate::newgrf::GRFFile,
     pos: u32,
     value: i32,
 ) {
@@ -782,7 +783,10 @@ mod tests {
         PSA_READS.set(PSA_READS.get() + 1);
         PSA.get()
     }
-    extern "C" fn set_airport_psa(_: *mut BaseStation, shell: *mut c_void) {
+    extern "C" fn set_airport_psa(
+        _: *mut BaseStation,
+        shell: *mut crate::newgrf_storage::BasePersistentStorageArray,
+    ) {
         PSA.set(fixture::array_of(shell));
     }
     extern "C" fn airport_tile(_: *const BaseStation) -> u32 {
@@ -838,7 +842,7 @@ mod tests {
             ..Services::with_station_id(crate::test_tables::unreachable1)
         };
         let own = 0x3931_2345_u32;
-        let file: *const c_void = (&raw const own).cast();
+        let file: *const crate::newgrf::GRFFile = (&raw const own).cast();
         let st: *mut BaseStation = ptr::dangling_mut();
         // SAFETY (each call): the station stand-in reaches only the leaves above, and the
         // file is live.

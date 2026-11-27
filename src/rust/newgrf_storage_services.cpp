@@ -7,7 +7,7 @@
 const OpenTTDStorageServices &GetRustStorageServices() noexcept
 {
 	static const OpenTTDStorageServices services{
-		.can_allocate_item = []() noexcept { return PersistentStorage::CanAllocateItem(); },
+		.can_allocate_item = []() noexcept -> uint8_t { return PersistentStorage::CanAllocateItem(); },
 		.new_storage = [](uint32_t grfid, uint8_t feature, uint32_t tile) noexcept { return (new PersistentStorage(grfid, static_cast<GrfSpecFeature>(feature), TileIndex{tile}))->rust_storage; },
 		.grfid = [](const BasePersistentStorageArray *storage) noexcept { return storage->grfid; },
 		.feature = [](const BasePersistentStorageArray *storage) noexcept -> uint8_t { return storage->feature; },

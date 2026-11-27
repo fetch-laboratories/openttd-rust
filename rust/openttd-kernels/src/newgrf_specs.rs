@@ -90,7 +90,7 @@ pub struct SpecServices<S, T> {
     /// `badges`: borrow the native badge storage without retaining the spec.
     pub badges: extern "C" fn(*const S) -> BadgeSpan,
     /// `grf_prop.grffile`.
-    pub grffile: extern "C" fn(*const S) -> *const c_void,
+    pub grffile: extern "C" fn(*const S) -> *const crate::newgrf::GRFFile,
     /// `grf_prop.grfid`.
     pub grfid: extern "C" fn(*const S) -> u32,
     /// `grf_prop.HasGrfFile()`.
@@ -100,7 +100,7 @@ pub struct SpecServices<S, T> {
     /// Writable display name, or null for specs with no display name.
     pub name: extern "C" fn(*mut S) -> *mut u32,
     /// `grf_prop.SetGRFFile`.
-    pub set_grf_file: extern "C" fn(*mut S, *const c_void),
+    pub set_grf_file: extern "C" fn(*mut S, *const crate::newgrf::GRFFile),
     /// Store `grf_prop.local_id`.
     pub set_local_id: extern "C" fn(*mut S, u16),
     standard: *const StandardServices<S>,

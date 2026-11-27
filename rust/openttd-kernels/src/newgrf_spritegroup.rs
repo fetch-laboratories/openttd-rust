@@ -585,7 +585,7 @@ impl<'a> Invocation<'a> {
                 7 => crate::newgrf_airport::store_psa(
                     &*self.s.airport,
                     (*scope.binding.data.airport).station,
-                    self.file,
+                    self.file.cast(),
                     reg,
                     value,
                 ),

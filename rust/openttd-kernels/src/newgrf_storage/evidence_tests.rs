@@ -17,24 +17,24 @@ struct Shell {
     feature: u8,
     tile: TileIndex,
 }
-extern "C" fn unused_can_allocate_item() -> bool {
+extern "C" fn unused_can_allocate_item() -> u8 {
     unreachable!("the policy test creates no pool item")
 }
 extern "C" fn unused_new(_: u32, _: u8, _: u32) -> *mut PersistentStorageArray<256> {
     unreachable!("the policy test creates no pool item")
 }
 #[allow(unsafe_code, reason = "a load of the test's live shell")]
-extern "C" fn shell_grfid(shell: *const c_void) -> u32 {
+extern "C" fn shell_grfid(shell: *const BasePersistentStorageArray) -> u32 {
     // SAFETY: every array's shell is a live `Shell`.
     unsafe { (*shell.cast::<Shell>()).grfid }
 }
 #[allow(unsafe_code, reason = "a load of the test's live shell")]
-extern "C" fn shell_feature(shell: *const c_void) -> u8 {
+extern "C" fn shell_feature(shell: *const BasePersistentStorageArray) -> u8 {
     // SAFETY: as `shell_grfid`.
     unsafe { (*shell.cast::<Shell>()).feature }
 }
 #[allow(unsafe_code, reason = "a load of the test's live shell")]
-extern "C" fn shell_tile(shell: *const c_void) -> u32 {
+extern "C" fn shell_tile(shell: *const BasePersistentStorageArray) -> u32 {
     // SAFETY: as `shell_grfid`.
     unsafe { (*shell.cast::<Shell>()).tile.0 }
 }
@@ -103,7 +103,11 @@ fn store_rollback_and_ownership_policy() {
             tile: TileIndex(9),
         },
     ];
-    let shell = |index: usize| (&raw const shells[index]).cast_mut().cast::<c_void>();
+    let shell = |index: usize| {
+        (&raw const shells[index])
+            .cast_mut()
+            .cast::<BasePersistentStorageArray>()
+    };
     let first = openttd_rust_storage256_new(shell(0), &raw const SERVICES);
     let old = openttd_rust_storage16_new(shell(1), &raw const SERVICES);
     // SAFETY: both arrays live until their deletion below.
@@ -210,11 +214,10 @@ fn temporary_storage_key_wraps() {
 /// create storages through the storage table and store them in their records.
 pub(crate) mod fixture {
     use super::{
-        PersistentStorageArray, Services, Shell, openttd_rust_storage256_new, shell_feature,
-        shell_grfid, shell_tile,
+        BasePersistentStorageArray, PersistentStorageArray, Services, Shell,
+        openttd_rust_storage256_new, shell_feature, shell_grfid, shell_tile,
     };
     use crate::tile_type::TileIndex;
-    use std::ffi::c_void;
     use std::sync::Mutex;
 
     /// A `PersistentStorage`: its members, then the array it owns.
@@ -226,8 +229,8 @@ pub(crate) mod fixture {
     /// The members of each storage `new` created, in a process each test of the bodies
     /// has to itself.
     static CREATED: Mutex<Vec<(u32, u8, u32)>> = Mutex::new(Vec::new());
-    extern "C" fn can_allocate_item() -> bool {
-        true
+    extern "C" fn can_allocate_item() -> u8 {
+        1
     }
     extern "C" fn new(grfid: u32, feature: u8, tile: u32) -> *mut PersistentStorageArray<256> {
         CREATED.lock().unwrap().push((grfid, feature, tile));
@@ -264,7 +267,9 @@ pub(crate) mod fixture {
     }
     /// The array of a storage this fixture made, from its shell.
     #[allow(unsafe_code, reason = "a load of a live stand-in record")]
-    pub(crate) fn array_of(shell: *mut c_void) -> *mut PersistentStorageArray<256> {
+    pub(crate) fn array_of(
+        shell: *mut BasePersistentStorageArray,
+    ) -> *mut PersistentStorageArray<256> {
         // SAFETY: every shell this fixture hands out is a leaked `Record`.
         unsafe { (*shell.cast::<Record>()).array }
     }
