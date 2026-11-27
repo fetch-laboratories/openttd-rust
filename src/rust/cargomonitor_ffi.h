@@ -8,22 +8,12 @@
 /** @file cargomonitor_ffi.h Process-wide cargo-monitor owner and incremental rows. */
 #ifndef RUST_CARGOMONITOR_FFI_H
 #define RUST_CARGOMONITOR_FFI_H
-#include "service_defaults.hpp"
 #include <cstdint>
-struct Station;
-struct Industry;
-/** Serialized by the game-state mutex. Native handles/cursors are call-scoped;
- * no map borrow crosses a leaf or SlObject. Leaves cannot reset catchments or
- * pools, yield, retain arguments or throw. Rust panics abort. Save/load keeps
- * SlObject/SlError native, inserting only complete rows, with no transaction. */
-struct OpenTTDCargoMonitorServices {
-	uint16_t (*station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
-	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
-};
-const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept;
+/* Serialized by the game-state mutex. No map borrow crosses SlObject; save/load keeps
+ * SlObject/SlError native, inserting only complete rows, with no transaction. Rust panics abort. */
 extern "C" {
-uint32_t openttd_rust_monitor_encode_industry(uint8_t, uint8_t, uint16_t, void (*)(bool) noexcept);
-uint32_t openttd_rust_monitor_encode_town(uint8_t, uint8_t, uint16_t, void (*)(bool) noexcept);
+uint32_t openttd_rust_monitor_encode_industry(uint8_t, uint8_t, uint16_t);
+uint32_t openttd_rust_monitor_encode_town(uint8_t, uint8_t, uint16_t);
 uint8_t openttd_rust_monitor_company(uint32_t);
 uint8_t openttd_rust_monitor_cargo(uint32_t);
 uint16_t openttd_rust_monitor_industry(uint32_t);

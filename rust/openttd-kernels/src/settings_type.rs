@@ -35,6 +35,7 @@ crate::abi::shared_records! {
         pub economy: *const bool,
         pub economy_type: *const u8,
         pub extra_tree_placement: *const u8,
+        pub feeder_payment_share: *const u8,
         pub freeform_edges: *const bool,
         pub generation_seed: *const u32,
         pub give_money: *const bool,
@@ -186,6 +187,11 @@ impl SettingAddresses {
         // SAFETY: As `road_side`.
         unsafe { self.vehicle_breakdowns.read() }
     }
+    /// `_settings_game.economy.feeder_payment_share`; one field-sized load.
+    pub(crate) fn feeder_payment_share(&self) -> u8 {
+        // SAFETY: As `road_side`.
+        unsafe { self.feeder_payment_share.read() }
+    }
     /// `_settings_game.vehicle.disable_elrails`; one field-sized load.
     pub(crate) fn disable_elrails(&self) -> bool {
         // SAFETY: As `road_side`.
@@ -216,6 +222,7 @@ impl SettingAddresses {
         economy: std::ptr::null(),
         economy_type: std::ptr::null(),
         extra_tree_placement: std::ptr::null(),
+        feeder_payment_share: std::ptr::null(),
         freeform_edges: std::ptr::null(),
         generation_seed: std::ptr::null(),
         give_money: std::ptr::null(),

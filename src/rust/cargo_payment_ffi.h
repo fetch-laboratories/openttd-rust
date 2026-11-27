@@ -13,7 +13,6 @@
 struct OpenTTDVehicle;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDVehicleServices;
-enum ExpensesType : uint8_t;
 struct OpenTTDCargoRegistryServices;
 struct OpenTTDSubsidyServices;
 struct OpenTTDIndustryResolverServices;
@@ -28,11 +27,6 @@ struct CargoPayment;
 using OpenTTDNativeCargoPayment = CargoPayment;
 #include <cstdint>
 #include "call_ffi.h"
-struct OpenTTDCargoDelivery;
-struct OpenTTDCargoSpec {
-	int64_t payment;
-	uint8_t valid, callback, periods1, periods2;
-};
 struct OpenTTDCargoPaymentFields {
 	OpenTTDVehicle *front;
 	int64_t route_profit, visual_profit, visual_transfer;
@@ -42,45 +36,35 @@ struct OpenTTDCargoPayment {
 	OpenTTDCargoPaymentFields fields;
 	uint16_t station;
 };
-/* Leaves cannot reenter payment or delivery owners or destroy the supplied world objects. Entry frames
- * own unbound nearby-industry cursors that begin binds per scan; delivery finishes its scan before
- * subsidy checks reuse it. Money add, sub, neg and multiply saturate. Each shell owns one payment;
- * the delivery owner lives for the process. Destroy accepts a null table only when cleaning.
- * Owners and outputs are live, nonnull and exclusive; tables are immutable and shareable.
- * All table entries have the declared ABI.
+/* Leaves cannot reenter payment or delivery owners or destroy the supplied world objects. Money add,
+ * sub, neg and multiply saturate. Each shell owns one payment; the delivery destinations live for the
+ * process. Destroy accepts a null table only when cleaning. Owners and outputs are live, nonnull and
+ * exclusive; tables are immutable and shareable. All table entries have the declared ABI.
  * Resolvers cannot run script VMs or mutate payment/destination storage; callbacks retain no pointers,
  * and unresolved front handles are not dereferenced before load fixup. */
 struct OpenTTDSharedServices;
+struct OpenTTDStationServices;
 struct OpenTTDCargoServices {
-	void (OPENTTD_RUST_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	const OpenTTDCargoRegistryServices *registry;
-	uint8_t (OPENTTD_RUST_CALL *station_company)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_company);
-	const OpenTTDTownHandle *(OPENTTD_RUST_CALL *station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
-	const OpenTTDIndustryResolverServices *resolver;
-	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
-	const OpenTTDIndustryDeliveryServices *industry_delivery;
 	void (OPENTTD_RUST_CALL *detach_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(detach_payment);
-	const OpenTTDCompanyFinanceServices *finance;
-	const OpenTTDVehicleServices *vehicles;
-	bool (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
-	ExpensesType (OPENTTD_RUST_CALL *expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);
-	int64_t (OPENTTD_RUST_CALL *profit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit);
-	const OpenTTDSharedServices *shared;
 	void (OPENTTD_RUST_CALL *feeder_animation)(int32_t, int32_t, int32_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder_animation);
-	uint8_t (OPENTTD_RUST_CALL *feeder_payment_share)() noexcept OPENTTD_SERVICE_DEFAULT(feeder_payment_share);
+	const OpenTTDCompanyFinanceServices *finance;
+	const OpenTTDIndustryDeliveryServices *industry_delivery;
+	const OpenTTDCargoRegistryServices *registry;
+	const OpenTTDIndustryResolverServices *resolver;
+	const OpenTTDSharedServices *shared;
+	const OpenTTDTownHandle *(OPENTTD_RUST_CALL *station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
+	const OpenTTDStationServices *stations;
+	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
+	const OpenTTDVehicleServices *vehicles;
 };
 const OpenTTDCargoServices &GetRustCargoServices() noexcept;
-OpenTTDCargoDelivery *GetCargoDeliveryState() noexcept;
 extern "C" {
-OpenTTDCargoPayment *OPENTTD_RUST_CALL openttd_rust_cargo_payment_new(OpenTTDVehicle *, uint16_t);
+OpenTTDCargoPayment *OPENTTD_RUST_CALL openttd_rust_cargo_payment_new(OpenTTDVehicle *);
 void OPENTTD_RUST_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t);
 OpenTTDVehicle *OPENTTD_RUST_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
 void OPENTTD_RUST_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *);
 /* For the consoles only: CargoPayment::PayFinalDelivery for a packet shell. */
 void OPENTTD_RUST_CALL openttd_rust_cargo_payment_final(const OpenTTDCargoStorageServices *, CargoPayment *, uint8_t, CargoPacket *, uint32_t, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);
-OpenTTDCargoDelivery *OPENTTD_RUST_CALL openttd_rust_cargo_delivery_new();
-void OPENTTD_RUST_CALL openttd_rust_cargo_delivery_destroy(OpenTTDCargoDelivery *);
-void OPENTTD_RUST_CALL openttd_rust_cargo_delivery_flush(OpenTTDCargoDelivery *, const OpenTTDCargoServices *);
 }
 #endif /* RUST_CARGO_PAYMENT_FFI_H */

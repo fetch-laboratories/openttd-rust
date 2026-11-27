@@ -34,19 +34,15 @@ struct OpenTTDCargoListFields {
  * snapshot output is confined to local exports. */
 struct CargoPacket;
 struct GoodsEntry;
-struct OpenTTDCargoDelivery;
-struct OpenTTDCargoMonitorServices;
 struct OpenTTDCargoPayment;
 struct OpenTTDCargoServices;
 struct OpenTTDSharedServices;
 struct CargoPayment;
 struct OpenTTDCargoStorageServices {
 	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	OpenTTDCargoDelivery *(*cargo_delivery_state)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_delivery_state);
 	CargoPacket *(*create)(const OpenTTDCargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(create);
 	void (*destroy)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	OpenTTDCargoFlowMap *(*flow_map)(const GoodsEntry *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);
-	const OpenTTDCargoMonitorServices *monitors;
 	OpenTTDCargoPacket *(*packet)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
 	CargoPacket *(*packet_next)(CargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
 	const OpenTTDCargoServices *payment;

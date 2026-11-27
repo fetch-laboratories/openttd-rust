@@ -20,6 +20,7 @@ use crate::bitmath_func::has_bit;
 use crate::cargo_type::CargoType;
 use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::Direction;
+use crate::economy_type::ExpensesType;
 use crate::engine_type::EngineID;
 use crate::group_type::GroupID;
 use crate::raw_field::{read_field, write_field};
@@ -1291,6 +1292,46 @@ impl crate::vehicle::VehicleRef {
             self.first().tile()
         } else {
             self.tile()
+        }
+    }
+    /// `Vehicle::GetExpenseType`: the expense type of the vehicle, a running cost or, for
+    /// `income`, its revenue. `Train`, `RoadVehicle`, `Ship` and `Aircraft` override it; the
+    /// base, which effect and disaster vehicles use, answers `EXPENSES_OTHER`.
+    pub(crate) fn get_expense_type(self, income: bool) -> ExpensesType {
+        match self.vehicle_type() {
+            // `Train::GetExpenseType`.
+            VehicleType::TRAIN => {
+                if income {
+                    ExpensesType::EXPENSES_TRAIN_REVENUE
+                } else {
+                    ExpensesType::EXPENSES_TRAIN_RUN
+                }
+            }
+            // `RoadVehicle::GetExpenseType`.
+            VehicleType::ROAD => {
+                if income {
+                    ExpensesType::EXPENSES_ROADVEH_REVENUE
+                } else {
+                    ExpensesType::EXPENSES_ROADVEH_RUN
+                }
+            }
+            // `Ship::GetExpenseType`.
+            VehicleType::SHIP => {
+                if income {
+                    ExpensesType::EXPENSES_SHIP_REVENUE
+                } else {
+                    ExpensesType::EXPENSES_SHIP_RUN
+                }
+            }
+            // `Aircraft::GetExpenseType`.
+            VehicleType::AIRCRAFT => {
+                if income {
+                    ExpensesType::EXPENSES_AIRCRAFT_REVENUE
+                } else {
+                    ExpensesType::EXPENSES_AIRCRAFT_RUN
+                }
+            }
+            _ => ExpensesType::EXPENSES_OTHER,
         }
     }
     #[inline]

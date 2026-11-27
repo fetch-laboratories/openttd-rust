@@ -275,6 +275,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.economy = &_settings_game.difficulty.economy,
 	.economy_type = reinterpret_cast<const uint8_t *>(&_settings_game.economy.type),
 	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
+	.feeder_payment_share = &_settings_game.economy.feeder_payment_share,
 	.freeform_edges = &_settings_game.construction.freeform_edges,
 	.generation_seed = &_settings_game.game_creation.generation_seed,
 	.give_money = &_settings_game.economy.give_money,

@@ -722,14 +722,19 @@ pub(crate) unsafe fn subtract_money_from_any_company(
 }
 
 /// `SubtractMoneyFromCompany`: subtract money from the `_current_company`, if the company is
-/// valid.
+/// valid. `shared` reads `_current_company`.
 #[allow(unsafe_code)] // Field-sized access to live native records, under the module contract.
-fn subtract_money_from_company(s: &Services, cost: i64, expenses_type: ExpensesType) {
-    let company = CompanyID((s.shared.current_company)());
-    let c = (s.finance.company_finances)(company.0);
+pub(crate) fn subtract_money_from_company(
+    shared: &crate::services::Services,
+    f: &FinanceServices,
+    cost: i64,
+    expenses_type: ExpensesType,
+) {
+    let company = CompanyID((shared.current_company)());
+    let c = (f.company_finances)(company.0);
     if !c.is_null() {
         // SAFETY: The pool returned the live record of `company`.
-        unsafe { subtract_money_from_any_company(s.finance, c, company, cost, expenses_type) };
+        unsafe { subtract_money_from_any_company(f, c, company, cost, expenses_type) };
     }
 }
 
@@ -1837,7 +1842,12 @@ pub(crate) fn cmd_give_money(
     if flags.test(DoCommandFlag::Execute) {
         // Add money to company
         (s.finance.set_current_company)(dest_company.0);
-        subtract_money_from_company(s, neg(amount), ExpensesType::EXPENSES_OTHER);
+        subtract_money_from_company(
+            s.shared,
+            s.finance,
+            neg(amount),
+            ExpensesType::EXPENSES_OTHER,
+        );
         (s.finance.set_current_company)(current.0);
 
         if (s.finance.networking)() {
@@ -2863,7 +2873,7 @@ fn companies_gen_statistics(s: &Services) {
                 c.index,
             ));
 
-            subtract_money_from_company(s, cost, ExpensesType::EXPENSES_PROPERTY);
+            subtract_money_from_company(s.shared, s.finance, cost, ExpensesType::EXPENSES_PROPERTY);
         });
     }
     (s.finance.set_current_company)(cur_company);
@@ -3117,13 +3127,15 @@ fn companies_pay_interest(s: &Services) {
         let up_to_this_month = yearly_fee.saturating_mul(month + 1) / 12;
 
         subtract_money_from_company(
-            s,
+            s.shared,
+            s.finance,
             up_to_this_month.saturating_sub(up_to_previous_month),
             ExpensesType::EXPENSES_LOAN_INTEREST,
         );
 
         subtract_money_from_company(
-            s,
+            s.shared,
+            s.finance,
             price(Price::PR_STATION_VALUE) >> 2,
             ExpensesType::EXPENSES_OTHER,
         );
@@ -3764,7 +3776,7 @@ pub(crate) fn cmd_change_bank_balance(
     if flags.test(DoCommandFlag::Execute) {
         // Change company bank balance of company.
         (s.finance.set_current_company)(company.0);
-        subtract_money_from_company(s, neg(delta), expenses_type);
+        subtract_money_from_company(s.shared, s.finance, neg(delta), expenses_type);
         (s.finance.set_current_company)(current);
 
         if tile.0 != 0 {

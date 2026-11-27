@@ -258,42 +258,28 @@ uint ScaleByInverseCargoScale(uint num, bool town)
  * NewGRF sprite-group resolution cannot reenter these owners or execute commands.
  * No exception crosses Rust; allocation/debug/UI failures terminate here. */
 static const OpenTTDCargoServices _cargo_services = {
-	.spec = [](uint8_t cargo, OpenTTDCargoSpec *out) noexcept {
-		const CargoSpec *cs = RustCargoSpec(cargo);
-		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
-	},
-	.registry = &GetRustCargoRegistryServices(),
-	.station_company = RustStationOwnerByte<const Station>,
-	.station_town = RustStationStationTown<const Station>,
-	.resolver = &GetIndustryResolverServices(),
-	.subsidies = RustSubsidyServices,
-	.industry_delivery = &GetIndustryDeliveryServices(),
 	.detach_payment = RustVehicleDetachPayment,
-	.finance = &GetRustCompanyFinanceServices(),
-	.vehicles = &GetRustVehicleServices(),
-	.local_company = RustIsLocalCompany,
-	.expense = RustVehicleExpense,
-	.profit = RustVehicleRead<int64_t, RustVehicleProfit>,
-	.shared = &GetRustSharedServices(),
 	.feeder_animation = RustFeederIncomeAnimation,
-	.feeder_payment_share = RustFeederPaymentShare,
+	.finance = &GetRustCompanyFinanceServices(),
+	.industry_delivery = &GetIndustryDeliveryServices(),
+	.registry = &GetRustCargoRegistryServices(),
+	.resolver = &GetIndustryResolverServices(),
+	.shared = &GetRustSharedServices(),
+	.station_town = RustStationStationTown<const Station>,
+	.stations = &GetRustStationServices(),
+	.subsidies = RustSubsidyServices,
+	.vehicles = &GetRustVehicleServices(),
 };
 
 const OpenTTDCargoServices &GetRustCargoServices() noexcept { return _cargo_services; }
-
-OpenTTDCargoDelivery *GetCargoDeliveryState() noexcept
-{
-	static const std::unique_ptr<OpenTTDCargoDelivery, decltype(&openttd_rust_cargo_delivery_destroy)> state(openttd_rust_cargo_delivery_new(), openttd_rust_cargo_delivery_destroy);
-	return state.get();
-}
 
 Money GetTransportedGoodsIncome(uint num_pieces, uint dist, uint16_t transit_periods, CargoType cargo_type)
 {
 	return openttd_rust_cargo_income(&_cargo_services, num_pieces, dist, transit_periods, cargo_type);
 }
 
-CargoPayment::CargoPayment() : rust_state(openttd_rust_cargo_payment_new(nullptr, StationID::Invalid().base())) {}
-CargoPayment::CargoPayment(Vehicle *front) : rust_state(openttd_rust_cargo_payment_new(RustVehicle(front), RustVehicleLastStationVisited(RustVehicle(front)))) {}
+CargoPayment::CargoPayment() : rust_state(openttd_rust_cargo_payment_new(nullptr)) {}
+CargoPayment::CargoPayment(Vehicle *front) : rust_state(openttd_rust_cargo_payment_new(RustVehicle(front))) {}
 CargoPayment::~CargoPayment() { openttd_rust_cargo_payment_destroy(this->rust_state, &_cargo_services, CleaningPool()); }
 Vehicle *CargoPayment::GetFront() const { return VehicleOf(openttd_rust_cargo_payment_front(this->rust_state)); }
 void CargoPayment::AfterLoad()
@@ -399,9 +385,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.delete_payment = [](OpenTTDNativeCargoPayment *handle) noexcept -> void {
 		delete static_cast<CargoPayment *>(handle);
-	},
-	.flush_delivery = []() noexcept -> void {
-		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
 	},
 };
 

@@ -451,7 +451,6 @@ pub struct World {
     pub(crate) rating_cheat: extern "C" fn() -> bool,
     pub(crate) available: extern "C" fn(*mut BaseStation, u8) -> u32,
     pub(crate) cargo_valid: extern "C" fn(u8) -> bool,
-    pub(crate) rating_callback_enabled: extern "C" fn(u8) -> bool,
     pub(crate) passenger_cargo: extern "C" fn(u8) -> bool,
     pub(crate) packet_available: extern "C" fn() -> bool,
     pub(crate) rating_redraw: extern "C" fn(*mut BaseStation, bool),
@@ -759,10 +758,8 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
     let mut waiting_changed = false;
     byte_inc_sat(unsafe { &raw mut (*state).fields.time_since_load });
     byte_inc_sat(unsafe { &raw mut (*state).fields.time_since_unload });
-    for cargo in (0..NUM_CARGO).map(CargoType) {
-        if !(w.cargo_valid)(cargo.0) {
-            continue;
-        }
+    for cs in crate::cargotype::iterate(unsafe { &*w.cargo_registry }) {
+        let cargo = cs.index();
         let ge = unsafe { cp(state, cargo) };
         /* The station might not currently be moving this cargo. */
         if !goods_entry::has_rating(unsafe { goods_status(ge) }) {
@@ -811,7 +808,10 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
             }
             rating = i32::from(MAX_STATION_RATING);
             skip = true;
-        } else if (w.rating_callback_enabled)(cargo.0) {
+        } else if cs
+            .callback_mask()
+            .test(crate::newgrf_callbacks::CargoCallbackMask::StationRatingCalc)
+        {
             /* Perform custom station rating. If it succeeds the speed, days in transit and
              * waiting cargo ratings must not be executed. */
             /* NewGRFs expect last speed to be 0xFF when no vehicle has arrived yet. */
@@ -836,7 +836,7 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World, l: &Links) {
                 crate::newgrf_callbacks::CallbackID::CBID_CARGO_STATION_RATING_CALC,
                 var10,
                 var18,
-                crate::cargotype::cargo_spec_get(unsafe { &*w.cargo_registry }, cargo),
+                cs,
                 &mut [],
             );
             if callback != crate::newgrf_callbacks::CALLBACK_FAILED {
@@ -1540,7 +1540,6 @@ pub struct Loading {
     pub(crate) get_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) create_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) delete_payment: extern "C" fn(*mut NativePayment),
-    pub(crate) flush_delivery: extern "C" fn(),
 }
 
 /// `v->cargo`: the vehicle's Rust-owned cargo list, resolved once per vehicle entry. Its
@@ -2630,7 +2629,7 @@ unsafe fn load_unload_station_queue(
         node = unsafe { loading_vehicles_next(node) };
     }
     /* Call the production machinery of industries */
-    (l.flush_delivery)();
+    crate::cargo_payment::trigger_industry_production_of_deliveries(l.storage().payment());
 }
 
 /// `ModifyStationRatingAround`'s per-station update: change the rating of every goods entry
@@ -2722,7 +2721,6 @@ crate::abi::layouts! {
         rating_cheat,
         available,
         cargo_valid,
-        rating_callback_enabled,
         passenger_cargo,
         packet_available,
         rating_redraw,
@@ -2772,7 +2770,6 @@ crate::abi::layouts! {
         get_payment,
         create_payment,
         delete_payment,
-        flush_delivery,
     };
 }
 

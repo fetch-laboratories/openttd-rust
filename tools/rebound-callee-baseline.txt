@@ -33,7 +33,6 @@ rebound | RustAirportTileSpec | src/newgrf_airport.cpp | tile_spec
 rebound | RustAirportTileSpec | src/rust/airport_definitions.cpp | tile_base
 rebound | RustAnimationRailSpec | src/animated_tile.cpp | rail_spec
 rebound | RustAnimationRailSpec | src/rust/station_command_services.hpp | rail_spec
-rebound | RustAssertCondition | src/cargomonitor.cpp | check
 rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert
 rebound | RustAssertCondition | src/newgrf_airport.cpp | check
@@ -80,8 +79,6 @@ rebound | RustIndustryID | src/station.cpp | industry_id
 rebound | RustIndustryID | src/subsidy.cpp | industry_id
 rebound | RustIndustryNeutralBaseStation | src/rust/station_command_services.hpp | industry_neutral
 rebound | RustIndustryNeutralBaseStation | src/station.cpp | industry_neutral
-rebound | RustIsLocalCompany | src/economy.cpp | local_company
-rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
 rebound | RustMaxBridgeHeight | src/landscape.cpp | max_bridge_height
 rebound | RustMaxBridgeHeight | src/tunnelbridge_cmd.cpp | max_bridge_height
 rebound | RustOnWater | src/industry_cmd.cpp | on_water
@@ -144,7 +141,6 @@ rebound | RustStationGet | src/subsidy.cpp | station
 rebound | RustStationIsExpected | src/animated_tile.cpp | is_station
 rebound | RustStationIsExpected | src/newgrf_roadstop.cpp | is_station
 rebound | RustStationIsExpected | src/station_cmd.cpp | is_station
-rebound | RustStationOwnerByte | src/economy.cpp | station_company
 rebound | RustStationOwnerByte | src/newgrf_roadstop.cpp | owner
 rebound | RustStationOwnerByte | src/station_cmd.cpp | station_owner
 rebound | RustStationOwnerByte | src/town_cmd.cpp | station_owner
@@ -178,8 +174,6 @@ rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type
-rebound | RustVehicleExpense | src/economy.cpp | expense
-rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
 rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index

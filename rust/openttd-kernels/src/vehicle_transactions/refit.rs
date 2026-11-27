@@ -11,7 +11,7 @@ use crate::engine_type::EngineID;
 use crate::engine_type::OpenTTDEngine;
 use crate::engine_type::RailVehicleTypes;
 use crate::game_state::GameState;
-use crate::services::{CommandCost, ExpenseType};
+use crate::services::CommandCost;
 use crate::table::strings::{
     STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT, STR_ERROR_VEHICLE_IS_DESTROYED,
 };
@@ -58,7 +58,6 @@ pub struct Services {
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_kind: extern "C" fn(*mut OpenTTDVehicle) -> CargoKind,
     pub set_cargo_kind: extern "C" fn(*mut OpenTTDVehicle, u8, u8),
-    pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
 }
@@ -291,13 +290,9 @@ unsafe fn refit_vehicle(
     let b = c.base;
     (b.cost.expense_money)(
         cost,
-        (s.expense)(
-            unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                .0
-                .as_ptr(),
-            false,
-        )
-        .0,
+        unsafe { super::vehicle_ref(v, s.common.vehicles) }
+            .get_expense_type(false)
+            .0,
         0,
     );
     let mut total = Capacity::default();
@@ -828,6 +823,6 @@ crate::abi::layouts! {
         cargo, subtype,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, train, road, aircraft, ship, road_ground, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, aircraft_handle,
+        common, selection, cargo, train, road, aircraft, ship, road_ground, engine, capabilities, cargo_kind, set_cargo_kind, invalidate_chain, aircraft_handle,
     };
 }

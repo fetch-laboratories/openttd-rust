@@ -29,7 +29,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_kind = VehicleRefitCargoKind,
 		.set_cargo_kind = RustVehicleSetCargoKind,
-		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
 		.aircraft_handle = GetRustAircraftVehicle,
 	};

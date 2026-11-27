@@ -137,7 +137,6 @@ inline uint32_t RustStationLocation(const BaseStation *s) noexcept { return s->x
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
-inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 /** Waypoint::Iterate(from)'s first waypoint, or nullptr; the one waypoint iterator of the Rust tables. */
 inline Waypoint *OpenTTDNextWaypoint(uint32_t from) noexcept { for (Waypoint *wp : Waypoint::Iterate(from)) return wp; return nullptr; }

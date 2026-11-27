@@ -1521,32 +1521,25 @@ pub(crate) const OBJECTIVES: crate::objectives::Services = crate::objectives::Se
 
 /// `crate::cargo_payment::Services` with every entry unreachable.
 pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::Services {
-    spec: unreachable2,
-    registry: ptr::null(),
-    station_company: unreachable1,
-    station_town: unreachable1,
-    resolver: ptr::null(),
-    subsidies: unreachable0,
-    industry_delivery: ptr::null(),
     detach_payment: unreachable1,
-    finance: ptr::null(),
-    vehicles: ptr::null(),
-    local_company: unreachable0,
-    expense: unreachable2,
-    profit: unreachable1,
-    shared: ptr::null(),
     feeder_animation: unreachable5,
-    feeder_payment_share: unreachable0,
+    finance: ptr::null(),
+    industry_delivery: ptr::null(),
+    registry: ptr::null(),
+    resolver: ptr::null(),
+    shared: ptr::null(),
+    station_town: unreachable1,
+    stations: ptr::null(),
+    subsidies: unreachable0,
+    vehicles: ptr::null(),
 };
 
 /// `crate::cargo_storage::Services` with every entry unreachable.
 pub(crate) const CARGO_STORAGE: crate::cargo_storage::Services = crate::cargo_storage::Services {
     can_allocate: unreachable0,
-    cargo_delivery_state: unreachable0,
     create: unreachable1,
     destroy: unreachable1,
     flow_map: unreachable1,
-    monitors: ptr::null(),
     packet: unreachable1,
     packet_next: unreachable1,
     payment: ptr::null(),
@@ -2029,7 +2022,6 @@ pub(crate) const STATION_WORLD: crate::station_service::World = crate::station_s
     rating_cheat: unreachable0,
     available: unreachable2,
     cargo_valid: unreachable1,
-    rating_callback_enabled: unreachable1,
     passenger_cargo: unreachable1,
     packet_available: unreachable0,
     rating_redraw: unreachable2,
@@ -2068,7 +2060,6 @@ pub(crate) const STATION_LOADING: crate::station_service::Loading =
         get_payment: unreachable1,
         create_payment: unreachable1,
         delete_payment: unreachable1,
-        flush_delivery: unreachable0,
     };
 
 /// `crate::station_service::Links` with every entry unreachable.
@@ -2150,7 +2141,6 @@ pub(crate) const REFIT: crate::vehicle_transactions::refit::Services =
         capabilities: &crate::engine_capabilities::TEST_TABLE,
         cargo_kind: unreachable1,
         set_cargo_kind: unreachable3,
-        expense: unreachable2,
         invalidate_chain: unreachable1,
         aircraft_handle: unreachable1,
     };

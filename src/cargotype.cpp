@@ -207,12 +207,15 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 		.fill_default = [](uint8_t first) noexcept { std::fill(RustCargoSpec(first), RustCargoSpec(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
 
 		.bitnum = RustCargoSpecBitnum,
+		.callback_mask = [](const CargoSpec *cs) noexcept { return cs->callback_mask.base(); },
 		.classes = RustCargoSpecClasses,
+		.current_payment = [](const CargoSpec *cs) noexcept { return cs->current_payment.base(); },
 		.index = RustCargoSpecIndex,
 		.label = RustCargoSpecLabel,
 		.town_acceptance_effect = [](const CargoSpec *cs) noexcept -> uint8_t { return cs->town_acceptance_effect; },
 		.town_production_effect = [](const CargoSpec *cs) noexcept -> uint8_t { return cs->town_production_effect; },
 		.town_production_multiplier = [](const CargoSpec *cs) noexcept { return cs->town_production_multiplier; },
+		.transit_periods = [](const CargoSpec *cs) noexcept -> const uint8_t * { return cs->transit_periods; },
 
 		.set_abbrev = [](CargoSpec *cs, uint32_t abbrev) noexcept { cs->abbrev = abbrev; },
 		.set_grffile = [](CargoSpec *cs, const GRFFile *grffile) noexcept { cs->grffile = grffile; },
