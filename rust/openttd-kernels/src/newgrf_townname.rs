@@ -11,7 +11,7 @@ use crate::control_codes::SCC_NEWGRF_PRINT_WORD_STRING_ID;
 use crate::debug::{Bytes, grf_msg};
 use crate::game_state::GameState;
 use crate::newgrf::GRFFileRef;
-use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
+use crate::newgrf_bytereader::{ByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_loading::{self, Services};
 use crate::newgrf_text::{AddGRFString, add_grf_string};
 use crate::newgrf_text_type::GRFStringID;
@@ -318,7 +318,7 @@ pub(crate) unsafe fn get_grf_town_name_type(mut gen_: u16) -> u16 {
 pub(crate) unsafe fn feature_town_name(
     s: &Services,
     buf: &mut ByteReader,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     /* <0F> <id> <style-name> <num-parts> <parts>
      *
      * B id          ID of this definition in bottom 7 bits (final definition if bit 7 set)
@@ -332,7 +332,7 @@ pub(crate) unsafe fn feature_town_name(
         // Only `DelGRFTownName` changes the list before this entry returns.
         let townname = add_grf_town_name(grfid);
 
-        let mut id = buf.byte()?;
+        let mut id = buf.read_byte()?;
         grf_msg!(6, "FeatureTownName: definition 0x{:02X}", id & 0x7F);
 
         if has_bit(id, 7) {
@@ -340,13 +340,13 @@ pub(crate) unsafe fn feature_town_name(
             clr_bit8(&mut id, 7);
             let new_scheme = grffile.grf_version() >= 7;
 
-            let mut lang = buf.byte()?;
+            let mut lang = buf.read_byte()?;
             let mut style;
 
             loop {
                 clr_bit8(&mut lang, 7);
 
-                let name = buf.string();
+                let name = buf.read_string();
                 let name = crate::utf8::borrow(name.0, name.1);
 
                 let lang_name = crate::newgrf_text::translate(
@@ -377,7 +377,7 @@ pub(crate) unsafe fn feature_town_name(
                     },
                 );
 
-                lang = buf.byte()?;
+                lang = buf.read_byte()?;
                 if lang == 0 {
                     break;
                 }
@@ -385,7 +385,7 @@ pub(crate) unsafe fn feature_town_name(
             (*townname).styles.push(TownNameStyle { name: style, id });
         }
 
-        let parts = buf.byte()?;
+        let parts = buf.read_byte()?;
         grf_msg!(6, "FeatureTownName: {} parts", parts);
 
         let lists = &raw mut (*townname).partlists[usize::from(id)];
@@ -394,9 +394,9 @@ pub(crate) unsafe fn feature_town_name(
             let index = (*lists).len();
             (*lists).push(NamePartList::default());
             let partlist = &raw mut (&mut *lists)[index];
-            let texts = buf.byte()?;
-            (*partlist).bitstart = buf.byte()?;
-            (*partlist).bitcount = buf.byte()?;
+            let texts = buf.read_byte()?;
+            (*partlist).bitstart = buf.read_byte()?;
+            (*partlist).bitcount = buf.read_byte()?;
             (*partlist).maxprob = 0;
             grf_msg!(
                 6,
@@ -412,10 +412,10 @@ pub(crate) unsafe fn feature_town_name(
                 let index = (*partlist).parts.len();
                 (*partlist).parts.push(NamePart::default());
                 let part = &raw mut (&mut (*partlist).parts)[index];
-                (*part).prob = buf.byte()?;
+                (*part).prob = buf.read_byte()?;
 
                 if has_bit((*part).prob, 7) {
-                    let ref_id = buf.byte()?;
+                    let ref_id = buf.read_byte()?;
                     if usize::from(ref_id) >= GRFTownName::MAX_LISTS
                         || (*townname).partlists[usize::from(ref_id)].is_empty()
                     {
@@ -438,7 +438,7 @@ pub(crate) unsafe fn feature_town_name(
                         (*part).prob & 0x7F
                     );
                 } else {
-                    let text = buf.string();
+                    let text = buf.read_string();
                     (*part).text = crate::newgrf_text::translate(
                         &*s.text,
                         grfid,

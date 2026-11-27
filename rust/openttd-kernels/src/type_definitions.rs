@@ -9,7 +9,9 @@
 use crate::debug::grf_msg;
 use crate::engine_type::VehicleAccelerationModel;
 use crate::newgrf::{GRFFile, GRFFileRef, GrfSpecFeature};
-use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
+use crate::newgrf_bytereader::{
+    ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read, Services as ReaderServices,
+};
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::newgrf_text_type::GRFStringID;
 use crate::rail::RailTypeFlags;
@@ -23,8 +25,8 @@ use crate::type_registry::{
 };
 
 /// `GRFStringID{buf.ReadWord()}`.
-fn grf_string_id(buf: &mut Reader<'_>) -> Result<GRFStringID, ReadError> {
-    Ok(GRFStringID(u32::from(buf.word()?)))
+fn grf_string_id(buf: &mut ByteReaderRef<'_>) -> Result<GRFStringID, OTTDByteReaderSignal> {
+    Ok(GRFStringID(u32::from(buf.read_word()?)))
 }
 
 /// `RailTypeChangeInfo`: define properties for railtypes.
@@ -41,8 +43,8 @@ pub(crate) fn rail_type_change_info(
     first: u32,
     last: u32,
     prop: i32,
-    buf: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    buf: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
     let s = services();
@@ -73,7 +75,7 @@ pub(crate) fn rail_type_change_info(
             // Label of rail type
             0x08 => {
                 /* Skipped here as this is loaded during reservation stage. */
-                buf.dword()?;
+                buf.read_dword()?;
             }
 
             // Toolbar caption of railtype (sets name as well for backwards compatibility for grf ver < 8)
@@ -105,9 +107,9 @@ pub(crate) fn rail_type_change_info(
                 /* Rail type compatibility bits are added to the existing bits
                  * to allow multiple GRFs to modify compatibility with the
                  * default rail types. */
-                let n = buf.byte()?;
+                let n = buf.read_byte()?;
                 for _ in 0..n {
-                    let label = buf.dword()?;
+                    let label = buf.read_dword()?;
                     let resolved_rt =
                         get_rail_type_by_label(RailTypeLabel(label.swap_bytes()), false);
                     if resolved_rt != RailType::INVALID_RAILTYPE {
@@ -127,45 +129,48 @@ pub(crate) fn rail_type_change_info(
             }
 
             // Rail Type flags
-            0x10 => (rail.set_flags)(rti, RailTypeFlags(buf.byte()?)),
+            0x10 => (rail.set_flags)(rti, RailTypeFlags(buf.read_byte()?)),
 
             // Curve speed advantage
-            0x11 => (rail.set_curve_speed)(rti, buf.byte()?),
+            0x11 => (rail.set_curve_speed)(rti, buf.read_byte()?),
 
             // Station graphic
-            0x12 => (rail.set_fallback_railtype)(rti, buf.byte()?.min(2)),
+            0x12 => (rail.set_fallback_railtype)(rti, buf.read_byte()?.min(2)),
 
             // Construction cost factor
-            0x13 => (rail.set_cost_multiplier)(rti, buf.word()?),
+            0x13 => (rail.set_cost_multiplier)(rti, buf.read_word()?),
 
             // Speed limit
-            0x14 => (rail.set_max_speed)(rti, buf.word()?),
+            0x14 => (rail.set_max_speed)(rti, buf.read_word()?),
 
             // Acceleration model
             0x15 => {
-                (rail.set_acceleration_type)(rti, VehicleAccelerationModel(buf.byte()?.min(2)));
+                (rail.set_acceleration_type)(
+                    rti,
+                    VehicleAccelerationModel(buf.read_byte()?.min(2)),
+                );
             }
 
             // Map colour
-            0x16 => (rail.set_map_colour)(rti, buf.byte()?),
+            0x16 => (rail.set_map_colour)(rti, buf.read_byte()?),
 
             // Introduction date
-            0x17 => (rail.set_introduction_date)(rti, CalendarDate(buf.dword()? as i32)),
+            0x17 => (rail.set_introduction_date)(rti, CalendarDate(buf.read_dword()? as i32)),
 
             // Sort order
-            0x1A => (rail.set_sorting_order)(rti, buf.byte()?),
+            0x1A => (rail.set_sorting_order)(rti, buf.read_byte()?),
 
             // Name of railtype (overridden by prop 09 for grf ver < 8)
             0x1B => add_string_for_mapping(grf_string_id(buf)?, (rail.strings_name)(rti)),
 
             // Maintenance cost factor
-            0x1C => (rail.set_maintenance_multiplier)(rti, buf.word()?),
+            0x1C => (rail.set_maintenance_multiplier)(rti, buf.read_word()?),
 
             // Alternate rail type label list
             0x1D => {
                 /* Skipped here as this is loaded during reservation stage. */
-                for _ in 0..buf.byte()? {
-                    buf.dword()?;
+                for _ in 0..buf.read_byte()? {
+                    buf.read_dword()?;
                 }
             }
 
@@ -173,7 +178,9 @@ pub(crate) fn rail_type_change_info(
             0x1E => {
                 // SAFETY: The type's badge list is live and nothing else reaches it during
                 // the read.
-                unsafe { buf.badges(GrfSpecFeature::GSF_RAILTYPES.0, (rail.badges)(rti))? };
+                unsafe {
+                    buf.assign_badge_list(GrfSpecFeature::GSF_RAILTYPES.0, (rail.badges)(rti))?
+                };
             }
 
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
@@ -190,8 +197,8 @@ pub(crate) fn rail_type_reserve_info(
     first: u32,
     last: u32,
     prop: i32,
-    buf: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    buf: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
     let rail = services().rail();
@@ -211,7 +218,7 @@ pub(crate) fn rail_type_reserve_info(
         match prop {
             // Label of rail type
             0x08 => {
-                let rtl = buf.dword()?;
+                let rtl = buf.read_dword()?;
                 let rtl = RailTypeLabel(rtl.swap_bytes());
 
                 let mut rt = get_rail_type_by_label(rtl, false);
@@ -234,7 +241,7 @@ pub(crate) fn rail_type_reserve_info(
             // 0x1B: Name of railtype
             // 0x1C: Maintenance cost factor
             0x09..=0x0D | 0x13 | 0x14 | 0x1B | 0x1C => {
-                buf.word()?;
+                buf.read_word()?;
             }
 
             // Alternate rail type label list
@@ -248,16 +255,16 @@ pub(crate) fn rail_type_reserve_info(
                         id
                     );
                     // Falls through to the label lists' skip.
-                    for _ in 0..buf.byte()? {
-                        buf.dword()?;
+                    for _ in 0..buf.read_byte()? {
+                        buf.read_dword()?;
                     }
                 } else {
-                    let n = buf.byte()?;
+                    let n = buf.read_byte()?;
                     let rti = (rail.spec)(rt);
                     for _ in 0..n {
                         (rail.alternate_labels_insert)(
                             rti,
-                            RailTypeLabel(buf.dword()?.swap_bytes()),
+                            RailTypeLabel(buf.read_dword()?.swap_bytes()),
                         );
                     }
                 }
@@ -268,8 +275,8 @@ pub(crate) fn rail_type_reserve_info(
             // 0x18: Railtype list required for date introduction
             // 0x19: Introduced railtype list
             0x0E | 0x0F | 0x18 | 0x19 => {
-                for _ in 0..buf.byte()? {
-                    buf.dword()?;
+                for _ in 0..buf.read_byte()? {
+                    buf.read_dword()?;
                 }
             }
 
@@ -280,16 +287,16 @@ pub(crate) fn rail_type_reserve_info(
             // 0x16: Map colour
             // 0x1A: Sort order
             0x10..=0x12 | 0x15 | 0x16 | 0x1A => {
-                buf.byte()?;
+                buf.read_byte()?;
             }
 
             // Introduction date
             0x17 => {
-                buf.dword()?;
+                buf.read_dword()?;
             }
 
             // Badge list
-            0x1E => buf.skip_badges()?,
+            0x1E => buf.skip_badge_list()?,
 
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
         }
@@ -312,9 +319,9 @@ pub(crate) fn road_type_change_info(
     first: u32,
     last: u32,
     prop: i32,
-    buf: &mut Reader<'_>,
+    buf: &mut ByteReaderRef<'_>,
     rtt: RoadTramType,
-) -> Result<ChangeInfoResult, ReadError> {
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
     let s = services();
@@ -349,7 +356,7 @@ pub(crate) fn road_type_change_info(
             // Label of road type
             0x08 => {
                 /* Skipped here as this is loaded during reservation stage. */
-                buf.dword()?;
+                buf.read_dword()?;
             }
 
             // Toolbar caption of roadtype
@@ -376,9 +383,9 @@ pub(crate) fn road_type_change_info(
                 /* Road type compatibility bits are added to the existing bits
                  * to allow multiple GRFs to modify compatibility with the
                  * default road types. */
-                let n = buf.byte()?;
+                let n = buf.read_byte()?;
                 for _ in 0..n {
-                    let label = buf.dword()?;
+                    let label = buf.read_dword()?;
                     let resolved_rt =
                         get_road_type_by_label(RoadTypeLabel(label.swap_bytes()), false);
                     if resolved_rt != RoadType::INVALID_ROADTYPE {
@@ -404,34 +411,34 @@ pub(crate) fn road_type_change_info(
             }
 
             // Road Type flags
-            0x10 => (road.set_flags)(rti, RoadTypeFlags(buf.byte()?)),
+            0x10 => (road.set_flags)(rti, RoadTypeFlags(buf.read_byte()?)),
 
             // Construction cost factor
-            0x13 => (road.set_cost_multiplier)(rti, buf.word()?),
+            0x13 => (road.set_cost_multiplier)(rti, buf.read_word()?),
 
             // Speed limit
-            0x14 => (road.set_max_speed)(rti, buf.word()?),
+            0x14 => (road.set_max_speed)(rti, buf.read_word()?),
 
             // Map colour
-            0x16 => (road.set_map_colour)(rti, buf.byte()?),
+            0x16 => (road.set_map_colour)(rti, buf.read_byte()?),
 
             // Introduction date
-            0x17 => (road.set_introduction_date)(rti, CalendarDate(buf.dword()? as i32)),
+            0x17 => (road.set_introduction_date)(rti, CalendarDate(buf.read_dword()? as i32)),
 
             // Sort order
-            0x1A => (road.set_sorting_order)(rti, buf.byte()?),
+            0x1A => (road.set_sorting_order)(rti, buf.read_byte()?),
 
             // Name of roadtype
             0x1B => add_string_for_mapping(grf_string_id(buf)?, (road.strings_name)(rti)),
 
             // Maintenance cost factor
-            0x1C => (road.set_maintenance_multiplier)(rti, buf.word()?),
+            0x1C => (road.set_maintenance_multiplier)(rti, buf.read_word()?),
 
             // Alternate road type label list
             0x1D => {
                 /* Skipped here as this is loaded during reservation stage. */
-                for _ in 0..buf.byte()? {
-                    buf.dword()?;
+                for _ in 0..buf.read_byte()? {
+                    buf.read_dword()?;
                 }
             }
 
@@ -439,7 +446,9 @@ pub(crate) fn road_type_change_info(
             0x1E => {
                 // SAFETY: The type's badge list is live and nothing else reaches it during
                 // the read.
-                unsafe { buf.badges(GrfSpecFeature::GSF_ROADTYPES.0, (road.badges)(rti))? };
+                unsafe {
+                    buf.assign_badge_list(GrfSpecFeature::GSF_ROADTYPES.0, (road.badges)(rti))?
+                };
             }
 
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
@@ -456,9 +465,9 @@ pub(crate) fn road_type_reserve_info(
     first: u32,
     last: u32,
     prop: i32,
-    buf: &mut Reader<'_>,
+    buf: &mut ByteReaderRef<'_>,
     rtt: RoadTramType,
-) -> Result<ChangeInfoResult, ReadError> {
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
     let road = services().road();
@@ -482,7 +491,7 @@ pub(crate) fn road_type_reserve_info(
         match prop {
             // Label of road type
             0x08 => {
-                let rtl = buf.dword()?;
+                let rtl = buf.read_dword()?;
                 let rtl = RoadTypeLabel(rtl.swap_bytes());
 
                 let mut rt = get_road_type_by_label(rtl, false);
@@ -511,7 +520,7 @@ pub(crate) fn road_type_reserve_info(
             // 0x1B: Name of roadtype
             // 0x1C: Maintenance cost factor
             0x09..=0x0D | 0x13 | 0x14 | 0x1B | 0x1C => {
-                buf.word()?;
+                buf.read_word()?;
             }
 
             // Alternate road type label list
@@ -525,16 +534,16 @@ pub(crate) fn road_type_reserve_info(
                         id
                     );
                     /* FALL THROUGH */
-                    for _ in 0..buf.byte()? {
-                        buf.dword()?;
+                    for _ in 0..buf.read_byte()? {
+                        buf.read_dword()?;
                     }
                 } else {
-                    let n = buf.byte()?;
+                    let n = buf.read_byte()?;
                     let rti = (road.spec)(rt);
                     for _ in 0..n {
                         (road.alternate_labels_insert)(
                             rti,
-                            RoadTypeLabel(buf.dword()?.swap_bytes()),
+                            RoadTypeLabel(buf.read_dword()?.swap_bytes()),
                         );
                     }
                 }
@@ -544,8 +553,8 @@ pub(crate) fn road_type_reserve_info(
             // 0x18: Roadtype list required for date introduction
             // 0x19: Introduced roadtype list
             0x0F | 0x18 | 0x19 => {
-                for _ in 0..buf.byte()? {
-                    buf.dword()?;
+                for _ in 0..buf.read_byte()? {
+                    buf.read_dword()?;
                 }
             }
 
@@ -553,16 +562,16 @@ pub(crate) fn road_type_reserve_info(
             // 0x16: Map colour
             // 0x1A: Sort order
             0x10 | 0x16 | 0x1A => {
-                buf.byte()?;
+                buf.read_byte()?;
             }
 
             // Introduction date
             0x17 => {
-                buf.dword()?;
+                buf.read_dword()?;
             }
 
             // Badge list
-            0x1E => buf.skip_badges()?,
+            0x1E => buf.skip_badge_list()?,
 
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
         }
@@ -573,7 +582,7 @@ pub(crate) fn road_type_reserve_info(
 
 /// The export's result: the `ChangeInfoResult`, or -1 for a read error the C++ caller
 /// rethrows.
-fn change_info_result(result: Result<ChangeInfoResult, ReadError>) -> i32 {
+fn change_info_result(result: Result<ChangeInfoResult, OTTDByteReaderSignal>) -> i32 {
     result.map_or(-1, |result| i32::from(result.0))
 }
 
@@ -596,11 +605,11 @@ pub unsafe extern "C" fn openttd_rust_rail_change(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
 ) -> i32 {
     // SAFETY: The loader passes its live reader with the reader table, and its current file,
     // live while it reads the file's properties.
-    let mut buf = unsafe { Reader::new(native, &*reads) };
+    let mut buf = unsafe { ByteReaderRef::new(native, &*reads) };
     let grffile = unsafe { GRFFileRef::of(services().shared(), file.cast_const()) };
     change_info_result(rail_type_change_info(grffile, first, last, prop, &mut buf))
 }
@@ -621,10 +630,10 @@ pub unsafe extern "C" fn openttd_rust_rail_reserve(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
 ) -> i32 {
     // SAFETY: As for `openttd_rust_rail_change`.
-    let mut buf = unsafe { Reader::new(native, &*reads) };
+    let mut buf = unsafe { ByteReaderRef::new(native, &*reads) };
     let grffile = unsafe { GRFFileRef::of(services().shared(), file.cast_const()) };
     change_info_result(rail_type_reserve_info(grffile, first, last, prop, &mut buf))
 }
@@ -645,11 +654,11 @@ pub unsafe extern "C" fn openttd_rust_road_change(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
     rtt: RoadTramType,
 ) -> i32 {
     // SAFETY: As for `openttd_rust_rail_change`.
-    let mut buf = unsafe { Reader::new(native, &*reads) };
+    let mut buf = unsafe { ByteReaderRef::new(native, &*reads) };
     let grffile = unsafe { GRFFileRef::of(services().shared(), file.cast_const()) };
     change_info_result(road_type_change_info(
         grffile, first, last, prop, &mut buf, rtt,
@@ -672,11 +681,11 @@ pub unsafe extern "C" fn openttd_rust_road_reserve(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
     rtt: RoadTramType,
 ) -> i32 {
     // SAFETY: As for `openttd_rust_rail_change`.
-    let mut buf = unsafe { Reader::new(native, &*reads) };
+    let mut buf = unsafe { ByteReaderRef::new(native, &*reads) };
     let grffile = unsafe { GRFFileRef::of(services().shared(), file.cast_const()) };
     change_info_result(road_type_reserve_info(
         grffile, first, last, prop, &mut buf, rtt,
@@ -686,7 +695,7 @@ pub unsafe extern "C" fn openttd_rust_road_reserve(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::newgrf_bytereader::Cursor;
+    use crate::newgrf_bytereader::ByteReader;
     use crate::rail::RailTypeInfo;
     use crate::road::RoadTypeInfo;
     use crate::services::Services as Shared;
@@ -809,31 +818,31 @@ mod tests {
     }
 
     #[allow(unsafe_code, reason = "the test reader's cursor")]
-    unsafe extern "C" fn read_byte(reader: *mut ByteReader, out: *mut u8) -> bool {
+    unsafe extern "C" fn read_byte(reader: *mut NativeByteReader, out: *mut u8) -> bool {
         // SAFETY: The test's reader is a live cursor and `out` its caller's local.
         unsafe {
-            (*reader.cast::<Cursor>())
-                .byte()
+            (*reader.cast::<ByteReader>())
+                .read_byte()
                 .map(|v| out.write(v))
                 .is_ok()
         }
     }
     #[allow(unsafe_code, reason = "the test reader's cursor")]
-    unsafe extern "C" fn read_word(reader: *mut ByteReader, out: *mut u16) -> bool {
+    unsafe extern "C" fn read_word(reader: *mut NativeByteReader, out: *mut u16) -> bool {
         // SAFETY: As for `read_byte`.
         unsafe {
-            (*reader.cast::<Cursor>())
-                .word()
+            (*reader.cast::<ByteReader>())
+                .read_word()
                 .map(|v| out.write(v))
                 .is_ok()
         }
     }
     #[allow(unsafe_code, reason = "the test reader's cursor")]
-    unsafe extern "C" fn read_dword(reader: *mut ByteReader, out: *mut u32) -> bool {
+    unsafe extern "C" fn read_dword(reader: *mut NativeByteReader, out: *mut u32) -> bool {
         // SAFETY: As for `read_byte`.
         unsafe {
-            (*reader.cast::<Cursor>())
-                .dword()
+            (*reader.cast::<ByteReader>())
+                .read_dword()
                 .map(|v| out.write(v))
                 .is_ok()
         }
@@ -857,7 +866,7 @@ mod tests {
     }
     #[allow(unsafe_code, reason = "a stub no row reaches")]
     unsafe extern "C" fn read_badge_ids(
-        _: *mut ByteReader,
+        _: *mut NativeByteReader,
         _: u8,
         _: u16,
         _: *mut u32,
@@ -866,7 +875,7 @@ mod tests {
         unreachable!("unexpected badge read")
     }
     #[allow(unsafe_code, reason = "a stub no row reaches")]
-    unsafe extern "C" fn skip_badges(_: *mut ByteReader) -> bool {
+    unsafe extern "C" fn skip_badges(_: *mut NativeByteReader) -> bool {
         unreachable!("unexpected badge skip")
     }
 
@@ -876,7 +885,10 @@ mod tests {
     fn run(
         version: u8,
         bytes: &[u8],
-        body: impl FnOnce(GRFFileRef<'_>, &mut Reader<'_>) -> Result<ChangeInfoResult, ReadError>,
+        body: impl FnOnce(
+            GRFFileRef<'_>,
+            &mut ByteReaderRef<'_>,
+        ) -> Result<ChangeInfoResult, OTTDByteReaderSignal>,
     ) -> (ChangeInfoResult, Vec<Store>, bool) {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let shared: &'static Shared = Box::leak(Box::new(Shared {
@@ -928,10 +940,11 @@ mod tests {
         VERSION.with(|v| v.set(version));
         STORES.with(|s| s.borrow_mut().clear());
         let saved = exchange_services(s);
-        let mut cursor = Cursor::new(bytes.as_ptr(), bytes.len());
+        // SAFETY: `bytes` outlives the reader and is not written.
+        let mut cursor = unsafe { ByteReader::new(bytes.as_ptr(), bytes.len()) };
         // SAFETY: The cursor and table outlive the reader, and the file is stand-in storage
         // only the stubs above receive.
-        let mut reader = unsafe { Reader::new((&raw mut cursor).cast(), &reads) };
+        let mut reader = unsafe { ByteReaderRef::new((&raw mut cursor).cast(), &reads) };
         let file = unsafe { GRFFileRef::of(shared, ptr::dangling::<GRFFile>()) };
         let result = body(file, &mut reader).expect("every row reads its whole property");
         exchange_services(saved);

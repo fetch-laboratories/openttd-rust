@@ -10,7 +10,7 @@
 //! resolver consumers stay native; `install_test_labels` stands in for the cargo table.
 use super::*;
 use crate::cargo_type::INVALID_CARGO;
-use crate::newgrf_bytereader::Cursor;
+use crate::newgrf_bytereader::ByteReader;
 use crate::newgrf_config::GCS_DISABLED;
 use crate::newgrf_loading::{TEST_TABLE as LOADING_TEST_TABLE, openttd_rust_grf_execution};
 use crate::test_tables::{SHARED, unreachable1, unreachable2, unreachable3};
@@ -273,7 +273,8 @@ impl Fixture {
         f
     }
     fn parse(&self, bytes: &[u8]) -> (bool, usize) {
-        let mut reader = Cursor::new(bytes.as_ptr(), bytes.len());
+        // SAFETY: `bytes` outlives the reader and is not written.
+        let mut reader = unsafe { ByteReader::new(bytes.as_ptr(), bytes.len()) };
         let done = unsafe { parse_action(&SERVICES, &self.loading, &mut reader) };
         (done, reader.remaining())
     }

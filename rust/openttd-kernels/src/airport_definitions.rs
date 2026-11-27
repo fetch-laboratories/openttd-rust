@@ -19,7 +19,7 @@ use crate::airport::{
 use crate::debug::grf_msg;
 use crate::direction_type::Direction;
 use crate::newgrf::GRFFileRef;
-use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
+use crate::newgrf_bytereader::{ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::override_manager::{self, OverrideManagerBase};
 use crate::{animated_tile::AirportSpec as TileSpec, station_cmd::AirportSpec};
@@ -138,8 +138,8 @@ unsafe fn airport_change_info(
     first: u32,
     last: u32,
     prop: u32,
-    buf: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    buf: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     unsafe {
         let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
@@ -173,7 +173,7 @@ unsafe fn airport_change_info(
             match prop {
                 // Modify original airport
                 0x08 => {
-                    let subs_id = buf.byte()?;
+                    let subs_id = buf.read_byte()?;
                     if subs_id == 0xFF {
                         /* Instead of defining a new airport, an airport id
                          * of 0xFF disables the old airport with the current id. */
@@ -221,8 +221,8 @@ unsafe fn airport_change_info(
 
                 // Set airport layout
                 0x0A => {
-                    let num_layouts = buf.byte()?;
-                    buf.dword()?; // Total size of definition, unneeded.
+                    let num_layouts = buf.read_byte()?;
+                    buf.read_dword()?; // Total size of definition, unneeded.
                     let mut size_x = 0u8;
                     let mut size_y = 0u8;
 
@@ -231,23 +231,23 @@ unsafe fn airport_change_info(
                     for _ in 0..num_layouts {
                         let mut layout = AirportTileLayout {
                             // Rotation can only be DIR_NORTH, DIR_EAST, DIR_SOUTH or DIR_WEST.
-                            rotation: Direction(buf.byte()? & 6),
+                            rotation: Direction(buf.read_byte()? & 6),
                             tiles: Vec::new(),
                         };
 
                         loop {
-                            let mut x = i16::from(buf.byte()?);
-                            let mut y = i16::from(buf.byte()?);
+                            let mut x = i16::from(buf.read_byte()?);
+                            let mut y = i16::from(buf.read_byte()?);
                             if x == 0 && y == 0x80 {
                                 /* Terminator, remove and finish up. */
                                 break;
                             }
 
-                            let mut gfx = buf.byte()?;
+                            let mut gfx = buf.read_byte()?;
 
                             if gfx == 0xFE {
                                 /* Use a new tile from this GRF */
-                                let local_tile_id = buf.word()?;
+                                let local_tile_id = buf.read_word()?;
 
                                 /* Read the ID from the _airporttile_mngr. */
                                 let tempid = (*override_manager::airporttile_mngr())
@@ -302,8 +302,8 @@ unsafe fn airport_change_info(
                 }
 
                 0x0C => {
-                    (s.airport_min_year)(r#as, i32::from(buf.word()?));
-                    let max_year = buf.word()?;
+                    (s.airport_min_year)(r#as, i32::from(buf.read_word()?));
+                    let max_year = buf.read_word()?;
                     (s.airport_max_year)(
                         r#as,
                         if max_year == 0xFFFF {
@@ -314,22 +314,23 @@ unsafe fn airport_change_info(
                     );
                 }
 
-                0x0D => (s.airport_ttdp_type)(r#as, buf.byte()?),
+                0x0D => (s.airport_ttdp_type)(r#as, buf.read_byte()?),
 
                 0x0E => (s.airport_catchment)(
                     r#as,
-                    buf.byte()?.clamp(1, crate::station_type::MAX_CATCHMENT),
+                    buf.read_byte()?
+                        .clamp(1, crate::station_type::MAX_CATCHMENT),
                 ),
 
-                0x0F => (s.airport_noise)(r#as, buf.byte()?),
+                0x0F => (s.airport_noise)(r#as, buf.read_byte()?),
 
-                0x10 => (s.airport_name)(r#as, buf.word()?),
+                0x10 => (s.airport_name)(r#as, buf.read_word()?),
 
                 // Maintenance cost factor
-                0x11 => (s.airport_maintenance)(r#as, buf.word()?),
+                0x11 => (s.airport_maintenance)(r#as, buf.read_word()?),
 
                 // Badge list
-                0x12 => buf.badges(
+                0x12 => buf.assign_badge_list(
                     crate::newgrf::GrfSpecFeature::GSF_AIRPORTS.0,
                     (s.shared().specs().airport().badge_list)(r#as),
                 )?,
@@ -348,8 +349,8 @@ unsafe fn airport_tiles_change_info(
     first: u32,
     last: u32,
     prop: u32,
-    buf: &mut Reader<'_>,
-) -> Result<ChangeInfoResult, ReadError> {
+    buf: &mut ByteReaderRef<'_>,
+) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
     unsafe {
         let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
@@ -383,7 +384,7 @@ unsafe fn airport_tiles_change_info(
             match prop {
                 // Substitute airport tile type
                 0x08 => {
-                    let subs_id = buf.byte()?;
+                    let subs_id = buf.read_byte()?;
                     if subs_id >= NEW_AIRPORTTILE_OFFSET {
                         /* The substitute id must be one of the original airport tiles. */
                         grf_msg!(
@@ -425,7 +426,7 @@ unsafe fn airport_tiles_change_info(
 
                 // Airport tile override
                 0x09 => {
-                    let override_id = buf.byte()?;
+                    let override_id = buf.read_byte()?;
 
                     /* The airport tile being overridden must be an original airport tile. */
                     if override_id >= NEW_AIRPORTTILE_OFFSET {
@@ -446,23 +447,27 @@ unsafe fn airport_tiles_change_info(
                 }
 
                 // Callback mask
-                0x0E => (s.tile_callbacks)(tsp, buf.byte()?),
+                0x0E => (s.tile_callbacks)(tsp, buf.read_byte()?),
 
                 // Animation information
                 0x0F => {
-                    (s.shared().specs().airport_tile().animation().frames)(tsp, buf.byte()?);
-                    (s.shared().specs().airport_tile().animation().status)(tsp, buf.byte()?);
+                    (s.shared().specs().airport_tile().animation().frames)(tsp, buf.read_byte()?);
+                    (s.shared().specs().airport_tile().animation().status)(tsp, buf.read_byte()?);
                 }
 
                 // Animation speed
-                0x10 => (s.shared().specs().airport_tile().animation().speed)(tsp, buf.byte()?),
+                0x10 => {
+                    (s.shared().specs().airport_tile().animation().speed)(tsp, buf.read_byte()?)
+                }
 
                 // Animation triggers
-                0x11 => (s.shared().specs().airport_tile().animation().triggers)(tsp, buf.byte()?),
+                0x11 => {
+                    (s.shared().specs().airport_tile().animation().triggers)(tsp, buf.read_byte()?)
+                }
 
                 // Badge list. AirportTilesChangeInfo uses the tram feature for badge-seen
                 // bookkeeping.
-                0x12 => buf.badges(
+                0x12 => buf.assign_badge_list(
                     crate::newgrf::GrfSpecFeature::GSF_TRAMTYPES.0,
                     (s.shared().specs().airport_tile().badge_list)(tsp),
                 )?,
@@ -483,11 +488,11 @@ macro_rules! parser_entry {
             first: u32,
             last: u32,
             prop: u32,
-            native: *mut ByteReader,
+            native: *mut NativeByteReader,
             result: *mut u8,
         ) -> u8 {
             let s = unsafe { &*s };
-            let mut reader = unsafe { Reader::new(native, &*s.reader) };
+            let mut reader = unsafe { ByteReaderRef::new(native, &*s.reader) };
             u8::from(
                 match unsafe {
                     $parser(
@@ -505,7 +510,7 @@ macro_rules! parser_entry {
                         }
                         true
                     }
-                    Err(ReadError) => false,
+                    Err(OTTDByteReaderSignal) => false,
                 },
             )
         }

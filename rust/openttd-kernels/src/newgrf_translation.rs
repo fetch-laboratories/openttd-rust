@@ -9,7 +9,9 @@
     clippy::too_many_arguments
 )]
 use crate::debug::{Bytes, grf_msg};
-use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
+use crate::newgrf_bytereader::{
+    ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read, Services as ReaderServices,
+};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS};
 use std::ffi::{c_char, c_void};
 #[repr(C)]
@@ -22,13 +24,13 @@ pub struct Services {
 }
 fn load(
     s: &Services,
-    reader: &mut Reader<'_>,
+    reader: &mut ByteReaderRef<'_>,
     file: *mut c_void,
     first: u32,
     last: u32,
     name: *const c_char,
     len: usize,
-) -> Result<i32, ReadError> {
+) -> Result<i32, OTTDByteReaderSignal> {
     if first != 0 {
         grf_msg!(
             1,
@@ -39,7 +41,7 @@ fn load(
     }
     (s.reset)(file, last);
     for _ in first..last {
-        let label = reader.dword()?.swap_bytes();
+        let label = reader.read_dword()?.swap_bytes();
         (s.append)(file, label);
     }
     let target = (s.override_file)();
@@ -61,11 +63,11 @@ pub unsafe extern "C" fn openttd_rust_load_translation(
     file: *mut c_void,
     first: u32,
     last: u32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
     name: *const c_char,
     len: usize,
 ) -> i32 {
-    let mut reader = unsafe { Reader::new(native, &*reads) };
+    let mut reader = unsafe { ByteReaderRef::new(native, &*reads) };
     load(unsafe { &*s }, &mut reader, file, first, last, name, len).unwrap_or(-1)
 }
 crate::abi::layouts! {

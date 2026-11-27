@@ -2,7 +2,7 @@
 //! GRF text loading actions. Checked reads return to the native loader error frame;
 //! earlier string publications remain visible if a later read fails.
 use crate::debug::{Bytes, grf_msg};
-use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
+use crate::newgrf_bytereader::{ByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_config::{GCS_ACTIVATED, GCS_INITIALISED};
 use crate::newgrf_loading::{self as loading, Services};
 use crate::string_validation::make_valid;
@@ -12,9 +12,9 @@ use std::ffi::c_void;
 pub(crate) unsafe fn translate_grf_strings(
     s: &Services,
     buf: &mut ByteReader,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let grfid = buf.dword()?;
+        let grfid = buf.read_dword()?;
         let config = ((*s.global).get_grf_config)(grfid, u32::MAX);
         let status = if config.is_null() {
             None
@@ -40,12 +40,12 @@ pub(crate) unsafe fn translate_grf_strings(
             return Ok(());
         }
         let language = if loading::file_version(s, loading::file()) >= 8 {
-            buf.byte()?
+            buf.read_byte()?
         } else {
             0x7f
         };
-        let num_strings = buf.byte()?;
-        let first_id = u32::from(buf.word()?);
+        let num_strings = buf.read_byte()?;
+        let first_id = u32::from(buf.read_word()?);
         let end = first_id + u32::from(num_strings);
         if !((first_id >= 0xd000 && end <= 0xd400) || (first_id >= 0xd800 && end <= 0xe000)) {
             grf_msg!(
@@ -58,7 +58,7 @@ pub(crate) unsafe fn translate_grf_strings(
             if buf.remaining() == 0 {
                 break;
             }
-            let string = buf.string();
+            let string = buf.read_string();
             if string.1 == 0 {
                 grf_msg!(7, "TranslateGRFString: Ignoring empty string.");
                 continue;
@@ -98,12 +98,12 @@ crate::abi::layouts! {
 pub(crate) unsafe fn feature_new_name(
     s: &Services,
     buf: &mut ByteReader,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     use crate::newgrf::{GSF_AIRCRAFT, GSF_BADGES, GSF_END};
     unsafe {
         let file = loading::file();
         let new_scheme = loading::file_version(s, file) >= 7;
-        let feature = buf.byte()?;
+        let feature = buf.read_byte()?;
         let text = &*s.text;
         if feature >= GSF_END && feature != crate::newgrf::GSF_ORIGINAL_STRINGS {
             grf_msg!(
@@ -112,15 +112,15 @@ pub(crate) unsafe fn feature_new_name(
             );
             return Ok(());
         }
-        let mut language = buf.byte()?;
-        let count = buf.byte()?;
+        let mut language = buf.read_byte()?;
+        let count = buf.read_byte()?;
         let generic = language & 0x80 != 0;
         let mut id = if generic {
-            buf.word()?
+            buf.read_word()?
         } else if feature <= GSF_AIRCRAFT || feature == GSF_BADGES {
-            buf.extended()?
+            buf.read_extended_byte()?
         } else {
-            u16::from(buf.byte()?)
+            u16::from(buf.read_byte()?)
         };
         language &= 0x7f;
         let end = id.wrapping_add(u16::from(count));
@@ -136,7 +136,7 @@ pub(crate) unsafe fn feature_new_name(
         let bindings = &*s.bindings;
         let grfid = (s.shared().grf_file_id)(file);
         while id < end && buf.remaining() != 0 {
-            let name = buf.string();
+            let name = buf.read_string();
             grf_msg!(
                 8,
                 "FeatureNewName: 0x{:04X} <- {}",

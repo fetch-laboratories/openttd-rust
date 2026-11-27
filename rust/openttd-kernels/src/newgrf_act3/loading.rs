@@ -12,7 +12,7 @@ use crate::newgrf::{
     GSF_RAILTYPES, GSF_ROADSTOPS, GSF_ROADTYPES, GSF_ROADVEHICLES, GSF_SHIPS, GSF_STATIONS,
     GSF_TRAINS, GSF_TRAMTYPES,
 };
-use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
+use crate::newgrf_bytereader::{ByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_commons::{SG_DEFAULT, StandardSpriteGroup};
 use crate::newgrf_loading::{self as loading, Services};
 use crate::newgrf_specs::SpecServices;
@@ -46,7 +46,7 @@ unsafe fn vehicle_map(
     buf: &mut ByteReader,
     feature: u8,
     mut count: u8,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
         let override_wagon = count & 0x80 != 0;
         if override_wagon {
@@ -69,7 +69,7 @@ unsafe fn vehicle_map(
         let file = loading::file();
         let mut engines = Vec::with_capacity(usize::from(count));
         for i in 0..count {
-            let local = buf.extended()?;
+            let local = buf.read_extended_byte()?;
             let engine = crate::engine_loading::openttd_rust_engine_definition(
                 &*s.engine, file, feature, local, false,
             );
@@ -83,10 +83,10 @@ unsafe fn vehicle_map(
                 remember_last(usize::from(i), id);
             }
         }
-        let cargos = buf.byte()?;
+        let cargos = buf.read_byte()?;
         for cargo_index in 0..cargos {
-            let cargo = buf.byte()?;
-            let id = buf.word()?;
+            let cargo = buf.read_byte()?;
+            let id = buf.read_word()?;
             if !valid_group(id, "VehicleMapSpriteGroup") {
                 continue;
             }
@@ -114,7 +114,7 @@ unsafe fn vehicle_map(
                 }
             }
         }
-        let id = buf.word()?;
+        let id = buf.read_word()?;
         if !valid_group(id, "VehicleMapSpriteGroup") {
             return Ok(());
         }
@@ -364,17 +364,17 @@ unsafe fn map_sprite_group(
     buf: &mut ByteReader,
     feature: u8,
     count: u8,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
         let mut ids = [0; 256];
         for id in &mut ids[..usize::from(count)] {
-            *id = buf.extended()?;
+            *id = buf.read_extended_byte()?;
         }
         let ids = &ids[..usize::from(count)];
-        let cargos = buf.byte()?;
+        let cargos = buf.read_byte()?;
         for _ in 0..cargos {
-            let cargo = buf.byte()?;
-            let id = buf.word()?;
+            let cargo = buf.read_byte()?;
+            let id = buf.read_word()?;
             if !valid_group(id, "MapSpriteGroup") {
                 continue;
             }
@@ -382,7 +382,7 @@ unsafe fn map_sprite_group(
                 map_binding(s, feature, local, Some(cargo), group(id));
             }
         }
-        let id = buf.word()?;
+        let id = buf.read_word()?;
         if valid_group(id, "MapSpriteGroup") {
             for &local in ids {
                 map_binding(s, feature, local, None, group(id));
@@ -394,10 +394,10 @@ unsafe fn map_sprite_group(
 pub(crate) unsafe fn feature_map_sprite_group(
     s: &Services,
     buf: &mut ByteReader,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let feature = buf.byte()?;
-        let count = buf.byte()?;
+        let feature = buf.read_byte()?;
+        let count = buf.read_byte()?;
         if feature >= GSF_END {
             grf_msg!(
                 1,
@@ -406,8 +406,8 @@ pub(crate) unsafe fn feature_map_sprite_group(
             return Ok(());
         }
         if count == 0 {
-            buf.byte()?;
-            let id = buf.word()?;
+            buf.read_byte()?;
+            let id = buf.read_word()?;
             if !valid_group(id, "FeatureMapSpriteGroup") {
                 return Ok(());
             }

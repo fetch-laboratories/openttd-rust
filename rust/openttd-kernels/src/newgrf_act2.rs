@@ -29,7 +29,7 @@ use crate::newgrf::{
     GSF_HOUSES, GSF_INDUSTRIES, GSF_INDUSTRYTILES, GSF_OBJECTS, GSF_RAILTYPES, GSF_ROADSTOPS,
     GSF_ROADTYPES, GSF_ROADVEHICLES, GSF_SHIPS, GSF_STATIONS, GSF_TRAINS, GSF_TRAMTYPES,
 };
-use crate::newgrf_bytereader::{Cursor, Read, ReadError, VarSize};
+use crate::newgrf_bytereader::{ByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_commons::{
     TLF_BB_XY_OFFSET, TLF_BB_Z_OFFSET, TLF_CHILD_X_OFFSET, TLF_CHILD_Y_OFFSET, TLF_CUSTOM_PALETTE,
     TLF_DODRAW, TLF_DRAWING_FLAGS, TLF_KNOWN_FLAGS, TLF_NON_GROUND_FLAGS, TLF_NOTHING, TLF_PALETTE,
@@ -284,44 +284,43 @@ unsafe fn deterministic<R: Read>(
     setid: u8,
     kind: u8,
     line: u32,
-) -> Result<Handle, ReadError> {
+) -> Result<Handle, OTTDByteReaderSignal> {
     unsafe {
         let scope = if has_bit(kind, 1) {
             VSG_SCOPE_PARENT
         } else {
             VSG_SCOPE_SELF
         };
-        // The six dispatch cases prove that the native size switch has no default here.
         let (size, varsize) = match gb(u32::from(kind), 2, 2) {
-            0 => (DSG_SIZE_BYTE, VarSize::Byte),
-            1 => (DSG_SIZE_WORD, VarSize::Word),
-            _ => (DSG_SIZE_DWORD, VarSize::Dword),
+            0 => (DSG_SIZE_BYTE, 1),
+            1 => (DSG_SIZE_WORD, 2),
+            _ => (DSG_SIZE_DWORD, 4),
         };
         let group = (s.deterministic_new)(line, scope, size);
         let mut first = true;
         loop {
             let a = (s.adjust_begin)(group);
-            *a.operation = if first { DSGA_OP_ADD } else { b.byte()? };
+            *a.operation = if first { DSGA_OP_ADD } else { b.read_byte()? };
             first = false;
-            let variable = b.byte()?;
+            let variable = b.read_byte()?;
             *a.variable = variable;
             if variable == 0x7E {
-                *a.subroutine = group_ref(s, l, setid, kind, u16::from(b.byte()?));
+                *a.subroutine = group_ref(s, l, setid, kind, u16::from(b.read_byte()?));
             } else {
                 *a.parameter = if is_inside_mm(usize::from(variable), 0x60, 0x80) {
-                    b.byte()?
+                    b.read_byte()?
                 } else {
                     0
                 };
             }
-            let varadjust = b.byte()?;
+            let varadjust = b.read_byte()?;
             *a.shift_num = gb(u32::from(varadjust), 0, 5) as u8;
             let adjust_type = gb(u32::from(varadjust), 6, 2) as u8;
             *a.kind = adjust_type;
-            *a.and_mask = b.var_size(varsize)?;
+            *a.and_mask = b.read_var_size(varsize)?;
             if adjust_type != DSGA_TYPE_NONE {
-                *a.add_val = b.var_size(varsize)?;
-                let divisor = b.var_size(varsize)?;
+                *a.add_val = b.read_var_size(varsize)?;
+                let divisor = b.read_var_size(varsize)?;
                 *a.divmod_val = if divisor == 0 { 1 } else { divisor };
             } else {
                 *a.add_val = 0;
@@ -331,19 +330,19 @@ unsafe fn deterministic<R: Read>(
                 break;
             }
         }
-        let count = b.byte()?;
+        let count = b.read_byte()?;
         let mut ranges = Vec::with_capacity(usize::from(count));
         for _ in 0..count {
-            let r = read_result(s, l, setid, kind, b.word()?);
-            let low = b.var_size(varsize)?;
-            let high = b.var_size(varsize)?;
+            let r = read_result(s, l, setid, kind, b.read_word()?);
+            let low = b.read_var_size(varsize)?;
+            let high = b.read_var_size(varsize)?;
             ranges.push(Range {
                 result: r,
                 low,
                 high,
             });
         }
-        let mut default = read_result(s, l, setid, kind, b.word()?);
+        let mut default = read_result(s, l, setid, kind, b.read_word()?);
         (s.deterministic_default)(group, default);
         (s.deterministic_error)(
             group,
@@ -410,7 +409,7 @@ unsafe fn randomized<R: Read>(
     setid: u8,
     kind: u8,
     line: u32,
-) -> Result<Handle, ReadError> {
+) -> Result<Handle, OTTDByteReaderSignal> {
     unsafe {
         let group = (s.random_new)(line);
         let fields = (s.random_storage)(group);
@@ -423,17 +422,17 @@ unsafe fn randomized<R: Read>(
             if feature <= GSF_AIRCRAFT {
                 *fields.scope = VSG_SCOPE_RELATIVE;
             }
-            *fields.count = b.byte()?;
+            *fields.count = b.read_byte()?;
         }
-        let triggers = b.byte()?;
+        let triggers = b.read_byte()?;
         *fields.triggers = gb(u32::from(triggers), 0, 7) as u8;
         *fields.compare = if has_bit(triggers, 7) {
             RSG_CMP_ALL
         } else {
             RSG_CMP_ANY
         };
-        *fields.lowest_bit = b.byte()?;
-        let count = b.byte()?;
+        *fields.lowest_bit = b.read_byte()?;
+        let count = b.read_byte()?;
         if !has_exactly_one_bit(count) {
             grf_msg!(
                 1,
@@ -442,7 +441,7 @@ unsafe fn randomized<R: Read>(
         }
         (s.random_reserve)(group, usize::from(count));
         for _ in 0..count {
-            let value = group_ref(s, l, setid, kind, b.word()?);
+            let value = group_ref(s, l, setid, kind, b.read_word()?);
             (s.random_append)(group, value);
         }
         Ok(group)
@@ -456,9 +455,9 @@ unsafe fn real<R: Read>(
     setid: u8,
     kind: u8,
     line: u32,
-) -> Result<Option<Handle>, ReadError> {
+) -> Result<Option<Handle>, OTTDByteReaderSignal> {
     unsafe {
-        let num_loading = b.byte()?;
+        let num_loading = b.read_byte()?;
         if loading::openttd_rust_grf_has_sets_abi(feature) == 0 {
             grf_msg!(0, "NewSpriteGroup: No sprite set to work on! Skipping");
             return Ok(None);
@@ -479,7 +478,7 @@ unsafe fn real<R: Read>(
                 return Ok(Some(ptr::null()));
             }
             1 => {
-                let id = b.word()?;
+                let id = b.read_word()?;
                 let group = create_group(s, l, feature, setid, kind, id);
                 grf_msg!(
                     8,
@@ -492,7 +491,7 @@ unsafe fn real<R: Read>(
         }
         let mut loaded = Vec::with_capacity(usize::from(kind));
         for i in 0..kind {
-            let id = b.word()?;
+            let id = b.read_word()?;
             loaded.push(id);
             grf_msg!(
                 8,
@@ -503,7 +502,7 @@ unsafe fn real<R: Read>(
         }
         let mut loading = Vec::with_capacity(usize::from(num_loading));
         for i in 0..num_loading {
-            let id = b.word()?;
+            let id = b.read_word()?;
             loading.push(id);
             grf_msg!(
                 8,
@@ -557,7 +556,7 @@ unsafe fn production<R: Read>(
     b: &mut R,
     kind: u8,
     line: u32,
-) -> Result<Option<Handle>, ReadError> {
+) -> Result<Option<Handle>, OTTDByteReaderSignal> {
     unsafe {
         if kind > 2 {
             grf_msg!(
@@ -574,21 +573,21 @@ unsafe fn production<R: Read>(
             *f.num_input = INDUSTRY_ORIGINAL_NUM_INPUTS as u8;
             for i in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
                 *f.subtract_input.add(i) = if kind == 0 {
-                    b.word()? as i16
+                    b.read_word()? as i16
                 } else {
-                    i16::from(b.byte()?)
+                    i16::from(b.read_byte()?)
                 };
             }
             *f.num_output = INDUSTRY_ORIGINAL_NUM_OUTPUTS as u8;
             for i in 0..INDUSTRY_ORIGINAL_NUM_OUTPUTS {
                 *f.add_output.add(i) = if kind == 0 {
-                    b.word()?
+                    b.read_word()?
                 } else {
-                    u16::from(b.byte()?)
+                    u16::from(b.read_byte()?)
                 };
             }
         } else {
-            let count = b.byte()?;
+            let count = b.read_byte()?;
             *f.num_input = count;
             if usize::from(count) > INDUSTRY_NUM_INPUTS {
                 disable(
@@ -601,7 +600,7 @@ unsafe fn production<R: Read>(
             }
             for i in 0..usize::from(count) {
                 let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
-                    b.byte()?,
+                    b.read_byte()?,
                     (*loading::openttd_rust_grf_execution()).grffile,
                     false,
                 );
@@ -617,9 +616,9 @@ unsafe fn production<R: Read>(
                     return Ok(None);
                 }
                 *f.cargo_input.add(i) = cargo;
-                *f.subtract_input.add(i) = i16::from(b.byte()?);
+                *f.subtract_input.add(i) = i16::from(b.read_byte()?);
             }
-            let count = b.byte()?;
+            let count = b.read_byte()?;
             *f.num_output = count;
             if usize::from(count) > INDUSTRY_NUM_OUTPUTS {
                 disable(
@@ -632,7 +631,7 @@ unsafe fn production<R: Read>(
             }
             for i in 0..usize::from(count) {
                 let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
-                    b.byte()?,
+                    b.read_byte()?,
                     (*loading::openttd_rust_grf_execution()).grffile,
                     false,
                 );
@@ -648,10 +647,10 @@ unsafe fn production<R: Read>(
                     return Ok(None);
                 }
                 *f.cargo_output.add(i) = cargo;
-                *f.add_output.add(i) = u16::from(b.byte()?);
+                *f.add_output.add(i) = u16::from(b.read_byte()?);
             }
         }
-        *f.again = b.byte()?;
+        *f.again = b.read_byte()?;
         Ok(Some(group))
     }
 }
@@ -688,13 +687,13 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
     image: *mut PalSpriteID,
     max_sprite: *mut u16,
     max_palette: *mut u16,
-) -> Result<u8, ReadError> {
+) -> Result<u8, OTTDByteReaderSignal> {
     unsafe {
         let image = (s.pal_sprite_storage)(image);
-        *image.sprite = u32::from(b.word()?);
-        *image.pal = u32::from(b.word()?);
+        *image.sprite = u32::from(b.read_word()?);
+        *image.pal = u32::from(b.read_word()?);
         let flags = if read_flags {
-            b.word()? as u8
+            b.read_word()? as u8
         } else {
             TLF_NOTHING
         };
@@ -784,7 +783,7 @@ unsafe fn layout_registers<R: Read>(
     parent: bool,
     layout: *mut NewGRFSpriteLayout,
     index: u32,
-) -> Result<(), ReadError> {
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
         if flags & TLF_DRAWING_FLAGS == 0 {
             return Ok(());
@@ -795,32 +794,32 @@ unsafe fn layout_registers<R: Read>(
         let regs = (s.registers)(layout, index);
         (*regs).flags = flags & TLF_DRAWING_FLAGS;
         if flags & TLF_DODRAW != 0 {
-            (*regs).dodraw = b.byte()?;
+            (*regs).dodraw = b.read_byte()?;
         }
         if flags & TLF_SPRITE != 0 {
-            (*regs).sprite = b.byte()?;
+            (*regs).sprite = b.read_byte()?;
         }
         if flags & TLF_PALETTE != 0 {
-            (*regs).palette = b.byte()?;
+            (*regs).palette = b.read_byte()?;
         }
         if parent {
             if flags & TLF_BB_XY_OFFSET != 0 {
-                (*regs).delta[0] = b.byte()?;
-                (*regs).delta[1] = b.byte()?;
+                (*regs).delta[0] = b.read_byte()?;
+                (*regs).delta[1] = b.read_byte()?;
             }
             if flags & TLF_BB_Z_OFFSET != 0 {
-                (*regs).delta[2] = b.byte()?;
+                (*regs).delta[2] = b.read_byte()?;
             }
         } else {
             if flags & TLF_CHILD_X_OFFSET != 0 {
-                (*regs).delta[0] = b.byte()?;
+                (*regs).delta[0] = b.read_byte()?;
             }
             if flags & TLF_CHILD_Y_OFFSET != 0 {
-                (*regs).delta[1] = b.byte()?;
+                (*regs).delta[1] = b.read_byte()?;
             }
         }
         if flags & TLF_SPRITE_VAR10 != 0 {
-            let value = b.byte()?;
+            let value = b.read_byte()?;
             (*regs).sprite_var10 = value;
             if u32::from(value) > TLR_MAX_VAR10 {
                 grf_msg!(
@@ -834,7 +833,7 @@ unsafe fn layout_registers<R: Read>(
             }
         }
         if flags & TLF_PALETTE_VAR10 != 0 {
-            let value = b.byte()?;
+            let value = b.read_byte()?;
             (*regs).palette_var10 = value;
             if u32::from(value) > TLR_MAX_VAR10 {
                 grf_msg!(
@@ -862,7 +861,7 @@ pub(crate) unsafe fn read_layout<R: Read>(
     allow_var10: bool,
     no_z: bool,
     layout: *mut NewGRFSpriteLayout,
-) -> Result<bool, ReadError> {
+) -> Result<bool, OTTDByteReaderSignal> {
     unsafe {
         let has_flags = has_bit(count, 6);
         clr_bit(&mut count, 6);
@@ -931,15 +930,15 @@ pub(crate) unsafe fn read_layout<R: Read>(
                 disable(s, l, STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT.0, b"");
                 return Ok(true);
             }
-            *f.x = b.byte()? as i8;
-            *f.y = b.byte()? as i8;
+            *f.x = b.read_byte()? as i8;
+            *f.y = b.read_byte()? as i8;
             if !no_z {
-                *f.z = b.byte()? as i8;
+                *f.z = b.read_byte()? as i8;
             }
             if (s.is_parent)(seq) {
-                *f.extent_x = b.byte()?;
-                *f.extent_y = b.byte()?;
-                *f.extent_z = b.byte()?;
+                *f.extent_x = b.read_byte()?;
+                *f.extent_y = b.read_byte()?;
+                *f.extent_z = b.read_byte()?;
             }
             layout_registers(s, l, b, flags, (s.is_parent)(seq), layout, i + 1)?;
             if disabled() {
@@ -981,9 +980,13 @@ pub(crate) unsafe fn read_layout<R: Read>(
         Ok(false)
     }
 }
-unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result<(), ReadError> {
+unsafe fn parse<R: Read>(
+    s: &Services,
+    l: &LoadingServices,
+    b: &mut R,
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let feature = b.byte()?;
+        let feature = b.read_byte()?;
         if feature >= GSF_END {
             grf_msg!(
                 1,
@@ -992,8 +995,8 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
             );
             return Ok(());
         }
-        let setid = b.byte()?;
-        let kind = b.byte()?;
+        let setid = b.read_byte()?;
+        let kind = b.read_byte()?;
         let line = (*loading::openttd_rust_grf_execution()).nfo_line;
         let group = match kind {
             0x81 | 0x82 | 0x85 | 0x86 | 0x89 | 0x8A => deterministic(s, l, b, setid, kind, line)?,
@@ -1056,6 +1059,10 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
         Ok(())
     }
 }
-pub(crate) unsafe fn parse_action(s: &Services, l: &LoadingServices, reader: &mut Cursor) -> bool {
+pub(crate) unsafe fn parse_action(
+    s: &Services,
+    l: &LoadingServices,
+    reader: &mut ByteReader,
+) -> bool {
     unsafe { parse(s, l, reader).is_ok() }
 }

@@ -242,7 +242,7 @@ impl Services {
 use crate::newgrf::{
     GLS_ACTIVATION, GLS_FILESCAN, GLS_INIT, GLS_LABELSCAN, GLS_RESERVE, GLS_SAFETYSCAN,
 };
-use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
+use crate::newgrf_bytereader::{ByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_config::{
     GCS_ACTIVATED, GCS_DISABLED, GCS_INITIALISED, GCS_NOT_FOUND, GCS_UNKNOWN, GRFP_USE_MASK,
     INIT_ONLY, INVALID, RESERVED, STATIC, SYSTEM, UNSAFE,
@@ -427,7 +427,7 @@ unsafe fn openttd_rust_grf_param(s: &Services, param: u8, cond: *mut u32) -> u32
 unsafe fn param(s: &Services, number: u8) -> u32 {
     unsafe { openttd_rust_grf_param(s, number, ptr::null_mut()) }
 }
-unsafe fn cfg_apply(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
+unsafe fn cfg_apply(s: &Services, b: &mut ByteReader) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
         let f = (*execution()).file;
         let pos = (s.position)(f);
@@ -457,14 +457,14 @@ unsafe fn cfg_apply(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
         }
         (s.seek)(f, pos, false);
         loop {
-            let pn = u32::from(b.byte()?);
+            let pn = u32::from(b.read_byte()?);
             if pn == 255 {
                 break;
             }
-            let size = b.byte()?;
+            let size = b.read_byte()?;
             let add = size & 128 != 0;
             let size = u32::from(size & 127);
-            let offset = u32::from(b.extended()?);
+            let offset = u32::from(b.read_extended_byte()?);
             if pn < 128
                 && pn.wrapping_add(size.wrapping_sub(1) / 4) as usize >= (s.param_count)(file())
             {
@@ -506,19 +506,19 @@ unsafe fn cfg_apply(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
         Ok(())
     }
 }
-unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
+unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let pn = b.byte()?;
-        let mut size = b.byte()?;
-        let cond = b.byte()?;
+        let pn = b.read_byte()?;
+        let mut size = b.read_byte()?;
+        let cond = b.read_byte()?;
         if cond < 2 {
             size = 1;
         }
         let (mut value, mask) = match size {
-            8 => (b.dword()?, b.dword()?),
-            4 => (b.dword()?, u32::MAX),
-            2 => (u32::from(b.word()?), 65535),
-            1 => (u32::from(b.byte()?), 255),
+            8 => (b.read_dword()?, b.read_dword()?),
+            4 => (b.read_dword()?, u32::MAX),
+            2 => (u32::from(b.read_word()?), 65535),
+            1 => (u32::from(b.read_byte()?), 255),
             _ => (0, 0),
         };
         if pn < 128 && (s.param_count)(file()) <= usize::from(pn) {
@@ -622,7 +622,7 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
             grf_msg!(2, "SkipIf: Not skipping sprites, test was false");
             return Ok(());
         }
-        let count = b.byte()?;
+        let count = b.read_byte()?;
         let mut choice = None;
         if let Some(labels) = (*LABELS.get()).get(&(file() as usize)) {
             for label in labels {
@@ -670,11 +670,15 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
 unsafe fn config_filename(s: &Services, c: *const c_void) -> &[u8] {
     unsafe { (s.config_filename)(c).bytes() }
 }
-unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), ReadBounds> {
+unsafe fn grf_info(
+    s: &Services,
+    b: &mut ByteReader,
+    scan: bool,
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let version = b.byte()?;
-        let id = b.dword()?;
-        let (name, size) = b.string();
+        let version = b.read_byte()?;
+        let id = b.read_dword()?;
+        let (name, size) = b.read_string();
         if scan {
             (s.set_config_id)(config(), id);
             if !(2..=8).contains(&version) {
@@ -699,7 +703,7 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
             }
             (s.scan_name)(config(), id, name, size);
             if b.remaining() > 0 {
-                let (info, size) = b.string();
+                let (info, size) = b.read_string();
                 (s.scan_info)(config(), id, info, size);
             }
             (*execution()).skip_sprites = -1;
@@ -750,11 +754,15 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
         Ok(())
     }
 }
-unsafe fn inhibit(s: &Services, b: &mut ByteReader, safe: bool) -> Result<(), ReadBounds> {
+unsafe fn inhibit(
+    s: &Services,
+    b: &mut ByteReader,
+    safe: bool,
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let num = b.byte()?;
+        let num = b.read_byte()?;
         for _ in 0..num {
-            let id = b.dword()?;
+            let id = b.read_dword()?;
             if safe {
                 if id != (s.config_id)(config()) {
                     openttd_rust_grf_unsafe(s);
@@ -776,9 +784,9 @@ unsafe fn inhibit(s: &Services, b: &mut ByteReader, safe: bool) -> Result<(), Re
         Ok(())
     }
 }
-unsafe fn define_label(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
+unsafe fn define_label(s: &Services, b: &mut ByteReader) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let label = b.byte()?;
+        let label = b.read_byte()?;
         let pos = (s.position)((*execution()).file);
         (*LABELS.get())
             .entry(file() as usize)
@@ -911,13 +919,17 @@ unsafe fn perform_grm(
         u32::MAX
     }
 }
-unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
+unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
-        let target = b.byte()?;
-        let mut op = b.byte()?;
-        let mut src1 = u32::from(b.byte()?);
-        let mut src2 = u32::from(b.byte()?);
-        let data = if b.remaining() >= 4 { b.dword()? } else { 0 };
+        let target = b.read_byte()?;
+        let mut op = b.read_byte()?;
+        let mut src1 = u32::from(b.read_byte()?);
+        let mut src2 = u32::from(b.read_byte()?);
+        let data = if b.remaining() >= 4 {
+            b.read_dword()?
+        } else {
+            0
+        };
         if op & 128 != 0 {
             if target < 128 && usize::from(target) < (s.param_count)(file()) {
                 grf_msg!(7, "ParamSet: Param {} already defined, skipping", target);
@@ -1197,7 +1209,7 @@ unsafe fn dispatch(
     action: u8,
     stage: u8,
     b: &mut ByteReader,
-) -> Result<(), ReadBounds> {
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
         match (action, stage) {
             (6, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return cfg_apply(s, b),
@@ -1207,7 +1219,7 @@ unsafe fn dispatch(
             (8, GLS_FILESCAN) => return grf_info(s, b, true),
             (8, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return grf_info(s, b, false),
             (13, GLS_SAFETYSCAN) => {
-                let target = b.byte()?;
+                let target = b.read_byte()?;
                 if target >= 128 && target != 0x9E {
                     openttd_rust_grf_unsafe(s);
                 }
@@ -1218,7 +1230,7 @@ unsafe fn dispatch(
                 return if crate::newgrf_act2::parse_action(&*s.action2, s, b) {
                     Ok(())
                 } else {
-                    Err(ReadBounds)
+                    Err(OTTDByteReaderSignal)
                 };
             }
             (14, GLS_SAFETYSCAN) => return inhibit(s, b, true),
@@ -1266,7 +1278,11 @@ unsafe fn dispatch(
             (20, GLS_FILESCAN) => (s.static_grf_info)(data, len),
             _ => true,
         };
-        if success { Ok(()) } else { Err(ReadBounds) }
+        if success {
+            Ok(())
+        } else {
+            Err(OTTDByteReaderSignal)
+        }
     }
 }
 unsafe fn decode_special_sprite(s: &Services, allocator: &mut Vec<u8>, num: u32, stage: u8) {
@@ -1288,7 +1304,7 @@ unsafe fn decode_special_sprite(s: &Services, allocator: &mut Vec<u8>, num: u32,
             allocator.as_ptr()
         };
         let mut reader = ByteReader::new(data, num as usize);
-        let result = reader.byte().and_then(|a| {
+        let result = reader.read_byte().and_then(|a| {
             match a {
                 0xFF => grf_msg!(2, "DecodeSpecialSprite: Unexpected data block, skipping"),
                 0xFE => grf_msg!(2, "DecodeSpecialSprite: Unexpected import block, skipping"),

@@ -21,7 +21,9 @@ use crate::engine_type::{
     AIR_CTOL, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM, VE_DEFAULT,
     VE_DISABLE_EFFECT, VE_TYPE_COUNT, VE_TYPE_START,
 };
-use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
+use crate::newgrf_bytereader::{
+    ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read, Services as ReaderServices,
+};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::newgrf_properties::{
     PROP_AIRCRAFT_CARGO_AGE_PERIOD, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_MAIL_CAPACITY,
@@ -55,19 +57,24 @@ crate::abi::layouts! {
     "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, id, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc };
 }
 
-fn common(_s: &Properties, e: E, prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
+fn common(
+    _s: &Properties,
+    e: E,
+    prop: i32,
+    r: &mut ByteReaderRef<'_>,
+) -> Result<i32, OTTDByteReaderSignal> {
     match prop {
         0x00 => write_field!(
             e.cast_mut(),
             info.base_intro,
-            crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR + i32::from(r.word()?)
+            crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR + i32::from(r.read_word()?)
         ),
-        0x02 => write_field!(e.cast_mut(), info.decay_speed, r.byte()?),
-        0x03 => write_field!(e.cast_mut(), info.lifelength, i32::from(r.byte()?)),
-        0x04 => write_field!(e.cast_mut(), info.base_life, i32::from(r.byte()?)),
-        0x06 => write_field!(e.cast_mut(), info.climates, r.byte()?),
+        0x02 => write_field!(e.cast_mut(), info.decay_speed, r.read_byte()?),
+        0x03 => write_field!(e.cast_mut(), info.lifelength, i32::from(r.read_byte()?)),
+        0x04 => write_field!(e.cast_mut(), info.base_life, i32::from(r.read_byte()?)),
+        0x06 => write_field!(e.cast_mut(), info.climates, r.read_byte()?),
         p if p == i32::from(PROP_VEHICLE_LOAD_AMOUNT) => {
-            write_field!(e.cast_mut(), info.load_amount, r.byte()?);
+            write_field!(e.cast_mut(), info.load_amount, r.read_byte()?);
         }
         _ => return Ok(CIR_UNKNOWN),
     }
@@ -153,9 +160,19 @@ fn visual(s: &Properties, value: u8) -> u8 {
     }
     effect as u8
 }
-fn callbacks(_s: &Properties, e: E, r: &mut Reader<'_>, high: bool) -> Result<(), ReadError> {
+fn callbacks(
+    _s: &Properties,
+    e: E,
+    r: &mut ByteReaderRef<'_>,
+    high: bool,
+) -> Result<(), OTTDByteReaderSignal> {
     let mut mask = u32::from(read_field!(e, info.callback_mask));
-    sb(&mut mask, if high { 8 } else { 0 }, 8, u32::from(r.byte()?));
+    sb(
+        &mut mask,
+        if high { 8 } else { 0 },
+        8,
+        u32::from(r.read_byte()?),
+    );
     write_field!(e.cast_mut(), info.callback_mask, mask as u16);
     Ok(())
 }
@@ -169,12 +186,12 @@ unsafe fn default_cargo(
     id: u16,
     file: File,
     kind: u8,
-    r: &mut Reader<'_>,
-) -> Result<(), ReadError> {
+    r: &mut ByteReaderRef<'_>,
+) -> Result<(), OTTDByteReaderSignal> {
     unsafe {
         (*temp(id)).fields.defaultcargo_grf = file;
     }
-    let value = r.byte()?;
+    let value = r.read_byte()?;
     let cargo = if value == 255 {
         INVALID_CARGO
     } else {
@@ -230,9 +247,9 @@ unsafe fn cargo_list(
     id: u16,
     file: File,
     include: bool,
-    r: &mut Reader<'_>,
-) -> Result<(), ReadError> {
-    let count = r.byte()?;
+    r: &mut ByteReaderRef<'_>,
+) -> Result<(), OTTDByteReaderSignal> {
+    let count = r.read_byte()?;
     unsafe {
         openttd_rust_engine_temp_refittability(&raw mut (*temp(id)).fields, include && count != 0);
         if include {
@@ -245,7 +262,7 @@ unsafe fn cargo_list(
         }
     }
     for _ in 0..count {
-        let cargo = openttd_rust_cargo_translate(r.byte()?, file, false);
+        let cargo = openttd_rust_cargo_translate(r.read_byte()?, file, false);
         if is_valid_cargo_type(cargo) {
             unsafe {
                 if include {
@@ -264,11 +281,11 @@ unsafe fn train(
     id: u16,
     file: File,
     prop: i32,
-    r: &mut Reader<'_>,
-) -> Result<i32, ReadError> {
+    r: &mut ByteReaderRef<'_>,
+) -> Result<i32, OTTDByteReaderSignal> {
     match prop {
         0x05 => {
-            let track = r.byte()?;
+            let track = r.read_byte()?;
             unsafe {
                 (*temp(id)).labels.clear();
             }
@@ -309,9 +326,9 @@ unsafe fn train(
                 }
             }
         }
-        0x08 => write_field!(OpenTTDEngine::rail(e), ai_passenger_only, r.byte()?),
+        0x08 => write_field!(OpenTTDEngine::rail(e), ai_passenger_only, r.read_byte()?),
         p if p == i32::from(PROP_TRAIN_SPEED) => {
-            let speed = r.word()?;
+            let speed = r.read_word()?;
             write_field!(
                 OpenTTDEngine::rail(e),
                 max_speed,
@@ -319,7 +336,7 @@ unsafe fn train(
             );
         }
         p if p == i32::from(PROP_TRAIN_POWER) => {
-            let power = r.word()?;
+            let power = r.read_word()?;
             write_field!(OpenTTDEngine::rail(e), power, power);
             if power != 0 {
                 if RailVehicleTypes(read_field!(OpenTTDEngine::rail(e), railveh_type))
@@ -340,16 +357,16 @@ unsafe fn train(
             }
         }
         p if p == i32::from(PROP_TRAIN_RUNNING_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::rail(e), running_cost, r.byte()?);
+            write_field!(OpenTTDEngine::rail(e), running_cost, r.read_byte()?);
         }
-        0x0e => price(s, e, VEH_TRAIN, r.dword()?),
+        0x0e => price(s, e, VEH_TRAIN, r.read_dword()?),
         0x12 => write_field!(
             OpenTTDEngine::rail(e),
             image_index,
-            image(s, VEH_TRAIN, r.byte()?)
+            image(s, VEH_TRAIN, r.read_byte()?)
         ),
         0x13 => {
-            let dual = r.byte()?;
+            let dual = r.read_byte()?;
             let kind = if dual != 0 {
                 RailVehicleTypes::MULTIHEAD
             } else if read_field!(OpenTTDEngine::rail(e), power) == 0 {
@@ -360,29 +377,29 @@ unsafe fn train(
             write_field!(OpenTTDEngine::rail(e), railveh_type, (kind).0);
         }
         p if p == i32::from(PROP_TRAIN_CARGO_CAPACITY) => {
-            write_field!(OpenTTDEngine::rail(e), capacity, r.byte()?);
+            write_field!(OpenTTDEngine::rail(e), capacity, r.read_byte()?);
         }
         0x15 => unsafe {
             default_cargo(s, e, id, file, VEH_TRAIN, r)?;
         },
         p if p == i32::from(PROP_TRAIN_WEIGHT) => {
-            let low = r.byte()?;
+            let low = r.read_byte()?;
             let mut weight = u32::from(read_field!(OpenTTDEngine::rail(e), weight));
             sb(&mut weight, 0, 8, u32::from(low));
             write_field!(OpenTTDEngine::rail(e), weight, weight as u16);
         }
         p if p == i32::from(PROP_TRAIN_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::rail(e), cost_factor, r.byte()?);
+            write_field!(OpenTTDEngine::rail(e), cost_factor, r.read_byte()?);
         }
         0x18 => {
             grf_msg!(
                 2,
                 "RailVehicleChangeInfo: Property 0x18 'AI rank' not used by NoAI, ignored."
             );
-            r.byte()?;
+            r.read_byte()?;
         }
         0x19 => {
-            let traction = r.byte()?;
+            let traction = r.read_byte()?;
             let class = match traction {
                 0..=7 => EC_STEAM,
                 8..=0x27 => EC_DIESEL,
@@ -405,25 +422,29 @@ unsafe fn train(
             write_field!(OpenTTDEngine::rail(e), engclass, class);
         }
         0x1a => unsafe {
-            openttd_rust_vehicle_order(id, r.extended()?);
+            openttd_rust_vehicle_order(id, r.read_extended_byte()?);
         },
-        0x1b => write_field!(OpenTTDEngine::rail(e), pow_wag_power, r.word()?),
-        0x1c => write_field!(e.cast_mut(), info.refit_cost, r.byte()?),
+        0x1b => write_field!(OpenTTDEngine::rail(e), pow_wag_power, r.read_word()?),
+        0x1c => write_field!(e.cast_mut(), info.refit_cost, r.read_byte()?),
         0x1d => unsafe {
-            refit(s, e, id, file, r.dword()?);
+            refit(s, e, id, file, r.read_dword()?);
         },
         0x1e => callbacks(s, e, r, false)?,
         p if p == i32::from(PROP_TRAIN_TRACTIVE_EFFORT) => {
-            write_field!(OpenTTDEngine::rail(e), tractive_effort, r.byte()?);
+            write_field!(OpenTTDEngine::rail(e), tractive_effort, r.read_byte()?);
         }
-        0x20 => write_field!(OpenTTDEngine::rail(e), air_drag, r.byte()?),
+        0x20 => write_field!(OpenTTDEngine::rail(e), air_drag, r.read_byte()?),
         p if p == i32::from(PROP_TRAIN_SHORTEN_FACTOR) => {
-            write_field!(OpenTTDEngine::rail(e), shorten_factor, r.byte()?);
+            write_field!(OpenTTDEngine::rail(e), shorten_factor, r.read_byte()?);
         }
-        0x22 => write_field!(OpenTTDEngine::rail(e), visual_effect, visual(s, r.byte()?)),
-        0x23 => write_field!(OpenTTDEngine::rail(e), pow_wag_weight, r.byte()?),
+        0x22 => write_field!(
+            OpenTTDEngine::rail(e),
+            visual_effect,
+            visual(s, r.read_byte()?)
+        ),
+        0x23 => write_field!(OpenTTDEngine::rail(e), pow_wag_weight, r.read_byte()?),
         0x24 => {
-            let high = r.byte()?;
+            let high = r.read_byte()?;
             if high > 4 {
                 grf_msg!(
                     2,
@@ -437,47 +458,51 @@ unsafe fn train(
             }
         }
         p if p == i32::from(PROP_TRAIN_USER_DATA) => {
-            write_field!(OpenTTDEngine::rail(e), user_def_data, r.byte()?);
+            write_field!(OpenTTDEngine::rail(e), user_def_data, r.read_byte()?);
         }
-        0x26 => write_field!(e.cast_mut(), info.retire_early, (r.byte()?) as i8),
-        0x27 => misc(s, e, r.byte()?),
+        0x26 => write_field!(e.cast_mut(), info.retire_early, (r.read_byte()?) as i8),
+        0x27 => misc(s, e, r.read_byte()?),
         0x28 => unsafe {
-            allowed(id, file, r.word()?);
+            allowed(id, file, r.read_word()?);
         },
         0x29 => unsafe {
-            disallowed(id, r.word()?);
+            disallowed(id, r.read_word()?);
         },
-        0x2a => write_field!(e.cast_mut(), info.base_intro, r.dword()? as i32),
+        0x2a => write_field!(e.cast_mut(), info.base_intro, r.read_dword()? as i32),
         p if p == i32::from(PROP_TRAIN_CARGO_AGE_PERIOD) => {
-            write_field!(e.cast_mut(), info.cargo_age_period, r.word()?);
+            write_field!(e.cast_mut(), info.cargo_age_period, r.read_word()?);
         }
         0x2c | 0x2d => unsafe {
             cargo_list(id, file, prop == 0x2c, r)?;
         },
         p if p == i32::from(PROP_TRAIN_CURVE_SPEED_MOD) => {
-            write_field!(OpenTTDEngine::rail(e), curve_speed_mod, r.word()? as i16);
+            write_field!(
+                OpenTTDEngine::rail(e),
+                curve_speed_mod,
+                r.read_word()? as i16
+            );
         }
         0x2f => write_field!(
             e.cast_mut(),
             info.variant_id,
-            crate::engine_type::EngineID(r.word()?)
+            crate::engine_type::EngineID(r.read_word()?)
         ),
-        0x30 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
+        0x30 => write_field!(e.cast_mut(), info.extra_flags, (r.read_dword()?) as u8),
         0x31 => callbacks(s, e, r, true)?,
         0x32 => unsafe {
-            (*temp(id)).fields.cargo_allowed_required = r.word()?;
+            (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x33 => unsafe {
-            let badges = r.badge_ids(VEH_TRAIN)?;
+            let badges = r.read_badge_list(VEH_TRAIN)?;
             (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         0x34 => {
-            let count = r.byte()?;
+            let count = r.read_byte()?;
             unsafe {
                 (*temp(id)).labels.clear();
             }
             for _ in 0..count {
-                let track = r.byte()?;
+                let track = r.read_byte()?;
                 let list = crate::type_registry::railtype_list_raw(file);
                 if usize::from(track) < list.len() {
                     let label = unsafe { list.at(usize::from(track)) }.0;
@@ -503,72 +528,76 @@ unsafe fn road(
     id: u16,
     file: File,
     prop: i32,
-    r: &mut Reader<'_>,
-) -> Result<i32, ReadError> {
+    r: &mut ByteReaderRef<'_>,
+) -> Result<i32, OTTDByteReaderSignal> {
     match prop {
         0x05 => unsafe {
-            (*temp(id)).fields.roadtramtype = r.byte()?.wrapping_add(1);
+            (*temp(id)).fields.roadtramtype = r.read_byte()?.wrapping_add(1);
         },
-        0x08 => write_field!(OpenTTDEngine::road(e), max_speed, u16::from(r.byte()?)),
+        0x08 => write_field!(OpenTTDEngine::road(e), max_speed, u16::from(r.read_byte()?)),
         p if p == i32::from(PROP_ROADVEH_RUNNING_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::road(e), running_cost, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), running_cost, r.read_byte()?);
         }
-        0x0a => price(s, e, VEH_ROAD, r.dword()?),
+        0x0a => price(s, e, VEH_ROAD, r.read_dword()?),
         0x0e => write_field!(
             OpenTTDEngine::road(e),
             image_index,
-            image(s, VEH_ROAD, r.byte()?)
+            image(s, VEH_ROAD, r.read_byte()?)
         ),
         p if p == i32::from(PROP_ROADVEH_CARGO_CAPACITY) => {
-            write_field!(OpenTTDEngine::road(e), capacity, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), capacity, r.read_byte()?);
         }
         0x10 => unsafe {
             default_cargo(s, e, id, file, VEH_ROAD, r)?;
         },
         p if p == i32::from(PROP_ROADVEH_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::road(e), cost_factor, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), cost_factor, r.read_byte()?);
         }
         0x12 => write_field!(
             OpenTTDEngine::road(e),
             sfx,
-            (s.sound)(file, u16::from(r.byte()?))
+            (s.sound)(file, u16::from(r.read_byte()?))
         ),
         p if p == i32::from(PROP_ROADVEH_POWER) => {
-            write_field!(OpenTTDEngine::road(e), power, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), power, r.read_byte()?);
         }
         p if p == i32::from(PROP_ROADVEH_WEIGHT) => {
-            write_field!(OpenTTDEngine::road(e), weight, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), weight, r.read_byte()?);
         }
         p if p == i32::from(PROP_ROADVEH_SPEED) => unsafe {
-            (*temp(id)).fields.rv_max_speed = r.byte()?;
+            (*temp(id)).fields.rv_max_speed = r.read_byte()?;
         },
         0x16 => unsafe {
-            refit(s, e, id, file, r.dword()?);
+            refit(s, e, id, file, r.read_dword()?);
         },
         0x17 => callbacks(s, e, r, false)?,
         p if p == i32::from(PROP_ROADVEH_TRACTIVE_EFFORT) => {
-            write_field!(OpenTTDEngine::road(e), tractive_effort, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), tractive_effort, r.read_byte()?);
         }
-        0x19 => write_field!(OpenTTDEngine::road(e), air_drag, r.byte()?),
-        0x1a => write_field!(e.cast_mut(), info.refit_cost, r.byte()?),
-        0x1b => write_field!(e.cast_mut(), info.retire_early, (r.byte()?) as i8),
-        0x1c => misc(s, e, r.byte()?),
+        0x19 => write_field!(OpenTTDEngine::road(e), air_drag, r.read_byte()?),
+        0x1a => write_field!(e.cast_mut(), info.refit_cost, r.read_byte()?),
+        0x1b => write_field!(e.cast_mut(), info.retire_early, (r.read_byte()?) as i8),
+        0x1c => misc(s, e, r.read_byte()?),
         0x1d => unsafe {
-            allowed(id, file, r.word()?);
+            allowed(id, file, r.read_word()?);
         },
         0x1e => unsafe {
-            disallowed(id, r.word()?);
+            disallowed(id, r.read_word()?);
         },
-        0x1f => write_field!(e.cast_mut(), info.base_intro, r.dword()? as i32),
+        0x1f => write_field!(e.cast_mut(), info.base_intro, r.read_dword()? as i32),
         0x20 => unsafe {
-            openttd_rust_vehicle_order(id, r.extended()?);
+            openttd_rust_vehicle_order(id, r.read_extended_byte()?);
         },
-        0x21 => write_field!(OpenTTDEngine::road(e), visual_effect, visual(s, r.byte()?)),
+        0x21 => write_field!(
+            OpenTTDEngine::road(e),
+            visual_effect,
+            visual(s, r.read_byte()?)
+        ),
         p if p == i32::from(PROP_ROADVEH_CARGO_AGE_PERIOD) => {
-            write_field!(e.cast_mut(), info.cargo_age_period, r.word()?);
+            write_field!(e.cast_mut(), info.cargo_age_period, r.read_word()?);
         }
         p if p == i32::from(PROP_ROADVEH_SHORTEN_FACTOR) => {
-            write_field!(OpenTTDEngine::road(e), shorten_factor, r.byte()?);
+            write_field!(OpenTTDEngine::road(e), shorten_factor, r.read_byte()?);
         }
         0x24 | 0x25 => unsafe {
             cargo_list(id, file, prop == 0x24, r)?;
@@ -576,15 +605,15 @@ unsafe fn road(
         0x26 => write_field!(
             e.cast_mut(),
             info.variant_id,
-            crate::engine_type::EngineID(r.word()?)
+            crate::engine_type::EngineID(r.read_word()?)
         ),
-        0x27 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
+        0x27 => write_field!(e.cast_mut(), info.extra_flags, (r.read_dword()?) as u8),
         0x28 => callbacks(s, e, r, true)?,
         0x29 => unsafe {
-            (*temp(id)).fields.cargo_allowed_required = r.word()?;
+            (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x2a => unsafe {
-            let badges = r.badge_ids(VEH_ROAD)?;
+            let badges = r.read_badge_list(VEH_ROAD)?;
             (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         _ => return common(s, e, prop, r),
@@ -597,57 +626,61 @@ unsafe fn ship(
     id: u16,
     file: File,
     prop: i32,
-    r: &mut Reader<'_>,
-) -> Result<i32, ReadError> {
+    r: &mut ByteReaderRef<'_>,
+) -> Result<i32, OTTDByteReaderSignal> {
     match prop {
         0x08 => write_field!(
             OpenTTDEngine::ship(e),
             image_index,
-            image(s, VEH_SHIP, r.byte()?)
+            image(s, VEH_SHIP, r.read_byte()?)
         ),
-        0x09 => write_field!(OpenTTDEngine::ship(e), old_refittable, r.byte()? != 0),
+        0x09 => write_field!(OpenTTDEngine::ship(e), old_refittable, r.read_byte()? != 0),
         p if p == i32::from(PROP_SHIP_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::ship(e), cost_factor, r.byte()?);
+            write_field!(OpenTTDEngine::ship(e), cost_factor, r.read_byte()?);
         }
         p if p == i32::from(PROP_SHIP_SPEED) => {
-            write_field!(OpenTTDEngine::ship(e), max_speed, u16::from(r.byte()?));
+            write_field!(OpenTTDEngine::ship(e), max_speed, u16::from(r.read_byte()?));
         }
         0x0c => unsafe {
             default_cargo(s, e, id, file, VEH_SHIP, r)?;
         },
         p if p == i32::from(PROP_SHIP_CARGO_CAPACITY) => {
-            write_field!(OpenTTDEngine::ship(e), capacity, r.word()?);
+            write_field!(OpenTTDEngine::ship(e), capacity, r.read_word()?);
         }
         p if p == i32::from(PROP_SHIP_RUNNING_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::ship(e), running_cost, r.byte()?);
+            write_field!(OpenTTDEngine::ship(e), running_cost, r.read_byte()?);
         }
         0x10 => write_field!(
             OpenTTDEngine::ship(e),
             sfx,
-            (s.sound)(file, u16::from(r.byte()?))
+            (s.sound)(file, u16::from(r.read_byte()?))
         ),
         0x11 => unsafe {
-            refit(s, e, id, file, r.dword()?);
+            refit(s, e, id, file, r.read_dword()?);
         },
         0x12 => callbacks(s, e, r, false)?,
-        0x13 => write_field!(e.cast_mut(), info.refit_cost, r.byte()?),
-        0x14 => write_field!(OpenTTDEngine::ship(e), ocean_speed_frac, r.byte()?),
-        0x15 => write_field!(OpenTTDEngine::ship(e), canal_speed_frac, r.byte()?),
-        0x16 => write_field!(e.cast_mut(), info.retire_early, (r.byte()?) as i8),
-        0x17 => misc(s, e, r.byte()?),
+        0x13 => write_field!(e.cast_mut(), info.refit_cost, r.read_byte()?),
+        0x14 => write_field!(OpenTTDEngine::ship(e), ocean_speed_frac, r.read_byte()?),
+        0x15 => write_field!(OpenTTDEngine::ship(e), canal_speed_frac, r.read_byte()?),
+        0x16 => write_field!(e.cast_mut(), info.retire_early, (r.read_byte()?) as i8),
+        0x17 => misc(s, e, r.read_byte()?),
         0x18 => unsafe {
-            allowed(id, file, r.word()?);
+            allowed(id, file, r.read_word()?);
         },
         0x19 => unsafe {
-            disallowed(id, r.word()?);
+            disallowed(id, r.read_word()?);
         },
-        0x1a => write_field!(e.cast_mut(), info.base_intro, r.dword()? as i32),
+        0x1a => write_field!(e.cast_mut(), info.base_intro, r.read_dword()? as i32),
         0x1b => unsafe {
-            openttd_rust_vehicle_order(id, r.extended()?);
+            openttd_rust_vehicle_order(id, r.read_extended_byte()?);
         },
-        0x1c => write_field!(OpenTTDEngine::ship(e), visual_effect, visual(s, r.byte()?)),
+        0x1c => write_field!(
+            OpenTTDEngine::ship(e),
+            visual_effect,
+            visual(s, r.read_byte()?)
+        ),
         p if p == i32::from(PROP_SHIP_CARGO_AGE_PERIOD) => {
-            write_field!(e.cast_mut(), info.cargo_age_period, r.word()?);
+            write_field!(e.cast_mut(), info.cargo_age_period, r.read_word()?);
         }
         0x1e | 0x1f => unsafe {
             cargo_list(id, file, prop == 0x1e, r)?;
@@ -655,17 +688,17 @@ unsafe fn ship(
         0x20 => write_field!(
             e.cast_mut(),
             info.variant_id,
-            crate::engine_type::EngineID(r.word()?)
+            crate::engine_type::EngineID(r.read_word()?)
         ),
-        0x21 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
+        0x21 => write_field!(e.cast_mut(), info.extra_flags, (r.read_dword()?) as u8),
         0x22 => callbacks(s, e, r, true)?,
-        0x23 => write_field!(OpenTTDEngine::ship(e), max_speed, r.word()?),
-        0x24 => write_field!(OpenTTDEngine::ship(e), acceleration, r.byte()?.max(1)),
+        0x23 => write_field!(OpenTTDEngine::ship(e), max_speed, r.read_word()?),
+        0x24 => write_field!(OpenTTDEngine::ship(e), acceleration, r.read_byte()?.max(1)),
         0x25 => unsafe {
-            (*temp(id)).fields.cargo_allowed_required = r.word()?;
+            (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x26 => unsafe {
-            let badges = r.badge_ids(VEH_SHIP)?;
+            let badges = r.read_badge_list(VEH_SHIP)?;
             (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         _ => return common(s, e, prop, r),
@@ -678,16 +711,16 @@ unsafe fn aircraft(
     id: u16,
     file: File,
     prop: i32,
-    r: &mut Reader<'_>,
-) -> Result<i32, ReadError> {
+    r: &mut ByteReaderRef<'_>,
+) -> Result<i32, OTTDByteReaderSignal> {
     match prop {
         0x08 => write_field!(
             OpenTTDEngine::aircraft(e),
             image_index,
-            image(s, VEH_AIRCRAFT, r.byte()?)
+            image(s, VEH_AIRCRAFT, r.read_byte()?)
         ),
         0x09 => {
-            let value = r.byte()?;
+            let value = r.read_byte()?;
             let subtype = if value == 0 {
                 AIR_HELI
             } else {
@@ -698,74 +731,78 @@ unsafe fn aircraft(
             write_field!(OpenTTDEngine::aircraft(e), subtype, subtype);
         }
         0x0a => {
-            let large = r.byte()? != 0;
+            let large = r.read_byte()? != 0;
             let mut subtype = u32::from(read_field!(OpenTTDEngine::aircraft(e), subtype));
             assign_bit(&mut subtype, 1, large);
             write_field!(OpenTTDEngine::aircraft(e), subtype, subtype as u8);
         }
         p if p == i32::from(PROP_AIRCRAFT_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::aircraft(e), cost_factor, r.byte()?);
+            write_field!(OpenTTDEngine::aircraft(e), cost_factor, r.read_byte()?);
         }
         p if p == i32::from(PROP_AIRCRAFT_SPEED) => {
             write_field!(
                 OpenTTDEngine::aircraft(e),
                 max_speed,
-                u16::from(r.byte()?) * 128 / 10
+                u16::from(r.read_byte()?) * 128 / 10
             );
         }
-        0x0d => write_field!(OpenTTDEngine::aircraft(e), acceleration, r.byte()?),
+        0x0d => write_field!(OpenTTDEngine::aircraft(e), acceleration, r.read_byte()?),
         p if p == i32::from(PROP_AIRCRAFT_RUNNING_COST_FACTOR) => {
-            write_field!(OpenTTDEngine::aircraft(e), running_cost, r.byte()?);
+            write_field!(OpenTTDEngine::aircraft(e), running_cost, r.read_byte()?);
         }
         p if p == i32::from(PROP_AIRCRAFT_PASSENGER_CAPACITY) => {
-            write_field!(OpenTTDEngine::aircraft(e), passenger_capacity, r.word()?);
+            write_field!(
+                OpenTTDEngine::aircraft(e),
+                passenger_capacity,
+                r.read_word()?
+            );
         }
         p if p == i32::from(PROP_AIRCRAFT_MAIL_CAPACITY) => {
-            write_field!(OpenTTDEngine::aircraft(e), mail_capacity, r.byte()?);
+            write_field!(OpenTTDEngine::aircraft(e), mail_capacity, r.read_byte()?);
         }
         0x12 => write_field!(
             OpenTTDEngine::aircraft(e),
             sfx,
-            (s.sound)(file, u16::from(r.byte()?))
+            (s.sound)(file, u16::from(r.read_byte()?))
         ),
         0x13 => unsafe {
-            refit(s, e, id, file, r.dword()?);
+            refit(s, e, id, file, r.read_dword()?);
         },
         0x14 => callbacks(s, e, r, false)?,
-        0x15 => write_field!(e.cast_mut(), info.refit_cost, r.byte()?),
-        0x16 => write_field!(e.cast_mut(), info.retire_early, (r.byte()?) as i8),
-        0x17 => misc(s, e, r.byte()?),
+        0x15 => write_field!(e.cast_mut(), info.refit_cost, r.read_byte()?),
+        0x16 => write_field!(e.cast_mut(), info.retire_early, (r.read_byte()?) as i8),
+        0x17 => misc(s, e, r.read_byte()?),
         0x18 => unsafe {
-            allowed(id, file, r.word()?);
+            allowed(id, file, r.read_word()?);
         },
         0x19 => unsafe {
-            disallowed(id, r.word()?);
+            disallowed(id, r.read_word()?);
         },
-        0x1a => write_field!(e.cast_mut(), info.base_intro, r.dword()? as i32),
+        0x1a => write_field!(e.cast_mut(), info.base_intro, r.read_dword()? as i32),
         0x1b => unsafe {
-            openttd_rust_vehicle_order(id, r.extended()?);
+            openttd_rust_vehicle_order(id, r.read_extended_byte()?);
         },
         p if p == i32::from(PROP_AIRCRAFT_CARGO_AGE_PERIOD) => {
-            write_field!(e.cast_mut(), info.cargo_age_period, r.word()?);
+            write_field!(e.cast_mut(), info.cargo_age_period, r.read_word()?);
         }
         0x1d | 0x1e => unsafe {
             cargo_list(id, file, prop == 0x1d, r)?;
         },
         p if p == i32::from(PROP_AIRCRAFT_RANGE) => {
-            write_field!(OpenTTDEngine::aircraft(e), max_range, r.word()?);
+            write_field!(OpenTTDEngine::aircraft(e), max_range, r.read_word()?);
         }
         0x20 => write_field!(
             e.cast_mut(),
             info.variant_id,
-            crate::engine_type::EngineID(r.word()?)
+            crate::engine_type::EngineID(r.read_word()?)
         ),
-        0x21 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
+        0x21 => write_field!(e.cast_mut(), info.extra_flags, (r.read_dword()?) as u8),
         0x22 => callbacks(s, e, r, true)?,
         0x23 => unsafe {
-            (*temp(id)).fields.cargo_allowed_required = r.word()?;
+            (*temp(id)).fields.cargo_allowed_required = r.read_word()?;
         },
         0x24 => unsafe {
-            let badges = r.badge_ids(VEH_AIRCRAFT)?;
+            let badges = r.read_badge_list(VEH_AIRCRAFT)?;
             (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         _ => return common(s, e, prop, r),
@@ -783,9 +820,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_properties(
     first: u32,
     last: u32,
     prop: i32,
-    native: *mut ByteReader,
+    native: *mut NativeByteReader,
 ) -> i32 {
-    let mut r = unsafe { Reader::new(native, reads) };
+    let mut r = unsafe { ByteReaderRef::new(native, reads) };
     let mut result = CIR_SUCCESS;
     for local in first..last {
         let e =
@@ -804,7 +841,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_properties(
         };
         match changed {
             Ok(value) => result = value,
-            Err(ReadError) => return -1,
+            Err(OTTDByteReaderSignal) => return -1,
         }
     }
     result
@@ -824,9 +861,9 @@ pub(super) unsafe fn partial_read_tests() {
     extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
         panic!("unused property service")
     }
-    unsafe extern "C" fn byte(reader: *mut ByteReader, out: *mut u8) -> bool {
-        let cursor = unsafe { &mut *reader.cast::<crate::newgrf_bytereader::Cursor>() };
-        match unsafe { cursor.byte() } {
+    unsafe extern "C" fn byte(reader: *mut NativeByteReader, out: *mut u8) -> bool {
+        let cursor = unsafe { &mut *reader.cast::<crate::newgrf_bytereader::ByteReader>() };
+        match cursor.read_byte() {
             Ok(value) => {
                 unsafe {
                     *out = value;
@@ -836,9 +873,9 @@ pub(super) unsafe fn partial_read_tests() {
             Err(_) => false,
         }
     }
-    unsafe extern "C" fn word(reader: *mut ByteReader, out: *mut u16) -> bool {
-        let cursor = unsafe { &mut *reader.cast::<crate::newgrf_bytereader::Cursor>() };
-        match unsafe { cursor.word() } {
+    unsafe extern "C" fn word(reader: *mut NativeByteReader, out: *mut u16) -> bool {
+        let cursor = unsafe { &mut *reader.cast::<crate::newgrf_bytereader::ByteReader>() };
+        match cursor.read_word() {
             Ok(value) => {
                 unsafe {
                     *out = value;
@@ -877,8 +914,9 @@ pub(super) unsafe fn partial_read_tests() {
                 (*temp(1)).fields.ctt_include_mask = 17;
                 (*temp(1)).fields.ctt_exclude_mask = 23;
                 (*temp(1)).fields.defaultcargo_grf = std::ptr::null();
-                let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
-                let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+                let mut cursor =
+                    crate::newgrf_bytereader::ByteReader::new(bytes.as_ptr(), bytes.len());
+                let mut reader = ByteReaderRef::new((&raw mut cursor).cast(), &reads);
                 assert!(cargo_list(1, file, include, &mut reader).is_err());
                 assert_eq!(
                     (*temp(1)).fields.ctt_include_mask,
@@ -902,12 +940,12 @@ pub(super) unsafe fn partial_read_tests() {
     }
     unsafe {
         let bytes = [255, 1];
-        let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
-        let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
-        assert!(reader.extended().is_err());
+        let mut cursor = crate::newgrf_bytereader::ByteReader::new(bytes.as_ptr(), bytes.len());
+        let mut reader = ByteReaderRef::new((&raw mut cursor).cast(), &reads);
+        assert!(reader.read_extended_byte().is_err());
         assert_eq!(cursor.remaining(), 1);
-        let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), 0);
-        let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+        let mut cursor = crate::newgrf_bytereader::ByteReader::new(bytes.as_ptr(), 0);
+        let mut reader = ByteReaderRef::new((&raw mut cursor).cast(), &reads);
         (*temp(1)).fields.defaultcargo_grf = std::ptr::null();
         assert!(
             default_cargo(&services, std::ptr::null(), 1, file, VEH_TRAIN, &mut reader).is_err()
@@ -915,8 +953,8 @@ pub(super) unsafe fn partial_read_tests() {
         assert_eq!((*temp(1)).fields.defaultcargo_grf, file);
         for bytes in [&[][..], &[2][..]] {
             (*temp(1)).labels = vec![crate::rail_type::RAILTYPE_LABEL_RAIL];
-            let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
-            let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+            let mut cursor = crate::newgrf_bytereader::ByteReader::new(bytes.as_ptr(), bytes.len());
+            let mut reader = ByteReaderRef::new((&raw mut cursor).cast(), &reads);
             assert!(train(&services, std::ptr::null(), 1, file, 0x34, &mut reader).is_err());
             assert_eq!((*temp(1)).labels.len(), usize::from(bytes.is_empty()));
             assert_eq!(cursor.remaining(), 0);
