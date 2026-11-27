@@ -220,9 +220,9 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
         },
     );
     if (b.cost.success)(costs.build.cast()) {
-        crate::orders::vehicle_get_if_valid(
+        crate::vehicle_base::get_asserted(
+            &b.groups.vehicles.orders().scheduler().pool(),
             crate::vehicle_type::VehicleID(result.id),
-            b.groups.vehicles.orders(),
         )
         .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
     } else {
@@ -356,12 +356,8 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
 unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut ()) {
     let s = (w.common)();
     let b = s.base;
-    let group = { crate::fleet::record(b.groups, old).group_id(b.groups).0 };
-    let id = {
-        crate::fleet::record(b.groups, new)
-            .index(b.groups.vehicles.newgrf())
-            .0
-    };
+    let group_id = crate::fleet::record(b.groups, old).group_id(b.groups);
+    let veh_id = crate::fleet::record(b.groups, new).index(b.groups.vehicles.newgrf());
     crate::command::nested(
         b.commands,
         b.shared,
@@ -376,8 +372,8 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
                 cost,
                 crate::command_type::DoCommandFlags(flags),
                 crate::fleet::CmdAddVehicleGroup {
-                    group_id: GroupID(group),
-                    veh_id: crate::vehicle_type::VehicleID(id),
+                    group_id,
+                    veh_id,
                     add_shared: false,
                     vli: crate::vehiclelist::VehicleListIdentifier::default(),
                 },

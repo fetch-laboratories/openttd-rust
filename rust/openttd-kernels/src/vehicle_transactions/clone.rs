@@ -61,12 +61,8 @@ unsafe fn copy_group(
     new: *mut (),
 ) {
     let b = s.build.refit.common.base;
-    let group = { crate::fleet::record(b.groups, old).group_id(b.groups).0 };
-    let id = {
-        crate::fleet::record(b.groups, new)
-            .index(b.groups.vehicles.newgrf())
-            .0
-    };
+    let group_id = crate::fleet::record(b.groups, old).group_id(b.groups);
+    let veh_id = crate::fleet::record(b.groups, new).index(b.groups.vehicles.newgrf());
     crate::command::nested(
         b.commands,
         b.shared,
@@ -81,8 +77,8 @@ unsafe fn copy_group(
                 cost,
                 DoCommandFlags(flags),
                 crate::fleet::CmdAddVehicleGroup {
-                    group_id: crate::group_type::GroupID(group),
-                    veh_id: VehicleID(id),
+                    group_id,
+                    veh_id,
                     add_shared: false,
                     vli: crate::vehiclelist::VehicleListIdentifier::default(),
                 },
@@ -171,17 +167,16 @@ unsafe fn cmd_clone_vehicle(
     let total = Cost(out, b.cost);
     let invalid = VehicleID::INVALID.0;
     (b.cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    let mut v = {
-        crate::orders::vehicle_get_if_valid(
-            crate::vehicle_type::VehicleID(veh_id.0),
-            b.groups.vehicles.orders(),
-        )
-        .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
+    let Some(handle) = crate::orders::vehicle_get_if_valid(veh_id, b.groups.vehicles.orders())
+    else {
+        total.error(ERROR);
+        return invalid;
     };
-    if v.is_null() || !{ crate::fleet::record(b.groups, v).is_primary_vehicle() } {
+    if !handle.is_primary_vehicle() {
         total.error(ERROR);
         return invalid;
     }
+    let mut v: *mut () = handle.shell().cast();
     let original = v;
     /*
      * original (v_front) is the front engine in the original vehicle
@@ -286,9 +281,9 @@ unsafe fn cmd_clone_vehicle(
             }
             total.add_money((b.cost.money)(part));
             if flags.test(DoCommandFlag::Execute) {
-                w = crate::orders::vehicle_get_if_valid(
-                    crate::vehicle_type::VehicleID(new_id),
-                    b.groups.vehicles.orders(),
+                w = crate::vehicle_base::get_asserted(
+                    &b.groups.vehicles.orders().scheduler().pool(),
+                    VehicleID(new_id),
                 )
                 .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast());
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {

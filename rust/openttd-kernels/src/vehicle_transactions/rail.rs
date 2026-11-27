@@ -163,11 +163,7 @@ impl Ctx {
         unsafe { crate::vehicle_base::set_next(v, next) };
     }
     fn id(self, v: R) -> VehicleID {
-        VehicleID(
-            crate::fleet::record(self.g, Self::sh(v))
-                .index(self.g.vehicles.newgrf())
-                .0,
-        )
+        Self::vref(v).index(self.g.vehicles.newgrf())
     }
     fn engine(self, v: R) -> EngineID {
         Self::vref(v).engine_type()
@@ -193,10 +189,10 @@ impl Ctx {
         );
     }
     fn update_group(self, v: R) {
-        crate::fleet::update_train_group_id(self.g, crate::fleet::record(self.g, Self::sh(v)));
+        crate::fleet::update_train_group_id(self.g, Self::vref(v));
     }
     fn count_vehicle(self, v: R, delta: i32) {
-        crate::fleet::count_vehicle(self.g, crate::fleet::record(self.g, Self::sh(v)), delta);
+        crate::fleet::count_vehicle(self.g, Self::vref(v), delta);
     }
     /// `TestVehicleBuildProbability(v, v->engine_type, Reversed)` and its flag.
     fn reverse_on_build(self, v: R) {
@@ -335,8 +331,7 @@ unsafe fn cmd_build_rail_wagon(
         // The native allocation clears gcache.first_engine: needs to be set before first callback.
         v = x.rec((x.s.new_wagon)(tile.0, e));
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
-        crate::fleet::record(x.g, Ctx::sh(v))
-            .set_group_id(x.g, crate::group_type::GroupID::DEFAULT_GROUP);
+        Ctx::vref(v).set_group_id(x.g, crate::group_type::GroupID::DEFAULT_GROUP);
         x.reverse_on_build(v);
         unsafe { super::articulated::add_articulated_parts(a, Ctx::sh(v)) };
         unsafe {
@@ -351,13 +346,11 @@ unsafe fn cmd_build_rail_wagon(
             if vehicle == x.id(v) {
                 continue;
             }
-            let w = x.rec(
-                crate::orders::vehicle_get_if_valid(
-                    crate::vehicle_type::VehicleID(vehicle.0),
-                    x.g.vehicles.orders(),
-                )
-                .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast()),
-            );
+            let w = crate::vehicle_base::get_asserted(
+                &x.g.vehicles.orders().scheduler().pool(),
+                vehicle,
+            )
+            .map_or(ptr::null_mut(), |v| v.0.as_ptr());
             if x.engine(w) != x.engine(v) {
                 continue; // Must be same type
             }
@@ -490,8 +483,7 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
             crate::vehicle::EngineRef::of(e).exclusive_preview(),
             x.t.interval_is_percent(CompanyID(company)),
         );
-        crate::fleet::record(x.g, Ctx::sh(v))
-            .set_group_id(x.g, crate::group_type::GroupID::DEFAULT_GROUP);
+        Ctx::vref(v).set_group_id(x.g, crate::group_type::GroupID::DEFAULT_GROUP);
         x.set_subtype(v, gv::set_front_engine);
         x.set_subtype(v, gv::set_engine);
         x.reverse_on_build(v);
@@ -517,13 +509,9 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
 fn find_good_vehicle_pos(x: Ctx, src: R) -> R {
     let eng = x.engine(src);
     for vehicle in get_free_wagons_in_depot(x, x.tile(src)) {
-        let dst = x.rec(
-            crate::orders::vehicle_get_if_valid(
-                crate::vehicle_type::VehicleID(vehicle.0),
-                x.g.vehicles.orders(),
-            )
-            .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast()),
-        );
+        let dst =
+            crate::vehicle_base::get_asserted(&x.g.vehicles.orders().scheduler().pool(), vehicle)
+                .map_or(ptr::null_mut(), |v| v.0.as_ptr());
         /* check so all vehicles in the line have the same engine. */
         let mut t = dst;
         while x.engine(t) == eng {
@@ -1145,7 +1133,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         crate::witness::hit(crate::witness::VT_RAIL_NEW_FRONT);
         crate::fleet::set_train_group_id(
             x.g,
-            crate::fleet::record(x.g, Ctx::sh(src)),
+            Ctx::vref(src),
             crate::group_type::GroupID::DEFAULT_GROUP,
         );
         (s.company_dirty)();
@@ -1285,7 +1273,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
             unsafe { (x.w.copy_configuration)(Ctx::sh(first), Ctx::sh(new_head)) };
         }
         x.count_vehicle(new_head, 1); // after copying over the profit, if required
-    } else if { crate::fleet::record(x.g, Ctx::sh(v)).is_primary_vehicle() } && backup_order {
+    } else if Ctx::vref(v).is_primary_vehicle() && backup_order {
         crate::orders::order_backup_backup(crate::vehicle::VehicleRef::of(v), user.0, x.c.orders);
     }
     /* We need to update the information about the train. */

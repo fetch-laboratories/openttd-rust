@@ -144,13 +144,7 @@ pub(crate) unsafe fn cmd_mass_start_stop_vehicle(
 ) {
     let b = s.common.base;
     let mut list = List::new();
-    if !cmd.vli.valid()
-        || !{
-            crate::vehicle_func::is_company_buildable_vehicle_type(
-                crate::vehicle_type::VehicleType(cmd.vli.vtype.0),
-            )
-        }
-    {
+    if !cmd.vli.valid() || !crate::vehicle_func::is_company_buildable_vehicle_type(cmd.vli.vtype) {
         (b.cost.error)(cost, ERROR);
         return;
     }
@@ -257,11 +251,8 @@ pub(crate) unsafe fn cmd_depot_sell_all_vehicles(
     let b = s.common.base;
     let mut list = List::new();
     (b.cost.expense_money)(cost, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    if !{
-        crate::vehicle_func::is_company_buildable_vehicle_type(crate::vehicle_type::VehicleType(
-            cmd.vehicle_type.0,
-        ))
-    } || !depot(s, cmd.tile)
+    if !crate::vehicle_func::is_company_buildable_vehicle_type(cmd.vehicle_type)
+        || !depot(s, cmd.tile)
     {
         (b.cost.error)(cost, ERROR);
         return;
@@ -346,11 +337,8 @@ pub(crate) unsafe fn cmd_depot_mass_auto_replace(
     let b = s.common.base;
     let mut list = List::new();
     (b.cost.expense_money)(cost, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    if !{
-        crate::vehicle_func::is_company_buildable_vehicle_type(crate::vehicle_type::VehicleType(
-            cmd.vehicle_type.0,
-        ))
-    } || !depot(s, cmd.tile)
+    if !crate::vehicle_func::is_company_buildable_vehicle_type(cmd.vehicle_type)
+        || !depot(s, cmd.tile)
     {
         (b.cost.error)(cost, ERROR);
         return;
@@ -434,18 +422,12 @@ unsafe fn send_one(
     depot_cmd: DepotCommandFlags,
 ) {
     let b = s.common.base;
-    let v = {
-        crate::orders::vehicle_get_if_valid(
-            crate::vehicle_type::VehicleID(veh_id.0),
-            b.groups.vehicles.orders(),
-        )
-        .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
-    };
-    if v.is_null() || !{ crate::fleet::record(b.groups, v).is_primary_vehicle() } {
+    let v = crate::orders::vehicle_get_if_valid(veh_id, b.groups.vehicles.orders());
+    let Some(v) = v.filter(|v| v.is_primary_vehicle()) else {
         (b.cost.error)(cost, ERROR);
         return;
-    }
-    (s.send)(cost, v, flags.0, depot_cmd.0);
+    };
+    (s.send)(cost, v.shell().cast(), flags.0, depot_cmd.0);
 }
 /// `SendAllVehiclesToDepot`: send all vehicles of type to depots.
 unsafe fn send_all_vehicles_to_depot(

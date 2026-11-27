@@ -1176,7 +1176,9 @@ mod tests {
     extern "C" fn vehicle_group(_: VehicleRef) -> GroupID {
         GroupID::DEFAULT_GROUP
     }
-    extern "C" fn renew_state(renew: *mut crate::fleet::OpenTTDEngineRenew) -> *mut crate::fleet::Renew {
+    extern "C" fn renew_state(
+        renew: *mut crate::fleet::OpenTTDEngineRenew,
+    ) -> *mut crate::fleet::Renew {
         renew.cast()
     }
     extern "C" fn no_group(_: GroupID) -> crate::fleet::GroupRecord {

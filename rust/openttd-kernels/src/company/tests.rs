@@ -3179,21 +3179,13 @@ mod evidence_tests {
             .collect();
         // Company 0's road vehicle default is 200, its percent flag set; the walk first
         // copies both to company 1's defaults, which the command reads. Outside a command
-        // the nested call is top-level: its test pass resolves the vehicle's record from its
-        // shell (twice, for the primary and ownership checks), then its execution resolves it
-        // again and stores. The custom vehicle 1 runs no command and is never resolved.
+        // the nested call is top-level: its test pass and its execution each take the
+        // vehicle's record from the pool and resolve no shell. The custom vehicle 1 runs no
+        // command.
         assert_eq!(
             intervals,
             [
-                "resolve 0",
-                "resolve 0",
-                "resolve 0",
-                "resolve 0",
                 "interval 0 200 false true current 1",
-                "resolve 3",
-                "resolve 3",
-                "resolve 3",
-                "resolve 3",
                 "interval 3 200 false true current 1",
             ]
         );

@@ -123,7 +123,9 @@ extern "C" fn group_statistics_get(
         return slot.statistics.cast();
     }
     let offset = if id_g == GroupID::ALL_GROUP { 0 } else { 5 };
-    COMPANY_STATS.with_borrow(|s| s[offset + usize::from(r#type.0)]).cast()
+    COMPANY_STATS
+        .with_borrow(|s| s[offset + usize::from(r#type.0)])
+        .cast()
 }
 extern "C" fn next_renew(_: u32) -> RenewRecord {
     RenewRecord {
@@ -1237,7 +1239,9 @@ fn to_company_id_of_another_type_fails_the_assertion() {
     to_id_of_another_type(
         "fleet::tests::to_company_id_of_another_type_fails_the_assertion",
         VehicleListType::VL_GROUP_LIST,
-        |vli| drop(vli.to_company_id()),
+        |vli| {
+            let _ = vli.to_company_id();
+        },
     );
 }
 #[test]
@@ -1245,7 +1249,9 @@ fn to_destination_id_of_another_type_fails_the_assertion() {
     to_id_of_another_type(
         "fleet::tests::to_destination_id_of_another_type_fails_the_assertion",
         VehicleListType::VL_STATION_LIST,
-        |vli| drop(vli.to_destination_id()),
+        |vli| {
+            let _ = vli.to_destination_id();
+        },
     );
 }
 #[test]
@@ -1253,7 +1259,9 @@ fn to_group_id_of_another_type_fails_the_assertion() {
     to_id_of_another_type(
         "fleet::tests::to_group_id_of_another_type_fails_the_assertion",
         VehicleListType::VL_STANDARD,
-        |vli| drop(vli.to_group_id()),
+        |vli| {
+            let _ = vli.to_group_id();
+        },
     );
 }
 #[test]
@@ -1261,7 +1269,9 @@ fn to_station_id_of_another_type_fails_the_assertion() {
     to_id_of_another_type(
         "fleet::tests::to_station_id_of_another_type_fails_the_assertion",
         VehicleListType::VL_DEPOT_LIST,
-        |vli| drop(vli.to_station_id()),
+        |vli| {
+            let _ = vli.to_station_id();
+        },
     );
 }
 #[test]
@@ -1269,6 +1279,8 @@ fn to_vehicle_id_of_another_type_fails_the_assertion() {
     to_id_of_another_type(
         "fleet::tests::to_vehicle_id_of_another_type_fails_the_assertion",
         VehicleListType::VL_GROUP_LIST,
-        |vli| drop(vli.to_vehicle_id()),
+        |vli| {
+            let _ = vli.to_vehicle_id();
+        },
     );
 }
