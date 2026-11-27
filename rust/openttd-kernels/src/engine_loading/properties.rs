@@ -274,7 +274,7 @@ unsafe fn train(
             }
             let list = crate::type_registry::railtype_list_raw(file);
             if usize::from(track) < list.len() {
-                let label = list.as_slice()[usize::from(track)].0;
+                let label = unsafe { list.at(usize::from(track)) }.0;
                 unsafe {
                     (*temp(id)).labels.push(label);
                 }
@@ -480,7 +480,7 @@ unsafe fn train(
                 let track = r.byte()?;
                 let list = crate::type_registry::railtype_list_raw(file);
                 if usize::from(track) < list.len() {
-                    let label = list.as_slice()[usize::from(track)].0;
+                    let label = unsafe { list.at(usize::from(track)) }.0;
                     unsafe {
                         (*temp(id)).labels.push(label);
                     }

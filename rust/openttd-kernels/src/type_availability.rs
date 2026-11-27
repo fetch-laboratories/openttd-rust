@@ -26,8 +26,8 @@ pub struct Services {
     pub avail_railtypes: extern "C" fn(u8) -> u64,
     /// `Company::Get(company)->avail_roadtypes`.
     pub avail_roadtypes: extern "C" fn(u8) -> u64,
-    /// `_game_mode == GM_EDITOR`.
-    pub editor: extern "C" fn() -> bool,
+    /// The environment table, for `_game_mode == GM_EDITOR`.
+    pub environment: *const crate::services::EnvironmentServices,
     /// The engine at or after the given ID, in ascending ID order (`Engine::Iterate`), or a
     /// null shell past the end.
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
@@ -61,6 +61,15 @@ pub fn services(shared: &Shared) -> &Services {
     unsafe { &*(shared.type_availability)() }
 }
 
+impl Services {
+    /// The environment table.
+    #[allow(unsafe_code, reason = "one borrow of the process-lifetime table")]
+    pub(crate) fn environment(&self) -> &crate::services::EnvironmentServices {
+        // SAFETY: C++ fills the field with the process-lifetime environment table.
+        unsafe { &*self.environment }
+    }
+}
+
 /// `e->company_avail.Test(company) || TimerGameCalendar::date >= e->intro_date +
 /// CalendarTime::DAYS_IN_YEAR`, the engine test of `GetCompanyRailTypes` and
 /// `GetCompanyRoadTypes`, on an engine `next` returned.
@@ -79,7 +88,7 @@ crate::abi::layouts! {
         assertions,
         avail_railtypes,
         avail_roadtypes,
-        editor,
+        environment,
         next,
         road_flags,
         road_info,

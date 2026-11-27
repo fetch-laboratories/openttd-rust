@@ -3,6 +3,7 @@
 #ifndef RUST_SHARED_SERVICES_TABLE_H
 #define RUST_SHARED_SERVICES_TABLE_H
 #include "services_ffi.h"
+#include "../strings_type.h"
 
 struct OpenTTDSettingAddresses;
 enum class LandscapeType : uint8_t;
@@ -208,13 +209,13 @@ struct OpenTTDSharedServices {
 	void (*grf_file_set_cargo_list)(GRFFile *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_list);
 	void (*grf_file_set_cargo_list_is_fallback)(GRFFile *, bool) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_list_is_fallback);
 	void (*grf_file_set_cargo_map)(GRFFile *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_map);
+	void (*add_string_for_mapping)(uint32_t, StringID *) noexcept OPENTTD_SERVICE_DEFAULT(add_string_for_mapping);
 	OpenTTDRailTypeLabels (*grf_file_railtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_railtype_list);
-	OpenTTDRoadTypeLabels (*grf_file_roadtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_roadtype_list);
-	OpenTTDRoadTypeLabels (*grf_file_tramtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_tramtype_list);
 	OpenTTDRailTypeMap (*grf_file_railtype_map)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_railtype_map);
+	OpenTTDRoadTypeLabels (*grf_file_roadtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_roadtype_list);
 	OpenTTDRoadTypeMap (*grf_file_roadtype_map)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_roadtype_map);
+	OpenTTDRoadTypeLabels (*grf_file_tramtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_tramtype_list);
 	OpenTTDRoadTypeMap (*grf_file_tramtype_map)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_tramtype_map);
-	void (*add_string_for_mapping)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(add_string_for_mapping);
 	int32_t (*grf_price_shift)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_price_shift);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);

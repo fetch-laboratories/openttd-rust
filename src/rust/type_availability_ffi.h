@@ -13,7 +13,7 @@ struct OpenTTDTypeAvailabilityServices {
 	bool assertions;
 	uint64_t (*avail_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(avail_railtypes);
 	uint64_t (*avail_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(avail_roadtypes);
-	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	const OpenTTDEnvironmentServices *environment;
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	uint8_t (*road_flags)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	const RoadTypeInfo *(*road_info)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_info);

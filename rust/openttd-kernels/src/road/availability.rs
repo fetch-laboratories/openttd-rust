@@ -49,7 +49,7 @@ pub fn has_road_type_avail(
 ) -> bool {
     if company == Owner::DEITY
         || company == Owner::TOWN
-        || (s.editor)()
+        || (s.environment().editor)()
         || (shared.clear_square_services.generating_world)()
     {
         let rti = get_road_type_info(s, roadtype);

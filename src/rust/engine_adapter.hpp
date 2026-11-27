@@ -26,7 +26,7 @@ const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcep
 #endif
 		.avail_railtypes = RustCompanyRailTypes,
 		.avail_roadtypes = RustCompanyRoadTypes,
-		.editor = OpenTTDEditor,
+		.environment = &GetRustEnvironmentServices(),
 		.next = Engine_next,
 		.road_flags = [](const RoadTypeInfo *rti) noexcept { return rti->flags.base(); },
 		.road_info = [](RoadType rt) noexcept { return GetRoadTypeInfo(rt); },

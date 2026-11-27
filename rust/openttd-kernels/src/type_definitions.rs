@@ -11,6 +11,7 @@ use crate::engine_type::VehicleAccelerationModel;
 use crate::newgrf::{GRFFile, GRFFileRef, GrfSpecFeature};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::ChangeInfoResult;
+use crate::newgrf_text_type::GRFStringID;
 use crate::rail::RailTypeFlags;
 use crate::rail_type::{RailType, RailTypeLabel};
 use crate::road::{RoadTypeFlags, get_road_tram_type};
@@ -72,7 +73,7 @@ pub(crate) fn rail_type_change_info(
 
             // Toolbar caption of railtype (sets name as well for backwards compatibility for grf ver < 8)
             0x09 => {
-                let str = buf.word()?;
+                let str = GRFStringID(u32::from(buf.word()?));
                 (shared.add_string_for_mapping)(str, (rail.strings_toolbar_caption)(rti));
                 if grffile.grf_version() < 8 {
                     (shared.add_string_for_mapping)(str, (rail.strings_name)(rti));
@@ -80,20 +81,32 @@ pub(crate) fn rail_type_change_info(
             }
 
             // Menu text of railtype
-            0x0A => (shared.add_string_for_mapping)(buf.word()?, (rail.strings_menu_text)(rti)),
+            0x0A => (shared.add_string_for_mapping)(
+                GRFStringID(u32::from(buf.word()?)),
+                (rail.strings_menu_text)(rti),
+            ),
 
             // Build window caption
             0x0B => {
-                (shared.add_string_for_mapping)(buf.word()?, (rail.strings_build_caption)(rti));
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (rail.strings_build_caption)(rti),
+                );
             }
 
             // Autoreplace text
             0x0C => {
-                (shared.add_string_for_mapping)(buf.word()?, (rail.strings_replace_text)(rti));
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (rail.strings_replace_text)(rti),
+                );
             }
 
             // New locomotive text
-            0x0D => (shared.add_string_for_mapping)(buf.word()?, (rail.strings_new_loco)(rti)),
+            0x0D => (shared.add_string_for_mapping)(
+                GRFStringID(u32::from(buf.word()?)),
+                (rail.strings_new_loco)(rti),
+            ),
 
             // 0x0E: Compatible railtype list
             // 0x0F: Powered railtype list
@@ -154,7 +167,10 @@ pub(crate) fn rail_type_change_info(
             0x1A => (rail.set_sorting_order)(rti, buf.byte()?),
 
             // Name of railtype (overridden by prop 09 for grf ver < 8)
-            0x1B => (shared.add_string_for_mapping)(buf.word()?, (rail.strings_name)(rti)),
+            0x1B => (shared.add_string_for_mapping)(
+                GRFStringID(u32::from(buf.word()?)),
+                (rail.strings_name)(rti),
+            ),
 
             // Maintenance cost factor
             0x1C => (rail.set_maintenance_multiplier)(rti, buf.word()?),
@@ -352,25 +368,40 @@ pub(crate) fn road_type_change_info(
 
             // Toolbar caption of roadtype
             0x09 => {
-                (shared.add_string_for_mapping)(buf.word()?, (road.strings_toolbar_caption)(rti));
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (road.strings_toolbar_caption)(rti),
+                );
             }
 
             // Menu text of roadtype
-            0x0A => (shared.add_string_for_mapping)(buf.word()?, (road.strings_menu_text)(rti)),
+            0x0A => (shared.add_string_for_mapping)(
+                GRFStringID(u32::from(buf.word()?)),
+                (road.strings_menu_text)(rti),
+            ),
 
             // Build window caption
             0x0B => {
-                (shared.add_string_for_mapping)(buf.word()?, (road.strings_build_caption)(rti));
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (road.strings_build_caption)(rti),
+                );
             }
 
             // Autoreplace text
             0x0C => {
-                (shared.add_string_for_mapping)(buf.word()?, (road.strings_replace_text)(rti));
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (road.strings_replace_text)(rti),
+                );
             }
 
             // New engine text
             0x0D => {
-                (shared.add_string_for_mapping)(buf.word()?, (road.strings_new_engine)(rti));
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (road.strings_new_engine)(rti),
+                );
             }
 
             // 0x0F: Powered roadtype list
@@ -426,7 +457,10 @@ pub(crate) fn road_type_change_info(
             0x1A => (road.set_sorting_order)(rti, buf.byte()?),
 
             // Name of roadtype
-            0x1B => (shared.add_string_for_mapping)(buf.word()?, (road.strings_name)(rti)),
+            0x1B => (shared.add_string_for_mapping)(
+                GRFStringID(u32::from(buf.word()?)),
+                (road.strings_name)(rti),
+            ),
 
             // Maintenance cost factor
             0x1C => (road.set_maintenance_multiplier)(rti, buf.word()?),
@@ -694,6 +728,7 @@ mod tests {
     use crate::rail::RailTypeInfo;
     use crate::road::RoadTypeInfo;
     use crate::services::Services as Shared;
+    use crate::strings_type::StringID;
     use crate::type_registry::{
         RailServices, RailTypeMap, RoadServices, RoadTypeMap, Services, TEST_RAIL, TEST_ROAD,
         exchange_services,
@@ -727,12 +762,12 @@ mod tests {
         STORES.with(|s| s.borrow_mut().push((member, value)));
     }
     /// The fake address of the `StringID` member `STRINGS[code]`.
-    fn string(code: usize) -> *mut u32 {
+    fn string(code: usize) -> *mut StringID {
         ptr::without_provenance_mut(code)
     }
 
-    extern "C" fn add_string_for_mapping(source: u16, target: *mut u32) {
-        record(STRINGS[target.addr()], u64::from(source));
+    extern "C" fn add_string_for_mapping(source: GRFStringID, target: *mut StringID) {
+        record(STRINGS[target.addr()], u64::from(source.0));
     }
     extern "C" fn grf_file_version(_: *const c_void) -> u8 {
         VERSION.with(Cell::get)
@@ -761,22 +796,22 @@ mod tests {
     extern "C" fn rail_spec(rt: RailType) -> *mut RailTypeInfo {
         ptr::without_provenance_mut(usize::from(rt.0))
     }
-    extern "C" fn rail_toolbar(_: *mut RailTypeInfo) -> *mut u32 {
+    extern "C" fn rail_toolbar(_: *mut RailTypeInfo) -> *mut StringID {
         string(1)
     }
-    extern "C" fn rail_menu(_: *mut RailTypeInfo) -> *mut u32 {
+    extern "C" fn rail_menu(_: *mut RailTypeInfo) -> *mut StringID {
         string(2)
     }
-    extern "C" fn rail_build(_: *mut RailTypeInfo) -> *mut u32 {
+    extern "C" fn rail_build(_: *mut RailTypeInfo) -> *mut StringID {
         string(3)
     }
-    extern "C" fn rail_replace(_: *mut RailTypeInfo) -> *mut u32 {
+    extern "C" fn rail_replace(_: *mut RailTypeInfo) -> *mut StringID {
         string(4)
     }
-    extern "C" fn rail_name(_: *mut RailTypeInfo) -> *mut u32 {
+    extern "C" fn rail_name(_: *mut RailTypeInfo) -> *mut StringID {
         string(5)
     }
-    extern "C" fn rail_new_loco(_: *mut RailTypeInfo) -> *mut u32 {
+    extern "C" fn rail_new_loco(_: *mut RailTypeInfo) -> *mut StringID {
         string(6)
     }
     extern "C" fn rail_compatible(_: *mut RailTypeInfo, rt: RailType) {
@@ -792,22 +827,22 @@ mod tests {
     extern "C" fn road_spec(rt: RoadType) -> *mut RoadTypeInfo {
         ptr::without_provenance_mut(usize::from(rt.0))
     }
-    extern "C" fn road_toolbar(_: *mut RoadTypeInfo) -> *mut u32 {
+    extern "C" fn road_toolbar(_: *mut RoadTypeInfo) -> *mut StringID {
         string(1)
     }
-    extern "C" fn road_menu(_: *mut RoadTypeInfo) -> *mut u32 {
+    extern "C" fn road_menu(_: *mut RoadTypeInfo) -> *mut StringID {
         string(2)
     }
-    extern "C" fn road_build(_: *mut RoadTypeInfo) -> *mut u32 {
+    extern "C" fn road_build(_: *mut RoadTypeInfo) -> *mut StringID {
         string(3)
     }
-    extern "C" fn road_replace(_: *mut RoadTypeInfo) -> *mut u32 {
+    extern "C" fn road_replace(_: *mut RoadTypeInfo) -> *mut StringID {
         string(4)
     }
-    extern "C" fn road_name(_: *mut RoadTypeInfo) -> *mut u32 {
+    extern "C" fn road_name(_: *mut RoadTypeInfo) -> *mut StringID {
         string(5)
     }
-    extern "C" fn road_new_engine(_: *mut RoadTypeInfo) -> *mut u32 {
+    extern "C" fn road_new_engine(_: *mut RoadTypeInfo) -> *mut StringID {
         string(6)
     }
 

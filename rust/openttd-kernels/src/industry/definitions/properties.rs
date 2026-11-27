@@ -17,6 +17,7 @@ use crate::industrytype::{
 use crate::newgrf::{GRFFile, GrfSpecFeature};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::ChangeInfoResult;
+use crate::newgrf_text_type::GRFStringID;
 use crate::table::strings::STR_NULL;
 use crate::{newgrf_loading, override_manager};
 use std::ptr;
@@ -576,17 +577,23 @@ unsafe fn industries_change_info(
             },
             // Industry closure message
             0x0C => unsafe {
-                (shared.add_string_for_mapping)(buf.word()?, &raw mut (*indsp).closure_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).closure_text).cast(),
+                );
             },
             // Production increase message
             0x0D => unsafe {
-                (shared.add_string_for_mapping)(buf.word()?, &raw mut (*indsp).production_up_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).production_up_text).cast(),
+                );
             },
             // Production decrease message
             0x0E => unsafe {
                 (shared.add_string_for_mapping)(
-                    buf.word()?,
-                    &raw mut (*indsp).production_down_text,
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).production_down_text).cast(),
                 );
             },
             // Fund cost multiplier
@@ -661,7 +668,10 @@ unsafe fn industries_change_info(
             },
             // New industry text ID
             0x1B => unsafe {
-                (shared.add_string_for_mapping)(buf.word()?, &raw mut (*indsp).new_industry_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).new_industry_text).cast(),
+                );
             },
             // Input cargo multipliers for the three input cargo types
             0x1C..=0x1E => {
@@ -674,7 +684,10 @@ unsafe fn industries_change_info(
             }
             // Industry name
             0x1F => unsafe {
-                (shared.add_string_for_mapping)(buf.word()?, &raw mut (*indsp).name);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).name).cast(),
+                );
             },
             // Prospecting success chance
             0x20 => unsafe {
@@ -701,7 +714,12 @@ unsafe fn industries_change_info(
                 if str == 0 {
                     unsafe { (*indsp).station_name = STR_NULL.0 };
                 } else {
-                    unsafe { (shared.add_string_for_mapping)(str, &raw mut (*indsp).station_name) };
+                    unsafe {
+                        (shared.add_string_for_mapping)(
+                            GRFStringID(u32::from(str)),
+                            (&raw mut (*indsp).station_name).cast(),
+                        )
+                    };
                 }
             }
             // 0x25: variable length produced cargoes; 0x26: variable length accepted cargoes

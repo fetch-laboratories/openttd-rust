@@ -29,6 +29,7 @@ use crate::road::{
 };
 use crate::road_type::{RoadTramType, RoadType, RoadTypeLabel, RoadTypes};
 use crate::services::{RailMapServices, Services as Shared};
+use crate::strings_type::StringID;
 use crate::tile_type::{TileIndex, TileType};
 use crate::timer_game_calendar::CalendarDate;
 use crate::timer_game_common::INVALID_DATE;
@@ -53,19 +54,33 @@ impl RailTypeLabels {
         self.size
     }
 
-    /// The labels, borrowed for a search with no call in between.
+    /// `list[index]`.
+    ///
+    /// # Safety
+    /// `index` is below [`Self::len`], and no call that can change the list has run since the
+    /// span was read.
+    #[allow(unsafe_code, reason = "an element load of the live list")]
+    pub(crate) unsafe fn at(self, index: usize) -> RailTypeLabel {
+        // SAFETY: The span holds `size` live labels until its owner changes, and the caller
+        // keeps `index` in bounds.
+        unsafe { self.data.add(index).read() }
+    }
+
+    /// `find_index(list, label)`: the index of the first `label`, or -1. The search makes no
+    /// call, so the list is unchanged while it is borrowed.
     #[allow(
         unsafe_code,
-        reason = "the span's live labels; an empty span may carry a null pointer"
+        reason = "the span's live labels, borrowed for a search that makes no call; an empty span may carry a null pointer"
     )]
-    pub(crate) fn as_slice(&self) -> &[RailTypeLabel] {
-        if self.size == 0 {
+    pub(crate) fn find_index(self, label: RailTypeLabel) -> i32 {
+        let list: &[RailTypeLabel] = if self.size == 0 {
             &[]
         } else {
-            // SAFETY: A span holds `size` live labels until its owner changes, and the
-            // returned slice borrows the span for a search that makes no call.
+            // SAFETY: The span holds `size` live labels until its owner changes, and the slice
+            // ends with this search, which makes no call.
             unsafe { std::slice::from_raw_parts(self.data, self.size) }
-        }
+        };
+        find_index(list, &label)
     }
 }
 
@@ -84,18 +99,33 @@ impl RoadTypeLabels {
         self.size
     }
 
-    /// The labels, borrowed for a search with no call in between.
+    /// `list[index]`.
+    ///
+    /// # Safety
+    /// `index` is below [`Self::len`], and no call that can change the list has run since the
+    /// span was read.
+    #[allow(unsafe_code, reason = "an element load of the live list")]
+    pub(crate) unsafe fn at(self, index: usize) -> RoadTypeLabel {
+        // SAFETY: The span holds `size` live labels until its owner changes, and the caller
+        // keeps `index` in bounds.
+        unsafe { self.data.add(index).read() }
+    }
+
+    /// `find_index(list, label)`: the index of the first `label`, or -1. The search makes no
+    /// call, so the list is unchanged while it is borrowed.
     #[allow(
         unsafe_code,
-        reason = "the span's live labels; an empty span may carry a null pointer"
+        reason = "the span's live labels, borrowed for a search that makes no call; an empty span may carry a null pointer"
     )]
-    pub(crate) fn as_slice(&self) -> &[RoadTypeLabel] {
-        if self.size == 0 {
+    pub(crate) fn find_index(self, label: RoadTypeLabel) -> i32 {
+        let list: &[RoadTypeLabel] = if self.size == 0 {
             &[]
         } else {
-            // SAFETY: As for `RailTypeLabels::as_slice`.
+            // SAFETY: The span holds `size` live labels until its owner changes, and the slice
+            // ends with this search, which makes no call.
             unsafe { std::slice::from_raw_parts(self.data, self.size) }
-        }
+        };
+        find_index(list, &label)
     }
 }
 
@@ -239,17 +269,17 @@ pub struct RailServices {
     /// Store `RailTypeInfo::sorting_order`.
     pub(crate) set_sorting_order: extern "C" fn(*mut RailTypeInfo, u8),
     /// `&RailTypeInfo::strings.build_caption`.
-    pub(crate) strings_build_caption: extern "C" fn(*mut RailTypeInfo) -> *mut u32,
+    pub(crate) strings_build_caption: extern "C" fn(*mut RailTypeInfo) -> *mut StringID,
     /// `&RailTypeInfo::strings.menu_text`.
-    pub(crate) strings_menu_text: extern "C" fn(*mut RailTypeInfo) -> *mut u32,
+    pub(crate) strings_menu_text: extern "C" fn(*mut RailTypeInfo) -> *mut StringID,
     /// `&RailTypeInfo::strings.name`.
-    pub(crate) strings_name: extern "C" fn(*mut RailTypeInfo) -> *mut u32,
+    pub(crate) strings_name: extern "C" fn(*mut RailTypeInfo) -> *mut StringID,
     /// `&RailTypeInfo::strings.new_loco`.
-    pub(crate) strings_new_loco: extern "C" fn(*mut RailTypeInfo) -> *mut u32,
+    pub(crate) strings_new_loco: extern "C" fn(*mut RailTypeInfo) -> *mut StringID,
     /// `&RailTypeInfo::strings.replace_text`.
-    pub(crate) strings_replace_text: extern "C" fn(*mut RailTypeInfo) -> *mut u32,
+    pub(crate) strings_replace_text: extern "C" fn(*mut RailTypeInfo) -> *mut StringID,
     /// `&RailTypeInfo::strings.toolbar_caption`.
-    pub(crate) strings_toolbar_caption: extern "C" fn(*mut RailTypeInfo) -> *mut u32,
+    pub(crate) strings_toolbar_caption: extern "C" fn(*mut RailTypeInfo) -> *mut StringID,
 }
 
 /// The road half of the registry table, as [`RailServices`] is for rail.
@@ -306,17 +336,17 @@ pub struct RoadServices {
     /// Store `RoadTypeInfo::sorting_order`.
     pub(crate) set_sorting_order: extern "C" fn(*mut RoadTypeInfo, u8),
     /// `&RoadTypeInfo::strings.build_caption`.
-    pub(crate) strings_build_caption: extern "C" fn(*mut RoadTypeInfo) -> *mut u32,
+    pub(crate) strings_build_caption: extern "C" fn(*mut RoadTypeInfo) -> *mut StringID,
     /// `&RoadTypeInfo::strings.menu_text`.
-    pub(crate) strings_menu_text: extern "C" fn(*mut RoadTypeInfo) -> *mut u32,
+    pub(crate) strings_menu_text: extern "C" fn(*mut RoadTypeInfo) -> *mut StringID,
     /// `&RoadTypeInfo::strings.name`.
-    pub(crate) strings_name: extern "C" fn(*mut RoadTypeInfo) -> *mut u32,
+    pub(crate) strings_name: extern "C" fn(*mut RoadTypeInfo) -> *mut StringID,
     /// `&RoadTypeInfo::strings.new_engine`.
-    pub(crate) strings_new_engine: extern "C" fn(*mut RoadTypeInfo) -> *mut u32,
+    pub(crate) strings_new_engine: extern "C" fn(*mut RoadTypeInfo) -> *mut StringID,
     /// `&RoadTypeInfo::strings.replace_text`.
-    pub(crate) strings_replace_text: extern "C" fn(*mut RoadTypeInfo) -> *mut u32,
+    pub(crate) strings_replace_text: extern "C" fn(*mut RoadTypeInfo) -> *mut StringID,
     /// `&RoadTypeInfo::strings.toolbar_caption`.
-    pub(crate) strings_toolbar_caption: extern "C" fn(*mut RoadTypeInfo) -> *mut u32,
+    pub(crate) strings_toolbar_caption: extern "C" fn(*mut RoadTypeInfo) -> *mut StringID,
 }
 
 /// `RailServices` with every entry unreachable, for tests.
@@ -698,6 +728,10 @@ pub(crate) fn get_rail_type_by_label(
 }
 
 /// `GetRailTypeTranslation`: translate a railtype from GRF-local to OpenTTD-global.
+#[allow(
+    unsafe_code,
+    reason = "an element load of the file's live rail type list"
+)]
 pub(crate) fn get_rail_type_translation(railtype: u8, grffile: Option<GRFFileRef<'_>>) -> RailType {
     match grffile.map(GRFFileRef::railtype_list) {
         Some(list) if list.len() != 0 => {
@@ -707,7 +741,8 @@ pub(crate) fn get_rail_type_translation(railtype: u8, grffile: Option<GRFFileRef
             }
 
             /* Look up railtype including alternate labels. */
-            let label = list.as_slice()[usize::from(railtype)];
+            // SAFETY: `railtype` is below the list's size, and no call has run since it was read.
+            let label = unsafe { list.at(usize::from(railtype)) };
             get_rail_type_by_label(label, true)
         }
         _ => {
@@ -748,7 +783,7 @@ pub(crate) fn get_reverse_rail_type_translation(
     /* Look for a matching rail type label in the table */
     let label = get_rail_type_info(services().shared(), railtype).label();
 
-    let idx = find_index(list.as_slice(), &label);
+    let idx = list.find_index(label);
     if idx >= 0 {
         return idx as u8;
     }
@@ -982,6 +1017,10 @@ pub(crate) fn get_road_type_by_label(
 }
 
 /// `GetRoadTypeTranslation`: translate a roadtype from GRF-local to OpenTTD-global.
+#[allow(
+    unsafe_code,
+    reason = "an element load of the file's live road type list"
+)]
 pub(crate) fn get_road_type_translation(
     rtt: RoadTramType,
     tracktype: u8,
@@ -1009,7 +1048,8 @@ pub(crate) fn get_road_type_translation(
     }
 
     /* Look up roadtype including alternate labels. */
-    let result = get_road_type_by_label(list.as_slice()[usize::from(tracktype)], true);
+    // SAFETY: `tracktype` is below the list's size, and no call has run since it was read.
+    let result = get_road_type_by_label(unsafe { list.at(usize::from(tracktype)) }, true);
 
     /* Check whether the result is actually the wanted road/tram-type */
     if result != RoadType::INVALID_ROADTYPE && get_road_tram_type(result) != rtt {
@@ -1048,7 +1088,7 @@ pub(crate) fn get_reverse_road_type_translation(
     let types = type_availability::services(services().shared());
     let label = get_road_type_info(types, roadtype).label();
 
-    let index = find_index(list.as_slice(), &label);
+    let index = list.find_index(label);
     if index >= 0 {
         return index as u8;
     }
@@ -1093,16 +1133,16 @@ pub(crate) fn convert_road_types(shared: &Shared, count: u32) {
         if rt != RoadType::INVALID_ROADTYPE {
             crate::road_map::set_road_type_road(
                 shared,
-                t.0,
-                roadtype_conversion_map[usize::from(rt.0)].0,
+                t,
+                roadtype_conversion_map[usize::from(rt.0)],
             );
         }
         let rt = w.asserted(|m| crate::road_map::get_road_type_tram(m, t.0));
         if rt != RoadType::INVALID_ROADTYPE {
             crate::road_map::set_road_type_tram(
                 shared,
-                t.0,
-                roadtype_conversion_map[usize::from(rt.0)].0,
+                t,
+                roadtype_conversion_map[usize::from(rt.0)],
             );
         }
     };
@@ -1454,7 +1494,10 @@ mod tests {
     extern "C" fn road_set_flags(rti: *mut RoadTypeInfo, value: RoadTypeFlags) {
         record("flags", index(rti), u64::from(value.0));
     }
-    #[allow(clippy::cast_sign_loss, reason = "the recorded date's bits")]
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "the bits of the recorded date, `CalendarTime::INVALID_DATE` (-1)"
+    )]
     extern "C" fn road_set_introduction_date(rti: *mut RoadTypeInfo, value: CalendarDate) {
         record("introduction_date", index(rti), u64::from(value.0 as u32));
     }
