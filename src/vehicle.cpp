@@ -389,7 +389,7 @@ void ResetVehicleColourMap()
  * List of vehicles that should check for autoreplace this tick.
  * Mapping of vehicle -> leave depot immediately after autoreplace.
  */
-#include "rust/fleet_pending_services.hpp"
+#include "rust/fleet_ffi.h"
 static void ClearPendingAutoreplace() { openttd_rust_fleet_pending_clear(); }
 
 void InitializeVehicles()
@@ -619,7 +619,6 @@ OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *ref
 		.cargo = CargoStorageServices(),
 		.group = &FleetGroupServices(),
 		.loading = &GetRustStationLoading(),
-		.pending = &_fleet_pending_services,
 		.refit_cost = refit_cost,
 		.refit_temporary = temporary,
 		.road_slot = road_slot,
@@ -1637,10 +1636,8 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 }
 
 #include "rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDFleetPendingServices.hpp"
 #include "abi-visit-OpenTTDVehicleVisits.hpp"
 bool CheckAbi_vehicle()
 {
-	return AbiServicesComplete(_fleet_pending_services) &&
-		AbiServicesComplete(GetRustVehicleVisits());
+	return AbiServicesComplete(GetRustVehicleVisits());
 }

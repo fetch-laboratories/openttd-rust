@@ -115,21 +115,10 @@ TEST_CASE("Base vehicle scheduler - session tick reaches a pooled vehicle")
 	v->Record().subtype = 0;
 	v->SetVehStatus(v->GetVehStatus().Set(VehState::Hidden));
 	v->Record().tick_counter = 41;
-	/* Rust borrows complete service values even when the pending map is empty.
-	 * Every function-pointer slot must be non-null, including unused callbacks. */
 	auto group = FleetGroupServices();
-	const auto unused = [](auto...) noexcept { FAIL_CHECK("Unexpected pending fleet operation"); };
-	OpenTTDFleetPendingServices pending{
-		.company = &GetRustCompanyIdentityServices(),
-		.subtract = unused,
-		.command = unused,
-		.length_news = unused,
-		.failed_news = unused,
-	};
 	auto transaction = FleetTransactionServices();
 	OpenTTDVehicleSchedulerTables tables{};
 	tables.scheduler = &GetRustVehicleSchedulerServices();
-	tables.pending = &pending;
 	tables.transaction = &transaction;
 	tables.group = &group;
 	SessionFixture fixture;

@@ -1185,7 +1185,6 @@ pub struct Links {
     pub(crate) order_destination: extern "C" fn(*mut NativeOrderList, usize) -> OrderDestination,
     pub(crate) order_vehicle: extern "C" fn(*mut NativeOrderList) -> Option<VehicleRef>,
     pub(crate) next_shared: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
-    pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) goods_entry:
         extern "C" fn(*mut BaseStation, u8) -> *const crate::station_base::GoodsEntry,
@@ -1338,11 +1337,18 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
                         }
                         vehicles.push(unsafe { (l.order_vehicle)(list).unwrap_unchecked() });
                     }
+                    // The ground vehicle table, through the vehicle resolver's scheduler.
+                    let physics = unsafe { &*l.vehicle_resolver }
+                        .vehicle
+                        .orders()
+                        .scheduler()
+                        .train()
+                        .physics;
                     let mut iter = 0;
                     while iter < vehicles.len() {
                         let v = vehicles[iter];
                         /* Do not refresh links of vehicles that have been stopped in depot for a long time. */
-                        if !(l.stopped_in_depot)(v)
+                        if !crate::vehicle_base::is_stopped_in_depot(v, physics)
                             || date.wrapping_sub(
                                 v.date_of_last_service(unsafe { &*l.vehicle_resolver }).0,
                             ) <= live::STALE_LINK_DEPOT_TIMEOUT
@@ -2742,7 +2748,6 @@ crate::abi::layouts! {
         order_destination,
         order_vehicle,
         next_shared,
-        stopped_in_depot,
         cargo_type,
         goods_entry, get_or_create_data_cargo, station_resolver, vehicle_resolver,
     };

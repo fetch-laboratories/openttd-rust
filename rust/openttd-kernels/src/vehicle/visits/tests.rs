@@ -125,8 +125,8 @@ extern "C" fn capacity_cargo(_: *mut OpenTTDVehicle) -> u8 {
     record(Call::Capacity(CARGO_TYPE.get(), CARGO_SUBTYPE.get()));
     CARGO_TYPE.get()
 }
-unsafe extern "C" fn best_fitting_sub_type(_: *mut (), _: *mut (), cargo: u8) -> u8 {
-    record(Call::BestFittingSubType(cargo, CARGO_TYPE.get()));
+extern "C" fn best_fitting_sub_type(_: VehicleRef, _: VehicleRef, cargo: CargoType) -> u8 {
+    record(Call::BestFittingSubType(cargo.0, CARGO_TYPE.get()));
     9
 }
 
@@ -214,7 +214,7 @@ fn visits(
         ..crate::test_tables::VEHICLE_TRANSACTION
     });
     let transactions = leak(crate::fleet::transactions::Services {
-        subtype: best_fitting_sub_type,
+        get_best_fitting_sub_type: best_fitting_sub_type,
         ..crate::test_tables::FLEET_TRANSACTIONS
     });
     let common = leak(crate::vehicle_transactions::CommonServices {

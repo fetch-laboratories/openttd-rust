@@ -207,12 +207,6 @@ impl EngineRef {
     pub(crate) fn company_availability(self) -> u16 {
         read_field!(self.0.as_ptr(), company_avail)
     }
-    pub(crate) fn wagon(self) -> bool {
-        self.rail_kind() == RailVehicleTypes::WAGON
-    }
-    pub(crate) fn tram(self) -> bool {
-        self.misc() & crate::engine_type::ROAD_IS_TRAM != 0
-    }
     pub(crate) fn plane(self) -> bool {
         self.aircraft_subtype() & crate::engine_type::AIR_CTOL != 0
     }

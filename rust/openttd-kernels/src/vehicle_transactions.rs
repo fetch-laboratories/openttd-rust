@@ -596,34 +596,6 @@ pub(crate) struct CmdSellVehicle {
     /// User.
     pub(crate) client_id: ClientID,
 }
-/// Raw adapter: `CmdSellVehicle` over base values, for `fleet/transactions.rs`,
-/// `vehicle_transactions/build.rs` and `vehicle_transactions/clone.rs` until their passes.
-///
-/// # Safety
-/// As `cmd_sell_vehicle`.
-pub(crate) unsafe fn sell(
-    s: &CommonServices,
-    cost: *mut CommandCost,
-    flags: u16,
-    id: u32,
-    chain: bool,
-    backup: bool,
-    client: u32,
-) {
-    unsafe {
-        cmd_sell_vehicle(
-            s,
-            cost,
-            DoCommandFlags(flags),
-            CmdSellVehicle {
-                v_id: VehicleID(id),
-                sell_chain: chain,
-                backup_order: backup,
-                client_id: ClientID(client),
-            },
-        );
-    }
-}
 /// `CmdSellVehicle`: sell a vehicle.
 ///
 /// # Safety
@@ -646,7 +618,6 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         return (b.cost.error)(cost, ERROR);
     };
     let front = v.first();
-    let front_shell: *mut () = front.shell().cast();
     unsafe { b.commands.ownership(cost, front.owner().0, 0) };
     if !(b.cost.success)(cost) {
         return;
@@ -654,15 +625,15 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     if front.vehstatus().test(VehState::Crashed) {
         return (b.cost.error)(cost, STR_ERROR_VEHICLE_IS_DESTROYED.0);
     }
-    if !unsafe { (s.transactions.stopped_in_depot)(front_shell) } {
+    // The build root is late-bound through the fleet table, as autoreplace does.
+    let root = (s.transactions.build)();
+    if !crate::vehicle_base::is_stopped_in_depot(front, root.refit.train.physics) {
         return (b.cost.error)(
             cost,
             STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT.0 + u32::from(front.vehicle_type().0),
         );
     }
     if v.vehicle_type() == VehicleType::TRAIN {
-        // The build root is late-bound through the fleet table, as autoreplace does.
-        let root = (s.transactions.build_services)();
         unsafe {
             rail::cmd_sell_rail_wagon(
                 root,
@@ -681,7 +652,7 @@ pub(crate) unsafe fn cmd_sell_vehicle(
     (b.cost.expense_money)(
         cost,
         ExpensesType::EXPENSES_NEW_VEHICLES.0,
-        (s.value)(front_shell).saturating_neg(),
+        (s.value)(front.shell().cast()).saturating_neg(),
     );
     if flags.test(DoCommandFlag::Execute) {
         if front.is_primary_vehicle() && backup_order {
@@ -699,30 +670,6 @@ pub(crate) struct CmdStartStopVehicle {
     /// Shall the start/stop newgrf callback be evaluated (only valid with
     /// `DoCommandFlag::AutoReplace` for network safety).
     pub(crate) evaluate_startstop_cb: bool,
-}
-/// Raw adapter: `CmdStartStopVehicle` over base values, for `fleet/transactions.rs`
-/// until its pass.
-///
-/// # Safety
-/// As `cmd_start_stop_vehicle`.
-pub(crate) unsafe fn startstop(
-    s: &CommonServices,
-    cost: *mut CommandCost,
-    flags: u16,
-    id: u32,
-    evaluate: bool,
-) {
-    unsafe {
-        cmd_start_stop_vehicle(
-            s,
-            cost,
-            DoCommandFlags(flags),
-            CmdStartStopVehicle {
-                veh_id: VehicleID(id),
-                evaluate_startstop_cb: evaluate,
-            },
-        );
-    }
 }
 /// `CmdStartStopVehicle`: start/stop a vehicle.
 ///
@@ -832,8 +779,10 @@ pub(crate) unsafe fn cmd_start_stop_vehicle(
         }
     }
     if flags.test(DoCommandFlag::Execute) {
-        if unsafe { (s.transactions.stopped_in_depot)(v) }
-            && !flags.test(DoCommandFlag::AutoReplace)
+        if crate::vehicle_base::is_stopped_in_depot(
+            handle,
+            (s.transactions.build)().refit.train.physics,
+        ) && !flags.test(DoCommandFlag::AutoReplace)
         {
             crate::news_func::delete_vehicle_news(
                 veh_id,

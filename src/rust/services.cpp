@@ -1003,6 +1003,7 @@ static_assert(ScriptEvent::ET_SUBSIDY_OFFER == 2 && ScriptEvent::ET_SUBSIDY_OFFE
 static_assert(ScriptEvent::ET_VEHICLE_CRASHED == 12 && ScriptEvent::ET_VEHICLE_WAITING_IN_DEPOT == 14 && ScriptEvent::ET_INDUSTRY_OPEN == 16 && ScriptEvent::ET_INDUSTRY_CLOSE == 17 && ScriptEvent::ET_STATION_FIRST_VEHICLE == 19);
 static_assert(ScriptEvent::ET_DISASTER_ZEPPELINER_CRASHED == 20 && ScriptEvent::ET_DISASTER_ZEPPELINER_CLEARED == 21);
 static_assert(ScriptEvent::ET_TOWN_FOUNDED == 22 && ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR == 23 && ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS == 27 && ScriptEvent::ET_ROAD_RECONSTRUCTION == 28);
+static_assert(ScriptEvent::ET_VEHICLE_AUTOREPLACED == 29);
 static_assert(ScriptEvent::ET_COMPANY_RENAMED == 33 && ScriptEvent::ET_PRESIDENT_RENAMED == 34);
 static_assert(ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING == 1 && ScriptEventVehicleCrashed::CRASH_RV_UFO == 2 && ScriptEventVehicleCrashed::CRASH_PLANE_LANDING == 3 && ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT == 4);
 
@@ -1030,6 +1031,7 @@ static ScriptEvent *RustScriptEvent(const OpenTTDScriptEvent &e) noexcept
 		case ScriptEvent::ET_AIRCRAFT_DEST_TOO_FAR: return new ScriptEventAircraftDestTooFar(VehicleID{e.vehicle});
 		case ScriptEvent::ET_EXCLUSIVE_TRANSPORT_RIGHTS: return new ScriptEventExclusiveTransportRights(CompanyID{e.company}, TownID{e.town});
 		case ScriptEvent::ET_ROAD_RECONSTRUCTION: return new ScriptEventRoadReconstruction(CompanyID{e.company}, TownID{e.town});
+		case ScriptEvent::ET_VEHICLE_AUTOREPLACED: return new ScriptEventVehicleAutoReplaced(VehicleID{e.vehicle}, VehicleID{e.other_vehicle});
 		case ScriptEvent::ET_COMPANY_RENAMED: return new ScriptEventCompanyRenamed(CompanyID{e.company}, std::string(reinterpret_cast<const char *>(e.text), e.text_length));
 		case ScriptEvent::ET_PRESIDENT_RENAMED: return new ScriptEventPresidentRenamed(CompanyID{e.company}, std::string(reinterpret_cast<const char *>(e.text), e.text_length));
 		default: NOT_REACHED();

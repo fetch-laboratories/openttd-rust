@@ -35,7 +35,6 @@ struct SessionFixture {
 	OpenTTDGenerationLoop loop{};
 	OpenTTDVehicleServices vehicles{};
 	OpenTTDVehicleSchedulerServices scheduler{};
-	OpenTTDFleetPendingServices pending{};
 	OpenTTDFleetTransactionServices transaction{};
 	OpenTTDCommandServices commands{};
 	OpenTTDFleetGroupServices group{};
@@ -113,7 +112,6 @@ struct SessionFixture {
 		shared.for_each_station = [](void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept {};
 		tables = {};
 		tables.scheduler = &scheduler;
-		tables.pending = &pending;
 		tables.transaction = &transaction;
 		tables.group = &group;
 		towns.environment.editor = []() noexcept { return true; };
@@ -151,7 +149,6 @@ struct SessionFixture {
 		services.tile_loop_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDGenerationLoop * { active->in_loop = true; return &active->loop; };
 		services.tile_loop_end = FrameNothing;
 		services.vehicle_tables = [](OpenTTDSessionFrame *, bool) noexcept { return active->tables; };
-		services.vehicle_cost = [](OpenTTDSessionFrame *) noexcept -> OpenTTDCommandCost * { return nullptr; };
 		services.vehicle_end = FrameNothing;
 		services.road_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDRoadCommandContext * { return nullptr; };
 		services.road_end = FrameNothing;

@@ -160,7 +160,11 @@ unsafe fn get_refit_cost_factor(
         }
     }
     let factor = crate::vehicle::EngineRef::of(e).refit_cost();
-    let changed = v.is_null() || unsafe { (s.common.transactions.cargo_type)(v) } != cargo;
+    let changed = v.is_null()
+        || unsafe { super::vehicle_ref(v, s.common.vehicles) }
+            .cargo_type(s.common.vehicles.newgrf())
+            .0
+            != cargo;
     (if changed { i32::from(factor) } else { 0 }, factor == 0)
 }
 /// `GetRefitCost`: learn the price of refitting a certain engine. `v` can be
@@ -305,7 +309,7 @@ unsafe fn refit_vehicle(
             },
         );
         /* In this case, we need to check the whole chain. */
-        v = crate::fleet::transactions::first(c.transactions, v);
+        v = crate::fleet::record(b.groups, v).first().shell().cast();
     }
     (s.invalidate_chain)(
         unsafe { super::vehicle_ref(v, s.common.vehicles) }
@@ -315,7 +319,7 @@ unsafe fn refit_vehicle(
     let mut actual_subtype = subtype;
     while !v.is_null() {
         /* Reset actual_subtype for every new vehicle */
-        if !crate::fleet::transactions::articulated(c.transactions, v) {
+        if !crate::fleet::record(b.groups, v).is_articulated_part() {
             actual_subtype = subtype;
         }
         if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN
@@ -349,7 +353,12 @@ unsafe fn refit_vehicle(
         let engine = crate::vehicle::EngineRef::of(e);
         let refittable = engine.refit_mask() & (1_u64 << cargo) != 0
             && (!automatic || engine.misc() & crate::engine_type::AUTO_REFIT != 0);
-        if !refittable && unsafe { (c.transactions.cargo_type)(v) } != cargo {
+        if !refittable
+            && crate::fleet::record(b.groups, v)
+                .cargo_type(b.groups.vehicles.newgrf())
+                .0
+                != cargo
+        {
             let amount = unsafe {
                 crate::engine_capabilities::openttd_rust_engine_capacity(
                     s.capabilities,
@@ -359,7 +368,9 @@ unsafe fn refit_vehicle(
                 )
             };
             if amount > 0 {
-                let original = unsafe { (c.transactions.cargo_type)(v) };
+                let original = crate::fleet::record(b.groups, v)
+                    .cargo_type(b.groups.vehicles.newgrf())
+                    .0;
                 total.cargo[usize::from(original)] =
                     total.cargo[usize::from(original)].wrapping_add(amount);
             }
@@ -372,7 +383,12 @@ unsafe fn refit_vehicle(
         }
         /* Determine best fitting subtype if requested */
         if actual_subtype == 0xff {
-            actual_subtype = unsafe { (c.transactions.subtype)(v, v, cargo) };
+            let record = crate::fleet::record(b.groups, v);
+            actual_subtype = (c.transactions.get_best_fitting_sub_type)(
+                record,
+                record,
+                crate::cargo_type::CargoType(cargo),
+            );
         }
         /* Back up the vehicle's cargo type */
         let old = (s.cargo_kind)(
@@ -427,7 +443,11 @@ unsafe fn refit_vehicle(
                  * It is not predictable. */
                 total.total = total.total.wrapping_sub(amount);
                 mail_total = mail_total.wrapping_sub(u32::from(mail));
-                if unsafe { (c.transactions.cargo_type)(v) } == cargo {
+                if crate::fleet::record(b.groups, v)
+                    .cargo_type(b.groups.vehicles.newgrf())
+                    .0
+                    == cargo
+                {
                     /* Add the old capacity nevertheless, if the cargo matches */
                     total.total = total.total.wrapping_add(u32::from(
                         crate::vehicle::VehicleRef::of(
@@ -495,9 +515,7 @@ unsafe fn refit_vehicle(
             (s.set_cargo_kind)(u.0.as_ptr(), cargo, result.subtype);
             if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT {
                 let shadow = unsafe { next(s, v) };
-                if c.transactions.assertions {
-                    c.transactions.check(!shadow.is_null());
-                }
+                crate::services_assert::assert_with(|| !shadow.is_null());
                 let cap = crate::vehicle::VehicleRef::of(
                     unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
                         .0
@@ -543,40 +561,6 @@ pub(crate) struct CmdRefitVehicle {
     /// Number of vehicles to refit (not counting articulated parts). Zero means
     /// all vehicles. Only used if "refit only this vehicle" is false.
     pub(crate) num_vehicles: u8,
-}
-/// Raw adapter: `CmdRefitVehicle` over base values, for `fleet/transactions.rs`,
-/// `vehicle/visits.rs`, `build.rs` and `clone.rs` until their passes.
-///
-/// # Safety
-/// As `cmd_refit_vehicle`.
-pub(crate) unsafe fn refit(
-    s: &Services,
-    cost: *mut CommandCost,
-    temp: *mut CommandCost,
-    flags: u16,
-    id: u32,
-    cargo: u8,
-    subtype: u8,
-    automatic: bool,
-    only: bool,
-    count: u8,
-) -> Capacity {
-    unsafe {
-        cmd_refit_vehicle(
-            s,
-            cost,
-            temp,
-            DoCommandFlags(flags),
-            CmdRefitVehicle {
-                veh_id: VehicleID(id),
-                new_cargo_type: CargoType(cargo),
-                new_subtype: subtype,
-                auto_refit: automatic,
-                only_this: only,
-                num_vehicles: count,
-            },
-        )
-    }
 }
 /// `CmdRefitVehicle`: refits a vehicle to the specified cargo type.
 ///
@@ -643,7 +627,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         && !free_wagon // used by autoreplace/renew
         && (!auto_refit || !loading()) // refit inside stations
         // refit inside depots
-        && !unsafe { (c.transactions.stopped_in_depot)(front) }
+        && !crate::vehicle_base::is_stopped_in_depot(front_handle, s.train.physics)
     {
         (b.cost.error)(
             cost,

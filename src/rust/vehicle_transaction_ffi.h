@@ -66,7 +66,7 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 extern "C" {
 void openttd_rust_vehicle_mass_start(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, bool, bool, const OpenTTDVehicleListId *);
 void openttd_rust_vehicle_depot_sell(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t);
-void openttd_rust_vehicle_depot_replace(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, const OpenTTDFleetCosts *, uint16_t, uint32_t, uint8_t);
+void openttd_rust_vehicle_depot_replace(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t);
 void openttd_rust_vehicle_send(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, const OpenTTDVehicleListId *);
 void openttd_rust_vehicle_startstop(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool);
 void openttd_rust_vehicle_sell(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool, bool, uint32_t);

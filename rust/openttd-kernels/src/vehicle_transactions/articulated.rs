@@ -131,7 +131,9 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
         let cargo = if can_carry {
             specification.default_cargo()
         } else {
-            unsafe { (c.transactions.cargo_type)(first) }
+            unsafe { super::vehicle_ref(first, c.vehicles) }
+                .cargo_type(c.vehicles.newgrf())
+                .0
         };
         // The road-only assertion remains in its native field-store leaf. The cargo
         // capacity callback (36) is called when the consist is finished; without
@@ -230,10 +232,10 @@ pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut 
         if mask != 0 {
             real_intersection &= mask;
         }
-        let cargo = unsafe { (c.transactions.cargo_type)(v) };
-        if c.transactions.assertions {
-            c.transactions.check(cargo < CargoType::NUM_CARGO.0);
-        }
+        let cargo = unsafe { super::vehicle_ref(v, c.vehicles) }
+            .cargo_type(c.vehicles.newgrf())
+            .0;
+        crate::services_assert::assert_with(|| cargo < CargoType::NUM_CARGO.0);
         if unsafe { super::vehicle_ref(v, r.common.vehicles) }.cargo_cap() > 0 {
             crate::bitmath_func::set_bit64(&mut real_cargo, cargo);
         }

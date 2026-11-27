@@ -172,9 +172,7 @@ impl Ctx {
         Self::vref(v).tile()
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
-        if self.w.assertions {
-            self.w.check(condition());
-        }
+        crate::services_assert::assert_with(condition);
     }
     /// `Train::GetIfValid`.
     fn train(self, id: VehicleID) -> R {
@@ -272,29 +270,6 @@ pub(crate) unsafe fn nested_move_rail_vehicle(
         },
     );
     (t.cost.success)(out)
-}
-/// Raw adapter: the nested `CmdMoveRailVehicle` over base values, for
-/// `fleet/transactions.rs` until its pass.
-pub(crate) unsafe fn nested_move(
-    b: &'static build::Services,
-    out: *mut CommandCost,
-    flags: u16,
-    src: u32,
-    dest: u32,
-    chain: bool,
-) -> bool {
-    unsafe {
-        nested_move_rail_vehicle(
-            b,
-            out,
-            DoCommandFlags(flags),
-            CmdMoveRailVehicle {
-                src_veh: VehicleID(src),
-                dest_veh: VehicleID(dest),
-                move_chain: chain,
-            },
-        )
-    }
 }
 
 /// Arguments of `CmdBuildRailWagon`.
@@ -1013,11 +988,13 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         return (cost.zero)(out);
     }
     /* Check if all vehicles in the source train are stopped inside a depot. */
-    if !unsafe { (x.w.stopped_in_depot)(Ctx::sh(src_head)) } {
+    if !crate::vehicle_base::is_stopped_in_depot(Ctx::vref(src_head), x.r.train.physics) {
         return (cost.error)(out, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0);
     }
     /* Check if all vehicles in the destination train are stopped inside a depot. */
-    if !dst_head.is_null() && !unsafe { (x.w.stopped_in_depot)(Ctx::sh(dst_head)) } {
+    if !dst_head.is_null()
+        && !crate::vehicle_base::is_stopped_in_depot(Ctx::vref(dst_head), x.r.train.physics)
+    {
         return (cost.error)(out, STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT.0);
     }
     /* First make a backup of the order of the trains. That way we can do
@@ -1120,7 +1097,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
             if !crate::vehicle_base::order_list(src_head).is_null() {
                 add_to_shared(x, src_head, src);
             }
-            unsafe { (x.w.copy_configuration)(Ctx::sh(src), Ctx::sh(src_head)) };
+            (x.w.copy_vehicle_config_and_statistics)(Ctx::vref(src_head), Ctx::vref(src));
         }
         /* Remove stuff not valid anymore for non-front engines. */
         delete_orders(x, src);
@@ -1270,7 +1247,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
             add_to_shared(x, new_head, first);
             delete_orders(x, first);
             /* Copy other important data from the front engine */
-            unsafe { (x.w.copy_configuration)(Ctx::sh(first), Ctx::sh(new_head)) };
+            (x.w.copy_vehicle_config_and_statistics)(Ctx::vref(new_head), Ctx::vref(first));
         }
         x.count_vehicle(new_head, 1); // after copying over the profit, if required
     } else if Ctx::vref(v).is_primary_vehicle() && backup_order {

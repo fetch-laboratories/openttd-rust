@@ -289,19 +289,36 @@ pub(crate) fn is_articulated_part(ground: bool, subtype: u8) -> bool {
     ground && has_bit(subtype, GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0)
 }
 
-/// `Vehicle::IsStoppedInDepot` of a ground vehicle `v`, whose `IsPrimaryVehicle` is
-/// `IsFrontEngine` and whose `IsChainInDepot` is `GroundVehicle::IsChainInDepot`: check
-/// whether the vehicle is in the depot *and* stopped.
+/// Virtual `Vehicle::IsChainInDepot`: check whether the whole vehicle chain is in the depot;
+/// dispatched on the vehicle's type to `GroundVehicle::IsChainInDepot`, `Ship::IsInDepot` and
+/// `Aircraft::IsInDepot`, with the base class's `IsInDepot()` false for the other types.
+/// `physics` is the ground vehicle table.
+pub(crate) fn is_chain_in_depot(
+    v: crate::vehicle::VehicleRef,
+    physics: &crate::ground_vehicle::Services,
+) -> bool {
+    match v.vehicle_type() {
+        VehicleType::VEH_TRAIN | VehicleType::VEH_ROAD => {
+            crate::ground_vehicle::is_chain_in_depot(physics, v)
+        }
+        VehicleType::VEH_SHIP => crate::ship_control::Ship::of(v).is_in_depot(),
+        VehicleType::VEH_AIRCRAFT => crate::aircraft::is_in_depot(v),
+        _ => false,
+    }
+}
+
+/// `Vehicle::IsStoppedInDepot`: check whether the vehicle is in the depot *and* stopped.
+/// `physics` is the ground vehicle table [`is_chain_in_depot`] takes.
 pub(crate) fn is_stopped_in_depot(
     v: crate::vehicle::VehicleRef,
     physics: &crate::ground_vehicle::Services,
 ) -> bool {
     crate::services_assert::assert_with(|| v == v.first());
     /* Free wagons have no VehState::Stopped state */
-    if v.is_front_engine() && !v.vehstatus().test(VehState::Stopped) {
+    if v.is_primary_vehicle() && !v.vehstatus().test(VehState::Stopped) {
         return false;
     }
-    crate::ground_vehicle::is_chain_in_depot(physics, v)
+    is_chain_in_depot(v, physics)
 }
 
 /// `Vehicle::IsGroundVehicle`: is this a ground vehicle (train or road vehicle)?
@@ -311,7 +328,6 @@ pub(crate) fn is_ground_vehicle(kind: VehicleType) -> bool {
 
 /// Raw compatibility names for files no pass has finished; #734's closure removes them.
 pub const VS_HIDDEN: u8 = VehStates::from_element(VehState::Hidden).0;
-pub const VS_STOPPED: u8 = VehStates::from_element(VehState::Stopped).0;
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 pub const NCVV_POSITION_CONSIST_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_CONSIST_LENGTH.0;
 pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_SAME_ID_LENGTH.0;
@@ -1542,10 +1558,6 @@ impl crate::vehicle::VehicleRef {
     #[inline]
     pub(crate) fn set_vehstatus(self, value: VehStates) {
         write_field!(self.0.as_ptr(), vehstatus, value);
-    }
-    #[inline]
-    pub(crate) fn set_vehstatus_raw(self, value: u8) {
-        self.set_vehstatus(VehStates(value));
     }
     pub(crate) fn subspeed(self) -> u8 {
         read_field!(self.0.as_ptr(), subspeed)

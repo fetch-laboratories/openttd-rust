@@ -365,6 +365,7 @@ mod bodies {
     const FIRST_VEHICLE: ScriptEvent = ScriptEvent {
         r#type: ScriptEventType::ET_STATION_FIRST_VEHICLE,
         vehicle: VEHICLE_ID,
+        other_vehicle: 0,
         tile: 0,
         crash_reason: CrashReason(0),
         victims: 0,
@@ -561,6 +562,7 @@ mod bodies {
             let crashed = ScriptEvent {
                 r#type: ScriptEventType::ET_VEHICLE_CRASHED,
                 vehicle: VEHICLE_ID,
+                other_vehicle: 0,
                 tile: TILE.0,
                 crash_reason: CrashReason(0),
                 victims: 4,

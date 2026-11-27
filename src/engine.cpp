@@ -446,7 +446,7 @@ CommandCost CmdRenameEngine(DoCommandFlags flags, EngineID engine_id, const std:
  */
 bool IsEngineBuildable(EngineID engine, VehicleType type, CompanyID company)
 {
-	return openttd_rust_engine_buildable(&EngineServices(), Engine_resolve(engine.base()), type, company.base());
+	return openttd_rust_engine_buildable(&EngineServices(), engine.base(), type, company.base());
 }
 
 /**

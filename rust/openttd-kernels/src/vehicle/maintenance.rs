@@ -871,7 +871,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service_abi(
     u8::from(needs_automatic_servicing(v, unsafe { &*base }))
 }
 /// `Vehicle::NeedsAutorenewing`, resolving the vehicle's resolver table.
-fn needs_autorenewing_entry<const C: bool>(
+pub(crate) fn needs_autorenewing_entry<const C: bool>(
     v: VehicleRef,
     base: &VehicleServices,
     c: *const OpenTTDCompany,

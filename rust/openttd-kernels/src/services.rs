@@ -1535,6 +1535,10 @@ impl Cost<'_> {
     pub(crate) fn set(self, money: i64) {
         (self.1.expense_money)(self.0, crate::economy_type::EXPENSES_CONSTRUCTION, money);
     }
+    /// `CommandCost(expense, money)`.
+    pub(crate) fn expense_money(self, expense: crate::economy_type::ExpensesType, money: i64) {
+        (self.1.expense_money)(self.0, expense.0, money);
+    }
     pub(crate) fn add_money(self, money: i64) {
         (self.1.amount)(self.0, money);
     }

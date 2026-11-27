@@ -3652,7 +3652,7 @@ fn get_order_station_location(v: VehicleRef, station: StationID, s: &Leaves) -> 
 #[allow(unsafe_code)]
 fn reverse_train_direction(v: VehicleRef, s: &Leaves) {
     // SAFETY: The maintenance table names the process-lifetime transaction table.
-    let build = (unsafe { &*s.maintenance().transaction }.build_services)();
+    let build = (unsafe { &*s.maintenance().transaction }.build)();
     let c = s.scheduler();
     let veh_id = v.index(s.newgrf());
     crate::command::command_do(

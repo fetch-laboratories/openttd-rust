@@ -758,14 +758,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         Self::call(|| (self.vs.update_delta)(v.base()));
     }
 
-    /// `Aircraft::IsInDepot()`, which is `IsChainInDepot()` for an aircraft.
-    fn is_in_depot(&self, v: Vehicle) -> bool {
-        let b = v.base();
-        self.check(is_primary_vehicle(b.subtype()));
-        vehstatus_test(b, VehState::Hidden)
-            && crate::station_map::is_hangar_tile(b.tile(), crate::newgrf_airport::runtime())
-    }
-
     /// `Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do(DoCommandFlag::Execute, v->index, depot_cmd, {})`
     /// under `Backup<CompanyID> cur_company(_current_company, v->owner)`; true when the
     /// command failed.
@@ -928,7 +920,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         {
             return;
         }
-        if self.is_in_depot(v) {
+        if is_in_depot(v.base()) {
             self.service_in_depot(v);
             return;
         }
@@ -2336,7 +2328,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         /* Check if we should wait here for unbunching. */
         if crate::vehicle::is_waiting_for_unbunching(v.base(), self.vs.orders(), || {
-            self.is_in_depot(v)
+            is_in_depot(v.base())
         }) {
             return;
         }
@@ -3200,6 +3192,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             unsafe { self.airport_blocks_reset(st, blocks) };
         }
     }
+}
+
+/// `Aircraft::IsInDepot`, which is also an aircraft's `Vehicle::IsChainInDepot`.
+pub(crate) fn is_in_depot(v: VehicleRef) -> bool {
+    crate::services_assert::assert_with(|| is_primary_vehicle(v.subtype()));
+    vehstatus_test(v, VehState::Hidden)
+        && crate::station_map::is_hangar_tile(v.tile(), crate::newgrf_airport::runtime())
 }
 
 /// `Aircraft::IsPrimaryVehicle`.

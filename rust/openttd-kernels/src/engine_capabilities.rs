@@ -374,9 +374,15 @@ unsafe fn count_articulated_parts(
         i - 1
     }
 }
-/// A live base shell, retained by its fleet/transaction caller.
-pub(crate) unsafe fn can_carry_vehicle(s: &Services, v: V) -> bool {
-    unsafe { openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0 }
+/// `Engine::Get(engine)->CanCarryCargo()`: determines whether an engine can carry something.
+/// A vehicle cannot carry anything if its capacity is zero, or none of the possible cargos is
+/// available in the climate.
+pub(crate) fn can_carry_cargo(s: &Services, engine: EngineID) -> bool {
+    can_carry(EngineRef::of((s.engine)(engine.0)).carrying())
+}
+/// `Engine::IsValidID(engine)`: `Engine::GetIfValid(engine)` is not null.
+pub(crate) fn engine_is_valid_id(s: &Services, engine: EngineID) -> bool {
+    !(s.engine_if_valid)(engine.0).is_null()
 }
 /// `Engine::GetDisplayDefaultCapacity` delegates to the capacity owner in purchase context.
 pub(crate) unsafe fn display_default_capacity(s: &Services, e: E, mail: *mut u16) -> u32 {
@@ -535,24 +541,25 @@ pub unsafe extern "C" fn openttd_rust_articulated_refit_masks(
         intersection.write(intersection_mask.0);
     }
 }
+/// `GetUnionOfArticulatedRefitMasks`: ors the refit masks of all articulated parts.
+/// `include_initial_cargo_type` includes the parts' initial cargo type.
+pub(crate) fn get_union_of_articulated_refit_masks(
+    s: &Services,
+    engine: EngineID,
+    include_initial_cargo_type: bool,
+) -> CargoTypes {
+    let (union_mask, _) = get_articulated_refit_masks(s, engine, include_initial_cargo_type);
+    union_mask
+}
+/// [`get_union_of_articulated_refit_masks`], for `GetUnionOfArticulatedRefitMasks`' C++
+/// callers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_refit_union(
     s: &Services,
     engine: u16,
-    initial: bool,
+    include_initial_cargo_type: bool,
 ) -> u64 {
-    let mut union = 0;
-    let mut intersection = 0;
-    unsafe {
-        openttd_rust_articulated_refit_masks(
-            s,
-            engine,
-            initial,
-            &raw mut union,
-            &raw mut intersection,
-        );
-    };
-    union
+    get_union_of_articulated_refit_masks(s, EngineID(engine), include_initial_cargo_type).0
 }
 /// `GetCargoTypesOfArticulatedVehicle`: get cargo mask of all cargoes carried by an
 /// articulated vehicle. `cargo_type`, when given, is set to the cargo type of the whole

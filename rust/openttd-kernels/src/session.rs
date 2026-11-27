@@ -130,7 +130,6 @@ pub struct Services {
     pub tile_loop_begin: extern "C" fn(*mut Frame) -> *const crate::landscape_generation::Loop,
     pub tile_loop_end: extern "C" fn(*mut Frame),
     pub vehicle_tables: extern "C" fn(*mut Frame, bool) -> crate::vehicle::scheduler::Tables,
-    pub vehicle_cost: extern "C" fn(*mut Frame) -> *mut std::ffi::c_void,
     pub vehicle_end: extern "C" fn(*mut Frame),
     pub town: *const crate::town::Leaves,
     pub trees: *const crate::trees::TreeServices,
@@ -682,10 +681,7 @@ impl<'a> Session<'a> {
             if calendar {
                 crate::vehicle::scheduler::calendar_day(&raw const tables);
             } else {
-                crate::vehicle::scheduler::ticks(
-                    &raw const tables,
-                    (s.vehicle_cost)(self.frame).cast(),
-                );
+                crate::vehicle::scheduler::ticks(&raw const tables);
             }
         }
         if !calendar {
@@ -1111,7 +1107,6 @@ crate::abi::layouts! {
         tile_loop_begin,
         tile_loop_end,
         vehicle_tables,
-        vehicle_cost,
         vehicle_end,
         town,
         trees,

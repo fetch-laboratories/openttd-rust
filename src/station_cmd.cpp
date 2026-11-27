@@ -319,9 +319,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	.next_shared = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
 		return RustVehicle(VehicleOf(handle)->NextShared());
 	},
-	.stopped_in_depot = [](OpenTTDVehicle *handle) noexcept -> bool {
-		return VehicleOf(handle)->IsStoppedInDepot();
-	},
 	.cargo_type = RustVehicleCargoType,
 	.goods_entry = RustStationGoodsEntry,
 	.get_or_create_data_cargo = RustStationCargoOwner,

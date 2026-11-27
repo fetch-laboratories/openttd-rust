@@ -224,7 +224,7 @@ unsafe fn cmd_clone_vehicle(
         /* we build the rear ends of multiheaded trains with the front ones */
         if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN
             || !crate::ground_vehicle::is_rear_dualheaded(
-                crate::fleet::transactions::record(c.transactions, v).subtype(),
+                crate::fleet::record(b.groups, v).subtype(),
             )
         {
             /* In case we're building a multi headed vehicle and the maximum number of
@@ -378,16 +378,19 @@ unsafe fn cmd_clone_vehicle(
     loop {
         loop {
             if flags.test(DoCommandFlag::Execute) {
-                if c.transactions.assertions {
-                    c.transactions.check(!w.is_null());
-                }
+                crate::services_assert::assert_with(|| !w.is_null());
                 /* Find out what's the best sub type */
-                let cargo = unsafe { (c.transactions.cargo_type)(v) };
-                let subtype = unsafe { (c.transactions.subtype)(v, w, cargo) };
+                let source = crate::fleet::record(b.groups, v);
+                let cargo = source.cargo_type(b.groups.vehicles.newgrf());
+                let subtype = (c.transactions.get_best_fitting_sub_type)(
+                    source,
+                    crate::fleet::record(b.groups, w),
+                    cargo,
+                );
                 let new_cargo =
                     (r.cargo_kind)(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr());
                 // Subtype selection invokes NewGRF: observe the source cargo again.
-                if new_cargo.cargo != unsafe { (c.transactions.cargo_type)(v) }
+                if new_cargo.cargo != source.cargo_type(b.groups.vehicles.newgrf()).0
                     || new_cargo.subtype != subtype
                 {
                     let id = {
@@ -395,7 +398,7 @@ unsafe fn cmd_clone_vehicle(
                             .index(b.groups.vehicles.newgrf())
                             .0
                     };
-                    let cargo = unsafe { (c.transactions.cargo_type)(v) };
+                    let cargo = source.cargo_type(b.groups.vehicles.newgrf()).0;
                     crate::command::nested(
                         b.commands,
                         b.shared,

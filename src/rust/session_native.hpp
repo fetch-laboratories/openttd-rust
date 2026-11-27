@@ -21,7 +21,7 @@ static_assert(FT_SAVEGAME == 1 && FT_SCENARIO == 2 && FT_HEIGHTMAP == 3 && SL_OK
 struct OpenTTDWorldSetupFrame { std::exception_ptr cancellation; };
 /* The vehicle tick's native storage: the fleet and refit costs, and the one road command
  * slot every road vehicle's tick reuses; a built context is rebuilt at each use. */
-struct RustSessionVehicleCosts { CommandCost replacement, refit, temporary; OpenTTDRoadCommandSlot road; };
+struct RustSessionVehicleCosts { CommandCost refit, temporary; OpenTTDRoadCommandSlot road; };
 struct OpenTTDSessionLoad {
 	const std::string &filename;
 	SaveLoadOperation operation;

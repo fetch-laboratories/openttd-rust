@@ -38,30 +38,33 @@ extern void ChangeVehicleViewports(VehicleID from_index, VehicleID to_index);
 extern void ChangeVehicleNews(VehicleID from_index, VehicleID to_index);
 extern void ChangeVehicleViewWindow(VehicleID from_index, VehicleID to_index);
 
-/**
- * Figure out if two engines got at least one type of cargo in common (refitting if needed)
- * @param engine_a one of the EngineIDs
- * @param engine_b the other EngineID
- * @return true if they can both carry the same type of cargo (or at least one of them got no capacity at all)
- */
-
-
-
 #include "rust/fleet_transaction_services.hpp"
 const OpenTTDFleetTransactionServices &FleetTransactionServices() { return _fleet_transaction_services; }
 
+/**
+ * Checks some basic properties whether autoreplace is allowed
+ * @param from Origin engine
+ * @param to Destination engine
+ * @param company Company to check for
+ * @return true if autoreplace is allowed
+ */
 bool CheckAutoreplaceValidity(EngineID from, EngineID to, CompanyID company)
 {
-	assert(Engine::IsValidID(from) && Engine::IsValidID(to));
-	return openttd_rust_fleet_valid(&_fleet_transaction_services, &FleetGroupServices(), from.base(), to.base(), company.base());
+	return openttd_rust_fleet_valid(&_fleet_transaction_services, from.base(), to.base(), company.base());
 }
 
+/**
+ * Autoreplaces a vehicle
+ * Trains are replaced as a whole chain, free wagons in depot are replaced on their own
+ * @param flags type of operation
+ * @param veh_id Index of vehicle
+ * @return the cost of this operation or an error
+ */
 CommandCost CmdAutoreplaceVehicle(DoCommandFlags flags, VehicleID veh_id)
 {
-	NativeFleetCosts context;
-	auto costs = context.View();
-	openttd_rust_fleet_autoreplace(&_fleet_transaction_services, &FleetGroupServices(), &costs, flags.base(), veh_id.base());
-	return std::move(context.result);
+	CommandCost cost;
+	openttd_rust_fleet_autoreplace(&_fleet_transaction_services, RustCommandCost(&cost), flags.base(), veh_id.base());
+	return cost;
 }
 
 /**
@@ -75,8 +78,9 @@ CommandCost CmdAutoreplaceVehicle(DoCommandFlags flags, VehicleID veh_id)
  */
 CommandCost CmdSetAutoReplace(DoCommandFlags flags, GroupID id_g, EngineID old_engine_type, EngineID new_engine_type, bool when_old)
 {
-	uint32_t error = openttd_rust_fleet_set_rule(&_fleet_transaction_services, &FleetGroupServices(), flags.base(), id_g.base(), old_engine_type.base(), new_engine_type.base(), when_old);
-	return error == UINT32_MAX ? CommandCost() : CommandCost(error);
+	CommandCost cost;
+	openttd_rust_fleet_set_rule(&_fleet_transaction_services, RustCommandCost(&cost), flags.base(), id_g.base(), old_engine_type.base(), new_engine_type.base(), when_old);
+	return cost;
 }
 
 

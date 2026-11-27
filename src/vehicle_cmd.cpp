@@ -304,10 +304,8 @@ CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, Vehicl
  */
 CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, VehicleType vehicle_type)
 {
-	CommandCost cost, item, replace, build, copy, temporary;
-	SavedRandomSeeds seeds;
-	OpenTTDFleetCosts costs{&item, &replace, &build, &copy, &temporary, &seeds};
-	openttd_rust_vehicle_depot_replace(&GetVehicleMassServices(), RustCommandCost(&cost), &costs, flags.base(), tile.base(), vehicle_type);
+	CommandCost cost;
+	openttd_rust_vehicle_depot_replace(&GetVehicleMassServices(), RustCommandCost(&cost), flags.base(), tile.base(), vehicle_type);
 	return cost;
 }
 

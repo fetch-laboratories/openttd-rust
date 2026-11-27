@@ -641,13 +641,12 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
     let mask = if e.kind == VehicleType::TRAIN {
         u64::MAX
     } else {
-        unsafe {
-            crate::engine_capabilities::openttd_rust_articulated_refit_union(
-                s.capabilities,
-                (s.engine_id)(e.shell),
-                true,
-            )
-        }
+        crate::engine_capabilities::get_union_of_articulated_refit_masks(
+            s.capabilities,
+            crate::engine_type::EngineID(unsafe { (s.engine_id)(e.shell) }),
+            true,
+        )
+        .0
     };
     let mut best = 255;
     let mut performance = -1;
@@ -984,15 +983,34 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
     }
     true
 }
+/// `IsEngineBuildable`: check if an engine is buildable by a company of the given vehicle
+/// type, resolving the engine as `Engine::GetIfValid`.
+pub(crate) fn is_engine_buildable(
+    s: &Services,
+    engine: crate::engine_type::EngineID,
+    kind: VehicleType,
+    company: crate::company_type::CompanyID,
+) -> bool {
+    // SAFETY: The process-lifetime engine table; the resolved record is live for the call.
+    unsafe { buildable(s, call!(s, resolve, engine.0), kind, company.0) }
+}
+/// [`is_engine_buildable`], for `IsEngineBuildable`'s C++ callers.
+/// # Safety
+/// `s` is the live engine table.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_buildable_abi(
     s: *const Services,
-    e: EngineRef,
+    engine: u16,
     kind: VehicleType,
     company: u8,
 ) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    u8::from(unsafe { buildable(&*s, e, kind, company) })
+    u8::from(is_engine_buildable(
+        unsafe { &*s },
+        crate::engine_type::EngineID(engine),
+        kind,
+        crate::company_type::CompanyID(company),
+    ))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_variant_hidden_abi(

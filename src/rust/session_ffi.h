@@ -105,7 +105,6 @@ struct OpenTTDSessionServices {
 	const OpenTTDGenerationLoop * (*tile_loop_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_begin);
 	void (*tile_loop_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_end);
 	OpenTTDVehicleSchedulerTables (*vehicle_tables)(OpenTTDSessionFrame *, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tables);
-	OpenTTDCommandCost * (*vehicle_cost)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cost);
 	void (*vehicle_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_end);
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTreeServices *trees;

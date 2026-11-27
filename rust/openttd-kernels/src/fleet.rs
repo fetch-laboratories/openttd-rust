@@ -610,11 +610,6 @@ pub(crate) fn record(w: &GroupServices, v: *mut ()) -> VehicleRef {
     // SAFETY: Every caller passes a live shell of the serialized game state.
     unsafe { VehicleRef::from_shell(v.cast(), w.vehicles) }
 }
-/// `v->Next()` as a native shell, for callers that hold shells.
-pub(crate) fn next_part(v: VehicleRef) -> *mut () {
-    v.next()
-        .map_or(std::ptr::null_mut(), |next| next.shell().cast())
-}
 
 /// `Group::Get(index)`.
 pub(crate) fn group_get(w: &GroupServices, index: GroupID) -> GroupRef {
@@ -630,10 +625,6 @@ pub(crate) fn group_get_if_valid(w: &GroupServices, index: GroupID) -> Option<Gr
 /// `Group::IsValidID(index)`.
 pub(crate) fn group_is_valid_id(w: &GroupServices, index: GroupID) -> bool {
     group_get_if_valid(w, index).is_some()
-}
-/// `IsDefaultGroupID(index)`.
-fn is_default_group_id(index: GroupID) -> bool {
-    index == GroupID::DEFAULT_GROUP
 }
 
 /// The cursor `for (Group *g : Group::Iterate())` walks; each step reads the next group after
@@ -1391,7 +1382,10 @@ pub(crate) fn cmd_add_vehicle_group(
         vli,
     } = args;
     let mut new_g = group_id;
-    if !group_is_valid_id(w, new_g) && !is_default_group_id(new_g) && new_g != GroupID::NEW_GROUP {
+    if !group_is_valid_id(w, new_g)
+        && !crate::group::is_default_group_id(new_g)
+        && new_g != GroupID::NEW_GROUP
+    {
         cmd_error(cost);
         return GroupID::INVALID;
     }
@@ -1758,11 +1752,13 @@ pub(crate) fn cmd_set_group_flag(
 /// @note called in `CmdAddVehicleGroup` and `CmdMoveRailVehicle`
 #[allow(unsafe_code, reason = "the vehicle's live `NewGRF` cache")]
 pub(crate) fn set_train_group_id(w: &GroupServices, v: VehicleRef, new_g: GroupID) {
-    if !group_is_valid_id(w, new_g) && !is_default_group_id(new_g) {
+    if !group_is_valid_id(w, new_g) && !crate::group::is_default_group_id(new_g) {
         return;
     }
 
-    crate::services_assert::assert_with(|| v.is_front_engine() || is_default_group_id(new_g));
+    crate::services_assert::assert_with(|| {
+        v.is_front_engine() || crate::group::is_default_group_id(new_g)
+    });
 
     let newgrf = w.vehicles.newgrf();
     let mut u = Some(v);

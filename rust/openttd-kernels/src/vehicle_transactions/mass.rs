@@ -174,14 +174,19 @@ pub(crate) unsafe fn cmd_mass_start_stop_vehicle(
     }
     for i in 0..list.0.len() {
         let v = list.0[i];
-        if crate::fleet::transactions::record(s.common.transactions, v)
+        if crate::fleet::record(b.groups, v)
             .vehstatus()
             .test(crate::vehicle_base::VehState::Stopped)
             != cmd.do_start
         {
             continue;
         }
-        if !cmd.vehicle_list_window && !unsafe { (s.common.transactions.chain_depot)(v) } {
+        if !cmd.vehicle_list_window
+            && !crate::vehicle_base::is_chain_in_depot(
+                crate::fleet::record(b.groups, v),
+                (s.common.transactions.build)().refit.train.physics,
+            )
+        {
             continue;
         }
         /* Just try and don't care if some vehicle's can't be stopped. */
@@ -326,11 +331,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_depot_sell(
 /// `CmdDepotMassAutoReplace`: autoreplace all vehicles in the depot.
 ///
 /// # Safety
-/// Fleet cost slots/seeds are caller-stack storage, distinct from the aggregate.
+/// `cost` is the caller's live native result.
 pub(crate) unsafe fn cmd_depot_mass_auto_replace(
     s: &Services,
     cost: *mut CommandCost,
-    costs: &crate::fleet::transactions::Costs,
     flags: DoCommandFlags,
     cmd: CmdDepotVehicles,
 ) {
@@ -356,36 +360,28 @@ pub(crate) unsafe fn cmd_depot_mass_auto_replace(
             },
         );
     }
+    let w = s.common.transactions;
+    let physics = (w.build)().refit.train.physics;
     for i in 0..list.0.len() {
-        let v = list.0[i];
+        let v = crate::fleet::record(b.groups, list.0[i]);
         /* Ensure that the vehicle completely in the depot */
-        if !unsafe { (s.common.transactions.chain_depot)(v) } {
+        if !crate::vehicle_base::is_chain_in_depot(v, physics) {
             continue;
         }
-        let id = {
-            crate::fleet::record(b.groups, v)
-                .index(b.groups.vehicles.newgrf())
-                .0
-        };
-        crate::command::nested(
-            b.commands,
-            b.shared,
-            Cost(costs.result.cast(), b.cost),
-            0,
-            flags.0,
-            |flags| unsafe {
-                crate::fleet::transactions::openttd_rust_fleet_autoreplace(
-                    s.common.transactions,
-                    b.groups,
-                    costs,
-                    u32::from(flags),
-                    id,
+        let veh_id = v.index(b.groups.vehicles.newgrf());
+        crate::fleet::transactions::with_cost(b.cost, |ret| {
+            crate::fleet::transactions::command(b, ret, TileIndex(0), flags, |flags| {
+                crate::fleet::transactions::cmd_autoreplace_vehicle(
+                    w,
+                    ret,
+                    flags,
+                    crate::fleet::transactions::CmdAutoreplaceVehicle { veh_id },
                 );
-            },
-        );
-        if (b.cost.success)(costs.result.cast()) {
-            (b.cost.amount)(cost, (b.cost.money)(costs.result.cast()));
-        }
+            });
+            if ret.ok() {
+                (b.cost.amount)(cost, ret.money());
+            }
+        });
     }
 }
 /// # Safety
@@ -394,7 +390,6 @@ pub(crate) unsafe fn cmd_depot_mass_auto_replace(
 pub unsafe extern "C" fn openttd_rust_vehicle_depot_replace(
     s: &Services,
     cost: *mut CommandCost,
-    costs: &crate::fleet::transactions::Costs,
     flags: u16,
     tile: u32,
     kind: u8,
@@ -403,7 +398,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_depot_replace(
         cmd_depot_mass_auto_replace(
             s,
             cost,
-            costs,
             DoCommandFlags(flags),
             CmdDepotVehicles {
                 tile: TileIndex(tile),

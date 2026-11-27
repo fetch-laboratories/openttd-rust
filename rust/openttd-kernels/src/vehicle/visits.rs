@@ -385,12 +385,10 @@ impl Refresher {
             let temp_cargo_type = v.cargo_type(resolver);
             let temp_subtype = v.cargo_subtype(resolver);
             v.set_cargo_type(vs, self.cargo);
-            // SAFETY: `GetBestFittingSubType(v, v, cargo)` takes the live shell twice; it
-            // changes and restores the cargo type and subtype, invalidates NewGRF caches and
-            // runs cargo suffix callbacks, and no Rust borrow of the vehicle spans the call.
-            let subtype = unsafe {
-                (r.common.transactions.subtype)(v.shell().cast(), v.shell().cast(), self.cargo.0)
-            };
+            // `GetBestFittingSubType(v, v, cargo)` changes and restores the cargo type and
+            // subtype, invalidates NewGRF caches and runs cargo suffix callbacks, and no Rust
+            // borrow of the vehicle spans the call.
+            let subtype = (r.common.transactions.get_best_fitting_sub_type)(v, v, self.cargo);
             v.set_cargo_subtype(vs, subtype);
 
             let mut mail_capacity = 0_u16;
@@ -1111,7 +1109,7 @@ pub(crate) fn handle_loading(v: VehicleRef, mode: bool, s: &Services) {
 #[allow(unsafe_code)]
 fn set_vehicle_to_autoreplace(index: VehicleID, value: bool) {
     // SAFETY: The serial game thread's pending map; no access survives the call.
-    unsafe { crate::fleet::pending::add(index.0, value) };
+    unsafe { crate::fleet::pending::add(index, value) };
 }
 
 /// `VehicleEnteredDepotThisTick`: adds a vehicle to the list of vehicles that visited a depot
@@ -1317,17 +1315,19 @@ fn depot_refit(v: VehicleRef, index: VehicleID, s: &Services) {
                     crate::command_type::DoCommandFlag::EXECUTE,
                     // SAFETY: The static refit table and the scope's live native costs.
                     |flags| {
-                        refit::refit(
+                        refit::cmd_refit_vehicle(
                             r,
                             cost.0,
                             temporary.0,
-                            flags,
-                            index.0,
-                            refit_cargo.0,
-                            0xff,
-                            false,
-                            false,
-                            0,
+                            crate::command_type::DoCommandFlags(flags),
+                            refit::CmdRefitVehicle {
+                                veh_id: index,
+                                new_cargo_type: refit_cargo,
+                                new_subtype: 0xff,
+                                auto_refit: false,
+                                only_this: false,
+                                num_vehicles: 0,
+                            },
                         )
                     },
                 );

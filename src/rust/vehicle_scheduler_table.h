@@ -9,7 +9,6 @@ struct OpenTTDCargoStorageServices;
 struct OpenTTDSharedServices;
 struct OpenTTDStationServices;
 struct OpenTTDStationLoading;
-struct OpenTTDFleetPendingServices;
 struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
 struct OpenTTDAircraftLeaves;
@@ -34,7 +33,6 @@ struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDCargoStorageServices *cargo;
 	const OpenTTDFleetGroupServices *group;
 	const OpenTTDStationLoading *loading;
-	const OpenTTDFleetPendingServices *pending;
 	OpenTTDCommandCost *refit_cost;
 	OpenTTDCommandCost *refit_temporary;
 	OpenTTDRoadCommandSlot *road_slot; ///< The session frame's road command slot for the vehicle tick; null on calendar day.

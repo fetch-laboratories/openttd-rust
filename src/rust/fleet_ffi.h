@@ -22,6 +22,7 @@ struct OpenTTDSharedServices;
  * pool identity. Name, children and engine maps are Rust containers. Commands write the
  * caller-owned stack CommandCost they are given. */
 struct OpenTTDVehicle;
+struct OpenTTDCommandCost;
 struct OpenTTDVehicleServices;
 struct OpenTTDVehicleSelectionServices;
 /* A group pool lookup's step: the shell, its Rust owner, its statistics' owner and its index; null for no group. */
@@ -58,59 +59,20 @@ struct OpenTTDFleetGroupServices {
 	bool (*is_engine_countable)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(is_engine_countable);
 	void (*set_group_id)(OpenTTDVehicle *v, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_group_id);
 };
-struct OpenTTDFleetCosts { void *result; void *replace; void *build; void *copy; void *temporary; void *seeds; };
-struct OpenTTDVehicleCommonServices;
-struct OpenTTDVehicleRefitServices;
 struct OpenTTDVehicleBuildServices;
 struct OpenTTDFleetTransactionServices {
-	const OpenTTDVehicleCommonServices &(*common)() noexcept OPENTTD_SERVICE_DEFAULT(common);
-	const OpenTTDVehicleRefitServices &(*refit_services)() noexcept OPENTTD_SERVICE_DEFAULT(refit_services);
-	const OpenTTDVehicleBuildServices &(*build_services)() noexcept OPENTTD_SERVICE_DEFAULT(build_services);
-	void (*cost_zero)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(cost_zero);
-	void (*cost_vehicles)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(cost_vehicles);
-	void (*cost_error)(void *out, uint32_t error) noexcept OPENTTD_SERVICE_DEFAULT(cost_error);
-	void (*cost_add)(void *out, void *item) noexcept OPENTTD_SERVICE_DEFAULT(cost_add);
-	void (*cost_move)(void *out, void *item) noexcept OPENTTD_SERVICE_DEFAULT(cost_move);
-	void (*cost_amount)(void *out, int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(cost_amount);
-	bool (*success)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(success);
-	uint32_t (*error)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(error);
-	int64_t (*money)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(money);
-	const OpenTTDCommandServices *commands;
-	bool (*chain_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
-	const OpenTTDVehicleServices *vehicles;
-	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
+	/* Tables. */
+	const OpenTTDVehicleBuildServices &(*build)() noexcept OPENTTD_SERVICE_DEFAULT(build);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
-	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
-	bool (*needs_renew)(void *shell, bool settings) noexcept OPENTTD_SERVICE_DEFAULT(needs_renew);
-	bool (*engine_valid)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(engine_valid);
-	bool (*company_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
-	bool (*engine_buildable)(uint16_t id, uint8_t type, uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(engine_buildable);
-	size_t (*order_count)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count);
-	uint8_t (*order_count_id)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count_id);
-	void * (*order_at)(void *orders, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(order_at);
-	bool (*order_refit)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_refit);
-	bool (*order_auto)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_auto);
-	uint8_t (*order_cargo)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_cargo);
-	void (*refit_news)(void *shell, int32_t order) noexcept OPENTTD_SERVICE_DEFAULT(refit_news);
-	uint8_t (*subtype)(void *old, void *replacement, uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
-	void (*reverse)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
-	void (*copy_configuration)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(copy_configuration);
-	void (*viewports)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(viewports);
-	void (*view_window)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(view_window);
-	void (*news)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(news);
-	void (*event)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(event);
-	void (*save_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(save_rng);
-	void (*restore_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(restore_rng);
-	void (*rule_window)(uint16_t engine, uint16_t group) noexcept OPENTTD_SERVICE_DEFAULT(rule_window);
-	bool assertions;
-};
-struct OpenTTDCompanyIdentityServices;
-struct OpenTTDFleetPendingServices {
-	const OpenTTDCompanyIdentityServices *company;
-	void (*subtract)(int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(subtract);
-	void (*command)(void *out, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(command);
-	void (*length_news)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(length_news);
-	void (*failed_news)(uint32_t id, uint32_t error) noexcept OPENTTD_SERVICE_DEFAULT(failed_news);
+	const OpenTTDCommandServices *commands;
+	const OpenTTDVehicleServices *vehicles;
+	/* Unported native bodies. */
+	void (*change_vehicle_news)(uint32_t from_index, uint32_t to_index) noexcept OPENTTD_SERVICE_DEFAULT(change_vehicle_news);
+	void (*change_vehicle_view_window)(uint32_t from_index, uint32_t to_index) noexcept OPENTTD_SERVICE_DEFAULT(change_vehicle_view_window);
+	void (*change_vehicle_viewports)(uint32_t from_index, uint32_t to_index) noexcept OPENTTD_SERVICE_DEFAULT(change_vehicle_viewports);
+	void (*copy_vehicle_config_and_statistics)(OpenTTDVehicle *v, OpenTTDVehicle *src) noexcept OPENTTD_SERVICE_DEFAULT(copy_vehicle_config_and_statistics);
+	uint8_t (*get_best_fitting_sub_type)(OpenTTDVehicle *v_from, OpenTTDVehicle *v_for, uint8_t dest_cargo_type) noexcept OPENTTD_SERVICE_DEFAULT(get_best_fitting_sub_type);
+	void (*invalidate_autoreplace_window)(uint16_t e, uint16_t id_g) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_autoreplace_window);
 };
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();
@@ -154,10 +116,10 @@ uint8_t openttd_rust_fleet_contains_abi(const OpenTTDFleetGroupServices *, uint1
 extern "C++" inline bool openttd_rust_fleet_contains(const OpenTTDFleetGroupServices *a0, uint16_t a1, uint16_t a2) { return openttd_rust_fleet_contains_abi(a0, a1, a2) != 0; }
 uint16_t openttd_rust_fleet_replacement(const OpenTTDFleetGroupServices *, EngineRenew *, uint16_t, uint16_t, bool *);
 void openttd_rust_fleet_remove_all_replacements(const OpenTTDFleetGroupServices *, EngineRenew **);
-uint8_t openttd_rust_fleet_valid_abi(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t);
-extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionServices *a0, const OpenTTDFleetGroupServices *a1, uint16_t a2, uint16_t a3, uint8_t a4) { return openttd_rust_fleet_valid_abi(a0, a1, a2, a3, a4) != 0; }
-void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, const OpenTTDFleetCosts *, uint32_t, uint32_t);
-uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
+uint8_t openttd_rust_fleet_valid_abi(const OpenTTDFleetTransactionServices *, uint16_t, uint16_t, uint8_t);
+extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionServices *a0, uint16_t a1, uint16_t a2, uint8_t a3) { return openttd_rust_fleet_valid_abi(a0, a1, a2, a3) != 0; }
+void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, OpenTTDCommandCost *, uint16_t, uint32_t);
+void openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint16_t, uint16_t, uint8_t);
 void openttd_rust_fleet_pending_clear();
 }
 #endif /* RUST_FLEET_FFI_H */

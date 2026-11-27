@@ -57,40 +57,6 @@ pub(crate) struct CmdBuildVehicle {
     /// User.
     pub(crate) client_id: ClientID,
 }
-/// Raw adapter: `CmdBuildVehicle` over base values, for `fleet/transactions.rs`
-/// until its pass.
-///
-/// # Safety
-/// As `cmd_build_vehicle`.
-pub(crate) unsafe fn build(
-    s: &'static Services,
-    out: *mut CommandCost,
-    temporary: *mut CommandCost,
-    refit_temporary: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-    engine: u16,
-    use_free: bool,
-    cargo: u8,
-    client: u32,
-) -> Result {
-    unsafe {
-        cmd_build_vehicle(
-            s,
-            out,
-            temporary,
-            refit_temporary,
-            DoCommandFlags(flags),
-            CmdBuildVehicle {
-                tile: TileIndex(tile),
-                eid: EngineID(engine),
-                use_free_vehicles: use_free,
-                cargo: CargoType(cargo),
-                client_id: ClientID(client),
-            },
-        )
-    }
-}
 /// `CmdBuildVehicle`: build a vehicle. Returns the new vehicle ID and the
 /// refitted capacity, mail capacity (aircraft) and cargo capacities; the cost
 /// or error is in `out`.
@@ -129,7 +95,14 @@ pub(crate) unsafe fn cmd_build_vehicle(
     }
     let kind = (s.depot_kind)(tile);
     /* Validate the engine type. */
-    if !unsafe { (c.transactions.engine_buildable)(engine, kind.0, company) } {
+    // SAFETY: The command table names the process-lifetime company and engine tables.
+    let engines = unsafe { &*((*(b.commands.company)()).engines)() };
+    if !crate::engine::is_engine_buildable(
+        engines,
+        crate::engine_type::EngineID(engine),
+        kind,
+        crate::company_type::CompanyID(company),
+    ) {
         value.error(
             STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE
                 .0

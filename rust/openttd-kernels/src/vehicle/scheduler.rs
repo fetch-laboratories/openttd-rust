@@ -60,7 +60,6 @@ pub struct Tables {
     pub cargo: *const cargo_storage::Services,
     pub group: *const fleet::GroupServices,
     pub loading: *const station_service::Loading,
-    pub pending: *const fleet::pending::Services,
     pub refit_cost: *mut services::CommandCost,
     pub refit_temporary: *mut services::CommandCost,
     /// The session frame's road command slot for the vehicle tick; null on the calendar-day
@@ -501,10 +500,9 @@ fn after_tick<const COUNTED: bool>(
     }
 }
 
-/// `CallVehicleTicks` up to its autoreplace loop, which `fleet::pending::drain` ports; `cost`
-/// is the native frame's command cost storage.
+/// `CallVehicleTicks` up to its autoreplace loop, which `fleet::pending::drain` ports.
 #[allow(unsafe_code)]
-fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
+fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables) {
     // SAFETY: The caller's live scheduler table.
     let s = unsafe { &*tables.scheduler };
     // SAFETY: Serial game thread; no pending entry is borrowed.
@@ -588,7 +586,7 @@ fn call_vehicle_ticks<const COUNTED: bool>(tables: &Tables, cost: *mut ()) {
 
     // SAFETY: No pool or record borrow survives into the fleet commands.
     unsafe {
-        fleet::pending::drain(tables.pending, tables.transaction, tables.group, cost);
+        fleet::pending::drain(&*tables.transaction, &*tables.group);
     };
 }
 
@@ -607,15 +605,15 @@ pub(crate) unsafe fn calendar_day(tables: *const Tables) {
 }
 /// The session's tick entry: `CallVehicleTicks`.
 /// # Safety
-/// As [`calendar_day`]; `cost` is native stack storage valid through the fleet drain.
+/// As [`calendar_day`].
 #[allow(unsafe_code)]
-pub(crate) unsafe fn ticks(tables: *const Tables, cost: *mut ()) {
+pub(crate) unsafe fn ticks(tables: *const Tables) {
     // SAFETY: The caller's live tables.
     let tables = unsafe { &*tables };
     if crate::witness::enabled() {
-        call_vehicle_ticks::<true>(tables, cost);
+        call_vehicle_ticks::<true>(tables);
     } else {
-        call_vehicle_ticks::<false>(tables, cost);
+        call_vehicle_ticks::<false>(tables);
     }
 }
 
@@ -635,7 +633,6 @@ crate::abi::layouts! {
         cargo,
         group,
         loading,
-        pending,
         refit_cost,
         refit_temporary,
         road_slot,
@@ -776,7 +773,6 @@ mod tests {
                 cargo: null(),
                 group: null(),
                 loading: null(),
-                pending: null(),
                 refit_cost: null_mut(),
                 refit_temporary: null_mut(),
                 road_slot: null_mut(),
@@ -1041,9 +1037,7 @@ mod tests {
         use crate::framerate_type::testing::{self as framerate, Effect};
         use crate::oracle;
         use crate::pool::{NativeOps, PoolConfig, PoolCore};
-        use crate::test_tables::{
-            FLEET_GROUPS, FLEET_PENDING, FLEET_TRANSACTIONS, SCHEDULER, VEHICLE,
-        };
+        use crate::test_tables::{FLEET_GROUPS, FLEET_TRANSACTIONS, SCHEDULER, VEHICLE};
         use crate::vehicle_base::VehicleRecord;
         use std::cell::{Cell, RefCell};
         use std::ffi::c_void;
@@ -1405,7 +1399,6 @@ mod tests {
             scheduler.road = road;
             scheduler.vehicle = vehicle;
             scheduler.shared = &raw const shared;
-            let pending = FLEET_PENDING;
             let mut commands = crate::test_tables::COMMANDS;
             commands.finance = &FINANCE;
             let mut transaction = FLEET_TRANSACTIONS;
@@ -1415,13 +1408,12 @@ mod tests {
             let tables = Tables {
                 cargo,
                 group: &raw const group,
-                pending: &raw const pending,
                 scheduler: &raw const scheduler,
                 transaction: &raw const transaction,
                 ..super::post_tick::null_tables()
             };
             // SAFETY: The tables and the pool outlive the synchronous pass.
-            unsafe { ticks(&raw const tables, null_mut()) };
+            unsafe { ticks(&raw const tables) };
         }
         extern "C" fn draw(_: *mut c_void) -> u32 {
             0

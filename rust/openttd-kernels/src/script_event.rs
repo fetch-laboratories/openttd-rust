@@ -56,6 +56,8 @@ impl ScriptEventType {
     pub const ET_EXCLUSIVE_TRANSPORT_RIGHTS: Self = Self(27);
     /// `ET_ROAD_RECONSTRUCTION`.
     pub const ET_ROAD_RECONSTRUCTION: Self = Self(28);
+    /// `ET_VEHICLE_AUTOREPLACED`.
+    pub const ET_VEHICLE_AUTOREPLACED: Self = Self(29);
     /// `ET_COMPANY_RENAMED`.
     pub const ET_COMPANY_RENAMED: Self = Self(33);
     /// `ET_PRESIDENT_RENAMED`.

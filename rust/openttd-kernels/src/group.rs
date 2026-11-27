@@ -45,3 +45,13 @@ impl GroupFlags {
 }
 
 crate::base_bitset_type::impl_bitset_ops!(GroupFlags);
+
+/// `IsDefaultGroupID`: checks if a `GroupID` stands for default vehicles of a company.
+pub(crate) fn is_default_group_id(index: crate::group_type::GroupID) -> bool {
+    index == crate::group_type::GroupID::DEFAULT_GROUP
+}
+
+/// `IsAllGroupID`: checks if a `GroupID` stands for all vehicles of a company.
+pub(crate) fn is_all_group_id(id_g: crate::group_type::GroupID) -> bool {
+    id_g == crate::group_type::GroupID::ALL_GROUP
+}

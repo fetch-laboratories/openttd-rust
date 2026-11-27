@@ -47,6 +47,8 @@ crate::abi::shared_records! {
         pub r#type: ScriptEventType,
         /// A vehicle.
         pub vehicle: u32,
+        /// A second vehicle: `ScriptEventVehicleAutoReplaced`'s new vehicle.
+        pub other_vehicle: u32,
         /// A tile.
         pub tile: u32,
         /// `ScriptEventVehicleCrashed::CrashReason`.
@@ -92,6 +94,7 @@ impl ScriptEvent {
         Self {
             r#type,
             vehicle: 0,
+            other_vehicle: 0,
             tile: 0,
             crash_reason: CrashReason(0),
             victims: 0,
@@ -217,6 +220,17 @@ impl ScriptEvent {
         Self {
             vehicle: vehicle_id.0,
             ..Self::of(ScriptEventType::ET_VEHICLE_WAITING_IN_DEPOT)
+        }
+    }
+
+    /// `ScriptEventVehicleAutoReplaced(old_id, new_id)`: a vehicle has been replaced by
+    /// autoreplace.
+    #[must_use]
+    pub const fn vehicle_auto_replaced(old_id: VehicleID, new_id: VehicleID) -> Self {
+        Self {
+            vehicle: old_id.0,
+            other_vehicle: new_id.0,
+            ..Self::of(ScriptEventType::ET_VEHICLE_AUTOREPLACED)
         }
     }
 
