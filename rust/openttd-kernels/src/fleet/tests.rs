@@ -41,6 +41,10 @@ thread_local! {
     static CURRENT: Cell<u8> = const { Cell::new(0) };
     /// The company's renewal list head.
     static RENEWALS: Cell<*mut ()> = const { Cell::new(ptr::null_mut()) };
+    /// The vehicle pool's descriptor, which the scheduler table names.
+    static VEHICLE_POOL: Cell<*mut crate::pool::PoolDescriptor> = const { Cell::new(ptr::null_mut()) };
+    /// The group the last guard row's `CmdAddVehicleGroup` returned.
+    static ADDED: Cell<GroupID> = const { Cell::new(GroupID::INVALID) };
     /// The company's liveries.
     static LIVERIES: RefCell<[Livery; 1]> = RefCell::new([Livery::default()]);
 }
@@ -268,7 +272,7 @@ fn vehicles() -> &'static VehicleServices {
     #[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
     thread_local! {
         static TABLE: &'static VehicleServices = {
-            let pool: *const crate::pool::PoolDescriptor = Box::leak(Box::new(
+            let pool: *mut crate::pool::PoolDescriptor = Box::leak(Box::new(
                 crate::pool::PoolDescriptor {
                     slots: crate::industrytype::NativeVec::new(),
                     used_bitmap: crate::industrytype::NativeVec::new(),
@@ -280,10 +284,11 @@ fn vehicles() -> &'static VehicleServices {
                     alloc_cache: ptr::null_mut(),
                 },
             ));
+            VEHICLE_POOL.set(pool);
             let orders: &'static crate::orders::Leaves = Box::leak(Box::new(crate::orders::Leaves {
                 next_backup: no_backup,
                 scheduler: Box::leak(Box::new(crate::vehicle::scheduler::SchedulerServices {
-                    pool: Box::leak(Box::new(pool)),
+                    pool: Box::leak(Box::new(pool.cast_const())),
                     ..SCHEDULER
                 })),
                 ..ORDERS
@@ -306,9 +311,57 @@ fn vehicles() -> &'static VehicleServices {
     TABLE.with(|t| *t)
 }
 
+/// The vehicle selection table, for `GenerateVehicleSortList`, over the fixture's vehicles.
+extern "C" fn selection() -> *const crate::vehicle_transactions::SelectionServices {
+    #[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
+    thread_local! {
+        static TABLE: &'static crate::vehicle_transactions::SelectionServices =
+            Box::leak(Box::new(crate::vehicle_transactions::SelectionServices {
+                vehicles: vehicles(),
+                shared: &SHARED_TABLE,
+                ..crate::test_tables::VEHICLE_SELECTION
+            }));
+    }
+    TABLE.with(|t| ptr::from_ref(*t))
+}
+
+/// `new (VehicleID(index)) Vehicle(kind)` in the fixture's vehicle pool, owned by `owner`, a
+/// primary front engine or not.
+#[allow(unsafe_code, reason = "the fixture's owners, built and read in place")]
+fn add_vehicle(index: usize, kind: VehicleType, owner: CompanyID, primary: bool) {
+    let subtype = if primary {
+        1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_FRONT.0
+    } else {
+        0
+    };
+    let record = vehicle(kind, subtype).0.as_ptr();
+    vehicles();
+    let pool = VEHICLE_POOL.get();
+    // SAFETY: The fresh record and the thread's live pool descriptor, with no access to either
+    // in progress.
+    unsafe {
+        (*record).owner = owner;
+        let mut slots = std::mem::take(&mut (*pool).slots).into_vec();
+        slots.resize(
+            slots.len().max(index + 1),
+            crate::pool::PoolSlot {
+                shell: ptr::null_mut(),
+                record: ptr::null_mut(),
+            },
+        );
+        slots[index] = crate::pool::PoolSlot {
+            shell: ptr::without_provenance_mut(index + 1),
+            record: record.cast(),
+        };
+        (*pool).first_unused = slots.len();
+        (*pool).slots = crate::industrytype::NativeVec::from_vec(slots);
+    }
+}
+
 /// The group table over the fixture pool.
 fn table() -> &'static GroupServices {
     Box::leak(Box::new(GroupServices {
+        selection,
         shared: &SHARED_TABLE,
         vehicles: vehicles(),
         group_can_allocate,
@@ -354,12 +407,20 @@ fn add_group(owner: Owner, vt: VehicleType, parent: GroupID) -> GroupID {
 /// the road group 2 of company 1; and the train group 3 of company 0.
 struct World;
 impl World {
+    #[allow(unsafe_code, reason = "the fixture's owners, built and read in place")]
     fn new() -> Self {
         POOL.with_borrow_mut(Vec::clear);
         COMPANY_STATS.set((0..10).map(|_| openttd_rust_fleet_stats_create()).collect());
         CAN_ALLOCATE.set(true);
         CURRENT.set(0);
         RENEWALS.set(ptr::null_mut());
+        vehicles();
+        // SAFETY: The thread's live pool descriptor, with no access in progress.
+        unsafe {
+            let pool = VEHICLE_POOL.get();
+            (*pool).slots = crate::industrytype::NativeVec::new();
+            (*pool).first_unused = 0;
+        }
         add_group(CompanyID(0), VehicleType::VEH_ROAD, GroupID::INVALID);
         add_group(CompanyID(0), VehicleType::VEH_ROAD, GroupID(0));
         add_group(CompanyID(1), VehicleType::VEH_ROAD, GroupID::INVALID);
@@ -536,7 +597,28 @@ fn group_command_windows() {
         let delete = CmdDeleteGroup {
             group_id: GroupID(0),
         };
+        // The window closes before the group's deletion, in the order of the slot calls.
+        fn record_close(effect: &Effect) {
+            if let Effect::CloseWindowById(..) = effect {
+                call("close");
+            }
+        }
+        calls();
+        crate::window_func::testing::observe(Some(record_close));
         assert_eq!(run(|cost| cmd_delete_group(w, cost, flags, delete)), None);
+        crate::window_func::testing::observe(None);
+        let order: Vec<String> = calls()
+            .into_iter()
+            .filter(|c| c == "close" || c.starts_with("delete "))
+            .collect();
+        assert_eq!(
+            order,
+            if executed {
+                vec!["close", "delete 0"]
+            } else {
+                vec![]
+            }
+        );
         assert_eq!(
             take(),
             expect(&[
@@ -572,7 +654,7 @@ enum Command {
     Create(VehicleType, GroupID),
     Delete(GroupID),
     Alter(AlterGroupMode, GroupID, GroupID, &'static [u8]),
-    Add(GroupID, VehicleID),
+    Add(GroupID, VehicleID, VehicleListIdentifier),
     Shared(GroupID, VehicleType),
     Remove(GroupID),
     Livery(GroupID, Colours),
@@ -596,8 +678,8 @@ fn dispatch(w: &GroupServices, cost: Cost<'_>, command: Command) {
                 text,
             },
         ),
-        Command::Add(group_id, veh_id) => {
-            cmd_add_vehicle_group(
+        Command::Add(group_id, veh_id, vli) => {
+            ADDED.set(cmd_add_vehicle_group(
                 w,
                 cost,
                 none,
@@ -605,9 +687,9 @@ fn dispatch(w: &GroupServices, cost: Cost<'_>, command: Command) {
                     group_id,
                     veh_id,
                     add_shared: false,
-                    vli: VehicleListIdentifier::default(),
+                    vli,
                 },
-            );
+            ));
         }
         Command::Shared(id_g, r#type) => {
             cmd_add_shared_vehicle_group(w, cost, none, CmdAddSharedVehicleGroup { id_g, r#type });
@@ -658,7 +740,21 @@ fn group_command_guards() {
     let name32: &'static [u8] = &[b'a'; 32];
     // Each row: its name, its command, whether the pool is full, the result and, where it
     // shows the guards' order, the slot calls.
-    let rows: [Row; 33] = [
+    // `VehicleListIdentifier{}`, the shared orders of the absent vehicle 9, and company 0's ships.
+    let no_list = VehicleListIdentifier::default();
+    let shared_list = VehicleListIdentifier {
+        r#type: VehicleListType::VL_SHARED_ORDERS,
+        vtype: road,
+        company: CompanyID(0),
+        index: 9,
+    };
+    let ship_list = VehicleListIdentifier {
+        r#type: VehicleListType::VL_STANDARD,
+        vtype: VehicleType::VEH_SHIP,
+        company: CompanyID(0),
+        index: 0,
+    };
+    let rows: &[Row] = &[
         // `CmdCreateGroup`: an unbuildable type makes no allocation check, and a full pool
         // no parent lookup.
         (
@@ -793,17 +889,75 @@ fn group_command_guards() {
         // `CmdAddVehicleGroup`.
         (
             "add to invalid group",
-            Command::Add(invalid, VehicleID(0)),
+            Command::Add(invalid, VehicleID(0), no_list),
+            false,
+            ERROR,
+            None,
+        ),
+        // Vehicle 9 is not in the pool.
+        (
+            "add invalid vehicle",
+            Command::Add(GroupID::DEFAULT_GROUP, VehicleID(9), no_list),
+            false,
+            ERROR,
+            Some(&["get_if_valid 65534"]),
+        ),
+        (
+            "add rejected list",
+            Command::Add(GroupID::DEFAULT_GROUP, VehicleID::INVALID, shared_list),
             false,
             ERROR,
             None,
         ),
         (
-            "add invalid vehicle",
-            Command::Add(GroupID::DEFAULT_GROUP, VehicleID(0)),
+            "add empty list",
+            Command::Add(GroupID::DEFAULT_GROUP, VehicleID::INVALID, ship_list),
             false,
             ERROR,
-            Some(&["get_if_valid 65534"]),
+            None,
+        ),
+        (
+            "add other company's vehicle",
+            Command::Add(GroupID::DEFAULT_GROUP, VehicleID(1), no_list),
+            false,
+            ERROR,
+            None,
+        ),
+        (
+            "add vehicle not primary",
+            Command::Add(GroupID::DEFAULT_GROUP, VehicleID(2), no_list),
+            false,
+            ERROR,
+            None,
+        ),
+        (
+            "add to other company's group",
+            Command::Add(GroupID(2), VehicleID(0), no_list),
+            false,
+            ERROR,
+            None,
+        ),
+        (
+            "add to other type's group",
+            Command::Add(GroupID(3), VehicleID(0), no_list),
+            false,
+            ERROR,
+            None,
+        ),
+        // `CmdCreateGroup`'s failure is the command's: no allocation check passes.
+        (
+            "add to new group, full pool",
+            Command::Add(GroupID::NEW_GROUP, VehicleID(0), no_list),
+            true,
+            ERROR,
+            Some(&["get_if_valid 65532", "get_if_valid 65532", "can_allocate"]),
+        ),
+        (
+            "add to own group",
+            Command::Add(GroupID(0), VehicleID(0), no_list),
+            false,
+            None,
+            None,
         ),
         // `CmdAddSharedVehicleGroup`.
         (
@@ -901,8 +1055,14 @@ fn group_command_guards() {
             None,
         ),
     ];
-    for (name, command, full, result, order) in rows {
+    for &(name, command, full, result, order) in rows {
         let _world = World::new();
+        // Company 0's primary road vehicle 0, company 1's road vehicle 1 and company 0's road
+        // vehicle 2, which is not primary.
+        add_vehicle(0, road, CompanyID(0), true);
+        add_vehicle(1, road, CompanyID(1), true);
+        add_vehicle(2, road, CompanyID(0), false);
+        ADDED.set(GroupID(1));
         CAN_ALLOCATE.set(!full);
         let before = snapshot();
         assert_eq!(run(|cost| dispatch(w, cost, command)), result, "{name}");
@@ -910,6 +1070,15 @@ fn group_command_guards() {
         let calls = calls();
         if let Some(order) = order {
             assert_eq!(calls, order, "{name}");
+        }
+        // The returned group: `GroupID::INVALID` for each error, and the target otherwise.
+        if let Command::Add(group_id, ..) = command {
+            let expected = if result.is_some() {
+                GroupID::INVALID
+            } else {
+                group_id
+            };
+            assert_eq!(ADDED.get(), expected, "{name}");
         }
     }
 
@@ -1040,21 +1209,62 @@ fn vehicle_list_identifier_to_id() {
     );
 }
 
-/// Evidence 4: a `To*ID` of another list type fails the native assertion.
-#[test]
-fn vehicle_list_identifier_to_id_of_another_type_fails_the_assertion() {
-    if crate::services_assert::isolate_test_exit(
-        "fleet::tests::vehicle_list_identifier_to_id_of_another_type_fails_the_assertion",
-    ) {
-        return;
+/// Evidence 4: a `To*ID` of another list type fails the native assertion: `accessor` on a
+/// list of `kind`, in the isolated child `name`; true in the parent.
+fn to_id_of_another_type(
+    name: &str,
+    kind: VehicleListType,
+    accessor: fn(&VehicleListIdentifier),
+) -> bool {
+    if crate::services_assert::isolate_test_exit(name) {
+        return true;
     }
     let vli = VehicleListIdentifier {
-        r#type: VehicleListType::VL_STANDARD,
+        r#type: kind,
         vtype: VehicleType::VEH_ROAD,
         company: CompanyID(0),
         index: 5,
     };
-    assert_eq!(vli.to_company_id(), CompanyID(5));
-    let _ = vli.to_group_id();
+    accessor(&vli);
     unreachable!("the assertion ends the child");
+}
+#[test]
+fn to_company_id_of_another_type_fails_the_assertion() {
+    to_id_of_another_type(
+        "fleet::tests::to_company_id_of_another_type_fails_the_assertion",
+        VehicleListType::VL_GROUP_LIST,
+        |vli| drop(vli.to_company_id()),
+    );
+}
+#[test]
+fn to_destination_id_of_another_type_fails_the_assertion() {
+    to_id_of_another_type(
+        "fleet::tests::to_destination_id_of_another_type_fails_the_assertion",
+        VehicleListType::VL_STATION_LIST,
+        |vli| drop(vli.to_destination_id()),
+    );
+}
+#[test]
+fn to_group_id_of_another_type_fails_the_assertion() {
+    to_id_of_another_type(
+        "fleet::tests::to_group_id_of_another_type_fails_the_assertion",
+        VehicleListType::VL_STANDARD,
+        |vli| drop(vli.to_group_id()),
+    );
+}
+#[test]
+fn to_station_id_of_another_type_fails_the_assertion() {
+    to_id_of_another_type(
+        "fleet::tests::to_station_id_of_another_type_fails_the_assertion",
+        VehicleListType::VL_DEPOT_LIST,
+        |vli| drop(vli.to_station_id()),
+    );
+}
+#[test]
+fn to_vehicle_id_of_another_type_fails_the_assertion() {
+    to_id_of_another_type(
+        "fleet::tests::to_vehicle_id_of_another_type_fails_the_assertion",
+        VehicleListType::VL_GROUP_LIST,
+        |vli| drop(vli.to_vehicle_id()),
+    );
 }

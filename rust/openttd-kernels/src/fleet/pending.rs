@@ -95,9 +95,11 @@ pub(crate) unsafe fn drain(
     let g = unsafe { &*group };
     let previous = g.current_company();
     let visit = |id, leave| {
-        let Some(v) = crate::orders::vehicle_get_if_valid(
+        // `Vehicle::Get` of a pending vehicle: its slot holds it, as the original's
+        // dereference of the result requires.
+        let Some(v) = crate::vehicle_base::get_asserted(
+            &g.vehicles.orders().scheduler().pool(),
             crate::vehicle_type::VehicleID(id),
-            g.vehicles.orders(),
         ) else {
             crate::services_assert::not_reached()
         };

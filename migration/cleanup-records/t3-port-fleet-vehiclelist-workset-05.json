@@ -1042,5 +1042,29 @@
     "site": "rust/openttd-kernels/src/fleet/tests.rs | fn group_command_windows | allow clippy::too_many_lines",
     "source_contract": "`the five group commands' window calls` (src/group_cmd.cpp)",
     "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "fleet::tests::add_vehicle",
+    "reason": "Plan #1060 part 2, Evidence: the fixture builds and reads its group and statistics owners and its vehicle record in place, or binds the native fatal-path policy.",
+    "retirement_condition": "Retires when the group pool moves to Rust (#907) and the fixture owns its records without raw places.",
+    "retiring_owner": "#907",
+    "site": "rust/openttd-kernels/src/fleet/tests.rs | fn add_vehicle | allow unsafe_code",
+    "source_contract": "`Vehicle` (src/vehicle_base.h)",
+    "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "fleet::tests::World::new",
+    "reason": "Plan #1060 part 2, Evidence: the fixture builds and reads its group and statistics owners and its vehicle record in place, or binds the native fatal-path policy.",
+    "retirement_condition": "Retires when the group pool moves to Rust (#907) and the fixture owns its records without raw places.",
+    "retiring_owner": "#907",
+    "site": "rust/openttd-kernels/src/fleet/tests.rs | impl World > fn new | allow unsafe_code",
+    "source_contract": "`Group` and `Vehicle` pools (src/group.h)",
+    "tool": "rust"
   }
 ]

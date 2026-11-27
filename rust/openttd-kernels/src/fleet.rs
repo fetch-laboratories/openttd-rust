@@ -1450,9 +1450,10 @@ pub(crate) fn cmd_add_vehicle_group(
         let pool = orders.scheduler().pool();
         for vc in &list {
             /* VehicleList is const but we need to modify the vehicle. */
-            // SAFETY: The scheduler's live descriptor; nothing mutates the pool during the read.
-            let Some(v) = (unsafe { crate::vehicle_base::get(&pool, vc.index(newgrf)) }) else {
-                continue;
+            // `Vehicle::Get` of a listed vehicle: its slot holds it, as the original's
+            // dereference of the result requires.
+            let Some(v) = crate::vehicle_base::get_asserted(&pool, vc.index(newgrf)) else {
+                crate::services_assert::not_reached()
             };
             add_vehicle_to_group(w, v, new_g);
 

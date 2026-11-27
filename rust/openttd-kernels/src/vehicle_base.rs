@@ -351,6 +351,15 @@ pub(crate) unsafe fn get(pool: &Pool, index: VehicleID) -> Option<crate::vehicle
     // SAFETY: The caller's live descriptor.
     std::ptr::NonNull::new(unsafe { pool.record(index) }).map(crate::vehicle::VehicleRef)
 }
+/// `Vehicle::Get(index)`: `Pool::Get`'s `assert(index < first_unused)`, then the slot's
+/// record, which a free slot leaves null.
+pub(crate) fn get_asserted(pool: &Pool, index: VehicleID) -> Option<crate::vehicle::VehicleRef> {
+    // SAFETY: The scheduler's process-lifetime pool descriptor; nothing mutates the pool here.
+    unsafe {
+        crate::services_assert::assert_with(|| (index.0 as usize) < pool.pool_size());
+        get(pool, index)
+    }
+}
 /// `Vehicle::GetIfValid(index)`: the vehicle at `index`, or `None` for an index at or past
 /// `GetPoolSize()` or a free slot.
 pub(crate) fn get_if_valid(pool: &Pool, index: VehicleID) -> Option<crate::vehicle::VehicleRef> {

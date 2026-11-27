@@ -2986,6 +2986,7 @@ mod evidence_tests {
     extern "C" fn record_from_shell(
         shell: *mut std::ffi::c_void,
     ) -> *mut crate::vehicle::OpenTTDVehicle {
+        trace(format!("resolve {}", shell_index(shell.cast())));
         SHELLS.with_borrow(|s| s[shell_index(shell.cast())].0.cast())
     }
     extern "C" fn set_colourmap(_: crate::vehicle::VehicleRef, _: crate::gfx_type::PaletteID) {}
@@ -3174,16 +3175,25 @@ mod evidence_tests {
         change_ownership_of_company_items(s, &ownership(), CompanyID(1), CompanyID(0));
         let intervals: Vec<String> = traced()
             .into_iter()
-            .filter(|t| t.starts_with("interval"))
+            .filter(|t| t.starts_with("interval") || t.starts_with("resolve"))
             .collect();
         // Company 0's road vehicle default is 200, its percent flag set; the walk first
         // copies both to company 1's defaults, which the command reads. Outside a command
-        // the nested call is top-level: it stores in its execution only. The custom vehicle
-        // 1 runs no command.
+        // the nested call is top-level: its test pass resolves the vehicle's record from its
+        // shell (twice, for the primary and ownership checks), then its execution resolves it
+        // again and stores. The custom vehicle 1 runs no command and is never resolved.
         assert_eq!(
             intervals,
             [
+                "resolve 0",
+                "resolve 0",
+                "resolve 0",
+                "resolve 0",
                 "interval 0 200 false true current 1",
+                "resolve 3",
+                "resolve 3",
+                "resolve 3",
+                "resolve 3",
                 "interval 3 200 false true current 1",
             ]
         );
