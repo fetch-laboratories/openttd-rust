@@ -85,7 +85,7 @@ TEST_CASE("Engine type availability returns canonical booleans for sparse masks"
 	static OpenTTDTypeAvailabilityServices types{};
 	shared.current_company = []() noexcept -> uint8_t { return 0; };
 	shared.type_availability = []() noexcept -> const OpenTTDTypeAvailabilityServices * { return &types; };
-	static const OpenTTDEnvironmentServices environment{.editor = []() noexcept { return false; }, .freeform_edges = []() noexcept { return false; }};
+	static const OpenTTDEnvironmentServices environment{.editor = []() noexcept { return false; }};
 	types.environment = &environment;
 	types.avail_roadtypes = [](uint8_t) noexcept { return available; };
 	types.avail_railtypes = [](uint8_t) noexcept { return available; };
