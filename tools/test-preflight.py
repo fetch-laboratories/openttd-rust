@@ -304,9 +304,11 @@ class RunTests(unittest.TestCase):
         for jobs, overlaps in ((2, True), (1, False)):
             meeting = threading.Barrier(2, timeout=1)
 
-            def meet(*_: object, meeting: threading.Barrier = meeting) -> tuple:
+            def meet(
+                *_: object, meeting: threading.Barrier = meeting
+            ) -> preflight.Outcome:
                 meeting.wait()
-                return True, 0.0
+                return preflight.Outcome(True, 0.0)
 
             with (
                 tempfile.TemporaryDirectory() as directory,
@@ -516,9 +518,9 @@ class RunTests(unittest.TestCase):
         started: list[str] = []
         steps = [preflight.Step(name, [name]) for name in ("a", "b", "c", "d")]
 
-        def record(step: preflight.Step, *_: object) -> tuple[bool, float]:
+        def record(step: preflight.Step, *_: object) -> preflight.Outcome:
             started.append(step.name)
-            return True, 1.0
+            return preflight.Outcome(True, 1.0)
 
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -531,44 +533,96 @@ class RunTests(unittest.TestCase):
         self.assertEqual(started, ["d", "b", "c", "a"])
         self.assertEqual(verdicts, ([], []))
 
-    def test_the_rust_checks_start_first_and_their_failure_stops_the_rest(
+    def stopping_run(
+        self, root: Path, sibling: list[str], jobs: int, keep_going: bool = False
+    ) -> tuple[preflight.Verdicts, float, dict[str, float], str]:
+        """Steps "Sibling", the Rust checks and "Queued", with recorded times
+        that queue Queued last. The Rust checks fail once Sibling has written
+        the marker given as its last argument, within 30 s. Returns the
+        verdicts, the seconds taken, the saved timings and the printed lines."""
+        marker = root / "sibling started"
+        wait = 'i=0; until [ -e "$1" ]; do i=$((i+1)); [ $i -gt 600 ] && exit 2; '
+        rust = [*preflight.SHELL, wait + "sleep 0.05; done; exit 1", "sh", str(marker)]
+        steps = [
+            preflight.Step("Sibling", [*sibling, str(marker)]),
+            preflight.Step(preflight.RUST_CHECKS, rust if jobs == 2 else ["false"]),
+            preflight.Step("Queued", ["touch", str(root / "queued ran")]),
+        ]
+        with (
+            patch.object(preflight.migration, "COMMON_LOCAL", root),
+            patch("builtins.print") as printed,
+        ):
+            preflight.save_timings({"Sibling": 90.0, "Queued": 5.0})
+            began = time.monotonic()
+            verdicts = preflight.run_steps(steps, {}, root, jobs, keep_going)
+            took = time.monotonic() - began
+            saved = preflight.last_timings()
+        if jobs == 2:
+            self.assertTrue(marker.exists(), "the Rust checks did not see Sibling")
+        lines = "\n".join(str(call.args[0]) for call in printed.call_args_list)
+        return verdicts, took, saved, lines
+
+    def test_a_rust_failure_stops_running_steps_and_starts_no_queued_one(
         self,
     ) -> None:
-        """A failure of the Rust checks cancels the queued steps and terminates
-        the running ones, which keep their last times; --keep-going runs all.
-        With two jobs the Rust checks fail only once the slow step runs."""
+        """The stopped steps keep their last times, and no queued step starts,
+        serially or in parallel; --keep-going runs them all."""
         rust = preflight.RUST_CHECKS
-        for jobs, keep_going in ((1, False), (2, False), (2, True)):
-            with tempfile.TemporaryDirectory() as directory:
+        slow = [*preflight.SHELL, 'touch "$1"; sleep 60', "sh"]
+        for jobs in (1, 2):
+            with tempfile.TemporaryDirectory(prefix="pre flight ") as directory:
                 root = Path(directory)
-                slow = "true" if keep_going else f"touch {root}/slow; sleep 60"
-                wait = f"until [ -e {root}/slow ]; do sleep 0.05; done; "
-                steps = [
-                    preflight.Step("Slow", ["sh", "-c", slow]),
-                    preflight.Step(rust, ["sh", "-c", (wait * (jobs == 2)) + "false"]),
-                    preflight.Step("Quick", ["true"]),
-                ]
-                with (
-                    patch.object(preflight.migration, "COMMON_LOCAL", root),
-                    patch("builtins.print"),
-                ):
-                    preflight.save_timings({"Slow": 90.0, "Quick": 5.0})
-                    if keep_going:
-                        (root / "slow").touch()
-                    began = time.monotonic()
-                    verdicts = preflight.run_steps(steps, {}, root, jobs, keep_going)
-                    took = time.monotonic() - began
-                    saved = preflight.last_timings()
-                self.assertEqual(verdicts.failed, [rust])
-                if keep_going:
-                    self.assertEqual(verdicts.stopped, [])
-                    self.assertLess(saved["Slow"], 90.0)
-                    continue
-                self.assertEqual(verdicts.stopped, ["Slow", "Quick"])
+                verdicts, took, saved, lines = self.stopping_run(root, slow, jobs)
+                self.assertEqual(verdicts, ([rust], ["Sibling", "Queued"]))
+                self.assertFalse((root / "queued ran").exists())
                 self.assertLess(took, preflight.STOP_SECONDS + 5)
-                # The stopped steps keep their last full times.
-                self.assertEqual((saved["Slow"], saved["Quick"]), (90.0, 5.0))
+                self.assertEqual((saved["Sibling"], saved["Queued"]), (90.0, 5.0))
                 self.assertIn(rust, saved)
+                self.assertNotIn("--> Queued", lines)
+        with tempfile.TemporaryDirectory(prefix="pre flight ") as directory:
+            root = Path(directory)
+            quick = [*preflight.SHELL, 'touch "$1"', "sh"]
+            verdicts, _, saved, _ = self.stopping_run(root, quick, 2, keep_going=True)
+            self.assertEqual(verdicts, ([rust], []))
+            self.assertTrue((root / "queued ran").exists())
+            self.assertLess(saved["Sibling"], 90.0)
+
+    def test_a_step_that_passes_while_the_run_stops_counts_as_passed(self) -> None:
+        """Its printed result, its verdict and its saved time agree."""
+        finisher = [*preflight.SHELL, "trap '' TERM; touch \"$1\"; sleep 1", "sh"]
+        with tempfile.TemporaryDirectory(prefix="pre flight ") as directory:
+            verdicts, _, saved, lines = self.stopping_run(Path(directory), finisher, 2)
+        self.assertEqual(verdicts, ([preflight.RUST_CHECKS], ["Queued"]))
+        self.assertRegex(lines, r"\npass \d+s Sibling")
+        self.assertNotIn("stopped 0s Sibling", lines)
+        self.assertLess(saved["Sibling"], 90.0)
+
+    def test_a_stop_ends_processes_a_step_started_in_their_own_session(
+        self,
+    ) -> None:
+        detach = (
+            "import subprocess, sys\n"
+            "child = subprocess.Popen(['sleep', '60'], start_new_session=True)\n"
+            "open(sys.argv[1], 'w').write(str(child.pid))\n"
+            "child.wait()\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="pre flight ") as directory:
+            root = Path(directory)
+            sibling = [sys.executable, "-c", detach]
+            verdicts, _, _, _ = self.stopping_run(root, sibling, 2)
+            pid = int((root / "sibling started").read_text())
+        self.assertEqual(verdicts.stopped, ["Sibling", "Queued"])
+        deadline = time.monotonic() + 5
+        while Path(f"/proc/{pid}").exists() and "Z" not in self.state(pid):
+            self.assertLess(time.monotonic(), deadline, "the detached sleep survived")
+            time.sleep(0.05)
+
+    @staticmethod
+    def state(pid: int) -> str:
+        try:
+            return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+        except (OSError, IndexError):
+            return "Z"
 
     def test_a_stopped_run_lists_the_stopped_steps_and_records_no_stamp(
         self,

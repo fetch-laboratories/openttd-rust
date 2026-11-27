@@ -2,11 +2,11 @@
 """Run every gate of Quick's `quick` job locally, plus the pinned commit checker.
 
 The steps come from .github/workflows/ci-quick.yml itself, so the two cannot
-drift. Unlike CI, every step runs even after a failure, and the result lists
-each failed step. The steps read the tree and write nothing a later step reads,
-so --jobs of them run at once, the longest of the last run first (#1069).
-Quick's Rust checks start before them, and their failure stops the run, since
-the Rust code must change first; --keep-going runs every step anyway (#1103).
+drift. The steps read the tree and write nothing a later step reads, so --jobs
+of them run at once: Quick's Rust checks first, then the longest of the last
+run. A failure of the Rust checks stops the run and lists the steps it stopped;
+any other failure lets every step run, and the result lists each failed step.
+--keep-going runs every step after the Rust checks fail too.
 
 --fast runs, in seconds, the pre-push hook's fast tier (the pinned commit
 checker, cargo fmt --check and Quick's Ruff lines) and Quick's ty line, and
@@ -67,8 +67,7 @@ TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 TAIL_LINES = 40
 # Quick's Rust checks: about a minute, started first, and their failure stops
-# the run unless --keep-going (#1103). They failed 11 of the 16 failed runs of
-# root's session of 2026-11-26, each of which waited out every slower step.
+# the run unless --keep-going, so it does not wait out the slower steps (#1103).
 RUST_CHECKS = "Rust formatting, check, warnings and tests"
 # Steps at once by default: half the host's threads, at most four. The probe
 # compile, the longest step, sizes its own compiler pool to the free threads.
@@ -222,12 +221,23 @@ def environment() -> dict[str, str]:
     return env
 
 
+class Outcome(NamedTuple):
+    """A step's verdict and seconds; a stopped step has neither verdict nor length."""
+
+    passed: bool
+    seconds: float
+    stopped: bool = False
+
+
 def run(step: Step, env: dict[str, str], log: Path) -> bool:
-    return timed(step, env, log)[0]
+    return timed(step, env, log).passed
 
 
-def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
-    """Run one step into its log; print its start, and its result in one block."""
+def timed(step: Step, env: dict[str, str], log: Path) -> Outcome:
+    """Run one step into its log; print its start, and its result in one block.
+
+    A step that exits non-zero while the run is stopping was stopped, and is
+    printed and counted so; one that exits zero then passed."""
     with PRINTING:
         print(f"--> {step.name}", flush=True)
     started = time.monotonic()
@@ -247,7 +257,7 @@ def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
     if code and STOPPING.is_set():
         with PRINTING:
             print(f"stopped {elapsed:.0f}s {step.name}", flush=True)
-        return False, elapsed
+        return Outcome(False, elapsed, stopped=True)
     lines = []
     if code:
         tail = log.read_text(errors="replace").splitlines()[-TAIL_LINES:]
@@ -257,7 +267,7 @@ def timed(step: Step, env: dict[str, str], log: Path) -> tuple[bool, float]:
         lines.append(f"    exit {code}; full output: {log}")
     with PRINTING:
         print("\n".join(lines), flush=True)
-    return code == 0, elapsed
+    return Outcome(code == 0, elapsed)
 
 
 def launch(step: Step, env: dict[str, str], output: IO[str]) -> subprocess.Popen[bytes]:
@@ -308,10 +318,39 @@ def signal_group(process: subprocess.Popen[bytes], number: int) -> None:
         pass
 
 
+def descendants(pid: int) -> list[int]:
+    """Every process below pid, read from /proc: a step's tests can start
+    processes in sessions of their own, which its process group misses."""
+    children: dict[int, list[int]] = {}
+    for entry in Path("/proc").glob("[0-9]*"):
+        try:
+            parent = int((entry / "stat").read_text().rsplit(")", 1)[1].split()[1])
+        except (OSError, IndexError, ValueError):
+            continue
+        children.setdefault(parent, []).append(int(entry.name))
+    found, unread = [], [pid]
+    while unread:
+        below = children.get(unread.pop(), [])
+        found += below
+        unread += below
+    return found
+
+
+def signal_each(pids: list[int], number: int) -> None:
+    for pid in pids:
+        try:
+            os.kill(pid, number)
+        except ProcessLookupError:
+            pass
+
+
 def stop(processes: list[subprocess.Popen[bytes]]) -> None:
-    """Terminate the given steps' process groups and reap them, killing stragglers."""
+    """Terminate the given steps' process groups and every process below them,
+    and reap the steps, killing stragglers."""
+    below = [pid for p in processes if p.pid > 0 for pid in descendants(p.pid)]
     for process in processes:
         signal_group(process, signal.SIGTERM)
+    signal_each(below, signal.SIGTERM)
     deadline = time.monotonic() + STOP_SECONDS
     for process in processes:
         try:
@@ -320,6 +359,7 @@ def stop(processes: list[subprocess.Popen[bytes]]) -> None:
             pass
         signal_group(process, signal.SIGKILL)
         process.wait()
+    signal_each(below, signal.SIGKILL)
 
 
 def timings_path() -> Path:
@@ -483,31 +523,36 @@ def run_steps(
     A verdict belongs to the step's position, not its name, which need not be
     unique. Each step keeps its workflow number for its log. A step with no
     recorded time starts first, since it may be the longest. On an interrupt,
-    queued steps are cancelled and running ones terminated; so they are when
-    the Rust checks fail, unless keep_going, and each step that had not ended
-    is stopped.
+    queued steps are cancelled and running ones terminated. So they are when
+    the Rust checks fail, unless keep_going: their worker marks the run as
+    stopping before it takes another step, so no queued step starts after.
     """
     last = last_timings()
     order = sorted(
         range(len(steps)),
         key=lambda i: (steps[i].name != RUST_CHECKS, -last.get(steps[i].name, INF)),
     )
+    gate = bool(steps) and steps[order[0]].name == RUST_CHECKS and not keep_going
+
+    def job(index: int) -> Outcome | None:
+        if STOPPING.is_set():
+            return None
+        outcome = timed(steps[index], env, logs / f"{index + 1:02}.log")
+        if gate and index == order[0] and not outcome.passed:
+            with PRINTING:
+                STOPPING.set()
+        return outcome
+
     STOPPING.clear()
     pool = ThreadPoolExecutor(max(1, jobs))
-    ended = set(range(len(steps)))
     try:
-        futures = {
-            index: pool.submit(timed, steps[index], env, logs / f"{index + 1:02}.log")
-            for index in order
-        }
-        gate = bool(steps) and steps[order[0]].name == RUST_CHECKS and not keep_going
-        if gate and not futures[order[0]].result()[0]:
-            ended = {index for index, future in futures.items() if future.done()}
+        futures = {index: pool.submit(job, index) for index in order}
+        rust = futures[order[0]].result() if gate else None
+        if rust and not rust.passed:
             halt(pool)
-        results = {
-            index: futures[index].result()
-            for index in range(len(steps))
-            if index in ended
+        outcomes = {
+            index: None if future.cancelled() else future.result()
+            for index, future in futures.items()
         }
     except BaseException:
         halt(pool)
@@ -515,12 +560,11 @@ def run_steps(
     finally:
         STOPPING.clear()
     pool.shutdown()
+    ended = {i: o for i, o in outcomes.items() if o is not None and not o.stopped}
     # A stopped step's time is not its length, so its last full time stays.
-    save_timings(
-        {steps[index].name: seconds for index, (_, seconds) in results.items()}
-    )
+    save_timings({steps[i].name: o.seconds for i, o in ended.items()})
     return Verdicts(
-        [steps[i].name for i in sorted(results) if not results[i][0]],
+        [steps[i].name for i in sorted(ended) if not ended[i].passed],
         [step.name for i, step in enumerate(steps) if i not in ended],
     )
 
