@@ -7,58 +7,40 @@
 #include <cstddef>
 #include <type_traits>
 struct BasePersistentStorageArray;
-struct Industry;
-struct Station;
-struct Town;
-struct GRFFile;
-struct OpenTTDSharedServices;
 struct OpenTTDStorage16;
 struct OpenTTDStorage256;
-struct OpenTTDStorageReference { OpenTTDStorage256 *owner; uint32_t grfid; };
-struct OpenTTDIndustryStorage { OpenTTDStorage256 *owner; bool valid; };
 /** All entries hold the native game-state mutex (including generation/main).
  * Canonical arrays stay allocated until shell destruction. Save/load calls
  * return before SlObject/SlError; no Rust frame spans native file errors.
  * Services cannot yield or throw. No owner borrow survives a service call. */
 struct OpenTTDStorageServices {
-	const OpenTTDSharedServices *shared;
-	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
-	OpenTTDIndustryStorage (*industry)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry);
-	OpenTTDStorage256 *(*create_industry)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(create_industry);
-	OpenTTDStorage256 *(*airport)(Station *) noexcept OPENTTD_SERVICE_DEFAULT(airport);
-	OpenTTDStorage256 *(*create_airport)(Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(create_airport);
-	size_t (*town_count)(const Town *) noexcept OPENTTD_SERVICE_DEFAULT(town_count);
-	OpenTTDStorageReference (*town_storage)(const Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(town_storage);
-	OpenTTDStorage256 *(*create_town)(Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(create_town);
-	void (*append_town)(Town *, BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(append_town);
+	bool (*can_allocate_item)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_item);
+	OpenTTDStorage256 *(*new_storage)(uint32_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_storage);
+	uint32_t (*grfid)(const BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
+	uint8_t (*feature)(const BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(feature);
+	uint32_t (*tile)(const BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 };
 const OpenTTDStorageServices &GetRustStorageServices() noexcept;
-/** Native shell association only; the caller retains the original scope gates. */
-OpenTTDStorage256 *RustIndustryStorageOwner(Industry *) noexcept;
-void RustStorageDiscard(void *) noexcept;
 extern "C" {
 #define OPENTTD_STORAGE_API(N) \
-OpenTTDStorage##N *openttd_rust_storage##N##_new(void *); \
+OpenTTDStorage##N *openttd_rust_storage##N##_new(void *, const OpenTTDStorageServices *); \
 void openttd_rust_storage##N##_delete(OpenTTDStorage##N *); \
 int32_t *openttd_rust_storage##N##_data(OpenTTDStorage##N *); \
-void openttd_rust_storage##N##_store(OpenTTDStorage##N *, uint32_t, int32_t, void (*)(bool) noexcept); \
+void openttd_rust_storage##N##_store(OpenTTDStorage##N *, uint32_t, int32_t); \
 int32_t openttd_rust_storage##N##_get(const OpenTTDStorage##N *, uint32_t); \
 void openttd_rust_storage##N##_clear(OpenTTDStorage##N *);
 OPENTTD_STORAGE_API(16)
 OPENTTD_STORAGE_API(256)
 #undef OPENTTD_STORAGE_API
-void openttd_rust_storage_switch_mode(uint8_t, bool, void (*)(bool) noexcept, void (*)(void *) noexcept);
+void openttd_rust_storage_switch_mode(uint8_t, bool);
 void openttd_rust_storage_temp_store(uint32_t, int32_t);
 int32_t openttd_rust_storage_temp_get(uint32_t);
-void openttd_rust_storage_temp_clear();
-void openttd_rust_storage_industry(const OpenTTDStorageServices *, Industry *, uint32_t, int32_t);
-void openttd_rust_storage_airport(const OpenTTDStorageServices *, Station *, const GRFFile *, uint32_t, int32_t);
 }
 #define OPENTTD_STORAGE_OVERLOADS(N) \
-inline OpenTTDStorage##N *RustStorageNew(std::integral_constant<uint, N>, void *shell) { return openttd_rust_storage##N##_new(shell); } \
+inline OpenTTDStorage##N *RustStorageNew(std::integral_constant<uint, N>, void *shell, const OpenTTDStorageServices *services) { return openttd_rust_storage##N##_new(shell, services); } \
 inline void RustStorageDelete(OpenTTDStorage##N *s) { openttd_rust_storage##N##_delete(s); } \
 inline int32_t *RustStorageData(OpenTTDStorage##N *s) { return openttd_rust_storage##N##_data(s); } \
-inline void RustStorageStore(OpenTTDStorage##N *s, uint32_t p, int32_t v, void (*check)(bool) noexcept) { openttd_rust_storage##N##_store(s, p, v, check); } \
+inline void RustStorageStore(OpenTTDStorage##N *s, uint32_t p, int32_t v) { openttd_rust_storage##N##_store(s, p, v); } \
 inline int32_t RustStorageGet(const OpenTTDStorage##N *s, uint32_t p) { return openttd_rust_storage##N##_get(s, p); } \
 inline void RustStorageClear(OpenTTDStorage##N *s) { openttd_rust_storage##N##_clear(s); }
 OPENTTD_STORAGE_OVERLOADS(16)

@@ -206,7 +206,7 @@ unsafe fn airport_change_info(
                         (s.shared().specs().airport().substitute().set_enabled)(r#as, true);
                         (s.shared().specs().airport().set_local_id)(r#as, id as u16);
                         (s.airport_set_substitute)(r#as, u16::from(subs_id));
-                        (s.shared().specs().airport().set_file)(
+                        (s.shared().specs().airport().set_grf_file)(
                             r#as,
                             grffile.as_ptr().cast_mut().cast(),
                         );
@@ -410,7 +410,7 @@ unsafe fn airport_tiles_change_info(
 
                         (s.shared().specs().airport_tile().set_local_id)(tsp, id as u16);
                         (s.tile_set_substitute)(tsp, u16::from(subs_id));
-                        (s.shared().specs().airport_tile().set_file)(
+                        (s.shared().specs().airport_tile().set_grf_file)(
                             tsp,
                             grffile.as_ptr().cast_mut().cast(),
                         );
@@ -451,19 +451,26 @@ unsafe fn airport_tiles_change_info(
 
                 // Animation information
                 0x0F => {
-                    (s.shared().specs().airport_tile().animation().frames)(tsp, buf.read_byte()?);
-                    (s.shared().specs().airport_tile().animation().status)(tsp, buf.read_byte()?);
+                    (s.shared().specs().airport_tile().animation().set_frames)(
+                        tsp,
+                        buf.read_byte()?,
+                    );
+                    (s.shared().specs().airport_tile().animation().set_status)(
+                        tsp,
+                        buf.read_byte()?,
+                    );
                 }
 
                 // Animation speed
                 0x10 => {
-                    (s.shared().specs().airport_tile().animation().speed)(tsp, buf.read_byte()?)
+                    (s.shared().specs().airport_tile().animation().set_speed)(tsp, buf.read_byte()?)
                 }
 
                 // Animation triggers
-                0x11 => {
-                    (s.shared().specs().airport_tile().animation().triggers)(tsp, buf.read_byte()?)
-                }
+                0x11 => (s.shared().specs().airport_tile().animation().set_triggers)(
+                    tsp,
+                    buf.read_byte()?,
+                ),
 
                 // Badge list. AirportTilesChangeInfo uses the tram feature for badge-seen
                 // bookkeeping.
@@ -556,12 +563,13 @@ macro_rules! publisher {
         $(#[$doc])*
         unsafe fn $entry(manager: *mut OverrideManagerBase, spec: *mut $spec, s: *const Services) {
             let s = unsafe { &*s };
-            let substitute = s.shared().specs().$specs().substitute();
-            let identity = (substitute.identity)(spec);
+            let specs = s.shared().specs().$specs();
+            let substitute = specs.substitute();
+            let (local_id, grfid) = ((specs.local_id)(spec), (specs.grfid)(spec));
             let (invalid, offset) = unsafe { ((*manager).invalid_id(), (*manager).max_offset()) };
             // SetEntitySpec narrows AddEntityID before comparing with the wide invalid ID.
             let id = unsafe {
-                $add_entity_id(manager, identity.local, identity.grfid, identity.substitute)
+                $add_entity_id(manager, local_id, grfid, (substitute.subst_id)(spec))
             } as u8;
             if u16::from(id) == invalid {
                 grf_msg!(1, $full);
@@ -576,14 +584,14 @@ macro_rules! publisher {
                 // Resolve the original slot before inspecting its override entry.
                 let overridden = unsafe { (s.$base)(i as _) };
                 let matched = unsafe {
-                    (*manager).entity_overrides(i) == identity.local
-                        && (*manager).grfid_overrides(i) == identity.grfid
+                    (*manager).entity_overrides(i) == local_id
+                        && (*manager).grfid_overrides(i) == grfid
                 };
                 if !matched {
                     continue;
                 }
                 unsafe {
-                    (substitute.set_override)(overridden, u16::from(id));
+                    (substitute.set_override_id)(overridden, u16::from(id));
                     (substitute.set_enabled)(overridden, false);
                     (*manager).set_entity_overrides(i, invalid);
                     (*manager).set_grfid_overrides(i, 0);

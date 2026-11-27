@@ -75,7 +75,15 @@ pub struct CommandServices {
     pub remove_town_sign: extern "C" fn(*mut TownHandle),
     pub delete_town: extern "C" fn(*mut TownHandle),
     pub cleaning_pool: extern "C" fn() -> bool,
+    /// `t->psa_list.size()`.
     pub storage_count: extern "C" fn(*mut TownHandle) -> usize,
+    /// `t->psa_list[index]`, as its array.
+    pub psa_list: extern "C" fn(
+        *mut TownHandle,
+        usize,
+    ) -> *mut crate::newgrf_storage::PersistentStorageArray<256>,
+    /// `t->psa_list.push_back(psa)`.
+    pub psa_list_push: extern "C" fn(*mut TownHandle, *mut std::ffi::c_void),
     pub delete_storage: extern "C" fn(*mut TownHandle, usize),
     pub clear_storage: extern "C" fn(*mut TownHandle),
     pub assertions: bool,
@@ -1347,6 +1355,8 @@ crate::abi::layouts! {
         delete_town,
         cleaning_pool,
         storage_count,
+        psa_list,
+        psa_list_push,
         delete_storage,
         clear_storage,
         assertions,

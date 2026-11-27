@@ -150,7 +150,7 @@ fn bind_standard<S, T>(
         (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Purchase.0 as u8, group);
     } else {
         (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Default.0 as u8, group);
-        (table.set_file)(spec, unsafe { loading::file() });
+        (table.set_grf_file)(spec, unsafe { loading::file() });
         (table.set_local_id)(spec, local);
     }
 }

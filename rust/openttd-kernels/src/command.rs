@@ -20,9 +20,7 @@ use crate::command_type::{
 };
 use crate::company_type::{COMPANY_SPECTATOR, OWNER_DEITY};
 use crate::game_state::GameState;
-use crate::newgrf_storage::{
-    PSM_ENTER_COMMAND, PSM_ENTER_TESTMODE, PSM_LEAVE_COMMAND, PSM_LEAVE_TESTMODE,
-};
+use crate::newgrf_storage::{PersistentStorageMode, switch_mode};
 use crate::openttd::{GameMode, PauseMode};
 use crate::services::{CommandCost, CommandCostServices, CommandServices};
 use crate::tile_type::TileIndex;
@@ -207,18 +205,6 @@ pub(crate) fn nested<T: Default>(
     extra
 }
 
-fn storage_mode(s: &CommandServices, mode: u8) {
-    // SAFETY: serialized persistent storage owner; the leaves never reenter it.
-    unsafe {
-        crate::newgrf_storage::openttd_rust_storage_switch_mode(
-            mode,
-            false,
-            s.signals.assert_condition,
-            s.shared.storage_discard,
-        );
-    }
-}
-
 /// `UpdateSignalsInBuffer()`.
 fn flush_signals(s: &CommandServices) {
     crate::signal::Context {
@@ -389,7 +375,7 @@ pub extern "C" fn openttd_rust_command_prepare(
         (finance.set_current_company)(COMPANY_SPECTATOR);
     }
     before(s, true, true);
-    storage_mode(s, PSM_ENTER_TESTMODE);
+    switch_mode(PersistentStorageMode::PSM_ENTER_TESTMODE, false);
     1
 }
 
@@ -420,7 +406,7 @@ pub unsafe extern "C" fn openttd_rust_command_tested(
     network_command: bool,
 ) -> Tested {
     let finance = s.finance;
-    storage_mode(s, PSM_LEAVE_TESTMODE);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_TESTMODE, false);
     crate::town::set_town_rating_test_mode(s.shared, false);
     /* Make sure we're not messing things up here. */
     (s.signals.assert_condition)(verify_company(s, cmd_flags));
@@ -444,7 +430,7 @@ pub unsafe extern "C" fn openttd_rust_command_tested(
         return Tested::Send;
     }
     before(s, true, false);
-    storage_mode(s, PSM_ENTER_COMMAND);
+    switch_mode(PersistentStorageMode::PSM_ENTER_COMMAND, false);
     Tested::Execute
 }
 
@@ -470,7 +456,7 @@ pub unsafe extern "C" fn openttd_rust_command_finish(
 ) {
     let c = s.cost;
     let finance = s.finance;
-    storage_mode(s, PSM_LEAVE_COMMAND);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_COMMAND, false);
     if cmd == CMD_COMPANY_CTRL {
         /* A new company switches to it, a closed one to spectator; the caller restores others. */
         set_backup(None);

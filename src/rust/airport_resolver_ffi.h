@@ -16,6 +16,8 @@ struct OpenTTDAirportResolverState {
 struct OpenTTDAirportResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
+	OpenTTDStorage256 *(*airport_psa)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_psa);
+	void (*set_airport_psa)(BaseStation *, BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_psa);
 	const OpenTTDVehicleServices *vehicles;
 	Station *(*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
 	uint16_t (*station_id)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
@@ -70,6 +72,7 @@ const SpriteGroup *openttd_rust_airport_tile_init(const OpenTTDAirportResolverSt
 const SpriteGroup *openttd_rust_airport_root(const OpenTTDAirportResolverState *, const OpenTTDAirportResolverServices *);
 TownScopeResolver *openttd_rust_airport_town(OpenTTDAirportResolverState *, AirportResolverObject *, const OpenTTDAirportResolverServices *);
 ScopeResolver *openttd_rust_airport_scope(OpenTTDAirportResolverState *, ResolverObject *, ScopeResolver *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDAirportResolverServices *);
+void openttd_rust_storage_airport(const OpenTTDAirportResolverServices *, BaseStation *, const GRFFile *, uint32_t, int32_t);
 uint32_t openttd_rust_airport_variable(const OpenTTDAirportResolverState *, const ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *, const OpenTTDAirportResolverServices *);
 uint32_t openttd_rust_airport_tile_variable(const OpenTTDAirportResolverState *, const ResolverObject *, uint8_t, uint32_t, bool *, const OpenTTDAirportResolverServices *);
 uint32_t openttd_rust_airport_random(const OpenTTDAirportResolverState *, bool, const OpenTTDAirportResolverServices *);

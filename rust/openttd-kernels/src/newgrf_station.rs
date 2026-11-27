@@ -766,7 +766,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                 };
                 land_info(native, file, nearby, axis)
             }
-            0x7a => (native.shared().specs().station().badges)(spec).resolve(
+            0x7a => (native.shared().specs().station().badges)(spec).get_badge_variable_result(
                 native.shared(),
                 resolver,
                 parameter,
@@ -789,7 +789,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
                     crate::map_func::World::new(native.shared()).get_rail_type_raw(tile),
-                    (native.shared().specs().station().file)(spec),
+                    (native.shared().specs().station().grffile)(spec),
                 )) << 8)
         }
         0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
@@ -868,7 +868,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             }
             value
         }
-        0x7a => (native.shared().specs().station().badges)(spec).resolve(
+        0x7a => (native.shared().specs().station().badges)(spec).get_badge_variable_result(
             native.shared(),
             resolver,
             parameter,

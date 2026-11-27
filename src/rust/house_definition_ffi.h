@@ -4,7 +4,6 @@
 #define RUST_HOUSE_DEFINITION_FFI_H
 #include "newgrf_bytereader_ffi.h"
 #include "../house.h"
-struct OpenTTDHouseDefinitionIdentity { uint32_t grfid; uint16_t local, substitute; };
 struct OpenTTDHouseDefinitionValidity { uint16_t availability, substitute; uint8_t flags; };
 struct OpenTTDHouseDefinitionPart { uint8_t flags, population; bool enabled; };
 struct OpenTTDHouseDefinitionEarly { int32_t year; uint16_t availability; bool enabled; };
@@ -26,7 +25,6 @@ struct OpenTTDHouseDefinitionServices {
 	void (*clear_local)(GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(clear_local);
 	const HouseSpec *(*copy_substitute)(GRFFile *file, uint16_t id, const HouseSpec *source) noexcept OPENTTD_SERVICE_DEFAULT(copy_substitute);
 	void (*set_identity)(const HouseSpec *spec, GRFFile *file, uint16_t local, uint16_t substitute) noexcept OPENTTD_SERVICE_DEFAULT(set_identity);
-	OpenTTDHouseDefinitionIdentity (*identity)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	OpenTTDHouseDefinitionValidity (*validity)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(validity);
 	OpenTTDHouseDefinitionPart (*part)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(part);
 	uint8_t (*flags)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(flags);

@@ -41,6 +41,8 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 	static const OpenTTDAirportResolverServices services{
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
+		.airport_psa = [](const BaseStation *st) noexcept { const PersistentStorage *psa = Station::From(st)->airport.psa; return psa == nullptr ? nullptr : psa->rust_storage; },
+		.set_airport_psa = [](BaseStation *st, BasePersistentStorageArray *psa) noexcept { Station::From(st)->airport.psa = static_cast<PersistentStorage *>(psa); },
 		.vehicles = &GetRustVehicleServices(),
 		.by_tile = RustStationByTile,
 		.station_id = RustBaseStationID<const BaseStation>,
@@ -146,7 +148,7 @@ uint32_t AirportResolverObject::GetDebugID() const
  */
 /* virtual */ void AirportScopeResolver::StorePSA(uint pos, int32_t value)
 {
-	openttd_rust_storage_airport(&GetRustStorageServices(), this->context.station, this->ro.grffile, pos, value);
+	openttd_rust_storage_airport(&GetAirportResolverServices(), this->context.station, this->ro.grffile, pos, value);
 }
 
 /**

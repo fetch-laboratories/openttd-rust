@@ -348,15 +348,24 @@ unsafe fn station_change_info(
                 0x13 => (s.station_flags)(spec, StationSpecFlags(reader.read_byte()?).0),
                 // Animation info
                 0x16 => {
-                    (s.shared().specs().station().animation().frames)(spec, reader.read_byte()?);
-                    (s.shared().specs().station().animation().status)(spec, reader.read_byte()?);
+                    (s.shared().specs().station().animation().set_frames)(
+                        spec,
+                        reader.read_byte()?,
+                    );
+                    (s.shared().specs().station().animation().set_status)(
+                        spec,
+                        reader.read_byte()?,
+                    );
                 }
                 // Animation speed
-                0x17 => (s.shared().specs().station().animation().speed)(spec, reader.read_byte()?),
-                // Animation triggers
-                0x18 => {
-                    (s.shared().specs().station().animation().triggers)(spec, reader.read_word()?)
+                0x17 => {
+                    (s.shared().specs().station().animation().set_speed)(spec, reader.read_byte()?)
                 }
+                // Animation triggers
+                0x18 => (s.shared().specs().station().animation().set_triggers)(
+                    spec,
+                    reader.read_word()?,
+                ),
                 // 0x19 road routing (not implemented)
 
                 // Advanced sprite layout
@@ -526,17 +535,25 @@ unsafe fn road_stop_change_info(
                 }
                 // Animation info
                 0x0e => {
-                    (s.shared().specs().road_stop().animation().frames)(spec, reader.read_byte()?);
-                    (s.shared().specs().road_stop().animation().status)(spec, reader.read_byte()?);
+                    (s.shared().specs().road_stop().animation().set_frames)(
+                        spec,
+                        reader.read_byte()?,
+                    );
+                    (s.shared().specs().road_stop().animation().set_status)(
+                        spec,
+                        reader.read_byte()?,
+                    );
                 }
                 // Animation speed
-                0x0f => {
-                    (s.shared().specs().road_stop().animation().speed)(spec, reader.read_byte()?)
-                }
+                0x0f => (s.shared().specs().road_stop().animation().set_speed)(
+                    spec,
+                    reader.read_byte()?,
+                ),
                 // Animation triggers
-                0x10 => {
-                    (s.shared().specs().road_stop().animation().triggers)(spec, reader.read_word()?)
-                }
+                0x10 => (s.shared().specs().road_stop().animation().set_triggers)(
+                    spec,
+                    reader.read_word()?,
+                ),
                 // Callback mask
                 0x11 => (s.road_callback_mask)(spec, reader.read_byte()?),
                 // General flags. Future-proofing, size this as 4 bytes, but we only
@@ -689,7 +706,7 @@ pub(crate) unsafe fn station_map_default(
     let spec = unsafe { (s.station_get)(grffile.as_ptr().cast_mut().cast(), u32::from(id)) };
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
-    } else if (s.shared().specs().station().has_file)(spec) {
+    } else if (s.shared().specs().station().has_grf_file)(spec) {
         grf_msg!(1, "MapSpriteGroup: {} mapped multiple times, skipping", id);
     } else {
         unsafe {
@@ -698,7 +715,7 @@ pub(crate) unsafe fn station_map_default(
                 crate::newgrf_commons::CargoGRFFileProps::SG_DEFAULT.0,
                 group,
             );
-            (s.shared().specs().station().set_file)(spec, grffile.as_ptr().cast_mut().cast());
+            (s.shared().specs().station().set_grf_file)(spec, grffile.as_ptr().cast_mut().cast());
             (s.shared().specs().station().set_local_id)(spec, id);
             crate::newgrf_station::StationClass::assign(spec);
         }
@@ -743,7 +760,7 @@ pub(crate) unsafe fn roadstop_map_default(
     let spec = unsafe { (s.road_get)(grffile.as_ptr().cast_mut().cast(), u32::from(id)) };
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
-    } else if (s.shared().specs().road_stop().has_file)(spec) {
+    } else if (s.shared().specs().road_stop().has_grf_file)(spec) {
         grf_msg!(1, "MapSpriteGroup: {} mapped multiple times, skipping", id);
     } else {
         unsafe {
@@ -752,7 +769,7 @@ pub(crate) unsafe fn roadstop_map_default(
                 crate::newgrf_commons::CargoGRFFileProps::SG_DEFAULT.0,
                 group,
             );
-            (s.shared().specs().road_stop().set_file)(spec, grffile.as_ptr().cast_mut().cast());
+            (s.shared().specs().road_stop().set_grf_file)(spec, grffile.as_ptr().cast_mut().cast());
             (s.shared().specs().road_stop().set_local_id)(spec, id);
             crate::newgrf_roadstop::RoadStopClass::assign(spec);
         }

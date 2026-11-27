@@ -6,7 +6,9 @@ use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::math::{clamp_to_u8, clamp_to_u16};
-use crate::newgrf_storage;
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_spritegroup::get_register;
+use crate::newgrf_storage::{self, PersistentStorageRef};
 use crate::services::{Map, Services, TownHandle};
 use crate::tile_type::{INVALID_TILE, TileIndex, TileType};
 use std::{cell::OnceCell, ffi::c_void};
@@ -65,6 +67,8 @@ pub struct ResolverServices {
     towns: *const Leaves,
     pub(crate) shared: *const Services,
     storage: *const newgrf_storage::Services,
+    /// The town command table, which holds the town's `psa_list`.
+    commands: *const super::commands::CommandServices,
     larger_towns: extern "C" fn() -> u8,
     stage: extern "C" fn(u32) -> u8,
     age: extern "C" fn(u32) -> i32,
@@ -87,6 +91,7 @@ pub(crate) const TEST_TABLE: ResolverServices = ResolverServices {
     towns: std::ptr::null(),
     shared: std::ptr::null(),
     storage: std::ptr::null(),
+    commands: std::ptr::null(),
     larger_towns: crate::test_tables::unreachable0,
     stage: crate::test_tables::unreachable1,
     age: crate::test_tables::unreachable1,
@@ -103,33 +108,35 @@ pub(crate) const TEST_TABLE: ResolverServices = ResolverServices {
     evaluate: crate::test_tables::unreachable3,
     reseed: crate::test_tables::unreachable4,
 };
-/// Test-only: `TEST_TABLE` over the given shared and storage tables, for callers of
-/// `town_store_psa` in other modules' tests.
-#[cfg(test)]
-pub(crate) const fn test_storage_table(
-    shared: *const Services,
-    storage: *const newgrf_storage::Services,
-) -> ResolverServices {
-    ResolverServices {
-        shared,
-        storage,
-        ..TEST_TABLE
-    }
-}
-/// Test-only: a town scope over `town`, for callers of `town_store_psa` in other modules' tests.
-#[cfg(test)]
-pub(crate) const fn test_scope(town: *mut TownHandle, readonly: bool) -> TownScope {
-    TownScope {
-        town,
-        owner: std::ptr::null_mut(),
-        id: 0,
-        readonly,
-    }
-}
 impl ResolverServices {
     pub(crate) fn shared(&self) -> &Services {
         // SAFETY: `GetHouseResolverServices` points at the process-lifetime shared table.
         unsafe { &*self.shared }
+    }
+    /// `ro.grffile`, or `None` where the resolver has no file.
+    fn resolver_grffile(&self, ro: *const c_void) -> Option<crate::newgrf::GRFFileRef<'_>> {
+        // SAFETY: A resolver's file is live while it resolves.
+        unsafe {
+            crate::newgrf::GRFFileRef::new(
+                self.shared(),
+                (self.shared().resolver_grf_file)(ro).cast(),
+            )
+        }
+    }
+    /// The storage of `t->psa_list` whose `grfid` is `grfid`: the list's size is read
+    /// once, as the original's range-for reads it, and for each element the element
+    /// and then its `grfid`, up to the first match.
+    fn find_psa(&self, t: *mut TownHandle, grfid: u32) -> Option<PersistentStorageRef> {
+        // SAFETY: the town command table lives for the process.
+        let commands = unsafe { &*self.commands };
+        for index in 0..(commands.storage_count)(t) {
+            // SAFETY: each element of a live town's list is a live storage.
+            let it = unsafe { PersistentStorageRef::of_live((commands.psa_list)(t, index)) };
+            if it.grfid() == grfid {
+                return Some(it);
+            }
+        }
+        None
     }
 }
 /// Makes class IDs unique to each GRF file (`HouseClassMapping`).
@@ -276,17 +283,20 @@ pub(crate) unsafe fn town_get_variable(
         unsafe { *available = false };
         return u32::MAX;
     }
-    // Get a variable from the persistent storage; the shared storage reads the
-    // GrfID stored in register 100h.
+    // Get a variable from the persistent storage
     if variable == 0x7C {
-        return unsafe {
-            newgrf_storage::openttd_rust_storage_town_get(
-                &*s.storage,
-                scope.town.cast(),
-                (s.shared().resolver_grf_file)(ro),
-                parameter,
-            )
-        };
+        /* Check the persistent storage for the GrfID stored in register 100h. */
+        let mut grfid = get_register(0x100) as u32;
+        if grfid == 0xFFFF_FFFF {
+            let Some(grffile) = s.resolver_grffile(ro) else {
+                return 0;
+            };
+            grfid = grffile.grfid();
+        }
+
+        return s
+            .find_psa(scope.town, grfid)
+            .map_or(0, |it| it.get_value(parameter) as u32);
     }
     // Larger towns.
     if variable == 0x40 {
@@ -414,16 +424,41 @@ pub(crate) unsafe fn town_store_psa(
     if scope.readonly {
         return;
     }
-    unsafe {
-        newgrf_storage::openttd_rust_storage_town(
-            &*s.storage,
-            scope.town.cast(),
-            scope.readonly,
-            (s.shared().resolver_grf_file)(ro),
-            pos,
-            value,
-        );
+
+    crate::services_assert::assert_with(|| !scope.town.is_null());
+    /* We can't store anything if the caller has no #GRFFile. */
+    let Some(grffile) = s.resolver_grffile(ro) else {
+        return;
+    };
+
+    /* Check the persistent storage for the GrfID stored in register 100h. */
+    let mut grfid = get_register(0x100) as u32;
+
+    /* A NewGRF can only write in the persistent storage associated to its own GRFID. */
+    let file_grfid = grffile.grfid();
+    if grfid == 0xFFFF_FFFF {
+        grfid = file_grfid;
     }
+    if grfid != file_grfid {
+        return;
+    }
+
+    /* Check if the storage exists. */
+    if let Some(it) = s.find_psa(scope.town, grfid) {
+        it.store_value(pos, value);
+        return;
+    }
+
+    /* Create a new storage. */
+    // SAFETY: the storage table lives for the process.
+    let storage = unsafe { &*s.storage };
+    crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
+    // SAFETY: a town scope with a town has its live owner.
+    let xy = TileIndex(unsafe { (*scope.owner).simulation.xy });
+    let psa = PersistentStorageRef::new(storage, grfid, GrfSpecFeature::GSF_FAKE_TOWNS, xy);
+    psa.store_value(pos, value);
+    // SAFETY: the town command table lives for the process.
+    (unsafe { &*s.commands }.psa_list_push)(scope.town, psa.shell());
 }
 /// # Safety
 /// As `house_random_bits`.
@@ -558,7 +593,7 @@ pub(crate) unsafe fn house_get_variable(
             0x45 => u32::from(l.generating_world()),
             // Class and ID of nearby house.
             0x66 => u32::MAX,
-            0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),
+            0x7A => (s.badges)(scope.house).get_badge_variable_result(s.shared(), ro, parameter),
             _ => {
                 debug!(grf, 1, "Unhandled house variable 0x{:X}", variable);
                 unsafe { *available = false };
@@ -725,7 +760,7 @@ pub(crate) unsafe fn house_get_variable(
                 unsafe { (*crate::override_manager::house_mngr()).get_grfid(house) }
             }
         }
-        0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),
+        0x7A => (s.badges)(scope.house).get_badge_variable_result(s.shared(), ro, parameter),
         _ => {
             debug!(grf, 1, "Unhandled house variable 0x{:X}", variable);
             unsafe { *available = false };
@@ -753,7 +788,7 @@ unsafe fn acceptance_history(
     }
     // Extract tile offset. ResolverObject::GetRegister uses this process-wide canonical
     // temporary storage. The fixed 0x100 index satisfies its original <0x110 precondition.
-    let register = unsafe { newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
+    let register = get_register(0x100) as u32;
     let x_offs = gb(register, 0, 8) as i8;
     let y_offs = gb(register, 8, 8) as i8;
     let offset = map
@@ -796,7 +831,7 @@ crate::abi::layouts! {
     "OpenTTDHouseFileIdentity" ["probe"] => FileIdentity { grfid, has_file };
     "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
-        towns, shared, storage, larger_towns, stage, age, random_bits,
+        towns, shared, storage, commands, larger_towns, stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity,
         badges, root, spec_house, local_id, base_scope, evaluate, reseed, };
 }
@@ -1003,4 +1038,177 @@ pub(crate) unsafe fn get_house_animation_callback(
         prospective: false,
     };
     unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResolverServices, TEST_TABLE, TownScope, town_get_variable, town_store_psa};
+    use crate::newgrf::GrfSpecFeature;
+    use crate::newgrf_spritegroup::set_register;
+    use crate::newgrf_storage::evidence_tests::fixture;
+    use crate::newgrf_storage::{PersistentStorageArray, openttd_rust_storage256_get};
+    use std::cell::{Cell, RefCell};
+    use std::ffi::c_void;
+    use std::ptr;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    thread_local! {
+        static PSA_LIST: RefCell<Vec<*mut PersistentStorageArray<256>>> =
+            const { RefCell::new(Vec::new()) };
+        /// The value at position 0 of each storage when it was appended.
+        static PUSHED_VALUES: RefCell<Vec<i32>> = const { RefCell::new(Vec::new()) };
+        static FILE_READS: Cell<usize> = const { Cell::new(0) };
+    }
+    extern "C" fn storage_count(_: *mut crate::services::TownHandle) -> usize {
+        PSA_LIST.with(|l| l.borrow().len())
+    }
+    extern "C" fn psa_list(
+        _: *mut crate::services::TownHandle,
+        index: usize,
+    ) -> *mut PersistentStorageArray<256> {
+        PSA_LIST.with(|l| l.borrow()[index])
+    }
+    #[allow(unsafe_code, reason = "a load of a live stand-in storage")]
+    extern "C" fn psa_list_push(_: *mut crate::services::TownHandle, shell: *mut c_void) {
+        let array = fixture::array_of(shell);
+        // SAFETY: the storage the body just created.
+        PUSHED_VALUES.with(|v| {
+            v.borrow_mut()
+                .push(unsafe { openttd_rust_storage256_get(array, 0) })
+        });
+        PSA_LIST.with(|l| l.borrow_mut().push(array));
+    }
+    #[allow(unsafe_code, reason = "a load of the test's live file")]
+    extern "C" fn grf_file_id(grffile: *const c_void) -> u32 {
+        // SAFETY: each file is the test's live `u32` GRFID.
+        unsafe { grffile.cast::<u32>().read() }
+    }
+    #[allow(unsafe_code, reason = "a load of the test's live resolver")]
+    extern "C" fn resolver_grf_file(ro: *const c_void) -> *const c_void {
+        FILE_READS.set(FILE_READS.get() + 1);
+        // SAFETY: each resolver is the test's live file pointer.
+        unsafe { ro.cast::<*const c_void>().read() }
+    }
+    static FAILED_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// `TownScopeResolver::StorePSA` and the `0x7C` case of `GetVariable`. A read-only
+    /// scope stores nothing before it reads the file; a resolver without a file and a
+    /// foreign GRFID in register `0x100` store nothing. Otherwise a write goes to the
+    /// storage with the file's GRFID among several, or creates one with that GRFID,
+    /// `GSF_FAKE_TOWNS` and the town's tile, even for a zero value, and appends it to
+    /// `psa_list` after the store. The read takes the GRFID in register `0x100`, or the
+    /// file's for `0xFFFFFFFF`, and reads zero without a file or a matching storage.
+    #[test]
+    #[allow(
+        unsafe_code,
+        reason = "stand-in town, files and resolvers in an isolated child"
+    )]
+    fn store_psa_and_read_go_to_the_storage_of_the_grfid() {
+        const NAME: &str =
+            "town::resolver::tests::store_psa_and_read_go_to_the_storage_of_the_grfid";
+        if crate::services_assert::isolate_test_check(NAME, record_assertion) {
+            return;
+        }
+        let shared = Box::leak(Box::new(crate::services::Services {
+            grf_file_id,
+            resolver_grf_file,
+            ..crate::test_tables::SHARED
+        }));
+        let commands = Box::leak(Box::new(crate::town::commands::CommandServices {
+            storage_count,
+            psa_list,
+            psa_list_push,
+            ..crate::test_tables::TOWN_COMMANDS
+        }));
+        let s = ResolverServices {
+            shared,
+            storage: &raw const fixture::STORAGE,
+            commands,
+            ..TEST_TABLE
+        };
+        let owner = crate::town::openttd_rust_town_new();
+        // SAFETY: a live owner.
+        unsafe { (*owner).simulation.xy = 0x0304 };
+        let (own, other) = (0x3931_2345_u32, 0x3935_4321_u32);
+        let own_file: *const c_void = (&raw const own).cast();
+        let no_file: *const c_void = ptr::null();
+        let scope = |readonly| TownScope {
+            town: ptr::dangling_mut(),
+            owner,
+            id: 0,
+            readonly,
+        };
+        // SAFETY (each call): the scope's town, the files and the resolvers are live.
+        let store = |file: &*const c_void, readonly, pos, value| unsafe {
+            town_store_psa(&s, &scope(readonly), (&raw const *file).cast(), pos, value);
+        };
+        let read = |file: &*const c_void| {
+            let mut available = true;
+            // SAFETY: as above.
+            let value = unsafe {
+                town_get_variable(
+                    &s,
+                    &scope(false),
+                    (&raw const *file).cast(),
+                    0x7C,
+                    0,
+                    &raw mut available,
+                )
+            };
+            (value, available)
+        };
+        let count = || PSA_LIST.with(|l| l.borrow().len());
+
+        set_register(0x100, -1);
+        store(&own_file, true, 0, 7);
+        assert_eq!(FILE_READS.get(), 0);
+        store(&no_file, false, 0, 7);
+        assert_eq!(FILE_READS.get(), 1);
+        set_register(0x100, other.cast_signed());
+        store(&own_file, false, 0, 7);
+        assert_eq!(count(), 0);
+
+        // An existing storage of another file stays untouched.
+        let foreign = fixture::storage(other, GrfSpecFeature::GSF_FAKE_TOWNS.0, 0);
+        PSA_LIST.with(|l| l.borrow_mut().push(foreign));
+        set_register(0x100, -1);
+        store(&own_file, false, 0, 0);
+        assert_eq!(
+            fixture::created(),
+            [(own, GrfSpecFeature::GSF_FAKE_TOWNS.0, 0x0304)]
+        );
+        assert_eq!(
+            (count(), PUSHED_VALUES.with(|v| v.borrow().clone())),
+            (2, vec![0])
+        );
+        set_register(0x100, own.cast_signed());
+        store(&own_file, false, 0, 77);
+        set_register(0x100, -1);
+        store(&own_file, false, 1, 78);
+        assert!(fixture::created().is_empty());
+        let mine = PSA_LIST.with(|l| l.borrow()[1]);
+        // SAFETY: both storages live for the process.
+        let get = |array, pos| unsafe { openttd_rust_storage256_get(array, pos) };
+        assert_eq!((get(mine, 0), get(mine, 1), get(foreign, 0)), (77, 78, 0));
+        // A created storage is appended after its store.
+        PSA_LIST.with(|l| l.borrow_mut().clear());
+        store(&own_file, false, 0, 5);
+        assert_eq!(PUSHED_VALUES.with(|v| v.borrow().clone()), [0, 5]);
+        PSA_LIST.with(|l| *l.borrow_mut() = vec![foreign, mine]);
+
+        // SAFETY: the foreign storage is live.
+        unsafe { crate::newgrf_storage::openttd_rust_storage256_store(foreign, 0, 99) };
+        assert_eq!(read(&own_file), (77, true));
+        assert_eq!(read(&no_file), (0, true));
+        set_register(0x100, other.cast_signed());
+        assert_eq!(read(&no_file), (99, true));
+        set_register(0x100, 0x1234);
+        assert_eq!(read(&own_file), (0, true));
+        assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
+    }
 }

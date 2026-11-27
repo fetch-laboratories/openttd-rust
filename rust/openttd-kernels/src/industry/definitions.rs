@@ -10,7 +10,6 @@ use crate::industry_type::{
     INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
 };
 use crate::newgrf::{CargoLabelChoice, GRFFile};
-use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, OverrideManagerBase};
 use crate::table::strings::STR_NEWGRF_INVALID_INDUSTRYTYPE;
 /// Native inputs: the original tables.
@@ -250,7 +249,6 @@ pub(crate) unsafe fn reset(climate: crate::landscape_type::LandscapeType, s: &Se
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDSubstituteSpecIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
         shared, origin, origin_tiles
     };

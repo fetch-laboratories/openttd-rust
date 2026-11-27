@@ -467,7 +467,7 @@ impl<'a> World<'a> {
         let q = self.query();
         // SAFETY: resolver and override manager are native and remain live.
         let kind = unsafe {
-            match crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) as u32 {
+            match crate::newgrf_spritegroup::get_register(0x100) as u32 {
                 0 => u16::from(local_id),
                 u32::MAX => (q.override_id)(u16::from(local_id), grfid),
                 other => (q.override_id)(u16::from(local_id), other),
@@ -505,11 +505,8 @@ impl<'a> World<'a> {
                     0x44 => return u32::from((self.shared.current_company)()),
                     0x48 => return u32::from(view),
                     0x7a => {
-                        return (self.shared.specs().object().badges)(spec).resolve(
-                            self.shared,
-                            ro.cast(),
-                            parameter,
-                        );
+                        return (self.shared.specs().object().badges)(spec)
+                            .get_badge_variable_result(self.shared, ro.cast(), parameter);
                     }
                     _ => return Self::unhandled(variable, available),
                 }
@@ -574,7 +571,7 @@ impl<'a> World<'a> {
                     tile,
                     obj,
                 ),
-                0x7a => (self.shared.specs().object().badges)(spec).resolve(
+                0x7a => (self.shared.specs().object().badges)(spec).get_badge_variable_result(
                     self.shared,
                     ro.cast(),
                     parameter,
@@ -1125,10 +1122,12 @@ impl<'a> World<'a> {
                         );
                         if result.callback != CALLBACK_FAILED {
                             let r = resolver_services(self.s);
-                            result.version =
-                                ((*r.shared).grf_file_version)(
-                                    ((*r.shared).specs().object().file)(spec),
-                                );
+                            result.version = ((*r.shared).grf_file_version)(((*r.shared)
+                                .specs()
+                                .object()
+                                .grffile)(
+                                spec
+                            ));
                         }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
@@ -1403,7 +1402,7 @@ impl World<'_> {
                             );
                             result == CALLBACK_FAILED
                                 || !(self.shared.grf_boolean_callback)(
-                                    (self.shared.specs().object().file)(spec),
+                                    (self.shared.specs().object().grffile)(spec),
                                     CBID_OBJECT_AUTOSLOPE,
                                     result,
                                 )
@@ -1975,7 +1974,7 @@ pub unsafe extern "C" fn openttd_rust_object_file(spec: *const Spec) -> *const s
         ((*resolver_services(invocation_services()).shared)
             .specs()
             .object()
-            .file)(spec)
+            .grffile)(spec)
     }
 }
 #[unsafe(no_mangle)]
@@ -1988,7 +1987,7 @@ pub unsafe extern "C" fn openttd_rust_object_root(
             .specs()
             .object()
             .standard()
-            .sprite_group)(spec, !object.is_null())
+            .get_sprite_group)(spec, !object.is_null())
     }
 }
 #[unsafe(no_mangle)]

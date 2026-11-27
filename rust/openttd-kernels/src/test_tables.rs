@@ -303,7 +303,6 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
     station_gfx: unreachable1,
     station_serve_neutral: unreachable0,
     station_type: unreachable1,
-    storage_discard: unreachable1,
     tile_animation_set_frame: unreachable2,
     town_next_id: unreachable1,
     town_by_id: unreachable1,
@@ -1735,6 +1734,44 @@ pub(crate) const WORLD: crate::genworld::WorldServices = crate::genworld::WorldS
     set_exit: unreachable0,
     save: unreachable1,
 };
+
+/// `crate::town::commands::CommandServices` with every entry unreachable.
+pub(crate) const TOWN_COMMANDS: crate::town::commands::CommandServices =
+    crate::town::commands::CommandServices {
+        founding: ptr::null(),
+        rail: ptr::null(),
+        cargo: ptr::null(),
+        objects: ptr::null(),
+        subsidies: ptr::null(),
+        fund_roads: unreachable0,
+        fund_buildings: unreachable0,
+        exclusive_rights: unreachable0,
+        bribe: unreachable0,
+        invalidate_view: unreachable1,
+        clock: ptr::null(),
+        next_station: unreachable1,
+        station_town: unreachable1,
+        station_owner: unreachable1,
+        station_airport: unreachable1,
+        airport_type: unreachable1,
+        airport_tile: unreachable1,
+        station_activity_owner: unreachable1,
+        local_company: unreachable0,
+        next_waypoint: unreachable1,
+        next_depot: unreachable1,
+        next_industry: unreachable1,
+        set_object_town: unreachable2,
+        industry_town_by_tile: unreachable1,
+        remove_town_sign: unreachable1,
+        delete_town: unreachable1,
+        cleaning_pool: unreachable0,
+        storage_count: unreachable1,
+        psa_list: unreachable2,
+        psa_list_push: unreachable2,
+        delete_storage: unreachable2,
+        clear_storage: unreachable1,
+        assertions: false,
+    };
 
 /// `crate::station_cmd::CommandServicesTable` with every entry unreachable.
 pub(crate) const STATION_COMMANDS: crate::station_cmd::CommandServicesTable =

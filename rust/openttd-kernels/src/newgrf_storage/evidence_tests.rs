@@ -1,306 +1,265 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Store, rollback and array-ownership policy of the persistent arrays (#736 W).
+//! Store, rollback and array-ownership policy of the persistent arrays (#736 W), and the
+//! temporary registers' key wrap.
 //!
-//! Moved from `tools/simulation/storage-console.inc`, whose literal expectations passed
-//! on the unchanged original (the reference role runs that fixture), and read against
-//! `PersistentStorageArray::StoreValue`, `IndustriesScopeResolver::StorePSA`,
-//! `AirportScopeResolver::StorePSA` and `TownScopeResolver::StorePSA` of the pinned
-//! original. The leaves below stand in for the native records and pool: they prove the
-//! Rust decisions and the order of its leaf calls, not `PersistentStorage`'s pool
-//! behaviour, which the console keeps.
+//! Expectations are read from `PersistentStorageArray::StoreValue`, `ClearChanges`,
+//! `BasePersistentStorageArray::SwitchMode` and `TemporaryStorageArray` of the pinned
+//! original. The shells below stand in for the C++ `PersistentStorage` records: the
+//! storage table's member leaves read them, as the C++ leaves read the real records.
 use super::*;
-use crate::test_tables::SHARED;
-use std::{
-    ptr::{addr_of_mut, null, null_mut},
-    sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// A C++ `BasePersistentStorageArray`'s members, which the leaves read.
+#[repr(C)]
+struct Shell {
+    grfid: u32,
+    feature: u8,
+    tile: u32,
+}
+extern "C" fn unused_can_allocate_item() -> bool {
+    unreachable!("the policy test creates no pool item")
+}
+extern "C" fn unused_new(_: u32, _: u8, _: u32) -> *mut PersistentStorageArray<256> {
+    unreachable!("the policy test creates no pool item")
+}
+#[allow(unsafe_code, reason = "a load of the test's live shell")]
+extern "C" fn shell_grfid(shell: *const c_void) -> u32 {
+    // SAFETY: every array's shell is a live `Shell`.
+    unsafe { (*shell.cast::<Shell>()).grfid }
+}
+#[allow(unsafe_code, reason = "a load of the test's live shell")]
+extern "C" fn shell_feature(shell: *const c_void) -> u8 {
+    // SAFETY: as `shell_grfid`.
+    unsafe { (*shell.cast::<Shell>()).feature }
+}
+#[allow(unsafe_code, reason = "a load of the test's live shell")]
+extern "C" fn shell_tile(shell: *const c_void) -> u32 {
+    // SAFETY: as `shell_grfid`.
+    unsafe { (*shell.cast::<Shell>()).tile }
+}
+static SERVICES: Services = Services {
+    can_allocate_item: unused_can_allocate_item,
+    new: unused_new,
+    grfid: shell_grfid,
+    feature: shell_feature,
+    tile: shell_tile,
 };
 
-type Owner = *mut Payload<256>;
-
-/// One town's, one industry's and one airport's native record.
-struct World {
-    industry_valid: bool,
-    industry: Owner,
-    airport: Owner,
-    town: Vec<(Owner, u32)>,
-    pending_town: Option<(Owner, u32)>,
-    industries_created: u32,
-    airport_grfids: Vec<u32>,
-}
-
-static FAILED_CHECKS: AtomicUsize = AtomicUsize::new(0);
-static DISCARDED: Mutex<Vec<usize>> = Mutex::new(Vec::new());
-
-extern "C" fn check(condition: bool) {
+static FAILED_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
+extern "C" fn record_assertion(condition: bool) {
     if !condition {
-        FAILED_CHECKS.fetch_add(1, Ordering::SeqCst);
-    }
-}
-extern "C" fn discard(shell: *mut c_void) {
-    DISCARDED.lock().unwrap().push(shell as usize);
-}
-fn new_owner() -> Owner {
-    openttd_rust_storage256_new(Box::into_raw(Box::new(0_u8)).cast())
-}
-unsafe fn world<'a>(context: *const c_void) -> &'a mut World {
-    unsafe { &mut *context.cast_mut().cast::<World>() }
-}
-extern "C" fn industry(context: *mut c_void) -> IndustryStorage {
-    let w = unsafe { world(context) };
-    IndustryStorage {
-        owner: w.industry,
-        valid: w.industry_valid,
-    }
-}
-extern "C" fn create_industry(context: *mut c_void) -> Owner {
-    let w = unsafe { world(context) };
-    w.industries_created += 1;
-    w.industry = new_owner();
-    w.industry
-}
-extern "C" fn airport(context: *mut c_void) -> Owner {
-    unsafe { world(context) }.airport
-}
-extern "C" fn create_airport(context: *mut c_void, grfid: u32) -> Owner {
-    let w = unsafe { world(context) };
-    w.airport_grfids.push(grfid);
-    w.airport = new_owner();
-    w.airport
-}
-extern "C" fn town_count(context: *const c_void) -> usize {
-    unsafe { world(context) }.town.len()
-}
-extern "C" fn town_storage(context: *const c_void, index: usize) -> StorageReference {
-    let (owner, grfid) = unsafe { world(context) }.town[index];
-    StorageReference { owner, grfid }
-}
-extern "C" fn create_town(context: *mut c_void, grfid: u32) -> Owner {
-    let w = unsafe { world(context) };
-    let owner = new_owner();
-    w.pending_town = Some((owner, grfid));
-    owner
-}
-extern "C" fn append_town(context: *mut c_void, shell: *mut c_void) {
-    let w = unsafe { world(context) };
-    let (owner, grfid) = w.pending_town.take().expect("created before appended");
-    assert_eq!(unsafe { (*owner).shell }, shell);
-    w.town.push((owner, grfid));
-}
-extern "C" fn grf_id(grf: *const c_void) -> u32 {
-    unsafe { grf.cast::<u32>().read() }
-}
-
-fn switch(mode: u8, ignore: bool) {
-    unsafe { openttd_rust_storage_switch_mode(mode, ignore, check, discard) };
-}
-fn get(owner: Owner, pos: u32) -> i32 {
-    unsafe { openttd_rust_storage256_get(owner, pos) }
-}
-/// A resolver object: the file `ResolverObject::grffile` names.
-struct Resolver {
-    grf: *const c_void,
-}
-static RESOLVER_FILE_READS: AtomicUsize = AtomicUsize::new(0);
-extern "C" fn resolver_grf_file(ro: *const c_void) -> *const c_void {
-    RESOLVER_FILE_READS.fetch_add(1, Ordering::SeqCst);
-    // SAFETY: the test passes a live `Resolver`.
-    unsafe { (*ro.cast::<Resolver>()).grf }
-}
-/// `TownScopeResolver::StorePSA` through its production port.
-unsafe fn store_town(
-    resolver: &crate::town::resolver::ResolverServices,
-    town: *mut c_void,
-    grf: *const c_void,
-    readonly: bool,
-    pos: u32,
-    value: i32,
-) {
-    let ro = Resolver { grf };
-    let scope = crate::town::resolver::test_scope(town.cast(), readonly);
-    // SAFETY: `town` is the test's live world and `ro` outlives the call.
-    unsafe {
-        crate::town::resolver::town_store_psa(
-            resolver,
-            &raw const scope,
-            (&raw const ro).cast(),
-            pos,
-            value,
-        );
-    }
-}
-fn reset_observations() {
-    FAILED_CHECKS.store(0, Ordering::SeqCst);
-    DISCARDED.lock().unwrap().clear();
-    RESOLVER_FILE_READS.store(0, Ordering::SeqCst);
-}
-/// Resolver-file reads since the last call.
-fn file_reads() -> usize {
-    RESOLVER_FILE_READS.swap(0, Ordering::SeqCst)
-}
-fn register(value: i32) {
-    unsafe { openttd_rust_storage_temp_store(0x100, value) };
-}
-
-impl World {
-    fn new() -> Self {
-        Self {
-            industry_valid: true,
-            industry: null_mut(),
-            airport: null_mut(),
-            town: Vec::new(),
-            pending_town: None,
-            industries_created: 0,
-            airport_grfids: Vec::new(),
-        }
-    }
-}
-fn table(shared: *const crate::services::Services) -> Services {
-    Services {
-        shared,
-        check,
-        industry,
-        create_industry,
-        airport,
-        create_airport,
-        town_count,
-        town_storage,
-        create_town,
-        append_town,
+        FAILED_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
     }
 }
 
+/// The discard messages `SwitchMode` wrote since the last call.
+fn discarded() -> Vec<String> {
+    crate::debug::tests::take()
+        .into_iter()
+        .map(|(category, level, message)| {
+            assert_eq!((category.as_str(), level), ("desync", 2));
+            String::from_utf8(message).unwrap()
+        })
+        .collect()
+}
+fn message(shell: &Shell) -> String {
+    format!(
+        "warning: discarding persistent storage changes: Feature {}, GrfID {:08X}, Tile {}",
+        shell.feature,
+        shell.grfid.swap_bytes(),
+        shell.tile
+    )
+}
+
+/// `PersistentStorageArray<int32_t, 256>` and its old 16-entry form across the six mode
+/// switches: changes outside the game loop and command scope, and inside test mode, are
+/// backed up once, registered once and rolled back at the next switch, which writes one
+/// `Debug(desync, 2)` line for each changed array in its shell's address order; changes
+/// inside the game loop or a command stay. A save-time `ClearChanges` rolls back but
+/// leaves the array registered; deletion unregisters it. A failed `SwitchMode`
+/// precondition is asserted through the native policy and the switch goes on.
 #[test]
+#[allow(
+    unsafe_code,
+    reason = "the arrays' exports over the test's live shells"
+)]
 fn store_rollback_and_ownership_policy() {
-    let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
-    let mut shared = SHARED;
-    shared.grf_file_id = grf_id;
-    shared.resolver_grf_file = resolver_grf_file;
-    let table = table(&raw const shared);
-    let s = &table;
-    let mut w = World::new();
-    let scope: *mut c_void = addr_of_mut!(w).cast();
-    let (own, other) = (0x3931_2345_u32, 0x3935_4321_u32);
-    let grf = (&raw const own).cast::<c_void>();
-    let other_grf = (&raw const other).cast::<c_void>();
-    // Town writes enter through `TownScopeResolver::StorePSA`'s port, the production caller.
-    let resolver = crate::town::resolver::test_storage_table(&raw const shared, s);
-    let town = |grf, readonly, pos, value| unsafe {
-        store_town(&resolver, scope, grf, readonly, pos, value);
+    const NAME: &str = "newgrf_storage::evidence_tests::store_rollback_and_ownership_policy";
+    if crate::services_assert::isolate_test_check(NAME, record_assertion) {
+        return;
+    }
+    discarded();
+    // Two shells in one allocation, so their address order is known.
+    let shells = [
+        Shell {
+            grfid: 0x1234_5678,
+            feature: 10,
+            tile: 7,
+        },
+        Shell {
+            grfid: 0x0102_0304,
+            feature: 13,
+            tile: 9,
+        },
+    ];
+    let shell = |index: usize| (&raw const shells[index]).cast_mut().cast::<c_void>();
+    let first = openttd_rust_storage256_new(shell(0), &raw const SERVICES);
+    let old = openttd_rust_storage16_new(shell(1), &raw const SERVICES);
+    // SAFETY: both arrays live until their deletion below.
+    let (store, get, store16, get16) = unsafe {
+        (
+            |pos, value| openttd_rust_storage256_store(first, pos, value),
+            |pos| openttd_rust_storage256_get(first, pos),
+            |pos, value| openttd_rust_storage16_store(old, pos, value),
+            |pos| openttd_rust_storage16_get(old, pos),
+        )
     };
-    let town_get =
-        |grf, pos| unsafe { openttd_rust_storage_town_get(s, scope.cast_const(), grf, pos) };
-    let ind = |pos, value| unsafe { openttd_rust_storage_industry(s, scope, pos, value) };
-    let air = |station, grf, pos, value| unsafe {
-        openttd_rust_storage_airport(s, station, grf, pos, value);
-    };
-    reset_observations();
+    switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
+    assert!(discarded().is_empty());
 
-    switch(PSM_LEAVE_GAMELOOP, true);
-    switch(PSM_ENTER_COMMAND, false);
+    // Outside the game loop: temporary. Out-of-range and unchanged values store nothing.
+    store(256, 99);
+    store(0, 0);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
+    assert!(discarded().is_empty());
+    store(15, -8);
+    store(15, -9);
+    store16(15, 4);
+    store16(16, 5);
+    assert_eq!(
+        (get(15), get(256), get(u32::MAX), get16(15), get16(16)),
+        (-9, 0, 0, 4, 0)
+    );
+    switch_mode(PersistentStorageMode::PSM_ENTER_GAMELOOP, false);
+    assert_eq!(discarded(), [message(&shells[0]), message(&shells[1])]);
+    assert_eq!((get(15), get16(15)), (0, 0));
 
-    // Null station, read-only town (before reading its file), absent file and another
-    // file's register write nothing.
-    air(null_mut(), grf, 0, 7);
-    town(grf, true, 0, 7);
-    assert_eq!(file_reads(), 0);
-    town(null(), false, 0, 7);
-    assert_eq!(file_reads(), 1);
-    register(123);
-    town(grf, false, 0, 7);
-    // Zero never creates an industry or airport array.
-    ind(0, 0);
-    air(scope, grf, 0, 0);
-    // An invalid-ID industry writes nothing.
-    let w_ptr = scope.cast::<World>();
-    unsafe { (*w_ptr).industry_valid = false };
-    ind(0, 7);
-    unsafe { (*w_ptr).industry_valid = true };
-    unsafe {
-        assert_eq!((&*w_ptr).town.len(), 0);
-        assert!((*w_ptr).industry.is_null() && (*w_ptr).airport.is_null());
-    }
+    // Inside the game loop and a command: persistent, with nothing registered.
+    store(255, i32::MIN);
+    switch_mode(PersistentStorageMode::PSM_ENTER_COMMAND, false);
+    store(1, i32::MAX);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_COMMAND, false);
+    assert!(discarded().is_empty());
+    // Test mode: temporary again, and rolled back on leaving it.
+    switch_mode(PersistentStorageMode::PSM_ENTER_TESTMODE, false);
+    store(255, 7);
+    store(255, 8);
+    assert_eq!(get(255), 8);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_TESTMODE, false);
+    assert_eq!(discarded(), [message(&shells[0])]);
+    assert_eq!((get(255), get(1)), (i32::MIN, i32::MAX));
+    switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, false);
 
-    // An airport without a file creates the default-file array.
-    air(scope, null(), 256, 7);
-    unsafe {
-        assert_eq!((&*w_ptr).airport_grfids, [0]);
-        openttd_rust_storage256_delete((*w_ptr).airport);
-        (*w_ptr).airport = null_mut();
-    }
+    // The saver's `ClearChanges` rolls back and keeps the array in the set.
+    store(1, -3);
+    // SAFETY: the array is live.
+    unsafe { openttd_rust_storage256_clear(first) };
+    assert_eq!(get(1), i32::MAX);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
+    assert_eq!(discarded(), [message(&shells[0])]);
+    assert_eq!(get(1), i32::MAX);
 
-    // Nonzero out-of-range writes allocate industry and airport; town allocates even for zero.
-    register(-1);
-    town(grf, false, 256, 0);
-    ind(256, 7);
-    air(scope, grf, 256, 7);
-    unsafe {
-        assert_eq!((&*w_ptr).town.len(), 1);
-        assert_eq!((*w_ptr).industries_created, 1);
-        assert_eq!((&*w_ptr).airport_grfids, [0, own]);
-    }
-    town(grf, false, 0, i32::MIN);
-    town(grf, false, 255, i32::MAX);
-    ind(15, -393);
-    air(scope, grf, 255, 393);
-    let (town_owner, industry_owner, airport_owner) =
-        unsafe { ((&(*w_ptr).town)[0].0, (*w_ptr).industry, (*w_ptr).airport) };
-    assert_eq!(get(industry_owner, 0), 0);
-    assert_eq!(get(industry_owner, 15), -393);
-    assert_eq!(get(industry_owner, 256), 0);
-    assert_eq!(get(industry_owner, u32::MAX), 0);
+    // A deleted array leaves the set.
+    store16(0, 1);
+    // SAFETY: the array is not used again.
+    unsafe { openttd_rust_storage16_delete(old) };
+    switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
+    assert!(discarded().is_empty());
+    assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
 
-    // An invalid-ID scope reads the existing array but cannot write it.
-    unsafe { (*w_ptr).industry_valid = false };
-    ind(15, 7);
-    assert_eq!(get(industry_owner, 15), -393);
-    unsafe { (*w_ptr).industry_valid = true };
-
-    // Another file gets a distinct array; explicit GRFID reads may cross files.
-    town(other_grf, false, 0, 99);
-    unsafe { assert_eq!((&*w_ptr).town.len(), 2) };
-    register(other.cast_signed());
-    town(grf, false, 0, 77);
-    assert_eq!(town_get(grf, 0), 99);
-    register(own.cast_signed());
-    assert_eq!(town_get(null(), 0), 0x8000_0000);
-    register(-1);
-    assert_eq!(town_get(null(), 0), 0);
-    assert_eq!(town_get(grf, 0), 0x8000_0000);
-
-    // Inside command test mode changes are temporary and roll back on leaving.
-    switch(PSM_LEAVE_COMMAND, false);
-    switch(PSM_ENTER_TESTMODE, false);
-    town(grf, false, 0, 1);
-    ind(15, 2);
-    air(scope, grf, 255, 3);
-    assert_eq!(get(industry_owner, 15), 2);
-    assert!(DISCARDED.lock().unwrap().is_empty());
-    switch(PSM_LEAVE_TESTMODE, false);
-    assert_eq!(get(town_owner, 0), i32::MIN);
-    assert_eq!(get(industry_owner, 15), -393);
-    assert_eq!(get(airport_owner, 255), 393);
-
-    // The registry is visited in pointer order, once per changed array.
-    let mut visited = std::mem::take(&mut *DISCARDED.lock().unwrap());
-    assert_eq!(visited.len(), 3);
-    assert!(visited.is_sorted());
-    visited.sort_unstable();
-    visited.dedup();
-    assert_eq!(visited.len(), 3);
-    assert_eq!(FAILED_CHECKS.load(Ordering::SeqCst), 0);
-
-    release(w_ptr, industry_owner, airport_owner);
+    // `assert(ignore_prev_mode || command)` fails outside a command; the flag is still written.
+    switch_mode(PersistentStorageMode::PSM_LEAVE_COMMAND, false);
+    assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 1);
+    switch_mode(PersistentStorageMode::PSM_ENTER_COMMAND, false);
+    store(2, 3);
+    switch_mode(PersistentStorageMode::PSM_LEAVE_COMMAND, false);
+    assert!(discarded().is_empty());
+    assert_eq!((get(2), FAILED_ASSERTIONS.load(Ordering::SeqCst)), (3, 1));
+    // SAFETY: the array is not used again.
+    unsafe { openttd_rust_storage256_delete(first) };
 }
 
-fn release(world: *mut World, industry: Owner, airport: Owner) {
-    unsafe {
-        for (owner, _) in std::mem::take(&mut *addr_of_mut!((*world).town)) {
-            openttd_rust_storage256_delete(owner);
-        }
-        openttd_rust_storage256_delete(industry);
-        openttd_rust_storage256_delete(airport);
+/// `TemporaryStorageArray`: a value reads back until the next `ClearChanges`, and after
+/// 65,535 of them, when the key wraps to zero and every slot is reset, a value stored
+/// before reads zero; one stored after reads back. A position past the array reads zero.
+#[test]
+fn temporary_storage_key_wraps() {
+    let mut temporary = TemporaryStorageArray::<0x110>::new();
+    temporary.store_value(0x10F, -123);
+    assert_eq!(temporary.get_value(0x10F), -123);
+    for _ in 0..65535 {
+        temporary.clear_changes();
+    }
+    assert_eq!(temporary.get_value(0x10F), 0);
+    temporary.store_value(0x10F, 456);
+    assert_eq!(temporary.get_value(0x10F), 456);
+    // The slot's old key is 1, which the key reaches again after the wrap: a stale
+    // slot that the wrap did not reset would read back here.
+    temporary.store_value(3, 9);
+    for _ in 0..65535 {
+        temporary.clear_changes();
+    }
+    temporary.store_value(0x110, 1);
+    assert_eq!((temporary.get_value(3), temporary.get_value(0x110)), (0, 0));
+    temporary.clear_changes();
+    assert_eq!(temporary.get_value(0x10F), 0);
+}
+
+/// Stand-in `PersistentStorage` records for the tests of the `StorePSA` bodies, which
+/// create storages through the storage table and store them in their records.
+pub(crate) mod fixture {
+    use super::{
+        PersistentStorageArray, Services, Shell, openttd_rust_storage256_new, shell_feature,
+        shell_grfid, shell_tile,
+    };
+    use std::cell::RefCell;
+    use std::ffi::c_void;
+
+    /// A `PersistentStorage`: its members, then the array it owns.
+    #[repr(C)]
+    struct Record {
+        shell: Shell,
+        array: *mut PersistentStorageArray<256>,
+    }
+    thread_local! {
+        static CREATED: RefCell<Vec<(u32, u8, u32)>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn can_allocate_item() -> bool {
+        true
+    }
+    extern "C" fn new(grfid: u32, feature: u8, tile: u32) -> *mut PersistentStorageArray<256> {
+        CREATED.with(|c| c.borrow_mut().push((grfid, feature, tile)));
+        storage(grfid, feature, tile)
+    }
+    /// The storage table over the stand-in records.
+    pub(crate) static STORAGE: Services = Services {
+        can_allocate_item,
+        new,
+        grfid: shell_grfid,
+        feature: shell_feature,
+        tile: shell_tile,
+    };
+    /// A storage with these members, which lives for the process, as its array.
+    pub(crate) fn storage(grfid: u32, feature: u8, tile: u32) -> *mut PersistentStorageArray<256> {
+        let record = Box::leak(Box::new(Record {
+            shell: Shell {
+                grfid,
+                feature,
+                tile,
+            },
+            array: std::ptr::null_mut(),
+        }));
+        record.array = openttd_rust_storage256_new((&raw mut *record).cast(), &raw const STORAGE);
+        record.array
+    }
+    /// The members of each storage the table's `new` created since the last call.
+    pub(crate) fn created() -> Vec<(u32, u8, u32)> {
+        CREATED.with(|c| std::mem::take(&mut *c.borrow_mut()))
+    }
+    /// The array of a storage this fixture made, from its shell.
+    #[allow(unsafe_code, reason = "a load of a live stand-in record")]
+    pub(crate) fn array_of(shell: *mut c_void) -> *mut PersistentStorageArray<256> {
+        // SAFETY: every shell this fixture hands out is a leaked `Record`.
+        unsafe { (*shell.cast::<Record>()).array }
     }
 }

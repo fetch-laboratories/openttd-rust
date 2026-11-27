@@ -59,6 +59,7 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.towns = &GetRustTownServices(),
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
+		.commands = &GetRustTownCommandServices(),
 		.larger_towns = OpenTTDLargerTowns,
 
 

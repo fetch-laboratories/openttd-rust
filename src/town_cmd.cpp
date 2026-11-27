@@ -720,6 +720,8 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.delete_town = [](Town *town) noexcept { delete town; },
 		.cleaning_pool = []() noexcept { return Town::CleaningPool(); },
 		.storage_count = RustTownStorageCount<Town>,
+		.psa_list = [](Town *town, size_t index) noexcept { return town->psa_list[index]->rust_storage; },
+		.psa_list_push = [](Town *town, BasePersistentStorageArray *psa) noexcept { town->psa_list.push_back(static_cast<PersistentStorage *>(psa)); },
 		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
 		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
 #ifdef WITH_ASSERT

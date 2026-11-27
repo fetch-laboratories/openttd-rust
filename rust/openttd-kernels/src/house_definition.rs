@@ -38,12 +38,6 @@ use std::ffi::c_void;
 type Spec = *const c_void;
 type File = *mut c_void;
 #[repr(C)]
-pub struct Identity {
-    grfid: u32,
-    pub(crate) local: u16,
-    substitute: u16,
-}
-#[repr(C)]
 pub struct Validity {
     availability: u16,
     substitute: u16,
@@ -82,7 +76,6 @@ pub struct Services {
     clear_local: extern "C" fn(File),
     copy_substitute: extern "C" fn(File, u16, Spec) -> Spec,
     set_identity: extern "C" fn(Spec, File, u16, u16),
-    identity: extern "C" fn(Spec) -> Identity,
     validity: extern "C" fn(Spec) -> Validity,
     part: extern "C" fn(Spec) -> Part,
     flags: extern "C" fn(Spec) -> u8,
@@ -127,12 +120,11 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDHouseDefinitionIdentity" ["house_definition"] => Identity { grfid, local, substitute };
     "OpenTTDHouseDefinitionValidity" ["house_definition"] => Validity { availability, substitute, flags };
     "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 /// Ignore a house property, retaining its original byte consumption.
@@ -538,7 +530,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
                 1,
                 "FinaliseHouseArray: {} defines house {} as multitile, but no suitable tiles follow. Disabling house.",
                 Bytes(filename),
-                (s.identity)(spec).local
+                (s.shared().specs().house().local_id)(spec.cast())
             );
         }
         return false;
@@ -558,7 +550,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
                 1,
                 "FinaliseHouseArray: {} defines multitile house {} with non-zero population on additional tiles. Disabling house.",
                 Bytes(filename),
-                (s.identity)(spec).local
+                (s.shared().specs().house().local_id)(spec.cast())
             );
         }
         return false;
@@ -576,7 +568,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
             1,
             "FinaliseHouseArray: {} defines house {} with different house size then it's substitute type. Disabling house.",
             Bytes(filename),
-            (s.identity)(spec).local
+            (s.shared().specs().house().local_id)(spec.cast())
         );
         return false;
     }
@@ -592,7 +584,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], grffile: Option<GRFFileRef<'
                 1,
                 "FinaliseHouseArray: {} defines house {} without a size but marked it as available. Disabling house.",
                 Bytes(filename),
-                (s.identity)(spec).local
+                (s.shared().specs().house().local_id)(spec.cast())
             );
         }
         return false;
@@ -642,13 +634,14 @@ pub fn reset(s: &Services) {
 }
 pub fn publish(s: &Services, spec: Spec) {
     let manager = override_manager::house_mngr();
-    let identity = (s.identity)(spec);
+    let house = s.shared().specs().house();
+    let (local_id, grfid) = ((house.local_id)(spec.cast()), (house.grfid)(spec.cast()));
     let id = unsafe {
         override_manager::house_add_entity_id(
             manager,
-            identity.local,
-            identity.grfid,
-            identity.substitute,
+            local_id,
+            grfid,
+            (house.substitute().subst_id)(spec.cast()),
         )
     };
     if id == INVALID_HOUSE_ID {
@@ -664,8 +657,8 @@ pub fn publish(s: &Services, spec: Spec) {
     (s.move_spec)(spec, id);
     for original in 0..NEW_HOUSE_OFFSET {
         let overridden = (s.get)(original);
-        if unsafe { (*manager).entity_overrides(original) } != identity.local
-            || unsafe { (*manager).grfid_overrides(original) } != identity.grfid
+        if unsafe { (*manager).entity_overrides(original) } != local_id
+            || unsafe { (*manager).grfid_overrides(original) } != grfid
         {
             continue;
         }

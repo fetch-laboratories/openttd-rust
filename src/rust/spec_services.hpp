@@ -13,25 +13,24 @@
 #include <type_traits>
 template <typename Spec, typename Triggers>
 inline constexpr OpenTTDSpecAnimationServices<Spec, Triggers> _rust_spec_animation{
-	.frames = RustSpecAnimationFrames<Spec>,
-	.speed = RustSpecAnimationSpeed<Spec>,
-	.status = RustSpecAnimationStatus<Spec>,
-	.triggers = RustSpecAnimationTriggers<Spec, Triggers>,
+	.set_frames = RustSpecAnimationFrames<Spec>,
+	.set_speed = RustSpecAnimationSpeed<Spec>,
+	.set_status = RustSpecAnimationStatus<Spec>,
+	.set_triggers = RustSpecAnimationTriggers<Spec, Triggers>,
 };
 template <typename Spec>
 inline constexpr OpenTTDStandardSpecServices<Spec> _rust_spec_standard{
 	.has_sprite_groups = RustSpecHasSpriteGroups<Spec>,
 	.set_sprite_group = RustSpecSetStandardSpriteGroup<Spec>,
-	.sprite_group = RustSpecSpriteGroup<Spec>,
+	.get_sprite_group = RustSpecSpriteGroup<Spec>,
 };
 template <typename Spec>
 inline constexpr OpenTTDSubstituteSpecServices<Spec> _rust_spec_substitute{
 	.enabled = RustSpecEnabled<Spec>,
-	.identity = RustSpecSubstituteIdentity<Spec>,
 	.override_id = RustSpecOverride<Spec>,
 	.set_enabled = RustSpecSetEnabled<Spec>,
-	.set_override = RustSpecSetOverride<Spec>,
-	.substitute = RustSpecSubstitute<Spec>,
+	.set_override_id = RustSpecSetOverride<Spec>,
+	.subst_id = RustSpecSubstitute<Spec>,
 };
 template <typename Spec, typename Triggers>
 constexpr const OpenTTDSpecAnimationServices<Spec, Triggers> *RustSpecAnimationTable() noexcept
@@ -66,13 +65,12 @@ inline constexpr OpenTTDSpecServices<Spec, Triggers> _rust_spec_services{
 	.animation = RustSpecAnimationTable<Spec, Triggers>(),
 	.badge_list = RustSpecBadgeList<Spec>,
 	.badges = RustSpecBadgeView<Spec>,
-	.cargo_map = RustSpecCargoMap<Spec>,
-	.file = RustSpecGRFFile<Spec>,
+	.grffile = RustSpecGRFFile<Spec>,
 	.grfid = RustSpecGRFID<Spec>,
-	.has_file = RustSpecHasGRFFile<Spec>,
+	.has_grf_file = RustSpecHasGRFFile<Spec>,
 	.local_id = RustSpecLocalID<Spec>,
 	.name = RustSpecName<Spec>,
-	.set_file = RustSpecSetGRFFile<Spec>,
+	.set_grf_file = RustSpecSetGRFFile<Spec>,
 	.set_local_id = RustSpecSetLocalID<Spec>,
 	.standard = RustSpecStandardTable<Spec>(),
 	.substitute = RustSpecSubstituteTable<Spec>(),

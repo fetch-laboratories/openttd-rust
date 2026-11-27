@@ -439,8 +439,6 @@ pub struct Services {
     pub station_serve_neutral: extern "C" fn() -> bool,
     /// Canonical shared `station_type` service.
     pub station_type: extern "C" fn(u32) -> StationType,
-    /// Persistent storage backup release on leaving command or test mode.
-    pub storage_discard: extern "C" fn(*mut std::ffi::c_void),
     /// Canonical shared `tile_animation_add` service.
 
     /// Canonical shared `tile_animation_delete` service.
@@ -896,7 +894,6 @@ crate::abi::layouts! {
         station_gfx,
         station_serve_neutral,
         station_type,
-        storage_discard,
 
         tile_animation_set_frame,
         town_next_id,
@@ -1344,7 +1341,6 @@ pub fn fixture(context: *mut c_void, random: extern "C" fn(*mut c_void) -> u32) 
         station_gfx: byte,
         station_serve_neutral: flag0,
         station_type: fixture_station_type,
-        storage_discard: fixture_storage_discard,
 
         tile_animation_set_frame: zone,
         town_next_id: word,
@@ -1594,8 +1590,6 @@ impl Cost<'_> {
 extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
     panic!("unused road stop table")
 }
-#[cfg(test)]
-extern "C" fn fixture_storage_discard(_: *mut std::ffi::c_void) {}
 #[cfg(test)]
 extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")

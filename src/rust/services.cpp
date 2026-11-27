@@ -627,7 +627,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
 	.station_serve_neutral = RustServeNeutralIndustries,
 	.station_type = [](uint32_t tile) noexcept { return GetStationType(TileIndex{tile}); },
-	.storage_discard = RustStorageDiscard,
 
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
 	.town_next_id = OpenTTDNextTownID,
