@@ -15,16 +15,16 @@ static OpenTTDFleetGroupRecord FleetGroup_record(Group *g) noexcept
 	if (g == nullptr) return {nullptr, nullptr, nullptr, 0};
 	return {g, g->state.state, g->statistics.state.state, g->index.base()};
 }
-static void FleetGroup_group_delete(void *shell) noexcept { delete static_cast<Group *>(shell); }
+static void FleetGroup_group_delete(Group *shell) noexcept { delete shell; }
 static OpenTTDFleetGroupRecord FleetGroup_group_get(uint16_t index) noexcept { return FleetGroup_record(Group::Get(GroupID(index))); }
 static OpenTTDFleetGroupRecord FleetGroup_group_get_if_valid(uint16_t index) noexcept { return FleetGroup_record(Group::GetIfValid(GroupID(index))); }
 static OpenTTDFleetGroupRecord FleetGroup_group_new(uint8_t owner, uint8_t vt) noexcept { return FleetGroup_record(new Group(CompanyID(owner), static_cast<VehicleType>(vt))); }
 static OpenTTDFleetGroupRecord FleetGroup_next_group(uint32_t from) noexcept { for (Group *g : Group::Iterate(from)) { if (g->index.base() >= from) return FleetGroup_record(g); } return FleetGroup_record(nullptr); }
-static void * FleetGroup_group_statistics_get(uint8_t company, uint16_t id_g, uint8_t type) noexcept { return GroupStatistics::Get(CompanyID(company), GroupID(id_g), static_cast<VehicleType>(type)).state.state; }
+static FleetStatisticsFields * FleetGroup_group_statistics_get(uint8_t company, uint16_t id_g, uint8_t type) noexcept { return GroupStatistics::Get(CompanyID(company), GroupID(id_g), static_cast<VehicleType>(type)).state.state; }
 static OpenTTDFleetRenewRecord FleetGroup_next_renew(uint32_t from) noexcept { for (EngineRenew *er : EngineRenew::Iterate(from)) { if (er->index.base() >= from) return {er, er->index.base()}; } return {nullptr, 0}; }
-static void FleetGroup_renew_delete(void *shell) noexcept { delete static_cast<EngineRenew *>(shell); }
-static void * FleetGroup_renew_new() noexcept { return new EngineRenew(); }
-static void * FleetGroup_renew_state(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->state.state; }
+static void FleetGroup_renew_delete(EngineRenew *shell) noexcept { delete shell; }
+static EngineRenew * FleetGroup_renew_new() noexcept { return new EngineRenew(); }
+static FleetRenewFields * FleetGroup_renew_state(EngineRenew *shell) noexcept { return shell->state.state; }
 static bool FleetGroup_is_engine_countable(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsEngineCountable(); }
 const OpenTTDFleetGroupServices &FleetGroupServices()
 {

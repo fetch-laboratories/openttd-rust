@@ -78,26 +78,6 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
 }
 
 /**
- * Returns the GroupStatistic for the group of a vehicle.
- * @param v Vehicle.
- * @return GroupStatistics for the group of the vehicle.
- */
-/* static */ GroupStatistics &GroupStatistics::Get(const Vehicle *v)
-{
-	return GroupStatistics::Get(v->GetOwner(), v->group_id, v->GetType());
-}
-
-/**
- * Returns the GroupStatistic for the ALL_GROUP of a vehicle type.
- * @param v Vehicle.
- * @return GroupStatistics for the ALL_GROUP of the vehicle type.
- */
-/* static */ GroupStatistics &GroupStatistics::GetAllGroup(const Vehicle *v)
-{
-	return GroupStatistics::Get(v->GetOwner(), ALL_GROUP, v->GetType());
-}
-
-/**
  * Update all caches after loading a game, changing NewGRF, etc.
  */
 /* static */ void GroupStatistics::UpdateAfterLoad()

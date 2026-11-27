@@ -97,7 +97,7 @@ mod tests {
         };
     }
 
-    extern "C" fn renew_state(renew: *mut ()) -> *mut Renew {
+    extern "C" fn renew_state(renew: *mut crate::fleet::OpenTTDEngineRenew) -> *mut Renew {
         renew.cast()
     }
     extern "C" fn group_of(id: GroupID) -> GroupRecord {
@@ -109,7 +109,7 @@ mod tests {
         };
         GroupRecord {
             shell: ptr::null_mut(),
-            group: index.map_or(ptr::null_mut(), |index| GROUPS.with(|g| g[index])),
+            group: index.map_or(ptr::null_mut(), |index| GROUPS.with(|g| g[index]).cast()),
             statistics: ptr::null_mut(),
             index: id.0,
         }
@@ -118,8 +118,8 @@ mod tests {
         /// The company's renewal owner: the Rust-owned slot holding its list head.
         static HEAD: std::cell::Cell<*mut ()> = std::cell::Cell::new(RULES.with(|r| *r));
     }
-    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut *mut () {
-        HEAD.with(std::cell::Cell::as_ptr)
+    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList {
+        HEAD.with(std::cell::Cell::as_ptr).cast()
     }
 
     fn lookup(

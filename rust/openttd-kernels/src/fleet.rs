@@ -159,17 +159,29 @@ crate::abi::shared_records! {
     }
 }
 
+/// The C++ `Group` shell, opaque to Rust.
+#[repr(C)]
+pub struct OpenTTDGroup {
+    _opaque: [u8; 0],
+}
+
+/// The C++ `EngineRenew` shell, opaque to Rust.
+#[repr(C)]
+pub struct OpenTTDEngineRenew {
+    _opaque: [u8; 0],
+}
+
 /// `EngineRenewList`: the C++ `EngineRenew` shell at the head of a renewal list, or null.
-pub(crate) type EngineRenewList = *mut ();
+pub(crate) type EngineRenewList = *mut OpenTTDEngineRenew;
 
 /// One step of a group pool lookup: the C++ shell, its Rust owner, the owner of its
 /// `statistics` member and its index; the shell and owner are null for no group.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GroupRecord {
-    pub shell: *mut (),
-    pub group: *mut (),
-    pub statistics: *mut (),
+    pub shell: *mut OpenTTDGroup,
+    pub group: *mut GroupFields,
+    pub statistics: *mut StatsFields,
     pub index: u16,
 }
 
@@ -178,7 +190,7 @@ pub struct GroupRecord {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RenewRecord {
-    pub shell: *mut (),
+    pub shell: *mut OpenTTDEngineRenew,
     pub index: u16,
 }
 
@@ -186,9 +198,9 @@ pub struct RenewRecord {
 /// `new Group`, or reaches it through `Group::Iterate`.
 #[derive(Clone, Copy)]
 pub(crate) struct GroupRef {
-    shell: *mut (),
+    shell: *mut OpenTTDGroup,
     group: NonNull<Group>,
-    statistics: *mut (),
+    statistics: *mut StatsFields,
     index: GroupID,
 }
 
@@ -219,7 +231,7 @@ impl GroupRef {
     fn of(record: GroupRecord) -> Option<Self> {
         Some(Self {
             shell: record.shell,
-            group: NonNull::new(record.group.cast())?,
+            group: NonNull::new(record.group.cast::<Group>())?,
             statistics: record.statistics,
             index: GroupID(record.index),
         })
@@ -274,7 +286,7 @@ impl GroupRef {
     }
     /// `Group::statistics`, of a group `Group::Iterate` reached.
     pub(crate) fn statistics(self) -> GroupStatisticsRef {
-        GroupStatisticsRef::of(self.statistics)
+        GroupStatisticsRef::of(self.statistics.cast())
     }
     /// `g->children`, walked by cursor.
     pub(crate) fn children(self) -> Children {
@@ -426,7 +438,7 @@ impl GroupStatisticsRef {
 /// `renew_state`.
 #[derive(Clone, Copy)]
 pub(crate) struct EngineRenewRef {
-    shell: NonNull<()>,
+    shell: NonNull<OpenTTDEngineRenew>,
     state: *mut Renew,
 }
 
@@ -457,11 +469,11 @@ impl EngineRenewRef {
     }
     /// `EngineRenew::next`.
     pub(crate) fn next(self) -> EngineRenewList {
-        read_field!(self.state, next)
+        read_field!(self.state, next).cast()
     }
     /// Store `EngineRenew::next`.
     fn set_next(self, next: EngineRenewList) {
-        write_field!(self.state, next, next);
+        write_field!(self.state, next, next.cast());
     }
     /// `EngineRenew::group_id`.
     pub(crate) fn group_id(self) -> GroupID {
@@ -493,7 +505,7 @@ pub struct GroupServices {
     /// `Group::CanAllocateItem()`.
     pub(crate) group_can_allocate: extern "C" fn() -> bool,
     /// `delete g` of a group shell.
-    pub(crate) group_delete: extern "C" fn(*mut ()),
+    pub(crate) group_delete: extern "C" fn(*mut OpenTTDGroup),
     /// `Group::Get(index)`, with its assertion.
     pub(crate) group_get: extern "C" fn(GroupID) -> GroupRecord,
     /// `Group::GetIfValid(index)`.
@@ -506,7 +518,8 @@ pub struct GroupServices {
     // `GroupStatistics`.
     /// `GroupStatistics::Get(company, id_g, type)`, with its assertions and `NOT_REACHED`:
     /// the owner of the statistics the group or company shell holds.
-    pub(crate) group_statistics_get: extern "C" fn(CompanyID, GroupID, VehicleType) -> *mut (),
+    pub(crate) group_statistics_get:
+        extern "C" fn(CompanyID, GroupID, VehicleType) -> *mut StatsFields,
 
     // `EngineRenew` pool.
     /// `EngineRenew::Iterate(from)`'s next renewal.
@@ -514,11 +527,11 @@ pub struct GroupServices {
     /// `EngineRenew::CanAllocateItem()`.
     pub(crate) renew_can_allocate: extern "C" fn() -> bool,
     /// `delete er` of a renewal shell.
-    pub(crate) renew_delete: extern "C" fn(*mut ()),
+    pub(crate) renew_delete: extern "C" fn(*mut OpenTTDEngineRenew),
     /// `new EngineRenew()`: the shell, whose owner the caller fills.
-    pub(crate) renew_new: extern "C" fn() -> *mut (),
+    pub(crate) renew_new: extern "C" fn() -> *mut OpenTTDEngineRenew,
     /// The Rust owner a renewal shell holds.
-    pub(crate) renew_state: extern "C" fn(*mut ()) -> *mut Renew,
+    pub(crate) renew_state: extern "C" fn(*mut OpenTTDEngineRenew) -> *mut Renew,
 
     // `Vehicle` members.
     /// `Vehicle::group_id`.
@@ -651,20 +664,6 @@ fn vehicles(w: &GroupServices) -> impl Iterator<Item = VehicleRef> + '_ {
     })
 }
 
-/// `Company::Iterate()`, walked over the identity table's `next_company`.
-fn companies(w: &GroupServices) -> impl Iterator<Item = *mut OpenTTDCompany> + '_ {
-    let identity = w.identity();
-    let mut from = 0_u32;
-    std::iter::from_fn(move || {
-        let c = (identity.next_company)(from);
-        if c.is_null() {
-            return None;
-        }
-        from = u32::from((identity.index)(c).0) + 1;
-        Some(c)
-    })
-}
-
 /// `VehicleListIdentifier(VL_GROUP_LIST, vtype, company).ToWindowNumber()`'s identifier.
 fn group_list(vtype: VehicleType, company: CompanyID) -> VehicleListIdentifier {
     VehicleListIdentifier {
@@ -714,7 +713,7 @@ pub(crate) fn group_statistics_get(
     id_g: GroupID,
     r#type: VehicleType,
 ) -> GroupStatisticsRef {
-    GroupStatisticsRef::of((w.group_statistics_get)(company, id_g, r#type))
+    GroupStatisticsRef::of((w.group_statistics_get)(company, id_g, r#type).cast())
 }
 
 /// `GroupStatistics::Get(const Vehicle *v)`: returns the statistic for the group of a vehicle.
@@ -735,12 +734,13 @@ pub(crate) fn group_statistics_get_all_group(
 pub(crate) fn update_after_load(w: &GroupServices) {
     let company = w.company();
     /* Set up the engine count for all companies */
-    for c in companies(w) {
+    crate::company_identity::companies(company.identity, |c| {
         for r#type in VehicleType::VEH_BEGIN.0..VehicleType::VEH_COMPANY_END.0 {
             GroupStatisticsRef::of((company.group_all)(c, VehicleType(r#type))).clear();
             GroupStatisticsRef::of((company.group_default)(c, VehicleType(r#type))).clear();
         }
-    }
+        true
+    });
 
     /* Recalculate */
     for g in groups(w) {
@@ -758,10 +758,11 @@ pub(crate) fn update_after_load(w: &GroupServices) {
         }
     }
 
-    let identity = w.identity();
-    for c in companies(w) {
+    let identity = company.identity;
+    crate::company_identity::companies(identity, |c| {
         update_autoreplace(w, (identity.index)(c));
-    }
+        true
+    });
 }
 
 /// `GroupStatistics::CountVehicle`: update `num_vehicle` when adding or removing a vehicle.
@@ -833,12 +834,13 @@ pub(crate) fn vehicle_reached_min_age(w: &GroupServices, v: VehicleRef) {
 pub(crate) fn update_profits(w: &GroupServices) {
     let company = w.company();
     /* Set up the engine count for all companies */
-    for c in companies(w) {
+    crate::company_identity::companies(company.identity, |c| {
         for r#type in VehicleType::VEH_BEGIN.0..VehicleType::VEH_COMPANY_END.0 {
             GroupStatisticsRef::of((company.group_all)(c, VehicleType(r#type))).clear_profits();
             GroupStatisticsRef::of((company.group_default)(c, VehicleType(r#type))).clear_profits();
         }
-    }
+        true
+    });
 
     /* Recalculate */
     for g in groups(w) {
@@ -1915,7 +1917,8 @@ pub(crate) fn remove_all_groups_for_company(w: &GroupServices, company: CompanyI
     }
 }
 
-/// `GroupIsInGroup`: test if group ID `group` is a descendant of (or is) group ID `search`.
+/// `GroupIsInGroup`: test whether `search` is `group` or one of its descendants, walking from
+/// `search` up its parents towards `group`.
 pub(crate) fn group_is_in_group(w: &GroupServices, mut search: GroupID, group: GroupID) -> bool {
     if !group_is_valid_id(w, search) {
         return search == group;
@@ -2056,7 +2059,7 @@ pub(crate) fn add_engine_replacement(
         write_field!(er.state, from, old_engine.0);
         write_field!(er.state, to, new_engine.0);
         // SAFETY: As above.
-        write_field!(er.state, next, unsafe { erl.read() });
+        write_field!(er.state, next, unsafe { erl.read() }.cast());
         write_field!(er.state, group_id, group.0);
         write_field!(er.state, replace_when_old, replace_when_old);
         // SAFETY: As above; one pointer-sized store.
@@ -2296,18 +2299,6 @@ pub extern "C" fn openttd_rust_fleet_engine_count(p: *const (), engine: u16) -> 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_fleet_stats_clear(p: *mut ()) {
     GroupStatisticsRef::of(p).clear();
-}
-/// `GroupStatistics::ClearProfits`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_fleet_stats_clear_profits(p: *mut ()) {
-    GroupStatisticsRef::of(p).clear_profits();
-}
-/// `GroupStatistics::ClearAutoreplace`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_fleet_stats_clear_autoreplace(p: *mut ()) {
-    GroupStatisticsRef::of(p).clear_autoreplace();
 }
 /// `num_engines[engine] += delta`.
 #[allow(unsafe_code)]

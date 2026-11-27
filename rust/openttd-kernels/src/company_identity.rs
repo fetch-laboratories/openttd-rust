@@ -103,7 +103,7 @@ pub struct Services {
     /// `CompanySettings::renew_keep_length`.
     pub renew_keep_length: extern "C" fn(*const OpenTTDCompany) -> bool,
     /// `&c->RenewalList()`: the Rust-owned slot holding the company's `EngineRenewList`.
-    pub renewal_head: extern "C" fn(*const OpenTTDCompany) -> *mut *mut (),
+    pub renewal_head: extern "C" fn(*const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList,
     /// `ResetVehicleColourMap()`.
     pub reset_colourmap: extern "C" fn() -> (),
     /// `Company::colour = value`.

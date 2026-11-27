@@ -1830,8 +1830,8 @@ mod evidence_tests {
     extern "C" fn admin_update(c: *mut OpenTTDCompany) {
         trace(format!("admin {}", index(c).0));
     }
-    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut *mut () {
-        RENEWALS.with(Cell::as_ptr)
+    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList {
+        RENEWALS.with(Cell::as_ptr).cast()
     }
     extern "C" fn town_next_id(from: u32) -> u32 {
         let count = TOWNS.with_borrow(Vec::len) as u32;
@@ -1922,9 +1922,9 @@ mod evidence_tests {
         let group = GROUP.get();
         if from == 0 && !group.is_null() {
             crate::fleet::GroupRecord {
-                shell: group,
-                group,
-                statistics: STATS.get(),
+                shell: group.cast(),
+                group: group.cast(),
+                statistics: STATS.get().cast(),
                 index: 0,
             }
         } else {
@@ -1936,8 +1936,8 @@ mod evidence_tests {
             }
         }
     }
-    extern "C" fn delete_group(shell: *mut ()) {
-        assert_eq!(shell, GROUP.get());
+    extern "C" fn delete_group(shell: *mut crate::fleet::OpenTTDGroup) {
+        assert_eq!(shell.cast(), GROUP.get());
         trace("delete group 0");
         GROUP.set(std::ptr::null_mut());
     }
@@ -1945,8 +1945,8 @@ mod evidence_tests {
         _: CompanyID,
         _: crate::group_type::GroupID,
         _: crate::vehicle_type::VehicleType,
-    ) -> *mut () {
-        STATS.get()
+    ) -> *mut crate::fleet::StatsFields {
+        STATS.get().cast()
     }
     extern "C" fn fleet_company() -> *const Services {
         thread_local! {

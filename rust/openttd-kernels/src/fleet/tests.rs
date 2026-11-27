@@ -67,9 +67,9 @@ fn record(index: u16) -> GroupRecord {
             index: 0,
         },
         |s| GroupRecord {
-            shell: s.group,
-            group: s.group,
-            statistics: s.statistics,
+            shell: s.group.cast(),
+            group: s.group.cast(),
+            statistics: s.statistics.cast(),
             index,
         },
     )
@@ -99,11 +99,11 @@ extern "C" fn group_new(owner: Owner, vt: VehicleType) -> GroupRecord {
     record(index.0)
 }
 #[allow(unsafe_code, reason = "the fixture's owners, built and read in place")]
-extern "C" fn group_delete(shell: *mut ()) {
+extern "C" fn group_delete(shell: *mut OpenTTDGroup) {
     POOL.with_borrow_mut(|p| {
         let index = p
             .iter()
-            .position(|s| s.is_some_and(|s| s.group == shell))
+            .position(|s| s.is_some_and(|s| s.group == shell.cast()))
             .unwrap();
         call(format!("delete {index}"));
         let slot = p[index].take().unwrap();
@@ -114,12 +114,16 @@ extern "C" fn group_delete(shell: *mut ()) {
         }
     });
 }
-extern "C" fn group_statistics_get(_: CompanyID, id_g: GroupID, r#type: VehicleType) -> *mut () {
+extern "C" fn group_statistics_get(
+    _: CompanyID,
+    id_g: GroupID,
+    r#type: VehicleType,
+) -> *mut StatsFields {
     if let Some(slot) = POOL.with_borrow(|p| p.get(usize::from(id_g.0)).copied().flatten()) {
-        return slot.statistics;
+        return slot.statistics.cast();
     }
     let offset = if id_g == GroupID::ALL_GROUP { 0 } else { 5 };
-    COMPANY_STATS.with_borrow(|s| s[offset + usize::from(r#type.0)])
+    COMPANY_STATS.with_borrow(|s| s[offset + usize::from(r#type.0)]).cast()
 }
 extern "C" fn next_renew(_: u32) -> RenewRecord {
     RenewRecord {
@@ -139,7 +143,7 @@ extern "C" fn company_livery(_: *mut OpenTTDCompany) -> *mut Livery {
     LIVERIES.with_borrow_mut(|l| l.as_mut_ptr())
 }
 extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut EngineRenewList {
-    RENEWALS.with(Cell::as_ptr)
+    RENEWALS.with(Cell::as_ptr).cast()
 }
 extern "C" fn no_keep_length(_: *const OpenTTDCompany) -> bool {
     false

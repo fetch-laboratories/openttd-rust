@@ -47,21 +47,9 @@ struct GroupStatistics {
 
 	void Clear();
 
-	void ClearProfits()
-	{
-		openttd_rust_fleet_stats_clear_profits(this->state.state);
-	}
-
-	void ClearAutoreplace()
-	{
-		openttd_rust_fleet_stats_clear_autoreplace(this->state.state);
-	}
-
 	uint16_t GetNumEngines(EngineID engine) const;
 
 	static GroupStatistics &Get(CompanyID company, GroupID id_g, VehicleType type);
-	static GroupStatistics &Get(const Vehicle *v);
-	static GroupStatistics &GetAllGroup(const Vehicle *v);
 
 	static void CountVehicle(const Vehicle *v, int delta);
 	static void CountEngine(const Vehicle *v, int delta);

@@ -27,7 +27,7 @@ INSTANTIATE_POOL_METHODS(EngineRenew)
  */
 void RemoveAllEngineReplacement(EngineRenewList *erl)
 {
-	openttd_rust_fleet_remove_all_replacements(&FleetGroupServices(), reinterpret_cast<void **>(erl));
+	openttd_rust_fleet_remove_all_replacements(&FleetGroupServices(), erl);
 }
 
 /**

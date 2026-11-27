@@ -1176,7 +1176,7 @@ mod tests {
     extern "C" fn vehicle_group(_: VehicleRef) -> GroupID {
         GroupID::DEFAULT_GROUP
     }
-    extern "C" fn renew_state(renew: *mut ()) -> *mut crate::fleet::Renew {
+    extern "C" fn renew_state(renew: *mut crate::fleet::OpenTTDEngineRenew) -> *mut crate::fleet::Renew {
         renew.cast()
     }
     extern "C" fn no_group(_: GroupID) -> crate::fleet::GroupRecord {
@@ -1384,7 +1384,7 @@ mod tests {
             /// The company's renewal owner: the Rust-owned slot holding its list head.
             static HEAD: Cell<*mut ()> = const { Cell::new(ptr::null_mut()) };
         }
-        extern "C" fn renewal_head(c: *const OpenTTDCompany) -> *mut *mut () {
+        extern "C" fn renewal_head(c: *const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList {
             assert_eq!(c, company(), "the owner's renewal list");
             let list = OWNER.get().rule.map_or(ptr::null_mut(), |when_old| {
                 RULE.with(|r| {
@@ -1396,7 +1396,7 @@ mod tests {
             });
             HEAD.with(|h| {
                 h.set(list);
-                h.as_ptr()
+                h.as_ptr().cast()
             })
         }
         leak(Companies {
