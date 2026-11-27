@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! NewGRF buffer reader (`newgrf/newgrf_bytereader.h`, `.cpp`), twice.
+//! `NewGRF` buffer reader (`newgrf/newgrf_bytereader.h`, `.cpp`), twice.
 //!
 //! [`ByteReader`] reads the pseudo-sprite buffer of an action Rust interprets.
 //! [`ByteReaderRef`] reads through a C++ `ByteReader` ([`NativeByteReader`]), which an
@@ -7,7 +7,7 @@
 //! Action 0 handlers pass back to the Rust property parsers. A failed read is
 //! [`OTTDByteReaderSignal`]: Rust returns it to the native caller, which rethrows the
 //! C++ signal in its own exception frame. The C++ view and `tail` leave when #669's
-//! "NewGRF configuration/common publication/actions delivery" line ports those handlers.
+//! "`NewGRF` configuration/common publication/actions delivery" line ports those handlers.
 //!
 //! Both readers meet one contract, which their constructors take: the buffer, or the
 //! native reader and the table of its operations, stay valid, readable and unchanged,
@@ -19,7 +19,7 @@ use crate::consumer::{self, SeparatorUsage};
 #[derive(Clone, Copy, Debug)]
 pub struct OTTDByteReaderSignal;
 
-/// Class to read from a NewGRF file
+/// Class to read from a `NewGRF` file
 pub struct ByteReader {
     data: *const u8,
     len: usize,
@@ -148,7 +148,7 @@ impl<'a> ByteReaderRef<'a> {
         unsafe { (self.services.has_data)(self.native, count) }
     }
 
-    /// Read a single DWord (32 bits).
+    /// Read a single `DWord` (32 bits).
     /// @note The buffer is NOT advanced.
     /// @returns Value read from buffer.
     pub(crate) fn peek_dword(&mut self) -> Result<u32, OTTDByteReaderSignal> {
@@ -252,7 +252,7 @@ pub(crate) trait Read {
     /// @return Value read from buffer.
     fn read_word(&mut self) -> Result<u16, OTTDByteReaderSignal>;
 
-    /// Read a single DWord (32 bits).
+    /// Read a single `DWord` (32 bits).
     /// @return Value read from buffer.
     fn read_dword(&mut self) -> Result<u32, OTTDByteReaderSignal>;
 
@@ -438,8 +438,8 @@ mod tests {
             assertions: true,
         }));
         let shared = Box::leak(Box::new(crate::services::Services {
-            not_reached,
             map,
+            not_reached,
             ..crate::test_tables::SHARED
         }));
         // SAFETY: The leaked map statics live through the child's last assertion.

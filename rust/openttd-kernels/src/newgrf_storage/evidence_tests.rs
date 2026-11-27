@@ -116,13 +116,13 @@ fn store_rollback_and_ownership_policy() {
         )
     };
     switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
-    assert!(discarded().is_empty());
+    assert_eq!(discarded(), [] as [String; 0]);
 
     // Outside the game loop: temporary. Out-of-range and unchanged values store nothing.
     store(256, 99);
     store(0, 0);
     switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
-    assert!(discarded().is_empty());
+    assert_eq!(discarded(), [] as [String; 0]);
     store(15, -8);
     store(15, -9);
     store16(15, 4);
@@ -140,7 +140,7 @@ fn store_rollback_and_ownership_policy() {
     switch_mode(PersistentStorageMode::PSM_ENTER_COMMAND, false);
     store(1, i32::MAX);
     switch_mode(PersistentStorageMode::PSM_LEAVE_COMMAND, false);
-    assert!(discarded().is_empty());
+    assert_eq!(discarded(), [] as [String; 0]);
     // Test mode: temporary again, and rolled back on leaving it.
     switch_mode(PersistentStorageMode::PSM_ENTER_TESTMODE, false);
     store(255, 7);
@@ -165,7 +165,7 @@ fn store_rollback_and_ownership_policy() {
     // SAFETY: the array is not used again.
     unsafe { openttd_rust_storage16_delete(old) };
     switch_mode(PersistentStorageMode::PSM_LEAVE_GAMELOOP, true);
-    assert!(discarded().is_empty());
+    assert_eq!(discarded(), [] as [String; 0]);
     assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
 
     // `assert(ignore_prev_mode || command)` fails outside a command; the flag is still written.
@@ -174,7 +174,7 @@ fn store_rollback_and_ownership_policy() {
     switch_mode(PersistentStorageMode::PSM_ENTER_COMMAND, false);
     store(2, 3);
     switch_mode(PersistentStorageMode::PSM_LEAVE_COMMAND, false);
-    assert!(discarded().is_empty());
+    assert_eq!(discarded(), [] as [String; 0]);
     assert_eq!((get(2), FAILED_ASSERTIONS.load(Ordering::SeqCst)), (3, 1));
     // SAFETY: the array is not used again.
     unsafe { openttd_rust_storage256_delete(first) };
@@ -214,8 +214,8 @@ pub(crate) mod fixture {
         shell_grfid, shell_tile,
     };
     use crate::tile_type::TileIndex;
-    use std::cell::RefCell;
     use std::ffi::c_void;
+    use std::sync::Mutex;
 
     /// A `PersistentStorage`: its members, then the array it owns.
     #[repr(C)]
@@ -223,14 +223,14 @@ pub(crate) mod fixture {
         shell: Shell,
         array: *mut PersistentStorageArray<256>,
     }
-    thread_local! {
-        static CREATED: RefCell<Vec<(u32, u8, u32)>> = const { RefCell::new(Vec::new()) };
-    }
+    /// The members of each storage `new` created, in a process each test of the bodies
+    /// has to itself.
+    static CREATED: Mutex<Vec<(u32, u8, u32)>> = Mutex::new(Vec::new());
     extern "C" fn can_allocate_item() -> bool {
         true
     }
     extern "C" fn new(grfid: u32, feature: u8, tile: u32) -> *mut PersistentStorageArray<256> {
-        CREATED.with(|c| c.borrow_mut().push((grfid, feature, tile)));
+        CREATED.lock().unwrap().push((grfid, feature, tile));
         storage(grfid, feature, TileIndex(tile))
     }
     /// The storage table over the stand-in records.
@@ -260,7 +260,7 @@ pub(crate) mod fixture {
     }
     /// The members of each storage the table's `new` created since the last call.
     pub(crate) fn created() -> Vec<(u32, u8, u32)> {
-        CREATED.with(|c| std::mem::take(&mut *c.borrow_mut()))
+        std::mem::take(&mut *CREATED.lock().unwrap())
     }
     /// The array of a storage this fixture made, from its shell.
     #[allow(unsafe_code, reason = "a load of a live stand-in record")]

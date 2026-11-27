@@ -179,7 +179,7 @@ pub(crate) fn rail_type_change_info(
                 // SAFETY: The type's badge list is live and nothing else reaches it during
                 // the read.
                 unsafe {
-                    buf.assign_badge_list(GrfSpecFeature::GSF_RAILTYPES.0, (rail.badges)(rti))?
+                    buf.assign_badge_list(GrfSpecFeature::GSF_RAILTYPES.0, (rail.badges)(rti))?;
                 };
             }
 
@@ -447,7 +447,7 @@ pub(crate) fn road_type_change_info(
                 // SAFETY: The type's badge list is live and nothing else reaches it during
                 // the read.
                 unsafe {
-                    buf.assign_badge_list(GrfSpecFeature::GSF_ROADTYPES.0, (road.badges)(rti))?
+                    buf.assign_badge_list(GrfSpecFeature::GSF_ROADTYPES.0, (road.badges)(rti))?;
                 };
             }
 

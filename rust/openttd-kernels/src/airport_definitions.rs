@@ -351,6 +351,7 @@ unsafe fn airport_tiles_change_info(
     prop: u32,
     buf: &mut ByteReaderRef<'_>,
 ) -> Result<ChangeInfoResult, OTTDByteReaderSignal> {
+    let animation = || s.shared().specs().airport_tile().animation();
     unsafe {
         let mut ret = ChangeInfoResult::CIR_SUCCESS;
 
@@ -451,26 +452,16 @@ unsafe fn airport_tiles_change_info(
 
                 // Animation information
                 0x0F => {
-                    (s.shared().specs().airport_tile().animation().set_frames)(
-                        tsp,
-                        buf.read_byte()?,
-                    );
-                    (s.shared().specs().airport_tile().animation().set_status)(
-                        tsp,
-                        buf.read_byte()?,
-                    );
+                    let table = animation();
+                    (table.set_frames)(tsp, buf.read_byte()?);
+                    (table.set_status)(tsp, buf.read_byte()?);
                 }
 
                 // Animation speed
-                0x10 => {
-                    (s.shared().specs().airport_tile().animation().set_speed)(tsp, buf.read_byte()?)
-                }
+                0x10 => (animation().set_speed)(tsp, buf.read_byte()?),
 
                 // Animation triggers
-                0x11 => (s.shared().specs().airport_tile().animation().set_triggers)(
-                    tsp,
-                    buf.read_byte()?,
-                ),
+                0x11 => (animation().set_triggers)(tsp, buf.read_byte()?),
 
                 // Badge list. AirportTilesChangeInfo uses the tram feature for badge-seen
                 // bookkeeping.

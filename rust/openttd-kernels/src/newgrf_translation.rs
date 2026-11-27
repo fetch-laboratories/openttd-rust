@@ -49,7 +49,7 @@ crate::abi::layouts! {
 /// @param last ID of the last translation table entry.
 /// @param buf The property value.
 /// @param name Name of the table for debug output.
-/// @return ChangeInfoResult.
+/// @return `ChangeInfoResult`.
 ///
 /// `file` is `_cur_gps.grffile`, and `s` holds `gettable`, the function to get storage
 /// for the translation table.

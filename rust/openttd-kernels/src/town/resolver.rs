@@ -1074,7 +1074,7 @@ mod tests {
         // SAFETY: the storage the body just created.
         PUSHED_VALUES.with(|v| {
             v.borrow_mut()
-                .push(unsafe { openttd_rust_storage256_get(array, 0) })
+                .push(unsafe { openttd_rust_storage256_get(array, 0) });
         });
         PSA_LIST.with(|l| l.borrow_mut().push(array));
     }
@@ -1194,7 +1194,7 @@ mod tests {
         store(&own_file, false, 0, 77);
         set_register(0x100, -1);
         store(&own_file, false, 1, 78);
-        assert!(fixture::created().is_empty());
+        assert_eq!(fixture::created(), []);
         let mine = PSA_LIST.with(|l| l.borrow()[1]);
         // SAFETY: both storages live for the process.
         let get = |array, pos| unsafe { openttd_rust_storage256_get(array, pos) };

@@ -64,6 +64,10 @@ pub struct SubstituteServices<S> {
 
 /// `AnimationInfo` stores of specs carrying one; `T` is the trigger storage type.
 #[repr(C)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "each store takes its member's name: `set_frames` for `animation.frames`"
+)]
 pub struct AnimationServices<S, T> {
     /// Store `animation.frames`.
     pub set_frames: extern "C" fn(*mut S, u8),

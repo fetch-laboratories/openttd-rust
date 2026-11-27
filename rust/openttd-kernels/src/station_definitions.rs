@@ -359,7 +359,7 @@ unsafe fn station_change_info(
                 }
                 // Animation speed
                 0x17 => {
-                    (s.shared().specs().station().animation().set_speed)(spec, reader.read_byte()?)
+                    (s.shared().specs().station().animation().set_speed)(spec, reader.read_byte()?);
                 }
                 // Animation triggers
                 0x18 => (s.shared().specs().station().animation().set_triggers)(

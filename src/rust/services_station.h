@@ -130,6 +130,8 @@ inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { re
 inline uint32_t RustStationTrainTile(const BaseStation *s) noexcept { return s->train_station.tile.base(); }
 inline uint32_t RustStationShipTile(const BaseStation *s) noexcept { return Station::From(s)->ship_station.tile.base(); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
+inline OpenTTDStorage256 *RustStationAirportPSA(const BaseStation *s) noexcept { const PersistentStorage *psa = Station::From(s)->airport.psa; return psa == nullptr ? nullptr : psa->rust_storage; }
+inline void RustStationSetAirportPSA(BaseStation *s, BasePersistentStorageArray *psa) noexcept { Station::From(s)->airport.psa = static_cast<PersistentStorage *>(psa); }
 inline uint8_t RustStationAirportLayout(const BaseStation *st) noexcept { return Station::From(st)->airport.layout; }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->airport.rotation; }

@@ -429,30 +429,27 @@ pub(crate) unsafe fn store_psa(
         return;
     }
 
-    let psa = match unsafe { s.airport_psa(st) } {
-        Some(psa) => psa,
-        None => {
-            /* There is no need to create a storage if the value is zero. */
-            if value == 0 {
-                return;
-            }
-
-            /* Create storage on first modification. */
-            let grfid = unsafe { crate::newgrf::GRFFileRef::new(s.shared(), grffile.cast()) }
-                .map_or(0, crate::newgrf::GRFFileRef::grfid);
-            let storage = unsafe { &*s.storage };
-            crate::services_assert::assert_with(|| {
-                PersistentStorageRef::can_allocate_item(storage)
-            });
-            let psa = PersistentStorageRef::new(
-                storage,
-                grfid,
-                crate::newgrf::GrfSpecFeature::GSF_AIRPORTS,
-                TileIndex((s.commands().airport_tile)(st)),
-            );
-            (s.set_airport_psa)(st, psa.shell());
-            psa
+    let psa = if let Some(psa) = unsafe { s.airport_psa(st) } {
+        psa
+    } else {
+        /* There is no need to create a storage if the value is zero. */
+        if value == 0 {
+            return;
         }
+
+        /* Create storage on first modification. */
+        let grfid = unsafe { crate::newgrf::GRFFileRef::new(s.shared(), grffile.cast()) }
+            .map_or(0, crate::newgrf::GRFFileRef::grfid);
+        let storage = unsafe { &*s.storage };
+        crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
+        let psa = PersistentStorageRef::new(
+            storage,
+            grfid,
+            crate::newgrf::GrfSpecFeature::GSF_AIRPORTS,
+            TileIndex((s.commands().airport_tile)(st)),
+        );
+        (s.set_airport_psa)(st, psa.shell());
+        psa
     };
     psa.store_value(pos, value);
 }
@@ -828,8 +825,8 @@ mod tests {
             Ordering::SeqCst,
         );
         let shared = Box::leak(Box::new(crate::services::Services {
-            grf_file_id,
             station_commands,
+            grf_file_id,
             ..crate::test_tables::SHARED
         }));
         let s = Services {
@@ -848,7 +845,7 @@ mod tests {
         assert_eq!(PSA_READS.get(), 0);
         unsafe { store_psa(&s, st, file, 0, 0) };
         assert_eq!((PSA_READS.get(), PSA.get()), (1, ptr::null_mut()));
-        assert!(fixture::created().is_empty());
+        assert_eq!(fixture::created(), []);
         unsafe { store_psa(&s, st, ptr::null(), 255, 7) };
         assert_eq!(
             fixture::created(),
@@ -861,7 +858,7 @@ mod tests {
             [(own, GrfSpecFeature::GSF_AIRPORTS.0, 0x0506)]
         );
         unsafe { store_psa(&s, st, file, 254, -1) };
-        assert!(fixture::created().is_empty());
+        assert_eq!(fixture::created(), []);
         // SAFETY: the storage just created.
         let get = |pos| unsafe { openttd_rust_storage256_get(PSA.get(), pos) };
         assert_eq!((get(255), get(254)), (393, -1));

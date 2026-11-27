@@ -22,28 +22,32 @@ struct OpenTTDStorageServices {
 };
 const OpenTTDStorageServices &GetRustStorageServices() noexcept;
 extern "C" {
-#define OPENTTD_STORAGE_API(N) \
-OpenTTDStorage##N *openttd_rust_storage##N##_new(void *, const OpenTTDStorageServices *); \
-void openttd_rust_storage##N##_delete(OpenTTDStorage##N *); \
-int32_t *openttd_rust_storage##N##_data(OpenTTDStorage##N *); \
-void openttd_rust_storage##N##_store(OpenTTDStorage##N *, uint32_t, int32_t); \
-int32_t openttd_rust_storage##N##_get(const OpenTTDStorage##N *, uint32_t); \
-void openttd_rust_storage##N##_clear(OpenTTDStorage##N *);
-OPENTTD_STORAGE_API(16)
-OPENTTD_STORAGE_API(256)
-#undef OPENTTD_STORAGE_API
+OpenTTDStorage16 *openttd_rust_storage16_new(void *, const OpenTTDStorageServices *);
+void openttd_rust_storage16_delete(OpenTTDStorage16 *);
+int32_t *openttd_rust_storage16_data(OpenTTDStorage16 *);
+void openttd_rust_storage16_store(OpenTTDStorage16 *, uint32_t, int32_t);
+int32_t openttd_rust_storage16_get(const OpenTTDStorage16 *, uint32_t);
+void openttd_rust_storage16_clear(OpenTTDStorage16 *);
+OpenTTDStorage256 *openttd_rust_storage256_new(void *, const OpenTTDStorageServices *);
+void openttd_rust_storage256_delete(OpenTTDStorage256 *);
+int32_t *openttd_rust_storage256_data(OpenTTDStorage256 *);
+void openttd_rust_storage256_store(OpenTTDStorage256 *, uint32_t, int32_t);
+int32_t openttd_rust_storage256_get(const OpenTTDStorage256 *, uint32_t);
+void openttd_rust_storage256_clear(OpenTTDStorage256 *);
 void openttd_rust_storage_switch_mode(uint8_t, bool);
 void openttd_rust_storage_temp_store(uint32_t, int32_t);
 int32_t openttd_rust_storage_temp_get(uint32_t);
 }
-#define OPENTTD_STORAGE_OVERLOADS(N) \
-inline OpenTTDStorage##N *RustStorageNew(std::integral_constant<uint, N>, void *shell, const OpenTTDStorageServices *services) { return openttd_rust_storage##N##_new(shell, services); } \
-inline void RustStorageDelete(OpenTTDStorage##N *s) { openttd_rust_storage##N##_delete(s); } \
-inline int32_t *RustStorageData(OpenTTDStorage##N *s) { return openttd_rust_storage##N##_data(s); } \
-inline void RustStorageStore(OpenTTDStorage##N *s, uint32_t p, int32_t v) { openttd_rust_storage##N##_store(s, p, v); } \
-inline int32_t RustStorageGet(const OpenTTDStorage##N *s, uint32_t p) { return openttd_rust_storage##N##_get(s, p); } \
-inline void RustStorageClear(OpenTTDStorage##N *s) { openttd_rust_storage##N##_clear(s); }
-OPENTTD_STORAGE_OVERLOADS(16)
-OPENTTD_STORAGE_OVERLOADS(256)
-#undef OPENTTD_STORAGE_OVERLOADS
+inline OpenTTDStorage16 *RustStorageNew(std::integral_constant<uint, 16>, void *shell, const OpenTTDStorageServices *services) { return openttd_rust_storage16_new(shell, services); }
+inline void RustStorageDelete(OpenTTDStorage16 *s) { openttd_rust_storage16_delete(s); }
+inline int32_t *RustStorageData(OpenTTDStorage16 *s) { return openttd_rust_storage16_data(s); }
+inline void RustStorageStore(OpenTTDStorage16 *s, uint32_t p, int32_t v) { openttd_rust_storage16_store(s, p, v); }
+inline int32_t RustStorageGet(const OpenTTDStorage16 *s, uint32_t p) { return openttd_rust_storage16_get(s, p); }
+inline void RustStorageClear(OpenTTDStorage16 *s) { openttd_rust_storage16_clear(s); }
+inline OpenTTDStorage256 *RustStorageNew(std::integral_constant<uint, 256>, void *shell, const OpenTTDStorageServices *services) { return openttd_rust_storage256_new(shell, services); }
+inline void RustStorageDelete(OpenTTDStorage256 *s) { openttd_rust_storage256_delete(s); }
+inline int32_t *RustStorageData(OpenTTDStorage256 *s) { return openttd_rust_storage256_data(s); }
+inline void RustStorageStore(OpenTTDStorage256 *s, uint32_t p, int32_t v) { openttd_rust_storage256_store(s, p, v); }
+inline int32_t RustStorageGet(const OpenTTDStorage256 *s, uint32_t p) { return openttd_rust_storage256_get(s, p); }
+inline void RustStorageClear(OpenTTDStorage256 *s) { openttd_rust_storage256_clear(s); }
 #endif /* RUST_NEWGRF_STORAGE_FFI_H */

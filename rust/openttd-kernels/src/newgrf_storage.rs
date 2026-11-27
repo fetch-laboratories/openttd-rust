@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Functionality related to the temporary and persistent storage arrays for NewGRFs
+//! Functionality related to the temporary and persistent storage arrays for `NewGRFs`
 //! (`newgrf_storage.h`, `newgrf_storage.cpp`).
 //!
 //! A [`PersistentStorageArray`] is owned by its C++ shell, a `PersistentStorageArray`
@@ -67,7 +67,7 @@ struct BasePersistentStorageArray {
 }
 
 /// Class for persistent storage of data.
-/// On #ClearChanges that data is either reverted or saved.
+/// On `ClearChanges` that data is either reverted or saved.
 #[repr(C)]
 pub struct PersistentStorageArray<const SIZE: usize> {
     base: BasePersistentStorageArray,
@@ -96,7 +96,7 @@ static CHANGED_STORAGE_ARRAYS: GameState<BTreeMap<usize, ChangedArray>> =
     GameState::new(BTreeMap::new());
 
 /// Check whether currently changes to the storage shall be persistent or
-/// temporary till the next call to ClearChanges().
+/// temporary till the next call to `ClearChanges()`.
 #[allow(
     unsafe_code,
     reason = "loads of the mode flags under the game-state mutex"
@@ -224,7 +224,7 @@ impl<const SIZE: usize> PersistentStorageArray<SIZE> {
 }
 
 /// `BasePersistentStorageArray::SwitchMode`: clear temporary changes made since the
-/// last call to SwitchMode, and set whether subsequent changes shall be persistent or
+/// last call to `SwitchMode`, and set whether subsequent changes shall be persistent or
 /// temporary.
 ///
 /// `mode` is the mode switch affecting temporary/persistent changes, and
@@ -367,13 +367,13 @@ impl PersistentStorageRef {
 }
 
 /// Class for temporary storage of data.
-/// On #ClearChanges that data is always zero-ed.
+/// On `ClearChanges` that data is always zero-ed.
 pub(crate) struct TemporaryStorageArray<const SIZE: usize> {
     /// Memory for the storage array
     storage: [i32; SIZE],
-    /// Storage has been assigned, if this equals 'init_key'.
+    /// Storage has been assigned, if this equals `init_key`.
     init: [u16; SIZE],
-    /// Magic key to 'init'.
+    /// Magic key to `init`.
     init_key: u16,
 }
 impl<const SIZE: usize> TemporaryStorageArray<SIZE> {

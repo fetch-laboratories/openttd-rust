@@ -872,30 +872,27 @@ pub(crate) unsafe fn store_psa(
     }
 
     // SAFETY: the caller's contract.
-    let psa = match unsafe { s.psa(c.industry) } {
-        Some(psa) => psa,
-        None => {
-            /* There is no need to create a storage if the value is zero. */
-            if value == 0 {
-                return;
-            }
-
-            /* Create storage on first modification. */
-            // SAFETY: a valid industry's owner and spec are live.
-            let indsp = unsafe { &*get_industry_spec(IndustryType((*c.owner).metadata.kind)) };
-            crate::services_assert::assert_with(|| {
-                PersistentStorageRef::can_allocate_item(storage)
-            });
-            let psa = PersistentStorageRef::new(
-                storage,
-                indsp.grf_prop.grfid,
-                GrfSpecFeature::GSF_INDUSTRIES,
-                location_tile(c.owner),
-            );
-            // SAFETY: the caller's contract; `psa` is the storage just created.
-            unsafe { (s.set_psa)(c.industry, psa.shell()) };
-            psa
+    let psa = if let Some(psa) = unsafe { s.psa(c.industry) } {
+        psa
+    } else {
+        /* There is no need to create a storage if the value is zero. */
+        if value == 0 {
+            return;
         }
+
+        /* Create storage on first modification. */
+        // SAFETY: a valid industry's owner and spec are live.
+        let indsp = unsafe { &*get_industry_spec(IndustryType((*c.owner).metadata.kind)) };
+        crate::services_assert::assert_with(|| PersistentStorageRef::can_allocate_item(storage));
+        let psa = PersistentStorageRef::new(
+            storage,
+            indsp.grf_prop.grfid,
+            GrfSpecFeature::GSF_INDUSTRIES,
+            location_tile(c.owner),
+        );
+        // SAFETY: the caller's contract; `psa` is the storage just created.
+        unsafe { (s.set_psa)(c.industry, psa.shell()) };
+        psa
     };
 
     psa.store_value(pos, value);
@@ -1363,7 +1360,7 @@ mod tests {
         assert_eq!(PSA_READS.get(), 0);
         unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 0) };
         assert_eq!((PSA_READS.get(), PSA.get()), (1, ptr::null_mut()));
-        assert!(fixture::created().is_empty());
+        assert_eq!(fixture::created(), []);
         unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 15, 7) };
         assert_eq!(fixture::created(), [(0x4142_4344, 10, 0x0102)]);
         // SAFETY: the storage just created.
@@ -1371,7 +1368,7 @@ mod tests {
             |pos| unsafe { crate::newgrf_storage::openttd_rust_storage256_get(PSA.get(), pos) };
         assert_eq!(get(15), 7);
         unsafe { store_psa(&s, &fixture::STORAGE, context(IndustryID(4)), 16, -1) };
-        assert!(fixture::created().is_empty());
+        assert_eq!(fixture::created(), []);
         assert_eq!((get(15), get(16), PSA_READS.get()), (7, -1, 3));
         assert_eq!(FAILED_ASSERTIONS.load(Ordering::SeqCst), 0);
     }
