@@ -466,8 +466,8 @@ unsafe fn industrytiles_change_info(
             0x14 => {
                 let ids = buf.read_badge_list(GrfSpecFeature::GSF_INDUSTRYTILES)?;
                 unsafe {
-                    (*tsp).badges = NativeVec::from_vec(ids.into_iter().map(|id| id.0).collect())
-                };
+                    (*tsp).badges = NativeVec::from_vec(ids.into_iter().map(|id| id.0).collect());
+                }
             }
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
         }
@@ -808,8 +808,8 @@ unsafe fn industries_change_info(
             0x29 => {
                 let ids = buf.read_badge_list(GrfSpecFeature::GSF_INDUSTRIES)?;
                 unsafe {
-                    (*indsp).badges = NativeVec::from_vec(ids.into_iter().map(|id| id.0).collect())
-                };
+                    (*indsp).badges = NativeVec::from_vec(ids.into_iter().map(|id| id.0).collect());
+                }
             }
             _ => ret = ChangeInfoResult::CIR_UNKNOWN,
         }
