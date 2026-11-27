@@ -228,6 +228,10 @@ impl Iterator for Children {
 )]
 impl GroupRef {
     /// The group a lookup returned, or `None` for a null record.
+    #[allow(
+        clippy::cast_ptr_alignment,
+        reason = "the record is the `repr(C)` `Group` that `group_new` allocated, whose first member is `GroupFields`"
+    )]
     fn of(record: GroupRecord) -> Option<Self> {
         Some(Self {
             shell: record.shell,

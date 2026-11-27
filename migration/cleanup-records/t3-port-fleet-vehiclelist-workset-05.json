@@ -1042,5 +1042,17 @@
     "site": "rust/openttd-kernels/src/fleet/tests.rs | impl World > fn new | allow unsafe_code",
     "source_contract": "`Group` and `Vehicle` pools (src/group.h)",
     "tool": "rust"
+  },
+  {
+    "after": 1,
+    "before": 0,
+    "kind": "suppression",
+    "operation": "fleet::GroupRef::of",
+    "reason": "The typed group record crosses the boundary as `FleetGroupFields *`, the first member of the `repr(C)` `Group` that `group_new` allocated; widening it back to `Group` is aligned by construction (porting review finding 6).",
+    "retirement_condition": "Retires when the group pool moves to Rust (#907) and the record is reached as a `Group` without the C++ boundary.",
+    "retiring_owner": "#907",
+    "site": "rust/openttd-kernels/src/fleet.rs | impl GroupRef > fn of | allow clippy::cast_ptr_alignment",
+    "source_contract": "`Group::Get` (src/group.h)",
+    "tool": "rust"
   }
 ]

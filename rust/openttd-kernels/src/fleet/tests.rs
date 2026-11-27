@@ -506,6 +506,12 @@ const ROAD_GROUP_LIST: WindowNumber = WindowNumber((4 << 23) | (1 << 26));
 /// Evidence 1: `CmdCreateGroup`, `CmdAlterGroup` in both modes, `CmdSetGroupFlag` and
 /// `CmdDeleteGroup` with `DoCommandFlag::Execute` make the original's window calls, each with
 /// its class, number and data; without `Execute` each makes none.
+/// Records each window close among the slot calls.
+fn record_close(effect: &Effect) {
+    if let Effect::CloseWindowById(..) = effect {
+        call("close");
+    }
+}
 #[test]
 #[allow(
     clippy::too_many_lines,
@@ -604,11 +610,6 @@ fn group_command_windows() {
             group_id: GroupID(0),
         };
         // The window closes before the group's deletion, in the order of the slot calls.
-        fn record_close(effect: &Effect) {
-            if let Effect::CloseWindowById(..) = effect {
-                call("close");
-            }
-        }
         calls();
         crate::window_func::testing::observe(Some(record_close));
         assert_eq!(run(|cost| cmd_delete_group(w, cost, flags, delete)), None);

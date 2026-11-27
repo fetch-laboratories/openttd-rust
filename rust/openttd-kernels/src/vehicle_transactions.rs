@@ -310,7 +310,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_selection_set(
     include: extern "C" fn(*mut (), u32),
 ) {
     vehicle_set(s, unsafe { vehicle_ref(v, s.vehicles) }, count, |id| {
-        include(set, id.0)
+        include(set, id.0);
     });
 }
 
