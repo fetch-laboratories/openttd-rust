@@ -16,6 +16,7 @@ use crate::timer_game_calendar::CalendarDate;
 use crate::timer_game_common::MAX_DATE;
 use crate::transport_type::TransportType;
 use crate::type_availability::{Services, company_available, services};
+use crate::type_registry::railtypes_hidden_mask;
 use crate::vehicle::{RailVehicleTypes, VehicleType};
 
 /// Native `RailTypeInfo`, opaque: Rust holds a `GetRailTypeInfo` result only through a
@@ -39,6 +40,15 @@ pub(crate) fn get_rail_type_info(shared: &Shared, railtype: RailType) -> RailTyp
     RailTypeInfoRef {
         shared,
         rti: (shared.rail_type_info)(railtype),
+    }
+}
+
+impl<'a> RailTypeInfoRef<'a> {
+    /// The handle of `&_railtypes[rt]`, for the bodies that index the array without
+    /// `GetRailTypeInfo`'s assertion: `rti` is what the type registry's `spec` returned.
+    #[inline]
+    pub(crate) fn of(shared: &'a Shared, rti: *const RailTypeInfo) -> Self {
+        Self { shared, rti }
     }
 }
 
@@ -108,18 +118,18 @@ impl RailTypeInfoRef<'_> {
     }
 }
 
-/// `RailTypeFlag`: enum holding the rail type flags. Rust reads `NoLevelCrossing` only.
+/// `RailTypeFlag`: enum holding the rail type flags. Rust reads `NoLevelCrossing` and
+/// `Hidden` only.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypeFlag(pub u8);
 
+#[allow(non_upper_case_globals, reason = "rail.h's RailTypeFlag enumerators")]
 impl RailTypeFlag {
     /// Bit number for disallowing level crossings.
-    #[allow(
-        non_upper_case_globals,
-        reason = "rail.h's RailTypeFlag::NoLevelCrossing"
-    )]
     pub const NoLevelCrossing: Self = Self(1);
+    /// Bit number for hiding from selection.
+    pub const Hidden: Self = Self(2);
 }
 
 /// `RailTypeFlags`: the set of [`RailTypeFlag`]s.
@@ -325,14 +335,14 @@ impl World<'_> {
 
 /// `HasRailTypeAvail`: finds out if a company has a certain buildable rail type available.
 pub(crate) fn has_rail_type_avail(s: &Services, company: CompanyID, railtype: RailType) -> bool {
-    !RailTypes(crate::type_registry::rail_hidden()).test(railtype)
-        && RailTypes((s.company_railtypes)(company.0)).test(railtype)
+    !railtypes_hidden_mask().test(railtype)
+        && RailTypes((s.avail_railtypes)(company.0)).test(railtype)
 }
 
 /// `HasAnyRailTypesAvail`: test if any buildable rail type is available for a company.
 pub(crate) fn has_any_rail_types_avail(s: &Services, company: CompanyID) -> bool {
-    let mut avail = RailTypes((s.company_railtypes)(company.0));
-    avail = avail.reset(RailTypes(crate::type_registry::rail_hidden()));
+    let mut avail = RailTypes((s.avail_railtypes)(company.0));
+    avail = avail.reset(railtypes_hidden_mask());
     avail.any()
 }
 
@@ -371,14 +381,6 @@ fn train_engines(s: &Services) -> impl Iterator<Item = crate::engine::EngineRef>
             }
         }
     })
-}
-
-/// `e->company_avail.Test(company) || TimerGameCalendar::date >= e->intro_date +
-/// CalendarTime::DAYS_IN_YEAR`.
-#[allow(unsafe_code)]
-fn engine_available(e: crate::engine::EngineRef, company: CompanyID) -> bool {
-    // SAFETY: `next` resolved this live engine shell; the reads end before any leaf.
-    unsafe { company_available(e, company.0) }
 }
 
 /// `AddDateIntroducedRailTypes`: add the rail types that are to be introduced at the given
@@ -448,7 +450,7 @@ pub(crate) fn get_company_rail_types(
     for e in train_engines(s) {
         let engine = crate::vehicle::EngineRef::of(e.shell);
         if engine.climate(shared_of(s).settings().landscape().0)
-            && engine_available(e, company)
+            && company_available(e, company)
             && engine.rail_kind() != RailVehicleTypes::WAGON
         {
             rts = rts.with(engine_rail_types(
@@ -626,7 +628,7 @@ mod tests {
             }
         })
     }
-    extern "C" fn company_railtypes(_: u8) -> u64 {
+    extern "C" fn avail_railtypes(_: u8) -> u64 {
         u64::MAX
     }
 
@@ -659,19 +661,10 @@ mod tests {
         }));
         Box::leak(Box::new(Services {
             assertions: true,
-            company_railtypes,
-            company_roadtypes: crate::test_tables::unreachable1,
-            editor: crate::test_tables::unreachable0,
+            avail_railtypes,
             next,
-            road_flags: crate::test_tables::unreachable1,
-            road_info: crate::test_tables::unreachable1,
-            road_introduces: crate::test_tables::unreachable1,
-            road_introduction_date: crate::test_tables::unreachable1,
-            road_introduction_required: crate::test_tables::unreachable1,
-            road_label: crate::test_tables::unreachable1,
-            set_company_railtypes: crate::test_tables::unreachable2,
-            set_company_roadtypes: crate::test_tables::unreachable2,
             shared,
+            ..crate::test_tables::TYPE_AVAILABILITY
         }))
     }
     fn reads() -> Vec<(u8, char)> {

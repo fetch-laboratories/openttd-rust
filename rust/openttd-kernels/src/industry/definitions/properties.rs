@@ -17,6 +17,7 @@ use crate::industrytype::{
 use crate::newgrf::{GRFFile, GrfSpecFeature};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::ChangeInfoResult;
+use crate::newgrf_text_type::GRFStringID;
 use crate::table::strings::STR_NULL;
 use crate::{newgrf_loading, override_manager};
 use std::ptr;
@@ -494,6 +495,7 @@ unsafe fn industries_change_info(
         return Ok(ChangeInfoResult::CIR_INVALID_ID);
     }
     let s = unsafe { &*loading.industry };
+    let shared = loading.shared();
     // Allocate industry specs if they haven't been allocated already.
     let specs = unsafe { industrytype::file_specs(c.file) };
     if specs.industries.len() < last as usize {
@@ -575,15 +577,24 @@ unsafe fn industries_change_info(
             },
             // Industry closure message
             0x0C => unsafe {
-                (s.map_string)(buf.word()?, &raw mut (*indsp).closure_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).closure_text).cast(),
+                );
             },
             // Production increase message
             0x0D => unsafe {
-                (s.map_string)(buf.word()?, &raw mut (*indsp).production_up_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).production_up_text).cast(),
+                );
             },
             // Production decrease message
             0x0E => unsafe {
-                (s.map_string)(buf.word()?, &raw mut (*indsp).production_down_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).production_down_text).cast(),
+                );
             },
             // Fund cost multiplier
             0x0F => unsafe {
@@ -598,8 +609,7 @@ unsafe fn industries_change_info(
                     INDUSTRY_ORIGINAL_NUM_INPUTS
                 };
                 for j in 0..count {
-                    let cargo =
-                        get_cargo_translation(buf.byte()?, c.grffile(loading.shared()), false);
+                    let cargo = get_cargo_translation(buf.byte()?, c.grffile(shared), false);
                     if produced {
                         unsafe {
                             (*indsp).produced_cargo[j] = cargo.0;
@@ -658,7 +668,10 @@ unsafe fn industries_change_info(
             },
             // New industry text ID
             0x1B => unsafe {
-                (s.map_string)(buf.word()?, &raw mut (*indsp).new_industry_text);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).new_industry_text).cast(),
+                );
             },
             // Input cargo multipliers for the three input cargo types
             0x1C..=0x1E => {
@@ -671,7 +684,10 @@ unsafe fn industries_change_info(
             }
             // Industry name
             0x1F => unsafe {
-                (s.map_string)(buf.word()?, &raw mut (*indsp).name);
+                (shared.add_string_for_mapping)(
+                    GRFStringID(u32::from(buf.word()?)),
+                    (&raw mut (*indsp).name).cast(),
+                );
             },
             // Prospecting success chance
             0x20 => unsafe {
@@ -698,7 +714,12 @@ unsafe fn industries_change_info(
                 if str == 0 {
                     unsafe { (*indsp).station_name = STR_NULL.0 };
                 } else {
-                    unsafe { (s.map_string)(str, &raw mut (*indsp).station_name) };
+                    unsafe {
+                        (shared.add_string_for_mapping)(
+                            GRFStringID(u32::from(str)),
+                            (&raw mut (*indsp).station_name).cast(),
+                        );
+                    }
                 }
             }
             // 0x25: variable length produced cargoes; 0x26: variable length accepted cargoes
@@ -723,7 +744,7 @@ unsafe fn industries_change_info(
                 };
                 for i in 0..size {
                     let cargo = if i < num_cargoes {
-                        get_cargo_translation(buf.byte()?, c.grffile(loading.shared()), false)
+                        get_cargo_translation(buf.byte()?, c.grffile(shared), false)
                     } else {
                         CargoType::INVALID_CARGO
                     };

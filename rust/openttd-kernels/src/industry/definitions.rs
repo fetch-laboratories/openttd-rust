@@ -19,8 +19,6 @@ pub struct Services {
     pub shared: *const crate::services::Services,
     pub origin: *const IndustrySpec,
     pub origin_tiles: *const IndustryTileSpec,
-    /// `AddStringForMapping` into a `StringID` field of a record.
-    pub map_string: unsafe extern "C" fn(u16, *mut u32),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -254,6 +252,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDSubstituteSpecIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        shared, origin, origin_tiles, map_string
+        shared, origin, origin_tiles
     };
 }

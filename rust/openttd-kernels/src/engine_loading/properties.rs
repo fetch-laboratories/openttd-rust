@@ -272,9 +272,9 @@ unsafe fn train(
             unsafe {
                 (*temp(id)).labels.clear();
             }
-            let list = crate::type_registry::rail_labels(file);
+            let list = crate::type_registry::railtype_list_raw(file);
             if usize::from(track) < list.len() {
-                let label = unsafe { list.at(usize::from(track)) };
+                let label = unsafe { list.at(usize::from(track)) }.0;
                 unsafe {
                     (*temp(id)).labels.push(label);
                 }
@@ -391,7 +391,7 @@ unsafe fn train(
                 0x38..=0x41 => EC_MAGLEV,
                 _ => return Ok(CIR_SUCCESS),
             };
-            if crate::type_registry::rail_labels(file).len() == 0 {
+            if crate::type_registry::railtype_list_raw(file).len() == 0 {
                 use crate::rail_type::{RAILTYPE_LABEL_ELECTRIC, RAILTYPE_LABEL_RAIL};
                 if let Some(label) = unsafe { &mut (*temp(id)).labels }.first_mut() {
                     if *label == RAILTYPE_LABEL_RAIL && class >= EC_ELECTRIC {
@@ -478,9 +478,9 @@ unsafe fn train(
             }
             for _ in 0..count {
                 let track = r.byte()?;
-                let list = crate::type_registry::rail_labels(file);
+                let list = crate::type_registry::railtype_list_raw(file);
                 if usize::from(track) < list.len() {
-                    let label = unsafe { list.at(usize::from(track)) };
+                    let label = unsafe { list.at(usize::from(track)) }.0;
                     unsafe {
                         (*temp(id)).labels.push(label);
                     }

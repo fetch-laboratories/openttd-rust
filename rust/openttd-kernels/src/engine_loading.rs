@@ -346,7 +346,7 @@ unsafe fn initialize_rail_labels(engine: EngineRef) {
         if railtypes & (1_u64 << rt) == 0 {
             continue;
         }
-        let label = crate::type_registry::rail_label(rt);
+        let label = crate::type_registry::rail_label_raw(rt);
         unsafe {
             openttd_rust_engine_temp_labels_push(engine.id, label);
         }

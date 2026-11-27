@@ -709,7 +709,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
                 c.id,
                 crate::rail::openttd_rust_add_date_rail_types(
                     types,
-                    call!((*s.types), company_railtypes, c.id),
+                    call!((*s.types), avail_railtypes, c.id),
                     date,
                 ),
             );
@@ -717,7 +717,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
                 c.id,
                 crate::road::openttd_rust_add_date_road_types(
                     types,
-                    call!((*s.types), company_roadtypes, c.id),
+                    call!((*s.types), avail_roadtypes, c.id),
                     date,
                 ),
             );
@@ -813,7 +813,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            let types = unsafe { call!((*s.types), company_railtypes, c.id) } | introduced;
+            let types = unsafe { call!((*s.types), avail_railtypes, c.id) } | introduced;
             unsafe {
                 ((&*s.types).set_company_railtypes)(
                     c.id,
@@ -827,8 +827,9 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
         if types.assertions {
             assert!(rt < crate::road_type::ROADTYPE_END);
         }
-        let introduced =
-            (types.road_introduces)((types.road_info)(crate::road_type::RoadType(rt))).0;
+        let introduced = crate::road::get_road_type_info(types, crate::road_type::RoadType(rt))
+            .introduces_roadtypes()
+            .0;
         let mut from = 0;
         loop {
             let c = unsafe { call!(s, company_next, from) };
@@ -836,7 +837,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            let types = unsafe { call!((*s.types), company_roadtypes, c.id) } | introduced;
+            let types = unsafe { call!((*s.types), avail_roadtypes, c.id) } | introduced;
             unsafe {
                 ((&*s.types).set_company_roadtypes)(
                     c.id,
@@ -967,7 +968,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         if kind == VehicleType::TRAIN
             && unsafe {
                 crate::vehicle::EngineRef::of(e.shell).compatible_railtypes(&*s.shared)
-                    & call!((*s.types), company_railtypes, company)
+                    & call!((*s.types), avail_railtypes, company)
             } == 0
         {
             return false;
@@ -975,7 +976,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         if kind == VehicleType::ROAD
             && unsafe {
                 crate::vehicle::EngineRef::of(e.shell).powered_roadtypes(&*s.shared)
-                    & call!((*s.types), company_roadtypes, company)
+                    & call!((*s.types), avail_roadtypes, company)
             } == 0
         {
             return false;

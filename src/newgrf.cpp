@@ -582,12 +582,7 @@ const OpenTTDTypeRegistryServices &GetRustTypeRegistryServices() noexcept
 	static const OpenTTDTypeRegistryServices table = {
 		.rail = &GetRustRailRegistryServices(),
 		.road = &GetRustRoadRegistryServices(),
-		.rail_labels = [](const GRFFile *file) noexcept { return OpenTTDTypeLabels{.data = file->railtype_list.data(), .size = file->railtype_list.size()}; },
-		.road_labels = [](const GRFFile *file) noexcept { return OpenTTDTypeLabels{.data = file->roadtype_list.data(), .size = file->roadtype_list.size()}; },
-		.tram_labels = [](const GRFFile *file) noexcept { return OpenTTDTypeLabels{.data = file->tramtype_list.data(), .size = file->tramtype_list.size()}; },
-		.rail_map = [](GRFFile *file) noexcept { return OpenTTDTypeMap{.data = reinterpret_cast<uint8_t *>(file->railtype_map.data()), .size = file->railtype_map.size()}; },
-		.road_map = [](GRFFile *file) noexcept { return OpenTTDTypeMap{.data = reinterpret_cast<uint8_t *>(file->roadtype_map.data()), .size = file->roadtype_map.size()}; },
-		.tram_map = [](GRFFile *file) noexcept { return OpenTTDTypeMap{.data = reinterpret_cast<uint8_t *>(file->tramtype_map.data()), .size = file->tramtype_map.size()}; },
+		.shared = &GetRustSharedServices(),
 	};
 	return table;
 }

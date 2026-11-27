@@ -315,9 +315,9 @@ unsafe fn map_binding(
                     if cargo >= crate::rail::RTSG_END {
                         return;
                     }
-                    let map = ((*s.types).rail_map)(file);
-                    let railtype = if usize::from(local) < map.size {
-                        map.data.add(usize::from(local)).read()
+                    let map = crate::newgrf::GRFFileRef::of(s.shared(), file.cast()).railtype_map();
+                    let railtype = if usize::from(local) < map.size() {
+                        map.at(usize::from(local)).0
                     } else {
                         crate::rail_type::INVALID_RAILTYPE
                     };
@@ -331,13 +331,14 @@ unsafe fn map_binding(
                     if cargo >= crate::road::ROTSG_END {
                         return;
                     }
+                    let grffile = crate::newgrf::GRFFileRef::of(s.shared(), file.cast());
                     let map = if feature == GSF_TRAMTYPES {
-                        ((*s.types).tram_map)(file)
+                        grffile.tramtype_map()
                     } else {
-                        ((*s.types).road_map)(file)
+                        grffile.roadtype_map()
                     };
-                    let roadtype = if usize::from(local) < map.size {
-                        map.data.add(usize::from(local)).read()
+                    let roadtype = if usize::from(local) < map.size() {
+                        map.at(usize::from(local)).0
                     } else {
                         crate::road_type::INVALID_ROADTYPE
                     };

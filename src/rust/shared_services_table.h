@@ -3,10 +3,20 @@
 #ifndef RUST_SHARED_SERVICES_TABLE_H
 #define RUST_SHARED_SERVICES_TABLE_H
 #include "services_ffi.h"
+#include "../strings_type.h"
 
 struct OpenTTDSettingAddresses;
 enum class LandscapeType : uint8_t;
 enum RailType : uint8_t;
+enum RoadType : uint8_t;
+/** A `std::span<const RailTypeLabel>`: a `GRFFile::railtype_list`, live until its owner changes. */
+struct OpenTTDRailTypeLabels { const uint32_t *data; size_t size; };
+/** A `std::span<const RoadTypeLabel>`: a `GRFFile::roadtype_list` or `tramtype_list`, live until its owner changes. */
+struct OpenTTDRoadTypeLabels { const uint32_t *data; size_t size; };
+/** A `GRFFile::railtype_map` (`std::array<RailType, RAILTYPE_END>`), read and written in place. */
+struct OpenTTDRailTypeMap { RailType *data; size_t size; };
+/** A `GRFFile::roadtype_map` or `tramtype_map` (`std::array<RoadType, ROADTYPE_END>`), read and written in place. */
+struct OpenTTDRoadTypeMap { RoadType *data; size_t size; };
 enum GrfSpecFeature : uint8_t;
 enum class StationType : uint8_t;
 struct BaseStation;
@@ -199,6 +209,13 @@ struct OpenTTDSharedServices {
 	void (*grf_file_set_cargo_list)(GRFFile *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_list);
 	void (*grf_file_set_cargo_list_is_fallback)(GRFFile *, bool) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_list_is_fallback);
 	void (*grf_file_set_cargo_map)(GRFFile *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_set_cargo_map);
+	void (*add_string_for_mapping)(uint32_t, StringID *) noexcept OPENTTD_SERVICE_DEFAULT(add_string_for_mapping);
+	OpenTTDRailTypeLabels (*grf_file_railtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_railtype_list);
+	OpenTTDRailTypeMap (*grf_file_railtype_map)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_railtype_map);
+	OpenTTDRoadTypeLabels (*grf_file_roadtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_roadtype_list);
+	OpenTTDRoadTypeMap (*grf_file_roadtype_map)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_roadtype_map);
+	OpenTTDRoadTypeLabels (*grf_file_tramtype_list)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_tramtype_list);
+	OpenTTDRoadTypeMap (*grf_file_tramtype_map)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_tramtype_map);
 	int32_t (*grf_price_shift)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_price_shift);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);

@@ -22,6 +22,7 @@ use crate::timer_game_common::{
     DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR, calendar_date,
     calendar_date_to_ymd, calendar_fraction, calendar_year, calendar_ymd_to_date, is_leap_year,
 };
+use crate::type_registry::{RailTypeLabels, RailTypeMap, RoadTypeLabels, RoadTypeMap};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -300,6 +301,41 @@ impl<'a> GRFFileRef<'a> {
     /// Store `GRFFile::cargo_map[cargo]`.
     pub(crate) fn set_cargo_map(self, cargo: CargoType, value: u8) {
         (self.shared.grf_file_set_cargo_map)(self.file_mut(), cargo.0, value);
+    }
+
+    /// `GRFFile::railtype_list`: railtype translation table, live until the next write to it.
+    pub(crate) fn railtype_list(self) -> RailTypeLabels {
+        (self.shared.grf_file_railtype_list)(self.file())
+    }
+
+    /// `GRFFile::roadtype_list`: roadtype translation table (road), live until the next write
+    /// to it.
+    pub(crate) fn roadtype_list(self) -> RoadTypeLabels {
+        (self.shared.grf_file_roadtype_list)(self.file())
+    }
+
+    /// `GRFFile::tramtype_list`: roadtype translation table (tram), live until the next write
+    /// to it.
+    pub(crate) fn tramtype_list(self) -> RoadTypeLabels {
+        (self.shared.grf_file_tramtype_list)(self.file())
+    }
+
+    /// `GRFFile::railtype_map`: the file's rail type IDs, read and written in place. The loader
+    /// writes the file it is loading.
+    pub(crate) fn railtype_map(self) -> RailTypeMap {
+        (self.shared.grf_file_railtype_map)(self.file_mut())
+    }
+
+    /// `GRFFile::roadtype_map`: the file's road type IDs, read and written in place. The loader
+    /// writes the file it is loading.
+    pub(crate) fn roadtype_map(self) -> RoadTypeMap {
+        (self.shared.grf_file_roadtype_map)(self.file_mut())
+    }
+
+    /// `GRFFile::tramtype_map`: the file's tram type IDs, read and written in place. The loader
+    /// writes the file it is loading.
+    pub(crate) fn tramtype_map(self) -> RoadTypeMap {
+        (self.shared.grf_file_tramtype_map)(self.file_mut())
     }
 
     /// `GRFFile::GetParam`: get GRF Parameter with range checking.

@@ -870,7 +870,7 @@ fn terminate_town_road_works(c: &TileLoop<'_>, tile: TileIndex) {
         // SAFETY: the immutable town table is live; road selection borrows no owner.
         let rt = unsafe { crate::town::get_town_road_type(leaves.town, s) };
         if rt != w.asserted(|m| crate::road_map::get_road_type_road(m, tile.0)) {
-            crate::road_map::set_road_type_road(s, tile.0, rt.0);
+            crate::road_map::set_road_type_road(s, tile, rt);
         }
     }
 

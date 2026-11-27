@@ -12,7 +12,6 @@ struct OpenTTDIndustryDefinitionServices {
 	const OpenTTDSharedServices *shared;
 	const IndustrySpec *origin;
 	const IndustryTileSpec *origin_tiles;
-	void (*map_string)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(map_string);
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;
 struct OpenTTDIndustryPropertyContext {

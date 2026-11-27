@@ -57,7 +57,6 @@
 #include "rust/movement_ffi.h"
 
 #include "rust/type_registry_ffi.h"
-#include "rust/type_availability_services.h"
 
 #include "safeguards.h"
 
@@ -117,33 +116,36 @@ static bool CompareRoadTypes(const RoadType &first, const RoadType &second)
 const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 {
 	static const OpenTTDRoadRegistryServices table = {
+		.clear = [](RoadTypeInfo *rti) noexcept { *rti = RoadTypeInfo{}; },
+		.copy_default = [](RoadTypeInfo *rti, RoadType source) noexcept { *rti = _original_roadtypes[source]; },
 		.default_count = std::size(_original_roadtypes),
-		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
-		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
-		.labels = []() noexcept -> const RoadTypeLabel * const * {
-			static const auto labels = [] {
-				std::array<const RoadTypeLabel *, ROADTYPE_END> pointers{};
-				for (size_t i = 0; i < pointers.size(); ++i) pointers[i] = &RustRoadTypeLabel(&_roadtypes[i]);
-				return pointers;
-			}();
-			return labels.data();
-		},
-		.alternate = [](RoadType rt, uint32_t label) noexcept { return GetRoadTypeInfo(rt)->alternate_labels.contains(label); },
-		.clear = [](RoadTypeInfo *info) noexcept { *info = RoadTypeInfo{}; },
-		.copy_default = [](RoadTypeInfo *info, RoadType source) noexcept { *info = _original_roadtypes[source]; },
-		.resolve_gui = [](RoadTypeInfo *info) noexcept { ResolveRoadTypeGUISprites(info); },
-		.publication = [](const RoadTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = RustRoadTypeLabel(info), .hidden = RustRoadTypeHidden(info)}; },
+		.resolve_road_type_gui_sprites = [](RoadTypeInfo *rti) noexcept { ResolveRoadTypeGUISprites(rti); },
+		.set_sorted_roadtypes = [](RoadType *data, size_t count) noexcept { _sorted_roadtypes = {data, count}; },
 		.sort = [](RoadType *data, size_t count) noexcept { std::sort(data, data + count, CompareRoadTypes); },
-		.publish_sorted = [](RoadType *data, size_t count) noexcept { _sorted_roadtypes = {data, count}; },
-		.allocate = [](RoadTypeInfo *info, const OpenTTDTypeAllocation *value) noexcept {
-			info->label = value->label;
-			info->alternate_labels.clear();
-			info->flags = {};
-			info->introduction_date = CalendarTime::INVALID_DATE;
-			info->powered_roadtypes = RoadTypes{value->self};
-			info->introduces_roadtypes = RoadTypes{value->self};
-			info->sorting_order = value->order;
-		},
+		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
+		.alternate_labels_clear = [](RoadTypeInfo *rti) noexcept { rti->alternate_labels.clear(); },
+		.alternate_labels_contains = [](const RoadTypeInfo *rti, uint32_t label) noexcept { return rti->alternate_labels.contains(label); },
+		.alternate_labels_insert = [](RoadTypeInfo *rti, uint32_t label) noexcept { rti->alternate_labels.insert(label); },
+		.badges = [](RoadTypeInfo *rti) noexcept { return &rti->badges; },
+		.introduces_roadtypes_set = [](RoadTypeInfo *rti, RoadType rt) noexcept { rti->introduces_roadtypes.Set(rt); },
+		.introduction_required_roadtypes_set = [](RoadTypeInfo *rti, RoadType rt) noexcept { rti->introduction_required_roadtypes.Set(rt); },
+		.powered_roadtypes_set = [](RoadTypeInfo *rti, RoadType rt) noexcept { rti->powered_roadtypes.Set(rt); },
+		.set_cost_multiplier = [](RoadTypeInfo *rti, uint16_t value) noexcept { rti->cost_multiplier = value; },
+		.set_flags = [](RoadTypeInfo *rti, uint8_t value) noexcept { rti->flags = static_cast<RoadTypeFlags>(value); },
+		.set_introduces_roadtypes = [](RoadTypeInfo *rti, uint64_t value) noexcept { rti->introduces_roadtypes = RoadTypes{value}; },
+		.set_introduction_date = [](RoadTypeInfo *rti, int32_t value) noexcept { rti->introduction_date = TimerGameCalendar::Date(value); },
+		.set_label = [](RoadTypeInfo *rti, uint32_t value) noexcept { rti->label = value; },
+		.set_maintenance_multiplier = [](RoadTypeInfo *rti, uint16_t value) noexcept { rti->maintenance_multiplier = value; },
+		.set_map_colour = [](RoadTypeInfo *rti, uint8_t value) noexcept { rti->map_colour = PixelColour{value}; },
+		.set_max_speed = [](RoadTypeInfo *rti, uint16_t value) noexcept { rti->max_speed = value; },
+		.set_powered_roadtypes = [](RoadTypeInfo *rti, uint64_t value) noexcept { rti->powered_roadtypes = RoadTypes{value}; },
+		.set_sorting_order = [](RoadTypeInfo *rti, uint8_t value) noexcept { rti->sorting_order = value; },
+		.strings_build_caption = [](RoadTypeInfo *rti) noexcept { return &rti->strings.build_caption; },
+		.strings_menu_text = [](RoadTypeInfo *rti) noexcept { return &rti->strings.menu_text; },
+		.strings_name = [](RoadTypeInfo *rti) noexcept { return &rti->strings.name; },
+		.strings_new_engine = [](RoadTypeInfo *rti) noexcept { return &rti->strings.new_engine; },
+		.strings_replace_text = [](RoadTypeInfo *rti) noexcept { return &rti->strings.replace_text; },
+		.strings_toolbar_caption = [](RoadTypeInfo *rti) noexcept { return &rti->strings.toolbar_caption; },
 	};
 	return table;
 }

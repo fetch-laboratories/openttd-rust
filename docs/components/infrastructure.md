@@ -11,10 +11,10 @@
 
 ## Rail/road definitions, translation and saved identity (#476)
 
-- Rust owns: Rail/road/tram reservation, property interpretation, allocation/reset/publication, lookup, translation, saved-label conversion, sorted lists and masks; cargo/rail/road/tram translation-table loading.
-- C++ keeps: TypeInfo/default tables, strings, badges, sorting, GUI sprite resolution, per-file GRF labels/maps and RAIL/ROTT serialization; conversion reads typed map accessors.
-- Limits: Rendering/resolver ownership, historical save variants and GUI scheduling remain outside this component.
-- PRs: #481.
+- Rust owns: Rail/road/tram reservation, property interpretation, allocation/reset/publication, lookup, translation, saved-label conversion, sorted lists and masks; cargo/rail/road/tram translation-table loading. Since #1098 every body is one function under its original's name (`type_registry.rs`, `type_definitions.rs`), the four masks are statics C++ binds references to, and the saved label lists hold `LabelObject`s.
+- C++ keeps: `RailTypeInfo`/`RoadTypeInfo` storage and default tables, `ResolveRailTypeGUISprites`/`ResolveRoadTypeGUISprites`, the sort with `CompareRailTypes`/`CompareRoadTypes`, `AddStringForMapping`, `GRFFile` storage and RAIL/ROTT serialization. Rust reads a type through `RailTypeInfoRef` or `RoadTypeInfoRef` and writes it through one store per member in the registry's two tables; a file's six type members are `GRFFileRef` readers.
+- Limits: Rendering/resolver ownership, historical save variants and GUI scheduling remain outside this component. `newgrf_loading.rs` still stores `cost_multiplier` through its own slot, and `engine.rs` stores company availability through the availability table, until their passes (#734).
+- PRs: #481, #1098.
 
 ## Rail signal blocks and fixed work sets (#219)
 
