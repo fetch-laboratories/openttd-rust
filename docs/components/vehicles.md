@@ -60,9 +60,9 @@
 
 ## Fleet grouping and replacement lifecycle (#147)
 
-- Rust owns: group metadata/names/children, statistics, engine counts, renewal rules/links, company renewal heads, pending tick-end map, group commands/traversal/livery, replacement/refit, build, rearrangement, rollback and execution.
-- C++ keeps: pool identities, group numbers, GUI folding, save adapters, `Vehicle::group_id` and command costs.
-- Checks: default `fleet-` simulation.
+- Rust owns: group metadata/names/children, statistics, engine counts, renewal rules/links, company renewal heads, pending tick-end map, replacement/refit, build, rearrangement, rollback and execution. `fleet.rs` holds every body of `group_cmd.cpp` but `GroupStatistics::Get` and every body of `autoreplace.cpp`, one function each under the original's name: the eight group commands take `DoCommandFlags` and an argument struct and write the caller's native `CommandCost`, run their nested commands through `command::command_do`, make their window calls through `window_func` and build `CmdAddVehicleGroup`'s list with `vehicle_transactions::generate_list`. `vehiclelist.rs` holds `VehicleListIdentifier` with its `To*ID` accessors.
+- C++ keeps: the `Group` and `EngineRenew` pool slots (#907, #637), `GroupStatistics::Get`, group numbers, GUI folding, save adapters, `Vehicle::group_id` and `Vehicle::IsEngineCountable` (#656). `GroupServices` binds those and nothing else.
+- Checks: default `fleet-` simulation; `fleet::tests` for the commands' window calls, their guards and the native fatal paths.
 - Limits: Gaps remain in NewGRF refit/attach callbacks and articulated parts (#156).
 - PRs: #197.
 
