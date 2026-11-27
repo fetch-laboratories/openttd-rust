@@ -27,9 +27,7 @@ use crate::house_type::HouseID;
 use crate::landscape_type::LandscapeType;
 use crate::newgrf::GRFFileRef;
 use crate::newgrf_animation_type::AnimationStatus;
-use crate::newgrf_bytereader::{
-    BadgeList, ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read,
-};
+use crate::newgrf_bytereader::{ByteReaderRef, NativeByteReader, OTTDByteReaderSignal, Read};
 use crate::newgrf_callbacks::HouseCallbackMasks;
 use crate::newgrf_internal::ChangeInfoResult;
 use crate::timer_game_common::{MAX_YEAR, MIN_YEAR, ORIGINAL_BASE_YEAR};
@@ -89,7 +87,6 @@ pub struct Services {
     watched: extern "C" fn(Spec) -> u64,
     map_string: extern "C" fn(Spec, u16),
     set_animation: extern "C" fn(Spec, u8, u8),
-    badges: extern "C" fn(Spec) -> *mut BadgeList,
     resize_specs: extern "C" fn(usize),
     move_spec: extern "C" fn(Spec, u16),
     set_override: extern "C" fn(Spec, u16),
@@ -124,7 +121,7 @@ crate::abi::layouts! {
     "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 /// Ignore a house property, retaining its original byte consumption.
@@ -463,8 +460,8 @@ fn property(
             // Badge list.
             0x24 => unsafe {
                 reader.assign_badge_list(
-                    crate::newgrf::GrfSpecFeature::GSF_HOUSES.0,
-                    (s.badges)(spec),
+                    crate::newgrf::GrfSpecFeature::GSF_HOUSES,
+                    (s.shared().specs().house().badge_list)(spec.cast_mut().cast()),
                 )?;
             },
             _ => result = ChangeInfoResult::CIR_UNKNOWN,
