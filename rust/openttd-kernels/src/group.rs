@@ -26,6 +26,22 @@ impl GroupFlags {
     pub const fn test(self, element: GroupFlag) -> bool {
         (self.0 as u64) & (1_u64 << element.0) != 0
     }
+    /// Native `BaseBitSet::Set` of one element.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`EnumBitSet<GroupFlag, uint8_t>` stores the element's bit in its `uint8_t`."
+    )]
+    pub fn set(&mut self, element: GroupFlag) {
+        self.0 |= (1_u64 << element.0) as u8;
+    }
+    /// Native `BaseBitSet::Reset` of one element.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "`EnumBitSet<GroupFlag, uint8_t>` stores the element's bit in its `uint8_t`."
+    )]
+    pub fn reset(&mut self, element: GroupFlag) {
+        self.0 &= !((1_u64 << element.0) as u8);
+    }
 }
 
 crate::base_bitset_type::impl_bitset_ops!(GroupFlags);

@@ -76,6 +76,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.president_name = Identity_president_name,
 	.president_name_1 = Identity_president_name_1,
 	.president_name_2 = Identity_president_name_2,
+	.renew_keep_length = RustCompanyRenewKeepLength,
 	.renewal_head = RustCompanyRenewalHead,
 	.reset_colourmap = Identity_reset_colourmap,
 	.set_colour = Identity_set_colour,

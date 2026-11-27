@@ -327,10 +327,11 @@ unsafe fn refit_vehicle(
         }
         if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN
             && !only
-            && !transaction
-                .0
-                .selection
-                .contains(&unsafe { (b.groups.vehicle_id)(v) })
+            && !transaction.0.selection.contains(&{
+                crate::fleet::record(b.groups, v)
+                    .index(b.groups.vehicles.newgrf())
+                    .0
+            })
         {
             v = unsafe { next(s, v) };
             continue;
@@ -606,7 +607,13 @@ pub(crate) unsafe fn cmd_refit_vehicle(
     } = cmd;
     let c = s.common;
     let b = c.base;
-    let v = unsafe { (b.groups.vehicle)(veh_id.0) };
+    let v = {
+        crate::orders::vehicle_get_if_valid(
+            crate::vehicle_type::VehicleID(veh_id.0),
+            b.groups.vehicles.orders(),
+        )
+        .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
+    };
     if v.is_null() {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
@@ -758,7 +765,11 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         if !free_wagon {
             invalidate_window_data(
                 WindowClass::WC_VEHICLE_DETAILS,
-                WindowNumber::from(VehicleID(unsafe { (b.groups.vehicle_id)(front) })),
+                WindowNumber::from(VehicleID(
+                    crate::fleet::record(b.groups, front)
+                        .index(b.groups.vehicles.newgrf())
+                        .0,
+                )),
                 0,
                 false,
             );
@@ -768,8 +779,13 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                 false,
             );
         }
-        unsafe {
-            (b.groups.depot_dirty)(front);
+        {
+            crate::window_func::set_window_dirty(
+                crate::window_type::WindowClass::WC_VEHICLE_DEPOT,
+                crate::window_type::WindowNumber::from(
+                    crate::fleet::record(b.groups, front).tile(),
+                ),
+            );
         }
     } else {
         /* Always invalidate the cache; querycost might have filled it. */

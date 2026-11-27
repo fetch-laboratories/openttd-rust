@@ -165,10 +165,12 @@ extern "C" fn draw(_: *mut std::ffi::c_void) -> u32 {
     DRAWS.set(draw + 1);
     draw
 }
-extern "C" fn no_group(_: u32) -> crate::fleet::NextGroup {
-    crate::fleet::NextGroup {
+extern "C" fn no_group(_: u32) -> crate::fleet::GroupRecord {
+    crate::fleet::GroupRecord {
+        shell: std::ptr::null_mut(),
         group: std::ptr::null_mut(),
-        index: u32::MAX,
+        statistics: std::ptr::null_mut(),
+        index: 0,
     }
 }
 
@@ -281,6 +283,7 @@ fn services(companies: Vec<Record>, current: u8) -> &'static Services {
     shared.town_index = map_town_index;
     shared.town_by_id = town_by_id;
     shared.town_owner = town_owner;
+    shared.station_commands = station_commands;
     let shared = leak(shared);
     let mut costs = crate::test_tables::COMMAND_COSTS;
     costs.construct = construct;
@@ -296,11 +299,18 @@ fn services(companies: Vec<Record>, current: u8) -> &'static Services {
     commands.shared = shared;
     commands.cost = leak(costs);
     commands.finance = leak(finance);
+    commands.company = company_table;
+    let commands = leak(commands);
+    STATION_COMMANDS.set(leak(crate::station_cmd::CommandServicesTable {
+        command: commands,
+        ..crate::test_tables::STATION_COMMANDS
+    }));
     let mut groups = FLEET_GROUPS;
+    groups.shared = shared;
     groups.next_group = no_group;
     let mut s = COMPANY_IDENTITY;
     s.shared = shared;
-    s.commands = leak(commands);
+    s.commands = commands;
     s.groups = leak(groups);
     s.capabilities = capabilities(shared);
     s.authority = leak(crate::town::AuthorityServices {
@@ -329,7 +339,28 @@ fn services(companies: Vec<Record>, current: u8) -> &'static Services {
     s.set_name_1 = set_name_1;
     s.set_name_2 = set_name_2;
     s.set_president_name = set_president_name;
-    leak(s)
+    let s = leak(s);
+    IDENTITY.set(s);
+    s
+}
+thread_local! {
+    /// The fixture's station command table, which names its command table.
+    static STATION_COMMANDS: Cell<*const crate::station_cmd::CommandServicesTable> =
+        const { Cell::new(std::ptr::null()) };
+    /// The fixture's identity table, which its company table names.
+    static IDENTITY: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
+}
+extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTable {
+    STATION_COMMANDS.get()
+}
+/// The company table the group bodies reach through the command table: its identity table.
+extern "C" fn company_table() -> *const crate::company::Services {
+    // SAFETY: `services` leaks the identity table before any body runs.
+    let identity = unsafe { &*IDENTITY.get() };
+    leak(crate::company::Services {
+        identity,
+        ..crate::test_tables::COMPANY
+    })
 }
 fn take_trace() -> Vec<std::string::String> {
     TRACE.with(|t| std::mem::take(&mut *t.borrow_mut()))

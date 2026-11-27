@@ -1151,10 +1151,12 @@ mod startup_tests {
     extern "C" fn style(_: *mut CompanyManagerFace) -> u32 {
         0
     }
-    extern "C" fn no_group(_: u32) -> crate::fleet::NextGroup {
-        crate::fleet::NextGroup {
+    extern "C" fn no_group(_: u32) -> crate::fleet::GroupRecord {
+        crate::fleet::GroupRecord {
+            shell: std::ptr::null_mut(),
             group: std::ptr::null_mut(),
-            index: u32::MAX,
+            statistics: std::ptr::null_mut(),
+            index: 0,
         }
     }
     extern "C" fn legend() {
@@ -1751,7 +1753,8 @@ mod evidence_tests {
         static CURRENT: Cell<u8> = const { Cell::new(0) };
         static LOCAL: Cell<u8> = const { Cell::new(0) };
         static TOWNS: RefCell<Vec<*mut crate::town::State>> = const { RefCell::new(Vec::new()) };
-        static GROUP: Cell<*mut crate::fleet::GroupFields> = const { Cell::new(std::ptr::null_mut()) };
+        /// The one group's Rust owner, which also stands for its shell.
+        static GROUP: Cell<*mut ()> = const { Cell::new(std::ptr::null_mut()) };
         static STATION_OWNER: Cell<u8> = const { Cell::new(0) };
         static RENEWALS: Cell<*mut ()> = const { Cell::new(std::ptr::null_mut()) };
         static STATS: Cell<*mut ()> = const { Cell::new(std::ptr::null_mut()) };
@@ -1898,10 +1901,16 @@ mod evidence_tests {
             station_owner,
             ..STATION_WORLD
         };
+        // The command table whose company getter the group bodies reach the company table by.
+        const COMMAND: crate::services::CommandServices = crate::services::CommandServices {
+            company: fleet_company,
+            ..COMMANDS
+        };
         const TABLE: crate::station_cmd::CommandServicesTable =
             crate::station_cmd::CommandServicesTable {
                 station: std::ptr::from_ref(&WORLD),
                 set_station_owner,
+                command: std::ptr::from_ref(&COMMAND),
                 ..STATION_COMMANDS
             };
         std::ptr::from_ref(&TABLE)
@@ -1911,26 +1920,41 @@ mod evidence_tests {
             crate::newgrf_vehicle::TEST_TABLE.with_id(vehicle_id);
         std::ptr::from_ref(&TABLE)
     }
-    unsafe extern "C" fn next_group(from: u32) -> crate::fleet::NextGroup {
+    extern "C" fn next_group(from: u32) -> crate::fleet::GroupRecord {
         let group = GROUP.get();
         if from == 0 && !group.is_null() {
-            crate::fleet::NextGroup { group, index: 0 }
+            crate::fleet::GroupRecord {
+                shell: group,
+                group,
+                statistics: STATS.get(),
+                index: 0,
+            }
         } else {
-            crate::fleet::NextGroup {
+            crate::fleet::GroupRecord {
+                shell: std::ptr::null_mut(),
                 group: std::ptr::null_mut(),
-                index: u32::MAX,
+                statistics: std::ptr::null_mut(),
+                index: 0,
             }
         }
     }
-    unsafe extern "C" fn delete_group(id: u16) {
-        trace(format!("delete group {id}"));
+    extern "C" fn delete_group(shell: *mut ()) {
+        assert_eq!(shell, GROUP.get());
+        trace("delete group 0");
         GROUP.set(std::ptr::null_mut());
     }
-    unsafe extern "C" fn stats(_: u8, _: u16, _: u8) -> *mut () {
+    extern "C" fn stats(
+        _: CompanyID,
+        _: crate::group_type::GroupID,
+        _: crate::vehicle_type::VehicleType,
+    ) -> *mut () {
         STATS.get()
     }
-    unsafe extern "C" fn head(_: u8) -> *mut () {
-        RENEWALS.with(Cell::as_ptr).cast()
+    extern "C" fn fleet_company() -> *const Services {
+        thread_local! {
+            static TABLE: &'static Services = leak(services());
+        }
+        TABLE.with(|t| std::ptr::from_ref(*t))
     }
     extern "C" fn group_all(
         _: *mut OpenTTDCompany,
@@ -2066,10 +2090,10 @@ mod evidence_tests {
                 shared,
                 commands: leak(crate::services::CommandServices { shared, ..COMMANDS }),
                 groups: leak(crate::fleet::GroupServices {
+                    shared,
                     next_group,
-                    stats,
-                    head,
-                    delete_group,
+                    group_statistics_get: stats,
+                    group_delete: delete_group,
                     ..FLEET_GROUPS
                 }),
                 company,
@@ -2087,6 +2111,7 @@ mod evidence_tests {
             settings,
             objectives,
             group_all,
+            group_default: group_all,
             use_free_group,
             next_waypoint: end,
             next_sign: end,
@@ -2106,7 +2131,7 @@ mod evidence_tests {
     struct World {
         finances: Vec<Finances>,
         towns: Vec<crate::town::State>,
-        group: Box<crate::fleet::GroupFields>,
+        group: *mut (),
         stats: *mut (),
         infrastructure: Vec<crate::company_base::CompanyInfrastructure>,
         defaults: Vec<crate::settings_table::VehicleDefaults>,
@@ -2117,14 +2142,14 @@ mod evidence_tests {
             let mut world = Self {
                 finances: (0..COUNT).map(|_| unsafe { std::mem::zeroed() }).collect(),
                 towns: Vec::new(),
-                group: Box::new(crate::fleet::GroupFields {
-                    owner: 1,
-                    vehicle_type: 0,
-                    flags: 0,
-                    livery: crate::livery::Livery::default(),
-                    parent: u16::MAX,
-                    number: 3,
-                }),
+                group: {
+                    let g = crate::fleet::openttd_rust_fleet_group_create();
+                    let fields = g.cast::<crate::fleet::GroupFields>();
+                    write_field!(fields, owner, 1);
+                    write_field!(fields, vehicle_type, 0);
+                    write_field!(fields, number, 3);
+                    g
+                },
                 stats: crate::fleet::openttd_rust_fleet_stats_create(),
                 infrastructure: (0..COUNT).map(|_| unsafe { std::mem::zeroed() }).collect(),
                 defaults: (0..COUNT)
@@ -2140,7 +2165,7 @@ mod evidence_tests {
             FINANCES.set(std::array::from_fn(|i| &raw mut world.finances[i]));
             INFRASTRUCTURE.set(std::array::from_fn(|i| &raw mut world.infrastructure[i]));
             DEFAULTS.set(std::array::from_fn(|i| &raw mut world.defaults[i]));
-            GROUP.set(&raw mut *world.group);
+            GROUP.set(world.group);
             STATS.set(world.stats);
             AI.set([false; COUNT]);
             RENEWALS.set(std::ptr::null_mut());
@@ -2187,7 +2212,10 @@ mod evidence_tests {
                 }
             }
             // SAFETY: Created by `World::new`; no access is live.
-            unsafe { crate::fleet::openttd_rust_fleet_stats_destroy(self.stats) };
+            unsafe {
+                crate::fleet::openttd_rust_fleet_stats_destroy(self.stats);
+                crate::fleet::openttd_rust_fleet_group_destroy(self.group);
+            }
         }
     }
     fn ownership() -> crate::tile_owner::Context {
@@ -2448,7 +2476,11 @@ mod evidence_tests {
             towns,
             [(0b001, 500, initial, 0, 3), (0b001, 700, initial, 2, 5)]
         );
-        assert_eq!((world.group.owner, world.group.number), (0, 7));
+        let group = world.group.cast::<crate::fleet::GroupFields>();
+        assert_eq!(
+            (read_field!(group, owner), read_field!(group, number)),
+            (0, 7)
+        );
         assert_eq!(STATION_OWNER.get(), 0);
         assert_eq!(world.infrastructure[0].airport, 4 + 5);
         assert_eq!(world.defaults[1].servint_trains, 100);
@@ -2931,21 +2963,27 @@ mod evidence_tests {
     fn shell_index(shell: *mut ()) -> usize {
         shell.addr() - 1
     }
-    unsafe extern "C" fn group_vehicle(id: u32) -> *mut () {
-        trace(format!("resolve {id}"));
-        std::ptr::without_provenance_mut(id as usize + 1)
+    thread_local! {
+        /// The takeover's vehicle pool descriptor, whose address the scheduler table names.
+        static TAKEOVER_POOL_VIEW: Cell<*const crate::pool::PoolDescriptor> =
+            const { Cell::new(std::ptr::null()) };
+        static TAKEOVER_ORDERS: Cell<*const crate::orders::Leaves> =
+            const { Cell::new(std::ptr::null()) };
     }
-    unsafe extern "C" fn always(_: *mut ()) -> bool {
-        true
+    extern "C" fn takeover_orders() -> *const crate::orders::Leaves {
+        TAKEOVER_ORDERS.get()
     }
-    unsafe extern "C" fn never(_: *mut ()) -> bool {
+    extern "C" fn never(_: crate::vehicle::VehicleRef) -> bool {
         false
     }
-    unsafe extern "C" fn no_profit(_: *mut ()) -> i64 {
+    extern "C" fn no_profit(_: crate::vehicle::VehicleRef) -> i64 {
         0
     }
-    unsafe extern "C" fn default_group(_: *mut ()) -> u16 {
-        crate::fleet::DEFAULT_GROUP
+    extern "C" fn young(_: crate::vehicle::VehicleRef) -> i32 {
+        0
+    }
+    extern "C" fn default_group(_: crate::vehicle::VehicleRef) -> crate::group_type::GroupID {
+        crate::group_type::GroupID::DEFAULT_GROUP
     }
     extern "C" fn record_from_shell(
         shell: *mut std::ffi::c_void,
@@ -2996,6 +3034,12 @@ mod evidence_tests {
             destroy: destroy_vehicle,
             record_from_shell,
             set_colourmap,
+            orders: takeover_orders,
+            profit_last_year: no_profit,
+            maintenance: leak(crate::vehicle::maintenance::Services {
+                economy_age: young,
+                ..crate::test_tables::MAINTENANCE
+            }),
             ..VEHICLE
         });
         let shared = leak(crate::services::Services {
@@ -3007,15 +3051,42 @@ mod evidence_tests {
             ..*base.shared
         });
         let groups = leak(crate::fleet::GroupServices {
-            vehicle: group_vehicle,
             vehicles,
-            primary: always,
-            countable: never,
-            old_enough: never,
-            profit: no_profit,
-            vehicle_group: default_group,
+            is_engine_countable: never,
+            group_id: default_group,
             ..*base.identity.groups
         });
+        // The vehicle pool: each of `SHELLS` in the slot of its index.
+        let slots: Vec<_> = SHELLS.with_borrow(|shells| {
+            shells
+                .iter()
+                .enumerate()
+                .map(|(id, part)| crate::pool::PoolSlot {
+                    shell: std::ptr::without_provenance_mut(id + 1),
+                    record: part.0.cast(),
+                })
+                .collect()
+        });
+        let first_unused = slots.len();
+        let pool = Box::into_raw(Box::new(crate::pool::PoolDescriptor {
+            slots: crate::industrytype::NativeVec::from_vec(slots),
+            used_bitmap: crate::industrytype::NativeVec::new(),
+            first_free: 0,
+            first_unused,
+            items: 0,
+            checked: 0,
+            cleaning: false,
+            alloc_cache: std::ptr::null_mut(),
+        }));
+        TAKEOVER_POOL_VIEW.set(pool);
+        TAKEOVER_ORDERS.set(leak(crate::orders::Leaves {
+            base: vehicles,
+            scheduler: leak(crate::vehicle::scheduler::SchedulerServices {
+                pool: TAKEOVER_POOL_VIEW.with(|view| leak(view.get())),
+                ..crate::test_tables::SCHEDULER
+            }),
+            ..crate::test_tables::ORDERS
+        }));
         let commands = leak(crate::services::CommandServices {
             shared,
             finance: base.finance,
@@ -3105,20 +3176,16 @@ mod evidence_tests {
         change_ownership_of_company_items(s, &ownership(), CompanyID(1), CompanyID(0));
         let intervals: Vec<String> = traced()
             .into_iter()
-            .filter(|t| t.starts_with("interval") || t.starts_with("resolve"))
+            .filter(|t| t.starts_with("interval"))
             .collect();
         // Company 0's road vehicle default is 200, its percent flag set; the walk first
         // copies both to company 1's defaults, which the command reads. Outside a command
-        // the nested call is top-level: it resolves the vehicle for its test pass, then
-        // resolves and stores in its execution. The custom vehicle 1 is never resolved.
+        // the nested call is top-level: it stores in its execution only. The custom vehicle
+        // 1 runs no command.
         assert_eq!(
             intervals,
             [
-                "resolve 0",
-                "resolve 0",
                 "interval 0 200 false true current 1",
-                "resolve 3",
-                "resolve 3",
                 "interval 3 200 false true current 1",
             ]
         );

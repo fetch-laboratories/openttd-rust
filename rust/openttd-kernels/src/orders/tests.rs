@@ -873,7 +873,7 @@ fn change_timetable_past_the_last_flag_is_not_reached() {
 /// The shared-orders window number of a list whose first vehicle is `first`.
 fn shared_window(first: u32) -> WindowNumber {
     VehicleListIdentifier {
-        list_type: VehicleListType::VL_SHARED_ORDERS,
+        r#type: VehicleListType::VL_SHARED_ORDERS,
         vtype: VehicleType::VEH_TRAIN,
         company: CompanyID(0),
         index: first,
@@ -952,7 +952,7 @@ fn remove_from_shared_closes_or_renumbers_the_shared_orders_window() {
 fn to_window_number_packs_the_original_fields() {
     let number = |list_type, vtype, company, index| {
         VehicleListIdentifier {
-            list_type,
+            r#type: list_type,
             vtype,
             company,
             index,
@@ -1001,7 +1001,7 @@ fn to_window_number_asserts_an_index_past_twenty_bits() {
         return;
     }
     let _ = VehicleListIdentifier {
-        list_type: VehicleListType::VL_SHARED_ORDERS,
+        r#type: VehicleListType::VL_SHARED_ORDERS,
         vtype: VehicleType::VEH_TRAIN,
         company: CompanyID(0),
         index: 1 << 20,

@@ -15,66 +15,43 @@ struct OpenTTDSharedServices;
 #include <cstdint>
 #include <cstddef>
 #include "command_services_ffi.h"
+#include "byte_span_ffi.h"
 /* Group, statistics, renewal and company-head owners are stable Rust allocations whose prefix holds
  * the C++ scalar objects that views alias. Vehicle::group_id stays in the C++ shell, read and written
- * through vehicle_group/set_membership; GRPS/ERNW/PLYR adapters keep widths, references and indexed
- * pool identity. Name, children and engine maps and pending IDs are Rust containers. Commands keep
- * caller-owned stack CommandCost objects with their original move and AddCost behavior. */
+ * through group_id/set_group_id; GRPS/ERNW/PLYR adapters keep widths, references and indexed
+ * pool identity. Name, children and engine maps are Rust containers. Commands write the
+ * caller-owned stack CommandCost they are given. */
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
-/* Group::Iterate(from)'s next step: the group's Rust record and its index; UINT32_MAX and null after the last. */
-struct OpenTTDFleetNextGroup { void *group; uint32_t index; };
+struct OpenTTDVehicleSelectionServices;
+/* A group pool lookup's step: the shell, its Rust owner, its statistics' owner and its index; null for no group. */
+struct OpenTTDFleetGroupRecord { void *shell; void *group; void *statistics; uint16_t index; };
+/* EngineRenew::Iterate(from)'s next step: the shell and its index; null after the last. */
+struct OpenTTDFleetRenewRecord { void *shell; uint16_t index; };
 struct OpenTTDFleetGroupServices {
-	void * (*group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(group);
-	OpenTTDFleetNextGroup (*next_group)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_group);
-	uint32_t (*next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
-	void * (*vehicle)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(vehicle);
-	const OpenTTDVehicleServices *vehicles;
-	uint32_t (*vehicle_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
-	uint16_t (*vehicle_group)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_group);
-	int64_t (*profit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(profit);
-	bool (*old_enough)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(old_enough);
-	bool (*primary)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(primary);
-	bool (*countable)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(countable);
-	void * (*first_shared)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(first_shared);
-	void * (*next_shared)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_shared);
-	void (*set_membership)(void *shell, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_membership);
-	void (*invalidate_cache)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_cache);
-	void (*viewport)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
-	void * (*stats)(uint8_t company, uint16_t id, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(stats);
-	void * (*head)(uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(head);
-	void * (*renew_state)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_state);
-	void * (*next_renew)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_renew);
-	uint32_t (*renew_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_id);
-	bool (*buildable_type)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(buildable_type);
-	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	uint16_t (*allocate)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
-	uint16_t (*use_number)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(use_number);
-	void (*release_number)(uint8_t owner, uint16_t number) noexcept OPENTTD_SERVICE_DEFAULT(release_number);
-	const Livery * (*company_livery)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(company_livery);
-	bool (*keep_length)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(keep_length);
-	void (*delete_group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);
-	void (*clear_backup)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(clear_backup);
-	void (*remove_rule)(uint8_t owner, uint16_t engine, uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(remove_rule);
-	void (*remove_vehicles)(uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(remove_vehicles);
-	void (*delete_child)(uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(delete_child);
-	void (*add_to_group)(uint16_t id, uint32_t vehicle, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(add_to_group);
-	void (*list_dirty)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(list_dirty);
-	void (*list_set_dirty)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(list_set_dirty);
-	void (*colour_dirty)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(colour_dirty);
-	void (*replace_dirty)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(replace_dirty);
-	void (*replace_invalidate)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(replace_invalidate);
-	void (*alter_dirty)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(alter_dirty);
-	void (*vehicle_dirty)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
-	void (*depot_dirty)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(depot_dirty);
-	void (*close_replace)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(close_replace);
+	/* Tables. */
+	const OpenTTDVehicleSelectionServices *(*selection)() noexcept OPENTTD_SERVICE_DEFAULT(selection);
 	const OpenTTDSharedServices *shared = nullptr;
-	bool (*list_generate)(void *context) noexcept OPENTTD_SERVICE_DEFAULT(list_generate);
-	size_t (*list_size)(void *context) noexcept OPENTTD_SERVICE_DEFAULT(list_size);
-	void * (*list_at)(void *context, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(list_at);
-	void * (*renew_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(renew_allocate);
+	const OpenTTDVehicleServices *vehicles;
+	/* Group pool. */
+	bool (*group_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(group_can_allocate);
+	void (*group_delete)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(group_delete);
+	OpenTTDFleetGroupRecord (*group_get)(uint16_t index) noexcept OPENTTD_SERVICE_DEFAULT(group_get);
+	OpenTTDFleetGroupRecord (*group_get_if_valid)(uint16_t index) noexcept OPENTTD_SERVICE_DEFAULT(group_get_if_valid);
+	OpenTTDFleetGroupRecord (*group_new)(uint8_t owner, uint8_t vt) noexcept OPENTTD_SERVICE_DEFAULT(group_new);
+	OpenTTDFleetGroupRecord (*next_group)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_group);
+	/* GroupStatistics. */
+	void * (*group_statistics_get)(uint8_t company, uint16_t id_g, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(group_statistics_get);
+	/* EngineRenew pool. */
+	OpenTTDFleetRenewRecord (*next_renew)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_renew);
 	bool (*renew_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(renew_can_allocate);
 	void (*renew_delete)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_delete);
+	void * (*renew_new)() noexcept OPENTTD_SERVICE_DEFAULT(renew_new);
+	void * (*renew_state)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_state);
+	/* Vehicle members. */
+	uint16_t (*group_id)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(group_id);
+	bool (*is_engine_countable)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(is_engine_countable);
+	void (*set_group_id)(OpenTTDVehicle *v, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_group_id);
 };
 struct OpenTTDFleetCosts { void *result; void *replace; void *build; void *copy; void *temporary; void *seeds; };
 struct OpenTTDVehicleCommonServices;
@@ -158,14 +135,14 @@ void openttd_rust_fleet_count_engine(const OpenTTDFleetGroupServices *, void *, 
 void openttd_rust_fleet_update_afterload(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_profits(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_autoreplace(const OpenTTDFleetGroupServices *, uint8_t);
-uint32_t openttd_rust_fleet_create_group(const OpenTTDFleetGroupServices *, uint32_t, uint8_t, uint16_t, uint16_t *);
-uint32_t openttd_rust_fleet_delete_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t);
-uint32_t openttd_rust_fleet_alter_group(const OpenTTDFleetGroupServices *, uint32_t, uint8_t, uint16_t, uint16_t, const uint8_t *, size_t);
-uint32_t openttd_rust_fleet_add_vehicle_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint32_t, bool, void *, bool, uint16_t *);
-uint32_t openttd_rust_fleet_add_shared_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint8_t);
-uint32_t openttd_rust_fleet_remove_vehicles_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t);
-uint32_t openttd_rust_fleet_set_livery(const OpenTTDFleetGroupServices *, uint32_t, uint16_t, bool, uint8_t);
-uint32_t openttd_rust_fleet_flag_command(const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint8_t, bool, bool);
+uint16_t openttd_rust_fleet_create_group(const OpenTTDFleetGroupServices *, uint16_t, uint8_t, uint16_t, void *);
+void openttd_rust_fleet_delete_group(const OpenTTDFleetGroupServices *, uint16_t, uint16_t, void *);
+void openttd_rust_fleet_alter_group(const OpenTTDFleetGroupServices *, uint16_t, uint8_t, uint16_t, uint16_t, OpenTTDByteSpan, void *);
+uint16_t openttd_rust_fleet_add_vehicle_group(const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint32_t, bool, uint8_t, uint8_t, uint8_t, uint32_t, void *);
+void openttd_rust_fleet_add_shared_group(const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t, void *);
+void openttd_rust_fleet_remove_vehicles_group(const OpenTTDFleetGroupServices *, uint16_t, uint16_t, void *);
+void openttd_rust_fleet_set_livery(const OpenTTDFleetGroupServices *, uint16_t, uint16_t, bool, uint8_t, void *);
+void openttd_rust_fleet_flag_command(const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t, bool, bool, void *);
 uint32_t openttd_rust_fleet_sum_engines(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint16_t);
 uint32_t openttd_rust_fleet_sum_vehicles(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
 uint32_t openttd_rust_fleet_sum_min_age(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
@@ -173,7 +150,6 @@ int64_t openttd_rust_fleet_sum_profit(const OpenTTDFleetGroupServices *, uint8_t
 uint8_t openttd_rust_fleet_contains_abi(const OpenTTDFleetGroupServices *, uint16_t, uint16_t);
 extern "C++" inline bool openttd_rust_fleet_contains(const OpenTTDFleetGroupServices *a0, uint16_t a1, uint16_t a2) { return openttd_rust_fleet_contains_abi(a0, a1, a2) != 0; }
 uint16_t openttd_rust_fleet_replacement(const OpenTTDFleetGroupServices *, void *, uint16_t, uint16_t, bool *);
-uint32_t openttd_rust_fleet_remove_replacement(const OpenTTDFleetGroupServices *, void **, uint16_t, uint16_t, uint32_t);
 void openttd_rust_fleet_remove_all_replacements(const OpenTTDFleetGroupServices *, void **);
 uint8_t openttd_rust_fleet_valid_abi(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t);
 extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionServices *a0, const OpenTTDFleetGroupServices *a1, uint16_t a2, uint16_t a3, uint8_t a4) { return openttd_rust_fleet_valid_abi(a0, a1, a2, a3, a4) != 0; }

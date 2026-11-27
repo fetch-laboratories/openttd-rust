@@ -240,6 +240,8 @@ pub struct Services {
     pub draw_string_company_colour: extern "C" fn(CompanyID) -> crate::gfx_type::TextColour,
     /// `&c->group_all[type]`, the company's statistics of all its vehicles of a type.
     pub group_all: extern "C" fn(*mut OpenTTDCompany, VehicleType) -> *mut (),
+    /// `&c->group_default[type]`, the company's statistics of its ungrouped vehicles of a type.
+    pub group_default: extern "C" fn(*mut OpenTTDCompany, VehicleType) -> *mut (),
     /// `c->location_of_HQ`.
     pub location_of_hq: extern "C" fn(*mut OpenTTDCompany) -> TileIndex,
     /// `NetworkAdminCompanyNew(c)`.
@@ -269,6 +271,8 @@ pub struct Services {
     pub price_base_start_price: extern "C" fn(Price) -> i64,
     /// `RailMaintenanceCost(railtype, num, total_num)`.
     pub rail_maintenance_cost: extern "C" fn(crate::rail_type::RailType, u32, u32) -> i64,
+    /// `c->freegroups.ReleaseID(number)`.
+    pub release_free_group: extern "C" fn(*mut OpenTTDCompany, u16),
     /// `RoadMaintenanceCost(roadtype, num, total_num)`.
     pub road_maintenance_cost: extern "C" fn(crate::road_type::RoadType, u32, u32) -> i64,
     /// `ScriptObject::GetRandomizer(OWNER_NONE).Next(max)`.
@@ -1087,7 +1091,7 @@ pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services) -> u
 /// the binding indexes `group_all` with.
 #[allow(unsafe_code)] // The contract the binding's dereference and index require.
 pub(crate) unsafe fn num_vehicle(s: &Services, c: *mut OpenTTDCompany, kind: VehicleType) -> u16 {
-    crate::fleet::num_vehicle((s.group_all)(c, kind))
+    crate::fleet::GroupStatisticsRef::of((s.group_all)(c, kind)).num_vehicle()
 }
 
 /// `CheckTakeoverVehicleLimit`: can company `cbig` buy company `csmall` without exceeding
@@ -2401,7 +2405,7 @@ pub(crate) fn change_ownership_of_company_items(
     // Even if it was copied, it could interfere with new owner's rules
     // `RemoveAllEngineReplacementForCompany(c)` is `RemoveAllEngineReplacement(&c->RenewalList())`.
     // SAFETY: The live company's renewal list; the group table's deletions end with the call.
-    unsafe {
+    {
         crate::fleet::remove_all_engine_replacement(
             groups,
             (s.identity.renewal_head)((s.identity.company)(old_owner)),
@@ -2412,17 +2416,10 @@ pub(crate) fn change_ownership_of_company_items(
         crate::fleet::remove_all_groups_for_company(groups, old_owner);
     } else {
         let c = (s.identity.company)(new_owner);
-        let mut from = 0_u32;
-        loop {
-            // SAFETY: The process-lifetime group table; the record ends with the step.
-            let crate::fleet::NextGroup { group: g, index } = unsafe { (groups.next_group)(from) };
-            if index == u32::MAX {
-                break;
-            }
-            from = index + 1;
-            if read_field!(g, owner) == old_owner.0 {
-                write_field!(g, owner, new_owner.0);
-                write_field!(g, number, (s.use_free_group)(c));
+        for g in crate::fleet::groups(groups) {
+            if g.owner() == old_owner {
+                g.set_owner(new_owner);
+                g.set_number((s.use_free_group)(c));
             }
         }
     }
@@ -3898,6 +3895,7 @@ crate::abi::layouts! {
         delete_story_page,
         draw_string_company_colour,
         group_all,
+        group_default,
         location_of_hq,
         network_admin_company_new,
         network_clients_to_spectators,
@@ -3912,6 +3910,7 @@ crate::abi::layouts! {
         price_base_category,
         price_base_start_price,
         rail_maintenance_cost,
+        release_free_group,
         road_maintenance_cost,
         script_random_next,
         send_company_manager_face,

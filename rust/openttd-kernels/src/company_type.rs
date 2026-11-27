@@ -18,7 +18,7 @@ pub const OWNER_DEITY: u8 = Owner::DEITY.0;
 /// `OWNER_END`.
 pub const OWNER_END: u8 = 0x13;
 /// `MAX_COMPANIES`.
-pub const MAX_COMPANIES: u8 = 0x0F;
+pub const MAX_COMPANIES: u8 = CompanyID::MAX_COMPANIES.0;
 /// `INVALID_OWNER`.
 pub const INVALID_OWNER: u8 = Owner::INVALID.0;
 
@@ -50,6 +50,8 @@ impl CompanyID {
     pub const BEGIN: Self = Self(0);
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(u8::MAX);
+    /// Native `MAX_COMPANIES`.
+    pub const MAX_COMPANIES: Self = Self(0x0F);
 }
 
 /// Native `Owner` is the same type as `CompanyID`.

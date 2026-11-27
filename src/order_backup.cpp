@@ -109,15 +109,6 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
 }
 
 /**
- * Clear the group of all backups having this group ID.
- * @param group The group to clear.
- */
-/* static */ void OrderBackup::ClearGroup(GroupID group)
-{
-	openttd_rust_backup_group_clear(group.base(), &GetRustOrdersLeaves());
-}
-
-/**
  * Clear/update the (clone) vehicle from an order backup.
  * @param v The vehicle to clear.
  * @pre v != nullptr

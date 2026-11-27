@@ -1135,8 +1135,12 @@ impl crate::vehicle::VehicleRef {
     /// `Vehicle::group_id`: index of group pool array item.
     #[inline]
     pub(crate) fn group_id(self, g: &crate::fleet::GroupServices) -> GroupID {
-        // SAFETY: The group slot reads the live record's shell.
-        GroupID(unsafe { (g.vehicle_group)(self.shell().cast()) })
+        (g.group_id)(self)
+    }
+    /// Store `Vehicle::group_id`.
+    #[inline]
+    pub(crate) fn set_group_id(self, g: &crate::fleet::GroupServices, value: GroupID) {
+        (g.set_group_id)(self, value);
     }
     /// `Vehicle::index`.
     #[inline]
@@ -1149,12 +1153,20 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn profit_last_year(self, base: &crate::vehicle::VehicleServices) -> i64 {
         (base.profit_last_year)(self)
     }
+    /// `Vehicle::GetDisplayProfitLastYear`: gets the profit vehicle had last year. It can be
+    /// sent into `SetDParam` for string processing.
+    #[inline]
+    pub(crate) fn get_display_profit_last_year(
+        self,
+        base: &crate::vehicle::VehicleServices,
+    ) -> i64 {
+        self.profit_last_year(base) >> 8
+    }
     /// `Vehicle::IsEngineCountable`: check if a vehicle is counted in `num_engines` in each
     /// company struct, through the group table's binding.
     #[inline]
     pub(crate) fn is_engine_countable(self, groups: &crate::fleet::GroupServices) -> bool {
-        // SAFETY: The live vehicle's shell.
-        unsafe { (groups.countable)(self.shell().cast()) }
+        (groups.is_engine_countable)(self)
     }
     /// `Vehicle::profit_this_year`: profit this year << 8, low 8 bits are fract.
     #[inline]

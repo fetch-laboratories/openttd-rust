@@ -15,7 +15,7 @@ use crate::network_type::DestType;
 use crate::station_type::StationID;
 use crate::tile_type::TileIndex;
 use crate::town_type::TownId;
-use crate::vehicle_type::VehicleID;
+use crate::vehicle_type::{VehicleID, VehicleType};
 
 /// Native `WindowNumberEnum`: window numbers.
 #[repr(transparent)]
@@ -190,6 +190,12 @@ impl From<TownId> for WindowNumber {
 impl From<VehicleID> for WindowNumber {
     fn from(value: VehicleID) -> Self {
         Self(value.0.cast_signed())
+    }
+}
+
+impl From<VehicleType> for WindowNumber {
+    fn from(value: VehicleType) -> Self {
+        Self(i32::from(value.0))
     }
 }
 

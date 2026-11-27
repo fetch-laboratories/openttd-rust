@@ -101,6 +101,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *delete_story_page)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(delete_story_page);
 	uint16_t (OPENTTD_RUST_CALL *draw_string_company_colour)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(draw_string_company_colour);
 	void *(OPENTTD_RUST_CALL *group_all)(Company *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group_all);
+	void *(OPENTTD_RUST_CALL *group_default)(Company *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group_default);
 	uint32_t (OPENTTD_RUST_CALL *location_of_hq)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(location_of_hq);
 	void (OPENTTD_RUST_CALL *network_admin_company_new)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_admin_company_new);
 	void (OPENTTD_RUST_CALL *network_clients_to_spectators)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(network_clients_to_spectators);
@@ -115,6 +116,7 @@ struct OpenTTDCompanyServices {
 	uint8_t (OPENTTD_RUST_CALL *price_base_category)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base_category);
 	int64_t (OPENTTD_RUST_CALL *price_base_start_price)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base_start_price);
 	int64_t (OPENTTD_RUST_CALL *rail_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_maintenance_cost);
+	void (OPENTTD_RUST_CALL *release_free_group)(Company *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(release_free_group);
 	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
 	uint32_t (OPENTTD_RUST_CALL *script_random_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(script_random_next);
 	void (OPENTTD_RUST_CALL *send_company_manager_face)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(send_company_manager_face);

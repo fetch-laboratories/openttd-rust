@@ -6,11 +6,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cb5
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cf059c2aa94086f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | b837556a01baf950 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
-src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexcept | ad49c9eeaeecb3c1 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_vehicle_group(void *shell) noexcept | a12f8a6d547d1ae7 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_viewport(void *shell) noexcept | 5fe83f6e19b74226 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_copy_configuration(void *old, void *replacement) noexcept | 727c7c448c7843d3 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_needs_renew(void *shell, bool settings) noexcept | 0c9267b6cb5b5b22 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) noexcept | fc5bd727a0ec52f9 | 1
@@ -18,7 +13,6 @@ src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void
 src/saveload/station_sl.cpp | [](void *object, size_t) -> void * | a82c84a1f03246e9 | 1
 write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> void | e49661d6b53b5cb0 | 1
 write | src/economy.cpp | [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void | cebe9268db3802a2 | 1
-write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1
 src/script/api/script_vehiclelist.cpp | [vehicle_type](const Vehicle *v) | 24bdc2b99efbbacb | 1
 write | src/rust/session_services.inc | []() noexcept | 56bc9a312836fcd1 | 1
 src/rust/session_services.inc | [](OpenTTDSessionFrame *f) noexcept | 309fd0e09c3b557e | 1

@@ -26,7 +26,11 @@ pub struct Services {
 unsafe fn sell(s: &Services, out: *mut CommandCost, flags: DoCommandFlags, v: *mut ()) {
     let c = s.build.refit.common;
     let b = c.base;
-    let id = unsafe { (b.groups.vehicle_id)(v) };
+    let id = {
+        crate::fleet::record(b.groups, v)
+            .index(b.groups.vehicles.newgrf())
+            .0
+    };
     crate::command::nested(
         b.commands,
         b.shared,
@@ -57,31 +61,32 @@ unsafe fn copy_group(
     new: *mut (),
 ) {
     let b = s.build.refit.common.base;
-    let group = unsafe { (b.groups.vehicle_group)(old) };
-    let id = unsafe { (b.groups.vehicle_id)(new) };
+    let group = { crate::fleet::record(b.groups, old).group_id(b.groups).0 };
+    let id = {
+        crate::fleet::record(b.groups, new)
+            .index(b.groups.vehicles.newgrf())
+            .0
+    };
     crate::command::nested(
         b.commands,
         b.shared,
         Cost(out, b.cost),
         0,
         flags.0,
-        |flags| unsafe {
-            let mut ignored = 0;
-            let error = crate::fleet::openttd_rust_fleet_add_vehicle_group(
+        |flags| {
+            let cost = Cost(out, b.cost);
+            cost.zero();
+            crate::fleet::cmd_add_vehicle_group(
                 b.groups,
-                u32::from(flags),
-                group,
-                id,
-                false,
-                ptr::null_mut(),
-                false,
-                &raw mut ignored,
+                cost,
+                DoCommandFlags(flags),
+                crate::fleet::CmdAddVehicleGroup {
+                    group_id: crate::group_type::GroupID(group),
+                    veh_id: VehicleID(id),
+                    add_shared: false,
+                    vli: crate::vehiclelist::VehicleListIdentifier::default(),
+                },
             );
-            if error == u32::MAX {
-                (b.cost.zero)(out);
-            } else {
-                (b.cost.error)(out, error);
-            }
         },
     );
 }
@@ -164,10 +169,16 @@ unsafe fn cmd_clone_vehicle(
     let c = r.common;
     let b = c.base;
     let total = Cost(out, b.cost);
-    let invalid = crate::fleet::INVALID_VEHICLE;
+    let invalid = VehicleID::INVALID.0;
     (b.cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    let mut v = unsafe { (b.groups.vehicle)(veh_id.0) };
-    if v.is_null() || !unsafe { (b.groups.primary)(v) } {
+    let mut v = {
+        crate::orders::vehicle_get_if_valid(
+            crate::vehicle_type::VehicleID(veh_id.0),
+            b.groups.vehicles.orders(),
+        )
+        .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
+    };
+    if v.is_null() || !{ crate::fleet::record(b.groups, v).is_primary_vehicle() } {
         total.error(ERROR);
         return invalid;
     }
@@ -232,12 +243,13 @@ unsafe fn cmd_clone_vehicle(
              * 'new' vehicles whereas they would immediately be joined with a primary
              * engine. This caused the vehicle to be not build as 'the limit' had been
              * reached, resulting in partially build vehicles and such. */
-            let build_flags =
-                if flags.test(DoCommandFlag::Execute) && !unsafe { (b.groups.primary)(v) } {
-                    flags.with(DoCommandFlags::from_element(DoCommandFlag::AutoReplace))
-                } else {
-                    flags
-                };
+            let build_flags = if flags.test(DoCommandFlag::Execute)
+                && !{ crate::fleet::record(b.groups, v).is_primary_vehicle() }
+            {
+                flags.with(DoCommandFlags::from_element(DoCommandFlag::AutoReplace))
+            } else {
+                flags
+            };
             let engine = crate::fleet::record(b.groups, v).engine_type();
             let built = crate::command::nested(
                 b.commands,
@@ -274,7 +286,11 @@ unsafe fn cmd_clone_vehicle(
             }
             total.add_money((b.cost.money)(part));
             if flags.test(DoCommandFlag::Execute) {
-                w = unsafe { (b.groups.vehicle)(new_id) };
+                w = crate::orders::vehicle_get_if_valid(
+                    crate::vehicle_type::VehicleID(new_id),
+                    b.groups.vehicles.orders(),
+                )
+                .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast());
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {
                     /* Only copy the reverse state if neither old or new vehicle implements reverse-on-build probability callback. */
                     let old_train = crate::train::Handle::from_vehicle(unsafe {
@@ -317,8 +333,16 @@ unsafe fn cmd_clone_vehicle(
                             part,
                             flags,
                             super::rail::CmdMoveRailVehicle {
-                                src_veh: VehicleID((b.groups.vehicle_id)(w)),
-                                dest_veh: VehicleID((b.groups.vehicle_id)(rear)),
+                                src_veh: VehicleID(
+                                    crate::fleet::record(b.groups, w)
+                                        .index(b.groups.vehicles.newgrf())
+                                        .0,
+                                ),
+                                dest_veh: VehicleID(
+                                    crate::fleet::record(b.groups, rear)
+                                        .index(b.groups.vehicles.newgrf())
+                                        .0,
+                                ),
                                 move_chain: true,
                             },
                         )
@@ -355,7 +379,9 @@ unsafe fn cmd_clone_vehicle(
         && crate::fleet::record(b.groups, original).vehicle_type() == VehicleType::TRAIN
     {
         /* for trains this needs to be the front engine due to the callback function */
-        new_id = unsafe { (b.groups.vehicle_id)(front) };
+        new_id = crate::fleet::record(b.groups, front)
+            .index(b.groups.vehicles.newgrf())
+            .0;
     }
     if flags.test(DoCommandFlag::Execute) {
         /* Cloned vehicles belong to the same group */
@@ -385,7 +411,11 @@ unsafe fn cmd_clone_vehicle(
                 if new_cargo.cargo != unsafe { (c.transactions.cargo_type)(v) }
                     || new_cargo.subtype != subtype
                 {
-                    let id = unsafe { (b.groups.vehicle_id)(w) };
+                    let id = {
+                        crate::fleet::record(b.groups, w)
+                            .index(b.groups.vehicles.newgrf())
+                            .0
+                    };
                     let cargo = unsafe { (c.transactions.cargo_type)(v) };
                     crate::command::nested(
                         b.commands,

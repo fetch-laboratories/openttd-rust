@@ -795,12 +795,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                                 crate::vehicle_transactions::mass::CmdSendVehicleToDepot {
                                     veh_id: v.index(),
                                     depot_cmd,
-                                    vli: crate::vehiclelist::VehicleListIdentifier {
-                                        list_type: crate::vehiclelist::VehicleListType(0),
-                                        vtype: VehicleType(0),
-                                        company: crate::company_type::CompanyID(0),
-                                        index: 0,
-                                    },
+                                    vli: crate::vehiclelist::VehicleListIdentifier::default(),
                                 },
                             );
                         },

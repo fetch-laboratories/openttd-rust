@@ -151,6 +151,11 @@ impl LiveryFlags {
     pub fn reset_all(&mut self) {
         self.0 = 0;
     }
+    /// Native `BaseBitSet::All` of a set: whether every element of `other` is set.
+    #[must_use]
+    pub const fn all(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
     /// Native `BaseBitSet::Any` of a set.
     #[must_use]
     pub const fn any(self, other: Self) -> bool {
@@ -159,11 +164,6 @@ impl LiveryFlags {
 }
 
 crate::base_bitset_type::impl_bitset_ops!(LiveryFlags);
-
-/// Raw mask of `LiveryFlag::Primary`, for the unfinished `fleet.rs`.
-pub const PRIMARY: u8 = LiveryFlags::from_element(LiveryFlag::Primary).0;
-/// Raw mask of `LiveryFlag::Secondary`, for the unfinished `fleet.rs`.
-pub const SECONDARY: u8 = LiveryFlags::from_element(LiveryFlag::Secondary).0;
 
 /// Information about a particular livery.
 #[repr(C)]
