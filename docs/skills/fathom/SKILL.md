@@ -14,7 +14,7 @@ If you hold other work (root, or a steering or navigation review), hand this off
 Attribution on everything you write:
 `Agent: /fathom-<case issue> | Model: <your exact model ID> | Reasoning effort: <as the host reports it, else not-reported-by-host> | Host: <host>`. The path, model and effort are one word each, because the tools read each up to its first space: `ci.py ready` and the merge group's growth gate refuse a PR whose path is more, and `ci.py comment` refuses an `--effort` that is more.
 
-Root may be running. Work in your own worktree under `.local/worktrees/`, take no wall-clock timings while it builds, and after pushing a rule that a running agent follows, send root the commit (`t3_thread_send`, mode `queue`).
+Root is usually inactive. Still work in your own worktree under `.local/worktrees/` and take no wall-clock timings while another build runs. Do not message root when you finish: messaging an idle root thread wakes it needlessly. Send root a commit (`t3_thread_send`, mode `queue`) only if `t3_thread_list` shows root is currently running and a pushed rule affects its in-flight work.
 
 ## 1. Write the case
 
