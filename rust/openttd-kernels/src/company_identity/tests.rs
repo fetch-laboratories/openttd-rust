@@ -343,6 +343,7 @@ fn services(companies: Vec<Record>, current: u8) -> &'static Services {
     IDENTITY.set(s);
     s
 }
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     /// The fixture's station command table, which names its command table.
     static STATION_COMMANDS: Cell<*const crate::station_cmd::CommandServicesTable> =

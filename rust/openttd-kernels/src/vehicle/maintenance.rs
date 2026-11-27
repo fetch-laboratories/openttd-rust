@@ -121,10 +121,6 @@ impl Services {
         // SAFETY: The module's table contract.
         unsafe { &*self.transaction().commands }
     }
-    /// `Vehicle::IsPrimaryVehicle`.
-    fn is_primary_vehicle<const C: bool>(&self, v: VehicleRef) -> bool {
-        v.is_primary_vehicle()
-    }
 }
 
 /// Count one getter call of this file: the table pointer it returns.
@@ -664,7 +660,7 @@ fn economy_age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices
     if economy_age.0 < MAX_DATE {
         let economy_age = EconomyDate(economy_age.0 + 1);
         svc!(C, VehicleRef::set_economy_age, v, m, economy_age);
-        if m.is_primary_vehicle::<C>(v) && economy_age.0 == VEHICLE_PROFIT_MIN_AGE.0 + 1 {
+        if v.is_primary_vehicle() && economy_age.0 == VEHICLE_PROFIT_MIN_AGE.0 + 1 {
             fleet::vehicle_reached_min_age(m.group(), v);
             branch!(C, VEHICLE_MAINT_PROFIT_AGE);
         }
@@ -685,7 +681,7 @@ fn age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         branch!(C, VEHICLE_MAINT_MAX_AGE);
     }
 
-    if !m.is_primary_vehicle::<C>(v)
+    if !v.is_primary_vehicle()
         && (v.vehicle_type() != VehicleType::VEH_TRAIN
             || !crate::ground_vehicle::is_engine(v.subtype()))
     {

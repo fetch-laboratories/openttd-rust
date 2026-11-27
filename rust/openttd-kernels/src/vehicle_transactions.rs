@@ -451,7 +451,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_depot_list(
 /// `vli` describes, in the original order; whether the identifier was valid.
 pub(crate) fn generate_list<F: FnMut(VehicleRef)>(
     s: &SelectionServices,
-    vli: &VehicleListIdentifier,
+    vli: VehicleListIdentifier,
     mut emit: F,
 ) -> bool {
     let groups = s.groups;
@@ -553,7 +553,7 @@ unsafe fn generate_vehicle_sort_list(
     vli: &VehicleListIdentifier,
 ) -> bool {
     (s.list_clear)(list);
-    generate_list(s, vli, |v| {
+    generate_list(s, *vli, |v| {
         (s.list_push)(list, v.shell().cast());
     })
 }

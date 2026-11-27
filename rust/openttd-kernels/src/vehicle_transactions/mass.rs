@@ -61,7 +61,7 @@ impl Drop for List {
 }
 /// `GenerateVehicleSortList` into the transaction-local list.
 unsafe fn generate(s: &Services, list: &mut List, vli: &VehicleListIdentifier) -> bool {
-    generate_list(s.selection, vli, |v| list.0.push(v.shell().cast()))
+    generate_list(s.selection, *vli, |v| list.0.push(v.shell().cast()))
 }
 /// `IsDepotTile(tile) && IsTileOwner(tile, _current_company)`.
 fn depot(s: &Services, tile: TileIndex) -> bool {

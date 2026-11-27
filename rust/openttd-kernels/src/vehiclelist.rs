@@ -75,6 +75,7 @@ impl VehicleListIdentifier {
         reason = "the original's conversion to `WindowNumber`"
     )]
     pub fn to_window_number(&self) -> WindowNumber {
+        const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
         let c: u8 = if self.company == Owner::NONE {
             0xF
         } else {
@@ -84,7 +85,6 @@ impl VehicleListIdentifier {
         assert_with(|| self.vtype.0 < (1 << 2));
         assert_with(|| self.index < (1 << 20));
         assert_with(|| self.r#type < VehicleListType::VLT_END);
-        const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
 
         // `c << 28 | type << 23 | vtype << 26 | index` in `uint`, as the `int` window number.
         WindowNumber(

@@ -26,6 +26,7 @@ struct Slot {
     statistics: *mut (),
 }
 
+#[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
 thread_local! {
     /// The group pool; `None` for a free slot.
     static POOL: RefCell<Vec<Option<Slot>>> = const { RefCell::new(Vec::new()) };
@@ -80,7 +81,7 @@ extern "C" fn group_get_if_valid(index: GroupID) -> GroupRecord {
 extern "C" fn next_group(from: u32) -> GroupRecord {
     let len = POOL.with_borrow(Vec::len);
     (from as usize..len)
-        .map(|i| record(i as u16))
+        .map(|i| record(u16::try_from(i).unwrap()))
         .find(|r| !r.group.is_null())
         .unwrap_or_else(|| record(u16::MAX))
 }
@@ -244,8 +245,8 @@ extern "C" fn station_commands() -> *const crate::station_cmd::CommandServicesTa
     };
     const TABLE: crate::station_cmd::CommandServicesTable =
         crate::station_cmd::CommandServicesTable {
-            cost: &COSTS,
-            command: &COMMAND,
+            cost: &raw const COSTS,
+            command: std::ptr::from_ref(&COMMAND),
             ..STATION_COMMANDS
         };
     &TABLE
@@ -264,6 +265,7 @@ extern "C" fn no_backup(_: *mut u32) -> *mut std::ffi::c_void {
     ptr::null_mut()
 }
 fn vehicles() -> &'static VehicleServices {
+    #[cfg(test)] // `tools/test-kernel-state.py` reads this file without its parent.
     thread_local! {
         static TABLE: &'static VehicleServices = {
             let pool: *const crate::pool::PoolDescriptor = Box::leak(Box::new(
@@ -338,7 +340,7 @@ fn add_group(owner: Owner, vt: VehicleType, parent: GroupID) -> GroupID {
     };
     let index = POOL.with_borrow_mut(|p| {
         p.push(Some(slot));
-        GroupID((p.len() - 1) as u16)
+        GroupID(u16::try_from(p.len() - 1).unwrap())
     });
     if parent != GroupID::INVALID {
         let parent = POOL.with_borrow(|p| p[usize::from(parent.0)].unwrap());
@@ -438,6 +440,10 @@ const ROAD_GROUP_LIST: WindowNumber = WindowNumber((4 << 23) | (1 << 26));
 /// `CmdDeleteGroup` with `DoCommandFlag::Execute` make the original's window calls, each with
 /// its class, number and data; without `Execute` each makes none.
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the five commands' calls, with and without Execute"
+)]
 fn group_command_windows() {
     let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
     let w = table();
@@ -550,6 +556,16 @@ fn group_command_windows() {
     }
 }
 
+/// A guard row: its name, its command, whether the pool is full, the result and, where it
+/// shows the guards' order, the slot calls.
+type Row = (
+    &'static str,
+    Command,
+    bool,
+    Option<u32>,
+    Option<&'static [&'static str]>,
+);
+
 /// One guard row's command, run without `DoCommandFlag::Execute`.
 #[derive(Clone, Copy)]
 enum Command {
@@ -642,7 +658,7 @@ fn group_command_guards() {
     let name32: &'static [u8] = &[b'a'; 32];
     // Each row: its name, its command, whether the pool is full, the result and, where it
     // shows the guards' order, the slot calls.
-    let rows: [(&str, Command, bool, Option<u32>, Option<&[&str]>); 33] = [
+    let rows: [Row; 33] = [
         // `CmdCreateGroup`: an unbuildable type makes no allocation check, and a full pool
         // no parent lookup.
         (

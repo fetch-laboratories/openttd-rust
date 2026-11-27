@@ -83,6 +83,7 @@ unsafe fn for_each_pending(mut action: impl FnMut(u32, bool)) {
 /// Static noexcept services, serial game thread and a native caller-owned cost.
 /// The map is accessed only to copy one current item before calling any service.
 #[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
+#[allow(clippy::many_single_char_names)] // The tables and the vehicle's coordinates, until part 3.
 pub(crate) unsafe fn drain(
     services: *const Services,
     transaction: *const TransactionServices,

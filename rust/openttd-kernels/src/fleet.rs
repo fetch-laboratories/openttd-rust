@@ -1397,7 +1397,7 @@ pub(crate) fn cmd_add_vehicle_group(
         // `GenerateVehicleSortList(&list, vli)`, which empties the new list first.
         // SAFETY: The selection table's live records; the walk ends with the call.
         let generated =
-            { crate::vehicle_transactions::generate_list(w.selection(), &vli, |v| list.push(v)) };
+            { crate::vehicle_transactions::generate_list(w.selection(), vli, |v| list.push(v)) };
         if !generated || list.is_empty() {
             cmd_error(cost);
             return GroupID::INVALID;
@@ -2442,10 +2442,10 @@ pub extern "C" fn openttd_rust_fleet_add_vehicle_group(
     group_id: u16,
     veh_id: u32,
     add_shared: bool,
-    vli_type: u8,
-    vli_vtype: u8,
-    vli_company: u8,
-    vli_index: u32,
+    r#type: u8,
+    vtype: u8,
+    company: u8,
+    index: u32,
     out: *mut CommandCost,
 ) -> u16 {
     cmd_add_vehicle_group(
@@ -2457,10 +2457,10 @@ pub extern "C" fn openttd_rust_fleet_add_vehicle_group(
             veh_id: VehicleID(veh_id),
             add_shared,
             vli: VehicleListIdentifier {
-                r#type: VehicleListType(vli_type),
-                vtype: VehicleType(vli_vtype),
-                company: CompanyID(vli_company),
-                index: vli_index,
+                r#type: VehicleListType(r#type),
+                vtype: VehicleType(vtype),
+                company: CompanyID(company),
+                index,
             },
         },
     )
