@@ -718,8 +718,8 @@ unsafe fn industries_change_info(
                         (shared.add_string_for_mapping)(
                             GRFStringID(u32::from(str)),
                             (&raw mut (*indsp).station_name).cast(),
-                        )
-                    };
+                        );
+                    }
                 }
             }
             // 0x25: variable length produced cargoes; 0x26: variable length accepted cargoes

@@ -22,6 +22,11 @@ use crate::type_registry::{
     services,
 };
 
+/// `GRFStringID{buf.ReadWord()}`.
+fn grf_string_id(buf: &mut Reader<'_>) -> Result<GRFStringID, ReadError> {
+    Ok(GRFStringID(u32::from(buf.word()?)))
+}
+
 /// `RailTypeChangeInfo`: define properties for railtypes.
 #[allow(
     unsafe_code,
@@ -42,7 +47,7 @@ pub(crate) fn rail_type_change_info(
 
     let s = services();
     let rail = s.rail();
-    let shared = s.shared();
+    let add_string_for_mapping = s.shared().add_string_for_mapping;
     let type_map = grffile.railtype_map();
 
     if last as usize > type_map.size() {
@@ -73,40 +78,24 @@ pub(crate) fn rail_type_change_info(
 
             // Toolbar caption of railtype (sets name as well for backwards compatibility for grf ver < 8)
             0x09 => {
-                let str = GRFStringID(u32::from(buf.word()?));
-                (shared.add_string_for_mapping)(str, (rail.strings_toolbar_caption)(rti));
+                let str = grf_string_id(buf)?;
+                add_string_for_mapping(str, (rail.strings_toolbar_caption)(rti));
                 if grffile.grf_version() < 8 {
-                    (shared.add_string_for_mapping)(str, (rail.strings_name)(rti));
+                    add_string_for_mapping(str, (rail.strings_name)(rti));
                 }
             }
 
             // Menu text of railtype
-            0x0A => (shared.add_string_for_mapping)(
-                GRFStringID(u32::from(buf.word()?)),
-                (rail.strings_menu_text)(rti),
-            ),
+            0x0A => add_string_for_mapping(grf_string_id(buf)?, (rail.strings_menu_text)(rti)),
 
             // Build window caption
-            0x0B => {
-                (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
-                    (rail.strings_build_caption)(rti),
-                );
-            }
+            0x0B => add_string_for_mapping(grf_string_id(buf)?, (rail.strings_build_caption)(rti)),
 
             // Autoreplace text
-            0x0C => {
-                (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
-                    (rail.strings_replace_text)(rti),
-                );
-            }
+            0x0C => add_string_for_mapping(grf_string_id(buf)?, (rail.strings_replace_text)(rti)),
 
             // New locomotive text
-            0x0D => (shared.add_string_for_mapping)(
-                GRFStringID(u32::from(buf.word()?)),
-                (rail.strings_new_loco)(rti),
-            ),
+            0x0D => add_string_for_mapping(grf_string_id(buf)?, (rail.strings_new_loco)(rti)),
 
             // 0x0E: Compatible railtype list
             // 0x0F: Powered railtype list
@@ -167,10 +156,7 @@ pub(crate) fn rail_type_change_info(
             0x1A => (rail.set_sorting_order)(rti, buf.byte()?),
 
             // Name of railtype (overridden by prop 09 for grf ver < 8)
-            0x1B => (shared.add_string_for_mapping)(
-                GRFStringID(u32::from(buf.word()?)),
-                (rail.strings_name)(rti),
-            ),
+            0x1B => add_string_for_mapping(grf_string_id(buf)?, (rail.strings_name)(rti)),
 
             // Maintenance cost factor
             0x1C => (rail.set_maintenance_multiplier)(rti, buf.word()?),
@@ -333,7 +319,7 @@ pub(crate) fn road_type_change_info(
 
     let s = services();
     let road = s.road();
-    let shared = s.shared();
+    let add_string_for_mapping = s.shared().add_string_for_mapping;
     let type_map = if rtt == RoadTramType::RTT_TRAM {
         grffile.tramtype_map()
     } else {
@@ -368,41 +354,20 @@ pub(crate) fn road_type_change_info(
 
             // Toolbar caption of roadtype
             0x09 => {
-                (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
-                    (road.strings_toolbar_caption)(rti),
-                );
+                add_string_for_mapping(grf_string_id(buf)?, (road.strings_toolbar_caption)(rti));
             }
 
             // Menu text of roadtype
-            0x0A => (shared.add_string_for_mapping)(
-                GRFStringID(u32::from(buf.word()?)),
-                (road.strings_menu_text)(rti),
-            ),
+            0x0A => add_string_for_mapping(grf_string_id(buf)?, (road.strings_menu_text)(rti)),
 
             // Build window caption
-            0x0B => {
-                (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
-                    (road.strings_build_caption)(rti),
-                );
-            }
+            0x0B => add_string_for_mapping(grf_string_id(buf)?, (road.strings_build_caption)(rti)),
 
             // Autoreplace text
-            0x0C => {
-                (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
-                    (road.strings_replace_text)(rti),
-                );
-            }
+            0x0C => add_string_for_mapping(grf_string_id(buf)?, (road.strings_replace_text)(rti)),
 
             // New engine text
-            0x0D => {
-                (shared.add_string_for_mapping)(
-                    GRFStringID(u32::from(buf.word()?)),
-                    (road.strings_new_engine)(rti),
-                );
-            }
+            0x0D => add_string_for_mapping(grf_string_id(buf)?, (road.strings_new_engine)(rti)),
 
             // 0x0F: Powered roadtype list
             // 0x18: Roadtype list required for date introduction
@@ -457,10 +422,7 @@ pub(crate) fn road_type_change_info(
             0x1A => (road.set_sorting_order)(rti, buf.byte()?),
 
             // Name of roadtype
-            0x1B => (shared.add_string_for_mapping)(
-                GRFStringID(u32::from(buf.word()?)),
-                (road.strings_name)(rti),
-            ),
+            0x1B => add_string_for_mapping(grf_string_id(buf)?, (road.strings_name)(rti)),
 
             // Maintenance cost factor
             0x1C => (road.set_maintenance_multiplier)(rti, buf.word()?),
@@ -920,9 +882,9 @@ mod tests {
         let shared: &'static Shared = Box::leak(Box::new(Shared {
             rail_type_label,
             grf_file_version,
+            add_string_for_mapping,
             grf_file_railtype_map,
             grf_file_roadtype_map,
-            add_string_for_mapping,
             ..crate::test_tables::SHARED
         }));
         let rail: &'static RailServices = Box::leak(Box::new(RailServices {

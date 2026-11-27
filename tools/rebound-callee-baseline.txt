@@ -7,7 +7,6 @@ rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
 rebound | OpenTTDCargoSpecValid | src/subsidy.cpp | cargo_valid
 rebound | OpenTTDEditor | src/landscape.cpp | editor
-rebound | OpenTTDEditor | src/rust/engine_adapter.hpp | editor
 rebound | OpenTTDEditor | src/rust/services.cpp | editor
 rebound | OpenTTDFreeformEdges | src/landscape.cpp | freeform_edges
 rebound | OpenTTDFreeformEdges | src/rust/services.cpp | freeform_edges
