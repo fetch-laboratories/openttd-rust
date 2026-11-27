@@ -145,7 +145,6 @@ void openttd_rust_backup_restore(OpenTTDVehicle *, uint32_t, const OpenTTDOrders
 void openttd_rust_backup_clear_user(uint32_t, uint32_t, const OpenTTDOrdersLeaves *);
 void openttd_rust_backup_reset(uint32_t, const OpenTTDOrdersLeaves *);
 void openttd_rust_backup_tile_clear(uint32_t, uint8_t, const OpenTTDOrdersLeaves *);
-void openttd_rust_backup_group_clear(uint16_t, const OpenTTDOrdersLeaves *);
 void openttd_rust_backup_vehicle_clear(OpenTTDVehicle *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_orders_start_tick(int32_t, const OpenTTDOrdersLeaves *);
 int32_t openttd_rust_orders_start_date(uint64_t, const OpenTTDOrdersLeaves *);

@@ -100,8 +100,10 @@ pub struct Services {
     pub president_name_1: extern "C" fn(*mut OpenTTDCompany) -> StringID,
     /// `Company::president_name_2`.
     pub president_name_2: extern "C" fn(*mut OpenTTDCompany) -> u32,
+    /// `CompanySettings::renew_keep_length`.
+    pub renew_keep_length: extern "C" fn(*const OpenTTDCompany) -> bool,
     /// `&c->RenewalList()`: the Rust-owned slot holding the company's `EngineRenewList`.
-    pub renewal_head: extern "C" fn(*const OpenTTDCompany) -> *mut *mut (),
+    pub renewal_head: extern "C" fn(*const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList,
     /// `ResetVehicleColourMap()`.
     pub reset_colourmap: extern "C" fn() -> (),
     /// `Company::colour = value`.
@@ -154,7 +156,7 @@ pub(crate) fn companies(s: &Services, mut f: impl FnMut(*mut OpenTTDCompany) -> 
 }
 
 /// `&c->livery[scheme]`, given the array `Services::livery` returns.
-fn livery_at(livery: *mut Livery, scheme: LiveryScheme) -> *mut Livery {
+pub(crate) fn livery_at(livery: *mut Livery, scheme: LiveryScheme) -> *mut Livery {
     livery.wrapping_add(usize::from(scheme.0))
 }
 
@@ -419,21 +421,15 @@ pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
         write_field!(l, colour2, (s.colour)(c));
     }
 
-    let mut from = 0;
-    loop {
-        // SAFETY: The module contract: the group table's records are live.
-        let crate::fleet::NextGroup { group: g, index } = unsafe { (s.groups.next_group)(from) };
-        if index == u32::MAX {
-            break;
-        }
-        from = index + 1;
-        if read_field!(g, owner) == (s.index)(c).0 {
+    for g in crate::fleet::groups(s.groups) {
+        if g.owner() == (s.index)(c) {
+            let l = g.livery();
             // `g->livery.in_use.Reset()`, through one field-sized load and store.
-            let mut in_use = read_field!(g, livery.in_use);
+            let mut in_use = read_field!(l, in_use);
             in_use.reset_all();
-            write_field!(g, livery.in_use, in_use);
-            write_field!(g, livery.colour1, (s.colour)(c));
-            write_field!(g, livery.colour2, (s.colour)(c));
+            write_field!(l, in_use, in_use);
+            write_field!(l, colour1, (s.colour)(c));
+            write_field!(l, colour2, (s.colour)(c));
         }
     }
 }
@@ -453,8 +449,7 @@ pub(crate) fn update_company_liveries(s: &Services, c: *mut OpenTTDCompany) {
             write_field!(l, colour2, read_field!(default, colour2));
         }
     }
-    // SAFETY: The module contract: the group table's records are live.
-    unsafe { crate::fleet::company_liveries(s.groups, (s.index)(c).0, default) };
+    crate::fleet::update_company_group_liveries(s.groups, c);
 }
 
 /// Arguments of `CmdSetCompanyManagerFace`, in command order.
@@ -1116,6 +1111,7 @@ crate::abi::layouts! {
         president_name,
         president_name_1,
         president_name_2,
+        renew_keep_length,
         renewal_head,
         reset_colourmap,
         set_colour,

@@ -15,7 +15,6 @@
 
 void RemoveAllEngineReplacement(EngineRenewList *erl);
 EngineID EngineReplacement(EngineRenewList erl, EngineID engine, GroupID group, bool *replace_when_old = nullptr);
-CommandCost RemoveEngineReplacement(EngineRenewList *erl, EngineID engine, GroupID group, DoCommandFlags flags);
 
 /**
  * Retrieve the engine replacement for the given company and original engine type.
@@ -55,19 +54,6 @@ inline bool EngineHasReplacementWhenOldForCompany(const Company *c, EngineID eng
 	bool replace_when_old;
 	EngineReplacement(c->RenewalList(), engine, group, &replace_when_old);
 	return replace_when_old;
-}
-
-/**
- * Remove an engine replacement for the company.
- * @param c Company.
- * @param engine The original engine type.
- * @param group The group related to this replacement.
- * @param flags The calling command flags.
- * @return 0 on success, CMD_ERROR on failure.
- */
-inline CommandCost RemoveEngineReplacementForCompany(Company *c, EngineID engine, GroupID group, DoCommandFlags flags)
-{
-	return RemoveEngineReplacement(&c->RenewalList(), engine, group, flags);
 }
 
 bool CheckAutoreplaceValidity(EngineID from, EngineID to, CompanyID company);

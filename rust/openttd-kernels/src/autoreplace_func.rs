@@ -17,10 +17,7 @@ use crate::group_type::GroupID;
 /// original engine type. `group` is the group related to this replacement;
 /// `replace_when_old` is set to true if the replacement should be done when old. Returns the
 /// engine type to replace with, or `EngineID::INVALID` if no replacement is in the list.
-#[allow(
-    unsafe_code,
-    reason = "the renewal list and out-value cross as pointers"
-)]
+#[allow(unsafe_code, reason = "the renewal list head crosses as a pointer")]
 pub(crate) fn engine_replacement_for_company(
     companies: &Services,
     c: *const OpenTTDCompany,
@@ -28,19 +25,11 @@ pub(crate) fn engine_replacement_for_company(
     group: GroupID,
     replace_when_old: Option<&mut bool>,
 ) -> EngineID {
-    let replace_when_old = replace_when_old.map_or(std::ptr::null_mut(), std::ptr::from_mut);
     let head = (companies.renewal_head)(c);
     // SAFETY: `c->RenewalList()`: the live company's renewal owner holds the Rust-owned list
-    // head, read in place; the group services and the list are live for the call.
-    EngineID(unsafe {
-        crate::fleet::engine_replacement(
-            companies.groups,
-            head.read(),
-            engine.0,
-            group.0,
-            replace_when_old,
-        )
-    })
+    // head, read in place.
+    let erl = unsafe { head.read() };
+    crate::fleet::engine_replacement(companies.groups, erl, engine, group, replace_when_old)
 }
 
 /// `EngineHasReplacementForCompany`: check if a company has a replacement set up for the given
@@ -60,7 +49,7 @@ pub(crate) fn engine_has_replacement_for_company(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fleet::{GroupFields, GroupServices, Renew};
+    use crate::fleet::{GroupFields, GroupRecord, GroupServices, Renew};
     use crate::group::GroupFlag;
     use crate::livery::Livery;
     use crate::test_tables::{COMPANY_IDENTITY, FLEET_GROUPS};
@@ -72,11 +61,12 @@ mod tests {
     const OTHER: GroupID = GroupID(6);
     const PROTECTED: GroupID = GroupID(8);
 
+    /// A group's scalar members, which are all `EngineReplacement` reads of a group.
     fn group(flags: u8) -> *mut () {
         ptr::from_mut(Box::leak(Box::new(GroupFields {
             owner: 0,
             vehicle_type: 0,
-            flags,
+            flags: crate::group::GroupFlags(flags),
             livery: Livery::default(),
             parent: GroupID::INVALID.0,
             number: 0,
@@ -107,24 +97,29 @@ mod tests {
         };
     }
 
-    extern "C" fn renew_state(renew: *mut ()) -> *mut () {
-        renew
+    extern "C" fn renew_state(renew: *mut crate::fleet::OpenTTDEngineRenew) -> *mut Renew {
+        renew.cast()
     }
-    extern "C" fn group_of(id: u16) -> *mut () {
-        let index = match GroupID(id) {
-            PLAIN => 0,
-            OTHER => 1,
-            PROTECTED => 2,
-            _ => return ptr::null_mut(),
+    extern "C" fn group_of(id: GroupID) -> GroupRecord {
+        let index = match id {
+            PLAIN => Some(0),
+            OTHER => Some(1),
+            PROTECTED => Some(2),
+            _ => None,
         };
-        GROUPS.with(|g| g[index])
+        GroupRecord {
+            shell: ptr::null_mut(),
+            group: index.map_or(ptr::null_mut(), |index| GROUPS.with(|g| g[index]).cast()),
+            statistics: ptr::null_mut(),
+            index: id.0,
+        }
     }
     thread_local! {
         /// The company's renewal owner: the Rust-owned slot holding its list head.
         static HEAD: std::cell::Cell<*mut ()> = std::cell::Cell::new(RULES.with(|r| *r));
     }
-    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut *mut () {
-        HEAD.with(std::cell::Cell::as_ptr)
+    extern "C" fn renewal_head(_: *const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList {
+        HEAD.with(std::cell::Cell::as_ptr).cast()
     }
 
     fn lookup(
@@ -156,7 +151,8 @@ mod tests {
     #[test]
     fn group_rule_then_all_group_unless_protected() {
         let groups: &'static GroupServices = Box::leak(Box::new(GroupServices {
-            group: group_of,
+            group_get: group_of,
+            group_get_if_valid: group_of,
             renew_state,
             ..FLEET_GROUPS
         }));

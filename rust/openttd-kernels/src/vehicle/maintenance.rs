@@ -121,12 +121,6 @@ impl Services {
         // SAFETY: The module's table contract.
         unsafe { &*self.transaction().commands }
     }
-    /// `Vehicle::IsPrimaryVehicle`, the virtual of the C++ shell.
-    fn is_primary_vehicle<const C: bool>(&self, v: VehicleRef) -> bool {
-        let g = self.group();
-        // SAFETY: The live shell of the entry's vehicle.
-        unsafe { svc!(C, g.primary, v.shell().cast()) }
-    }
 }
 
 /// Count one getter call of this file: the table pointer it returns.
@@ -666,7 +660,7 @@ fn economy_age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices
     if economy_age.0 < MAX_DATE {
         let economy_age = EconomyDate(economy_age.0 + 1);
         svc!(C, VehicleRef::set_economy_age, v, m, economy_age);
-        if m.is_primary_vehicle::<C>(v) && economy_age.0 == VEHICLE_PROFIT_MIN_AGE.0 + 1 {
+        if v.is_primary_vehicle() && economy_age.0 == VEHICLE_PROFIT_MIN_AGE.0 + 1 {
             fleet::vehicle_reached_min_age(m.group(), v);
             branch!(C, VEHICLE_MAINT_PROFIT_AGE);
         }
@@ -687,7 +681,7 @@ fn age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         branch!(C, VEHICLE_MAINT_MAX_AGE);
     }
 
-    if !m.is_primary_vehicle::<C>(v)
+    if !v.is_primary_vehicle()
         && (v.vehicle_type() != VehicleType::VEH_TRAIN
             || !crate::ground_vehicle::is_engine(v.subtype()))
     {
@@ -991,9 +985,7 @@ mod tests {
     const INDEX: u32 = 41;
     thread_local! {
         static NATIVE: Cell<Native> = const { Cell::new(NATIVE_DEFAULT) };
-        /// The shell's virtuals: whether the vehicle is primary, and whether the dirty
-        /// callback makes it an aircraft.
-        static PRIMARY: Cell<bool> = const { Cell::new(false) };
+        /// Whether the dirty callback makes the vehicle an aircraft.
         static REENTER: Cell<bool> = const { Cell::new(false) };
         /// The engine `GetEngine()` and `Engine::Get` return.
         static ENGINE: Cell<*const Lifecycle> = const { Cell::new(ptr::null()) };
@@ -1180,18 +1172,22 @@ mod tests {
         TABLE.with(|t| ptr::from_ref(*t))
     }
 
-    // The shell's virtuals and the company and group statistics.
-    unsafe extern "C" fn primary(_: *mut ()) -> bool {
-        PRIMARY.get()
+    // The vehicle's group and the group and renewal pools.
+    extern "C" fn vehicle_group(_: VehicleRef) -> GroupID {
+        GroupID::DEFAULT_GROUP
     }
-    unsafe extern "C" fn vehicle_group(_: *mut ()) -> u16 {
-        GroupID::DEFAULT_GROUP.0
+    extern "C" fn renew_state(
+        renew: *mut crate::fleet::OpenTTDEngineRenew,
+    ) -> *mut crate::fleet::Renew {
+        renew.cast()
     }
-    unsafe extern "C" fn renew_state(renew: *mut ()) -> *mut () {
-        renew
-    }
-    unsafe extern "C" fn no_group(_: u16) -> *mut () {
-        ptr::null_mut()
+    extern "C" fn no_group(_: GroupID) -> crate::fleet::GroupRecord {
+        crate::fleet::GroupRecord {
+            shell: ptr::null_mut(),
+            group: ptr::null_mut(),
+            statistics: ptr::null_mut(),
+            index: 0,
+        }
     }
 
     fn leak<T>(value: T) -> &'static T {
@@ -1284,10 +1280,9 @@ mod tests {
             company: companies(),
             economy_age,
             group: leak(fleet::GroupServices {
-                group: no_group,
-                primary,
+                group_get_if_valid: no_group,
                 renew_state,
-                vehicle_group,
+                group_id: vehicle_group,
                 ..FLEET_GROUPS
             }),
             mark_dirty,
@@ -1391,7 +1386,7 @@ mod tests {
             /// The company's renewal owner: the Rust-owned slot holding its list head.
             static HEAD: Cell<*mut ()> = const { Cell::new(ptr::null_mut()) };
         }
-        extern "C" fn renewal_head(c: *const OpenTTDCompany) -> *mut *mut () {
+        extern "C" fn renewal_head(c: *const OpenTTDCompany) -> *mut crate::fleet::EngineRenewList {
             assert_eq!(c, company(), "the owner's renewal list");
             let list = OWNER.get().rule.map_or(ptr::null_mut(), |when_old| {
                 RULE.with(|r| {
@@ -1403,7 +1398,7 @@ mod tests {
             });
             HEAD.with(|h| {
                 h.set(list);
-                h.as_ptr()
+                h.as_ptr().cast()
             })
         }
         leak(Companies {
@@ -1414,7 +1409,7 @@ mod tests {
             engine_renew_months,
             renewal_head,
             groups: leak(fleet::GroupServices {
-                group: no_group,
+                group_get_if_valid: no_group,
                 renew_state,
                 ..FLEET_GROUPS
             }),
@@ -1449,7 +1444,6 @@ mod tests {
             crate::window_func::testing::take();
             crate::news_func::testing::take();
             NATIVE.set(NATIVE_DEFAULT);
-            PRIMARY.set(false);
             REENTER.set(false);
             let mut engine = Box::new(Lifecycle::default());
             engine.r#type = VehicleType::VEH_ROAD;
@@ -1847,7 +1841,11 @@ mod tests {
     fn age_vehicle_warns_of_old_vehicles() {
         let f = Fixture::new();
         let v = f.v();
-        PRIMARY.set(true);
+        // A primary vehicle: a front road vehicle.
+        // SAFETY: The fixture's record.
+        unsafe {
+            (*f.record).subtype = 1 << crate::vehicle_base::GroundVehicleSubtypeFlags::GVSF_FRONT.0;
+        }
         settings(|s| store(s.old_vehicle_warn, true));
         owner(|o| {
             *o = Owner {

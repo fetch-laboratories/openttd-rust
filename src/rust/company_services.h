@@ -20,6 +20,8 @@ int32_t RustGRFPriceShift(const GRFFile *, uint32_t) noexcept;
 inline UnitID RustCompanyUseVehicleUnit(CompanyID owner, VehicleType type, UnitID unit) noexcept { return Company::Get(owner)->freeunits[type].UseID(unit); }
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
 inline void *RustCompanyGroupAll(Company *company, uint8_t type) noexcept { return company->group_all[static_cast<VehicleType>(type)].state.state; }
+inline void *RustCompanyGroupDefault(Company *company, uint8_t type) noexcept { return company->group_default[static_cast<VehicleType>(type)].state.state; }
+inline void RustCompanyReleaseFreeGroup(Company *company, uint16_t number) noexcept { company->freegroups.ReleaseID(number); }
 inline uint32_t RustCompanyLocationOfHQ(Company *company) noexcept { return company->location_of_HQ.base(); }
 inline bool RustCompanyAllowsPublicKey(uint8_t company, std::string_view public_key) noexcept { return Company::Get(company)->allow_list.Contains(public_key); }
 inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Company::IsValidHumanID(CompanyID(company)); }
@@ -28,6 +30,7 @@ inline void OpenTTDSetCurrentCompany(CompanyID company) noexcept { _current_comp
 inline bool RustCompanyEngineRenew(const Company *company) noexcept { return company->settings.engine_renew; }
 inline uint32_t RustCompanyEngineRenewMoney(const Company *company) noexcept { return company->settings.engine_renew_money; }
 inline int16_t RustCompanyEngineRenewMonths(const Company *company) noexcept { return company->settings.engine_renew_months; }
+inline bool RustCompanyRenewKeepLength(const Company *company) noexcept { return company->settings.renew_keep_length; }
 inline EngineRenew **RustCompanyRenewalHead(const Company *company) noexcept { return company->renewal_head.state; }
 inline CompanySettings *RustCompanySettings(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings; }
 /** `&c->settings.vehicle`, the one member accessor of the company's vehicle defaults. */

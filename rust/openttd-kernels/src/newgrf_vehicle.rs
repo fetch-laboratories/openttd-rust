@@ -151,7 +151,6 @@ pub struct Services {
     pub(crate) reliability_decay: unsafe extern "C" fn(V) -> u16,
     pub(crate) value: unsafe extern "C" fn(V) -> i64,
     profit_this: unsafe extern "C" fn(V) -> i64,
-    profit_last: unsafe extern "C" fn(V) -> i64,
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
     target_airport: unsafe extern "C" fn(V) -> *const crate::station::Station,
     airport_ttd_type: unsafe extern "C" fn(
@@ -425,7 +424,6 @@ pub(crate) const TEST_TABLE: Services = Services {
     reliability_decay: crate::test_tables::unreachable1,
     value: crate::test_tables::unreachable1,
     profit_this: crate::test_tables::unreachable1,
-    profit_last: crate::test_tables::unreachable1,
     vehicle_flags: crate::test_tables::unreachable1,
     target_airport: crate::test_tables::unreachable1,
     airport_ttd_type: crate::test_tables::unreachable1,
@@ -1814,7 +1812,9 @@ unsafe fn variable(
             0xd2..=0xd9 | 0xdc..=0xdf => {
                 let value = match variable {
                     0xd2..=0xd5 => (s.profit_this)(v),
-                    0xd6..=0xd9 => (s.profit_last)(v),
+                    0xd6..=0xd9 => {
+                        crate::vehicle::VehicleRef::of(v).get_display_profit_last_year(s.vehicle)
+                    }
                     _ => (s.value)(v),
                 }
                 .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as u32;
@@ -1828,7 +1828,7 @@ unsafe fn variable(
             0xda => {
                 let n = next(v);
                 return if n.is_null() {
-                    crate::fleet::INVALID_VEHICLE
+                    crate::vehicle_type::VehicleID::INVALID.0
                 } else {
                     (s.id)(n)
                 };
@@ -1979,7 +1979,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
                         .local_id,
                 ) >> 8
             }
-            0xda => crate::fleet::INVALID_VEHICLE,
+            0xda => crate::vehicle_type::VehicleID::INVALID.0,
             _ => {
                 *available = false;
                 u32::MAX
@@ -2103,7 +2103,6 @@ crate::abi::layouts! {
         reliability_decay,
         value,
         profit_this,
-        profit_last,
         vehicle_flags,
         target_airport,
         airport_ttd_type,

@@ -27,6 +27,7 @@ pub struct Services {
 }
 
 /// `SetCurrentCompany`, through the command table's finance owner.
+#[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
 fn set_current_company(t: &TransactionServices, company: crate::company_type::CompanyID) {
     // SAFETY: The command table is immutable for the process lifetime.
     (unsafe { &*t.commands }.finance.set_current_company)(company.0);
@@ -37,12 +38,14 @@ static PENDING: GameState<BTreeMap<u32, bool>> = GameState::new(BTreeMap::new())
 /// initialization/tick-start point.
 /// # Safety
 /// Serial game-thread access; no map reference is active during this call.
+#[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
 pub(crate) unsafe fn clear() {
     unsafe { (&mut *PENDING.get()).clear() };
 }
 /// [`clear`], for C++ callers.
 /// # Safety
 /// As [`clear`].
+#[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_fleet_pending_clear() {
     unsafe { clear() };
@@ -50,12 +53,14 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_clear() {
 /// Record or overwrite the original `VehicleID` key's leave-depot flag.
 /// # Safety
 /// Serial game thread; map accesses end before returning/reentry.
+#[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
 pub(crate) unsafe fn add(id: u32, leave: bool) {
     unsafe { (&mut *PENDING.get()).insert(id, leave) };
 }
 /// Iterate the live pending map without retaining an entry across the action.
 /// # Safety
 /// Serialized access; the action may insert or overwrite entries synchronously.
+#[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
 unsafe fn for_each_pending(mut action: impl FnMut(u32, bool)) {
     let mut from = 0;
     loop {
@@ -77,6 +82,8 @@ unsafe fn for_each_pending(mut action: impl FnMut(u32, bool)) {
 /// # Safety
 /// Static noexcept services, serial game thread and a native caller-owned cost.
 /// The map is accessed only to copy one current item before calling any service.
+#[allow(unsafe_code)] // The process-wide pending map and the tables, under the module contract.
+#[allow(clippy::many_single_char_names)] // The tables and the vehicle's coordinates, until part 3.
 pub(crate) unsafe fn drain(
     services: *const Services,
     transaction: *const TransactionServices,
@@ -88,7 +95,14 @@ pub(crate) unsafe fn drain(
     let g = unsafe { &*group };
     let previous = g.current_company();
     let visit = |id, leave| {
-        let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
+        // `Vehicle::Get` of a pending vehicle: its slot holds it, as the original's
+        // dereference of the result requires.
+        let Some(v) = crate::vehicle_base::get_asserted(
+            &g.vehicles.orders().scheduler().pool(),
+            crate::vehicle_type::VehicleID(id),
+        ) else {
+            crate::services_assert::not_reached()
+        };
         let owner = v.owner_raw();
         set_current_company(t, crate::company_type::CompanyID(owner));
         if leave {
@@ -128,7 +142,7 @@ pub(crate) unsafe fn drain(
         }
     };
     unsafe { for_each_pending(visit) };
-    set_current_company(t, crate::company_type::CompanyID(previous));
+    set_current_company(t, previous);
 }
 
 crate::abi::layouts! {
@@ -151,6 +165,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(unsafe_code)] // The process-wide pending map, under the module contract.
     fn pending_iteration_observes_later_insertions_and_overwrites() {
         let _guard = TEST_LOCK.lock().unwrap();
         // This test retains no pending-map entry while reentering insertion.

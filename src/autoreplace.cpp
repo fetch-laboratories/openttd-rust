@@ -27,7 +27,7 @@ INSTANTIATE_POOL_METHODS(EngineRenew)
  */
 void RemoveAllEngineReplacement(EngineRenewList *erl)
 {
-	openttd_rust_fleet_remove_all_replacements(&FleetGroupServices(), reinterpret_cast<void **>(erl));
+	openttd_rust_fleet_remove_all_replacements(&FleetGroupServices(), erl);
 }
 
 /**
@@ -42,18 +42,4 @@ void RemoveAllEngineReplacement(EngineRenewList *erl)
 EngineID EngineReplacement(EngineRenewList erl, EngineID engine, GroupID group, bool *replace_when_old)
 {
 	return EngineID(openttd_rust_fleet_replacement(&FleetGroupServices(), const_cast<EngineRenew *>(erl), engine.base(), group.base(), replace_when_old));
-}
-
-/**
- * Remove an engine replacement from a given renewlist.
- * @param erl The renewlist from which to remove the replacement
- * @param engine The original engine type.
- * @param group The group related to this replacement.
- * @param flags The calling command flags.
- * @return 0 on success, CMD_ERROR on failure.
- */
-CommandCost RemoveEngineReplacement(EngineRenewList *erl, EngineID engine, GroupID group, DoCommandFlags flags)
-{
-	uint32_t error = openttd_rust_fleet_remove_replacement(&FleetGroupServices(), reinterpret_cast<void **>(erl), engine.base(), group.base(), flags.base());
-	return error == UINT32_MAX ? CommandCost() : CommandCost(error);
 }

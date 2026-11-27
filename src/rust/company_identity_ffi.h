@@ -47,6 +47,7 @@ struct OpenTTDCompanyIdentityServices {
 	OpenTTDByteSpan (OPENTTD_RUST_CALL *president_name)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(president_name);
 	uint32_t (OPENTTD_RUST_CALL *president_name_1)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(president_name_1);
 	uint32_t (OPENTTD_RUST_CALL *president_name_2)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(president_name_2);
+	bool (OPENTTD_RUST_CALL *renew_keep_length)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(renew_keep_length);
 	EngineRenew ** (OPENTTD_RUST_CALL *renewal_head)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(renewal_head);
 	void (OPENTTD_RUST_CALL *reset_colourmap)() noexcept OPENTTD_SERVICE_DEFAULT(reset_colourmap);
 	void (OPENTTD_RUST_CALL *set_colour)(Company *c, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_colour);

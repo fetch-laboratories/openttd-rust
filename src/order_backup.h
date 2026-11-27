@@ -65,7 +65,6 @@ public:
 	static void ResetUser(uint32_t user);
 	static void Reset(TileIndex tile = INVALID_TILE, bool from_gui = true);
 
-	static void ClearGroup(GroupID group);
 	static void ClearVehicle(const Vehicle *v);
 };
 

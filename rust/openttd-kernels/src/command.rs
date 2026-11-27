@@ -229,6 +229,27 @@ fn flush_signals(s: &CommandServices) {
     .update_signals_in_buffer();
 }
 
+/// `Command<cmd>::Do(flags, args)` around the Rust body `body` of a command with no tile
+/// argument; the result is discarded, as each caller discards it. The shared table's
+/// `station_commands` getter gives the command and cost tables.
+pub(crate) fn command_do(
+    shared: &crate::services::Services,
+    flags: crate::command_type::DoCommandFlags,
+    mut body: impl FnMut(crate::services::Cost<'_>, crate::command_type::DoCommandFlags),
+) {
+    // SAFETY: The getter returns the process-lifetime station command table, which names the
+    // process-lifetime command and cost tables; `with_cost` constructs and destroys the
+    // native result around the call.
+    unsafe {
+        let table = &*(shared.station_commands)();
+        with_cost(&*table.cost, |out| {
+            nested(&*table.command, shared, out, 0, flags.0, |flags| {
+                body(out, crate::command_type::DoCommandFlags(flags));
+            });
+        });
+    }
+}
+
 /// `IsLocalCompany`.
 pub(crate) fn is_local_company(s: &CommandServices) -> bool {
     // SAFETY: the company table is immutable for the process lifetime.

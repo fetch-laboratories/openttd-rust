@@ -70,6 +70,7 @@ mod geometry_type;
 mod ground;
 mod ground_vehicle;
 pub mod group;
+pub mod group_cmd;
 pub mod group_type;
 mod heightmap;
 mod history;

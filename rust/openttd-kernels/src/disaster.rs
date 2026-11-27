@@ -347,16 +347,6 @@ impl<'a> Tables<'a> {
     fn iterate(&self, kind: Option<VehicleType>) -> impl Iterator<Item = VehicleRef> + use<'_, 'a> {
         vehicles_of(self.shared, self.newgrf(), kind)
     }
-    /// `Vehicle::Get(index)`: `Pool::Get`'s `assert(index < this->first_unused)`, then the
-    /// slot's record, which a free slot leaves null.
-    #[allow(unsafe_code)]
-    fn vehicle_get(&self, index: VehicleID) -> Option<VehicleRef> {
-        let pool = self.scheduler().pool();
-        // SAFETY: The scheduler's live descriptor; nothing mutates the pool during the read.
-        crate::services_assert::assert_with(|| (index.0 as usize) < unsafe { pool.pool_size() });
-        // SAFETY: As above.
-        unsafe { crate::vehicle_base::get(&pool, index) }
-    }
     /// `Industry::Get(index)`: the industry's shell, through the pool's asserting lookup.
     #[allow(unsafe_code)]
     fn industry_get(&self, index: u32) -> *mut crate::industry::tile::ShellHandle {
@@ -876,7 +866,8 @@ fn disaster_tick_ufo(t: &Tables<'_>, ufo: DisasterVehicle) -> bool {
     }
 
     /* Target a vehicle */
-    let target = t.vehicle_get(VehicleID(ufo.v.dest_tile().0));
+    let target =
+        crate::vehicle_base::get_asserted(&t.scheduler().pool(), VehicleID(ufo.v.dest_tile().0));
     crate::services_assert::assert_with(|| {
         target.is_some_and(|target| {
             target.vehicle_type() == VehicleType::VEH_ROAD && target.is_front_engine()
@@ -1306,9 +1297,9 @@ fn disaster_tick_big_ufo_destroyer(t: &Tables<'_>, v: DisasterVehicle) -> bool {
     }
 
     if v.state() == 0 {
-        let u = t
-            .vehicle_get(v.big_ufo_destroyer_target())
-            .expect("Vehicle::Get of the destroyer's target");
+        let u =
+            crate::vehicle_base::get_asserted(&t.scheduler().pool(), v.big_ufo_destroyer_target())
+                .expect("Vehicle::Get of the destroyer's target");
         if delta(v.v.x_pos(), u.x_pos()) > TILE_SIZE as i32 {
             return true;
         }

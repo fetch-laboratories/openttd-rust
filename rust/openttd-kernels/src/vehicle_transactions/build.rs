@@ -21,7 +21,7 @@ pub struct Result {
 impl Default for Result {
     fn default() -> Self {
         Self {
-            id: crate::fleet::INVALID_VEHICLE,
+            id: crate::vehicle_type::VehicleID::INVALID.0,
             capacity: refit::Capacity::default(),
         }
     }
@@ -265,7 +265,9 @@ pub(crate) unsafe fn cmd_build_vehicle(
     if value.ok() {
         if subflags.test(DoCommandFlag::Execute) {
             (s.set_purchase)(v, unit, value.money());
-            result.id = unsafe { (b.groups.vehicle_id)(v) };
+            result.id = crate::fleet::record(b.groups, v)
+                .index(b.groups.vehicles.newgrf())
+                .0;
         }
         if refitting {
             /* Refit only one vehicle. If we purchased an engine, it may have gained free wagons. */
@@ -276,7 +278,11 @@ pub(crate) unsafe fn cmd_build_vehicle(
                     refit_temporary,
                     flags,
                     refit::CmdRefitVehicle {
-                        veh_id: crate::vehicle_type::VehicleID((b.groups.vehicle_id)(v)),
+                        veh_id: crate::vehicle_type::VehicleID(
+                            crate::fleet::record(b.groups, v)
+                                .index(b.groups.vehicles.newgrf())
+                                .0,
+                        ),
                         new_cargo_type: cmd.cargo,
                         new_subtype: 0,
                         auto_refit: false,
@@ -326,19 +332,16 @@ pub(crate) unsafe fn cmd_build_vehicle(
             (s.presentation)(v, kind);
         }
         if subflags.test(DoCommandFlag::Execute) {
-            unsafe {
-                crate::fleet::openttd_rust_fleet_count_engine(b.groups, v, 1);
-                crate::fleet::openttd_rust_fleet_update_autoreplace(
-                    b.groups,
-                    (b.shared.current_company)(),
-                );
-            }
-            if unsafe { (b.groups.primary)(v) } {
-                unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(b.groups, v, 1) };
+            // `v` is the live new vehicle's shell.
+            let record = crate::fleet::record(b.groups, v);
+            crate::fleet::count_engine(b.groups, record, 1);
+            crate::fleet::update_autoreplace(
+                b.groups,
+                crate::company_type::CompanyID((b.shared.current_company)()),
+            );
+            if record.is_primary_vehicle() {
+                crate::fleet::count_vehicle(b.groups, record, 1);
                 if !subflags.test(DoCommandFlag::AutoReplace) {
-                    // SAFETY: `v` is the live new vehicle's shell.
-                    let record =
-                        unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), c.orders.base) };
                     crate::orders::order_backup_restore(record, cmd.client_id.0, c.orders);
                 }
             }
@@ -346,7 +349,11 @@ pub(crate) unsafe fn cmd_build_vehicle(
         }
         /* If we are not in DoCommandFlag::Execute undo everything */
         if flags != subflags {
-            let id = unsafe { (b.groups.vehicle_id)(v) };
+            let id = {
+                crate::fleet::record(b.groups, v)
+                    .index(b.groups.vehicles.newgrf())
+                    .0
+            };
             crate::command::nested(
                 b.commands,
                 b.shared,

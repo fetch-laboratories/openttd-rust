@@ -23,7 +23,6 @@
 #include "table/strings.h"
 
 #include "rust/fleet_group_services.hpp"
-static CommandCost FleetGroupResult(uint32_t error) { return error == UINT32_MAX ? CommandCost() : CommandCost(error); }
 
 #include "safeguards.h"
 
@@ -79,26 +78,6 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
 }
 
 /**
- * Returns the GroupStatistic for the group of a vehicle.
- * @param v Vehicle.
- * @return GroupStatistics for the group of the vehicle.
- */
-/* static */ GroupStatistics &GroupStatistics::Get(const Vehicle *v)
-{
-	return GroupStatistics::Get(v->GetOwner(), v->group_id, v->GetType());
-}
-
-/**
- * Returns the GroupStatistic for the ALL_GROUP of a vehicle type.
- * @param v Vehicle.
- * @return GroupStatistics for the ALL_GROUP of the vehicle type.
- */
-/* static */ GroupStatistics &GroupStatistics::GetAllGroup(const Vehicle *v)
-{
-	return GroupStatistics::Get(v->GetOwner(), ALL_GROUP, v->GetType());
-}
-
-/**
  * Update all caches after loading a game, changing NewGRF, etc.
  */
 /* static */ void GroupStatistics::UpdateAfterLoad()
@@ -113,7 +92,6 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
  */
 /* static */ void GroupStatistics::CountVehicle(const Vehicle *v, int delta)
 {
-	assert(delta == 1 || delta == -1);
 	openttd_rust_fleet_count_vehicle(&FleetGroupServices(), const_cast<Vehicle *>(v), delta);
 }
 
@@ -124,7 +102,6 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
  */
 /* static */ void GroupStatistics::CountEngine(const Vehicle *v, int delta)
 {
-	assert(delta == 1 || delta == -1);
 	openttd_rust_fleet_count_engine(&FleetGroupServices(), const_cast<Vehicle *>(v), delta);
 }
 
@@ -155,9 +132,9 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
  */
 std::tuple<CommandCost, GroupID> CmdCreateGroup(DoCommandFlags flags, VehicleType vt, GroupID parent_group)
 {
-	uint16_t id;
-	uint32_t error = openttd_rust_fleet_create_group(&FleetGroupServices(), flags.base(), vt, parent_group.base(), &id);
-	return {FleetGroupResult(error), GroupID(id)};
+	CommandCost cost;
+	GroupID id = GroupID(openttd_rust_fleet_create_group(&FleetGroupServices(), flags.base(), vt, parent_group.base(), &cost));
+	return {cost, id};
 }
 
 
@@ -169,7 +146,9 @@ std::tuple<CommandCost, GroupID> CmdCreateGroup(DoCommandFlags flags, VehicleTyp
  */
 CommandCost CmdDeleteGroup(DoCommandFlags flags, GroupID group_id)
 {
-	return FleetGroupResult(openttd_rust_fleet_delete_group(&FleetGroupServices(), flags.base(), group_id.base()));
+	CommandCost cost;
+	openttd_rust_fleet_delete_group(&FleetGroupServices(), flags.base(), group_id.base(), &cost);
+	return cost;
 }
 
 /**
@@ -183,7 +162,9 @@ CommandCost CmdDeleteGroup(DoCommandFlags flags, GroupID group_id)
  */
 CommandCost CmdAlterGroup(DoCommandFlags flags, AlterGroupMode mode, GroupID group_id, GroupID parent_id, const std::string &text)
 {
-	return FleetGroupResult(openttd_rust_fleet_alter_group(&FleetGroupServices(), flags.base(), to_underlying(mode), group_id.base(), parent_id.base(), reinterpret_cast<const uint8_t *>(text.data()), text.size()));
+	CommandCost cost;
+	openttd_rust_fleet_alter_group(&FleetGroupServices(), flags.base(), to_underlying(mode), group_id.base(), parent_id.base(), OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(text.data()), text.size()}, &cost);
+	return cost;
 }
 
 
@@ -197,10 +178,9 @@ CommandCost CmdAlterGroup(DoCommandFlags flags, AlterGroupMode mode, GroupID gro
  */
 std::tuple<CommandCost, GroupID> CmdAddVehicleGroup(DoCommandFlags flags, GroupID group_id, VehicleID veh_id, bool add_shared, const VehicleListIdentifier &vli)
 {
-	FleetVehicleListContext context{{}, vli};
-	uint16_t id;
-	uint32_t error = openttd_rust_fleet_add_vehicle_group(&FleetGroupServices(), flags.base(), group_id.base(), veh_id.base(), add_shared, &context, vli.Valid(), &id);
-	return {FleetGroupResult(error), GroupID(id)};
+	CommandCost cost;
+	GroupID id = GroupID(openttd_rust_fleet_add_vehicle_group(&FleetGroupServices(), flags.base(), group_id.base(), veh_id.base(), add_shared, vli.type, vli.vtype, vli.company.base(), vli.index, &cost));
+	return {cost, id};
 }
 
 /**
@@ -212,7 +192,9 @@ std::tuple<CommandCost, GroupID> CmdAddVehicleGroup(DoCommandFlags flags, GroupI
  */
 CommandCost CmdAddSharedVehicleGroup(DoCommandFlags flags, GroupID id_g, VehicleType type)
 {
-	return FleetGroupResult(openttd_rust_fleet_add_shared_group(&FleetGroupServices(), flags.base(), id_g.base(), type));
+	CommandCost cost;
+	openttd_rust_fleet_add_shared_group(&FleetGroupServices(), flags.base(), id_g.base(), type, &cost);
+	return cost;
 }
 
 
@@ -224,7 +206,9 @@ CommandCost CmdAddSharedVehicleGroup(DoCommandFlags flags, GroupID id_g, Vehicle
  */
 CommandCost CmdRemoveAllVehiclesGroup(DoCommandFlags flags, GroupID group_id)
 {
-	return FleetGroupResult(openttd_rust_fleet_remove_vehicles_group(&FleetGroupServices(), flags.base(), group_id.base()));
+	CommandCost cost;
+	openttd_rust_fleet_remove_vehicles_group(&FleetGroupServices(), flags.base(), group_id.base(), &cost);
+	return cost;
 }
 
 /**
@@ -236,7 +220,9 @@ CommandCost CmdRemoveAllVehiclesGroup(DoCommandFlags flags, GroupID group_id)
  */
 CommandCost CmdSetGroupLivery(DoCommandFlags flags, GroupID group_id, bool primary, Colours colour)
 {
-	return FleetGroupResult(openttd_rust_fleet_set_livery(&FleetGroupServices(), flags.base(), group_id.base(), primary, colour));
+	CommandCost cost;
+	openttd_rust_fleet_set_livery(&FleetGroupServices(), flags.base(), group_id.base(), primary, colour, &cost);
+	return cost;
 }
 
 
@@ -251,7 +237,9 @@ CommandCost CmdSetGroupLivery(DoCommandFlags flags, GroupID group_id, bool prima
  */
 CommandCost CmdSetGroupFlag(DoCommandFlags flags, GroupID group_id, GroupFlag flag, bool value, bool recursive)
 {
-	return FleetGroupResult(openttd_rust_fleet_flag_command(&FleetGroupServices(), flags.base(), group_id.base(), to_underlying(flag), value, recursive));
+	CommandCost cost;
+	openttd_rust_fleet_flag_command(&FleetGroupServices(), flags.base(), group_id.base(), to_underlying(flag), value, recursive, &cost);
+	return cost;
 }
 
 

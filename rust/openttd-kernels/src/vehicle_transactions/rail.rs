@@ -10,7 +10,7 @@ use crate::company_type::CompanyID;
 use crate::engine_type::EngineID;
 use crate::engine_type::OpenTTDEngine;
 use crate::engine_type::RailVehicleTypes;
-use crate::fleet::{DEFAULT_GROUP, GroupServices, INVALID_VEHICLE};
+use crate::fleet::GroupServices;
 use crate::ground_vehicle as gv;
 use crate::network_type::ClientID;
 use crate::newgrf::GrfSpecFeature;
@@ -163,7 +163,7 @@ impl Ctx {
         unsafe { crate::vehicle_base::set_next(v, next) };
     }
     fn id(self, v: R) -> VehicleID {
-        VehicleID(unsafe { (self.g.vehicle_id)(Self::sh(v)) })
+        Self::vref(v).index(self.g.vehicles.newgrf())
     }
     fn engine(self, v: R) -> EngineID {
         Self::vref(v).engine_type()
@@ -189,10 +189,10 @@ impl Ctx {
         );
     }
     fn update_group(self, v: R) {
-        unsafe { crate::fleet::update_train_group_id(self.g, Self::sh(v)) };
+        crate::fleet::update_train_group_id(self.g, Self::vref(v));
     }
     fn count_vehicle(self, v: R, delta: i32) {
-        unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(self.g, Self::sh(v), delta) };
+        crate::fleet::count_vehicle(self.g, Self::vref(v), delta);
     }
     /// `TestVehicleBuildProbability(v, v->engine_type, Reversed)` and its flag.
     fn reverse_on_build(self, v: R) {
@@ -331,7 +331,7 @@ unsafe fn cmd_build_rail_wagon(
         // The native allocation clears gcache.first_engine: needs to be set before first callback.
         v = x.rec((x.s.new_wagon)(tile.0, e));
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
-        unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
+        Ctx::vref(v).set_group_id(x.g, crate::group_type::GroupID::DEFAULT_GROUP);
         x.reverse_on_build(v);
         unsafe { super::articulated::add_articulated_parts(a, Ctx::sh(v)) };
         unsafe {
@@ -346,7 +346,11 @@ unsafe fn cmd_build_rail_wagon(
             if vehicle == x.id(v) {
                 continue;
             }
-            let w = x.rec(unsafe { (x.g.vehicle)(vehicle.0) });
+            let w = crate::vehicle_base::get_asserted(
+                &x.g.vehicles.orders().scheduler().pool(),
+                vehicle,
+            )
+            .map_or(ptr::null_mut(), |v| v.0.as_ptr());
             if x.engine(w) != x.engine(v) {
                 continue; // Must be same type
             }
@@ -479,7 +483,7 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
             crate::vehicle::EngineRef::of(e).exclusive_preview(),
             x.t.interval_is_percent(CompanyID(company)),
         );
-        unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
+        Ctx::vref(v).set_group_id(x.g, crate::group_type::GroupID::DEFAULT_GROUP);
         x.set_subtype(v, gv::set_front_engine);
         x.set_subtype(v, gv::set_engine);
         x.reverse_on_build(v);
@@ -505,7 +509,9 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
 fn find_good_vehicle_pos(x: Ctx, src: R) -> R {
     let eng = x.engine(src);
     for vehicle in get_free_wagons_in_depot(x, x.tile(src)) {
-        let dst = x.rec(unsafe { (x.g.vehicle)(vehicle.0) });
+        let dst =
+            crate::vehicle_base::get_asserted(&x.g.vehicles.orders().scheduler().pool(), vehicle)
+                .map_or(ptr::null_mut(), |v| v.0.as_ptr());
         /* check so all vehicles in the line have the same engine. */
         let mut t = dst;
         while x.engine(t) == eng {
@@ -950,7 +956,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     }
     /* if nothing is selected as destination, try and find a matching vehicle to drag to. */
     let mut dst;
-    if dest_veh.0 == INVALID_VEHICLE {
+    if dest_veh == VehicleID::INVALID {
         dst = if x.is_engine(src) || flags.test(DoCommandFlag::AutoReplace) {
             ptr::null_mut()
         } else {
@@ -1125,13 +1131,11 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
      * we should be put in the default group. */
     if original_src_head != src && dst_head == src {
         crate::witness::hit(crate::witness::VT_RAIL_NEW_FRONT);
-        unsafe {
-            crate::fleet::set_train_group_id(
-                x.g,
-                Ctx::sh(src),
-                crate::group_type::GroupID::DEFAULT_GROUP,
-            );
-        }
+        crate::fleet::set_train_group_id(
+            x.g,
+            Ctx::vref(src),
+            crate::group_type::GroupID::DEFAULT_GROUP,
+        );
         (s.company_dirty)();
     }
     /* Handle 'new engine' part of cases #1b, #2b, #3b, #4b and #5 in NormaliseTrainHead. */
@@ -1269,7 +1273,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
             unsafe { (x.w.copy_configuration)(Ctx::sh(first), Ctx::sh(new_head)) };
         }
         x.count_vehicle(new_head, 1); // after copying over the profit, if required
-    } else if unsafe { (x.g.primary)(Ctx::sh(v)) } && backup_order {
+    } else if Ctx::vref(v).is_primary_vehicle() && backup_order {
         crate::orders::order_backup_backup(crate::vehicle::VehicleRef::of(v), user.0, x.c.orders);
     }
     /* We need to update the information about the train. */

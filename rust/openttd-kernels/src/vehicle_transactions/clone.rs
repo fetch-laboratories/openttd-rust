@@ -26,7 +26,11 @@ pub struct Services {
 unsafe fn sell(s: &Services, out: *mut CommandCost, flags: DoCommandFlags, v: *mut ()) {
     let c = s.build.refit.common;
     let b = c.base;
-    let id = unsafe { (b.groups.vehicle_id)(v) };
+    let id = {
+        crate::fleet::record(b.groups, v)
+            .index(b.groups.vehicles.newgrf())
+            .0
+    };
     crate::command::nested(
         b.commands,
         b.shared,
@@ -57,31 +61,28 @@ unsafe fn copy_group(
     new: *mut (),
 ) {
     let b = s.build.refit.common.base;
-    let group = unsafe { (b.groups.vehicle_group)(old) };
-    let id = unsafe { (b.groups.vehicle_id)(new) };
+    let group_id = crate::fleet::record(b.groups, old).group_id(b.groups);
+    let veh_id = crate::fleet::record(b.groups, new).index(b.groups.vehicles.newgrf());
     crate::command::nested(
         b.commands,
         b.shared,
         Cost(out, b.cost),
         0,
         flags.0,
-        |flags| unsafe {
-            let mut ignored = 0;
-            let error = crate::fleet::openttd_rust_fleet_add_vehicle_group(
+        |flags| {
+            let cost = Cost(out, b.cost);
+            cost.zero();
+            crate::fleet::cmd_add_vehicle_group(
                 b.groups,
-                u32::from(flags),
-                group,
-                id,
-                false,
-                ptr::null_mut(),
-                false,
-                &raw mut ignored,
+                cost,
+                DoCommandFlags(flags),
+                crate::fleet::CmdAddVehicleGroup {
+                    group_id,
+                    veh_id,
+                    add_shared: false,
+                    vli: crate::vehiclelist::VehicleListIdentifier::default(),
+                },
             );
-            if error == u32::MAX {
-                (b.cost.zero)(out);
-            } else {
-                (b.cost.error)(out, error);
-            }
         },
     );
 }
@@ -164,13 +165,18 @@ unsafe fn cmd_clone_vehicle(
     let c = r.common;
     let b = c.base;
     let total = Cost(out, b.cost);
-    let invalid = crate::fleet::INVALID_VEHICLE;
+    let invalid = VehicleID::INVALID.0;
     (b.cost.expense_money)(out, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    let mut v = unsafe { (b.groups.vehicle)(veh_id.0) };
-    if v.is_null() || !unsafe { (b.groups.primary)(v) } {
+    let Some(handle) = crate::orders::vehicle_get_if_valid(veh_id, b.groups.vehicles.orders())
+    else {
+        total.error(ERROR);
+        return invalid;
+    };
+    if !handle.is_primary_vehicle() {
         total.error(ERROR);
         return invalid;
     }
+    let mut v: *mut () = handle.shell().cast();
     let original = v;
     /*
      * original (v_front) is the front engine in the original vehicle
@@ -179,20 +185,15 @@ unsafe fn cmd_clone_vehicle(
      * w is the car/vehicle currently being cloned
      * rear (w_rear) is the rear end of the cloned train. It's used to add more cars and is only used by trains
      */
-    unsafe {
-        b.commands
-            .ownership(temporary, crate::fleet::record(b.groups, v).owner().0, 0);
-    };
+    unsafe { b.commands.ownership(temporary, handle.owner().0, 0) };
     if !(b.cost.success)(temporary) {
         total.take(Cost(temporary, b.cost));
         return invalid;
     }
     /* Crashed trains can only be cloned before cleanup begins. */
-    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN
-        && (!crate::fleet::record(b.groups, v).is_front_engine()
-            || crate::train::Handle::from_vehicle(unsafe { super::vehicle_ref(v, c.vehicles) })
-                .crash_anim_pos()
-                >= 4400)
+    if handle.vehicle_type() == VehicleType::TRAIN
+        && (!handle.is_front_engine()
+            || crate::train::Handle::from_vehicle(handle).crash_anim_pos() >= 4400)
     {
         total.error(STR_ERROR_VEHICLE_IS_DESTROYED.0);
         return invalid;
@@ -217,7 +218,7 @@ unsafe fn cmd_clone_vehicle(
     v = original;
     let mut w: *mut ();
     let mut front: *mut () = ptr::null_mut();
-    let mut rear: *mut () = ptr::null_mut();
+    let mut rear: Option<crate::vehicle::VehicleRef> = None;
     let mut new_id = invalid;
     loop {
         /* we build the rear ends of multiheaded trains with the front ones */
@@ -232,12 +233,13 @@ unsafe fn cmd_clone_vehicle(
              * 'new' vehicles whereas they would immediately be joined with a primary
              * engine. This caused the vehicle to be not build as 'the limit' had been
              * reached, resulting in partially build vehicles and such. */
-            let build_flags =
-                if flags.test(DoCommandFlag::Execute) && !unsafe { (b.groups.primary)(v) } {
-                    flags.with(DoCommandFlags::from_element(DoCommandFlag::AutoReplace))
-                } else {
-                    flags
-                };
+            let build_flags = if flags.test(DoCommandFlag::Execute)
+                && !{ crate::fleet::record(b.groups, v).is_primary_vehicle() }
+            {
+                flags.with(DoCommandFlags::from_element(DoCommandFlag::AutoReplace))
+            } else {
+                flags
+            };
             let engine = crate::fleet::record(b.groups, v).engine_type();
             let built = crate::command::nested(
                 b.commands,
@@ -274,7 +276,13 @@ unsafe fn cmd_clone_vehicle(
             }
             total.add_money((b.cost.money)(part));
             if flags.test(DoCommandFlag::Execute) {
-                w = unsafe { (b.groups.vehicle)(new_id) };
+                let Some(new) = crate::vehicle_base::get_asserted(
+                    &b.groups.vehicles.orders().scheduler().pool(),
+                    VehicleID(new_id),
+                ) else {
+                    crate::services_assert::not_reached()
+                };
+                w = new.shell().cast();
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN {
                     /* Only copy the reverse state if neither old or new vehicle implements reverse-on-build probability callback. */
                     let old_train = crate::train::Handle::from_vehicle(unsafe {
@@ -289,16 +297,9 @@ unsafe fn cmd_clone_vehicle(
                                 super::vehicle_ref(v, c.vehicles),
                             )
                         }
-                        && !unsafe {
-                            crate::newgrf_vehicle::reverse_probability(
-                                c.vehicles,
-                                super::vehicle_ref(w, c.vehicles),
-                            )
-                        }
+                        && !unsafe { crate::newgrf_vehicle::reverse_probability(c.vehicles, new) }
                     {
-                        let new_train = crate::train::Handle::from_vehicle(unsafe {
-                            super::vehicle_ref(w, c.vehicles)
-                        });
+                        let new_train = crate::train::Handle::from_vehicle(new);
                         new_train.set_flags(
                             new_train
                                 .flags()
@@ -317,8 +318,10 @@ unsafe fn cmd_clone_vehicle(
                             part,
                             flags,
                             super::rail::CmdMoveRailVehicle {
-                                src_veh: VehicleID((b.groups.vehicle_id)(w)),
-                                dest_veh: VehicleID((b.groups.vehicle_id)(rear)),
+                                src_veh: new.index(b.groups.vehicles.newgrf()),
+                                dest_veh: rear
+                                    .unwrap_or_else(|| crate::services_assert::not_reached())
+                                    .index(b.groups.vehicles.newgrf()),
                                 move_chain: true,
                             },
                         )
@@ -340,7 +343,7 @@ unsafe fn cmd_clone_vehicle(
                     front = w;
                     (s.copy_service)(v, w);
                 }
-                rear = w; // trains needs to know the last car in the train, so they can add more in next loop
+                rear = Some(new); // trains needs to know the last car in the train, so they can add more in next loop
             }
         }
         if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN {
@@ -355,7 +358,9 @@ unsafe fn cmd_clone_vehicle(
         && crate::fleet::record(b.groups, original).vehicle_type() == VehicleType::TRAIN
     {
         /* for trains this needs to be the front engine due to the callback function */
-        new_id = unsafe { (b.groups.vehicle_id)(front) };
+        new_id = crate::fleet::record(b.groups, front)
+            .index(b.groups.vehicles.newgrf())
+            .0;
     }
     if flags.test(DoCommandFlag::Execute) {
         /* Cloned vehicles belong to the same group */
@@ -385,7 +390,11 @@ unsafe fn cmd_clone_vehicle(
                 if new_cargo.cargo != unsafe { (c.transactions.cargo_type)(v) }
                     || new_cargo.subtype != subtype
                 {
-                    let id = unsafe { (b.groups.vehicle_id)(w) };
+                    let id = {
+                        crate::fleet::record(b.groups, w)
+                            .index(b.groups.vehicles.newgrf())
+                            .0
+                    };
                     let cargo = unsafe { (c.transactions.cargo_type)(v) };
                     crate::command::nested(
                         b.commands,

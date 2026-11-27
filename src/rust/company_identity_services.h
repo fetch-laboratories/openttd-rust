@@ -17,7 +17,6 @@ inline bool OPENTTD_RUST_CALL Identity_is_ai(const Company *c) noexcept { return
 inline bool OPENTTD_RUST_CALL Identity_is_freight(uint8_t cargo_type) noexcept { return RustCargoSpec(cargo_type)->is_freight; }
 inline uint32_t OPENTTD_RUST_CALL Identity_last_build_coordinate(const Company *c) noexcept { return c->last_build_coordinate.base(); }
 inline Livery * OPENTTD_RUST_CALL Identity_livery(Company *c) noexcept { return c->livery.data(); }
-inline const Livery *OPENTTD_RUST_CALL Identity_default_livery(uint8_t owner) noexcept { return &Identity_livery(Identity_company(owner))[LS_DEFAULT]; }
 inline OpenTTDByteSpan OPENTTD_RUST_CALL Identity_name(const Company *c) noexcept { return {reinterpret_cast<const uint8_t *>(c->name.data()), c->name.size()}; }
 inline uint32_t OPENTTD_RUST_CALL Identity_name_1(const Company *c) noexcept { return c->name_1; }
 inline uint32_t OPENTTD_RUST_CALL Identity_name_2(const Company *c) noexcept { return c->name_2; }

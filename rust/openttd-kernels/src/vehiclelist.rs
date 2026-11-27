@@ -7,6 +7,14 @@
 
 //! Shared definitions from `vehiclelist.h`.
 
+use crate::company_type::{CompanyID, Owner};
+use crate::group_type::GroupID;
+use crate::order_type::DestinationID;
+use crate::services_assert::assert_with;
+use crate::station_type::StationID;
+use crate::vehicle_type::{VehicleID, VehicleType};
+use crate::window_type::WindowNumber;
+
 /// Vehicle list type flags, retaining every underlying `uint8_t` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -28,17 +36,36 @@ impl VehicleListType {
 }
 
 /// Native `VehicleListIdentifier`: the information about a vehicle list.
+///
+/// A struct literal stands for the original's constructors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleListIdentifier {
     /// The type of vehicle list.
-    pub list_type: VehicleListType,
+    pub r#type: VehicleListType,
     /// The vehicle type associated with this list.
-    pub vtype: crate::vehicle_type::VehicleType,
+    pub vtype: VehicleType,
     /// The company associated with this list.
-    pub company: crate::company_type::CompanyID,
+    pub company: CompanyID,
     /// A vehicle list type specific index.
     pub index: u32,
 }
+
+impl Default for VehicleListIdentifier {
+    /// The value-initialisation `VehicleListIdentifier{}`: every member zero.
+    fn default() -> Self {
+        Self {
+            r#type: VehicleListType(0),
+            vtype: VehicleType(0),
+            company: CompanyID(0),
+            index: 0,
+        }
+    }
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the `To*ID` accessors convert the `uint32_t` index as the original's constructors do"
+)]
 impl VehicleListIdentifier {
     /// `VehicleListIdentifier::ToWindowNumber`: pack a `VehicleListIdentifier` in 32 bits so
     /// it can be used as unique `WindowNumber`.
@@ -47,10 +74,9 @@ impl VehicleListIdentifier {
         clippy::cast_possible_wrap,
         reason = "the original's conversion to `WindowNumber`"
     )]
-    pub fn to_window_number(&self) -> crate::window_type::WindowNumber {
-        use crate::services_assert::assert_with;
+    pub fn to_window_number(&self) -> WindowNumber {
         const _: () = assert!(VehicleListType::VLT_END.0 <= (1 << 3));
-        let c: u8 = if self.company == crate::company_type::Owner::NONE {
+        let c: u8 = if self.company == Owner::NONE {
             0xF
         } else {
             self.company.0
@@ -58,12 +84,12 @@ impl VehicleListIdentifier {
         assert_with(|| c < (1 << 4));
         assert_with(|| self.vtype.0 < (1 << 2));
         assert_with(|| self.index < (1 << 20));
-        assert_with(|| self.list_type < VehicleListType::VLT_END);
+        assert_with(|| self.r#type < VehicleListType::VLT_END);
 
         // `c << 28 | type << 23 | vtype << 26 | index` in `uint`, as the `int` window number.
-        crate::window_type::WindowNumber(
+        WindowNumber(
             (u32::from(c) << 28
-                | u32::from(self.list_type.0) << 23
+                | u32::from(self.r#type.0) << 23
                 | u32::from(self.vtype.0) << 26
                 | self.index) as i32,
         )
@@ -71,17 +97,36 @@ impl VehicleListIdentifier {
     /// `VehicleListIdentifier::Valid`.
     #[must_use]
     pub fn valid(&self) -> bool {
-        self.list_type < VehicleListType::VLT_END
+        self.r#type < VehicleListType::VLT_END
+    }
+    /// `VehicleListIdentifier::ToCompanyID`.
+    #[must_use]
+    pub fn to_company_id(&self) -> CompanyID {
+        assert_with(|| self.r#type == VehicleListType::VL_STANDARD);
+        CompanyID(self.index as u8)
+    }
+    /// `VehicleListIdentifier::ToDestinationID`.
+    #[must_use]
+    pub fn to_destination_id(&self) -> DestinationID {
+        assert_with(|| self.r#type == VehicleListType::VL_DEPOT_LIST);
+        DestinationID(self.index as u16)
+    }
+    /// `VehicleListIdentifier::ToGroupID`.
+    #[must_use]
+    pub fn to_group_id(&self) -> GroupID {
+        assert_with(|| self.r#type == VehicleListType::VL_GROUP_LIST);
+        GroupID(self.index as u16)
+    }
+    /// `VehicleListIdentifier::ToStationID`.
+    #[must_use]
+    pub fn to_station_id(&self) -> StationID {
+        assert_with(|| self.r#type == VehicleListType::VL_STATION_LIST);
+        StationID(self.index as u16)
+    }
+    /// `VehicleListIdentifier::ToVehicleID`.
+    #[must_use]
+    pub fn to_vehicle_id(&self) -> VehicleID {
+        assert_with(|| self.r#type == VehicleListType::VL_SHARED_ORDERS);
+        VehicleID(self.index)
     }
 }
-
-/// `VL_STANDARD`.
-pub const VL_STANDARD: u8 = VehicleListType::VL_STANDARD.0;
-/// `VL_SHARED_ORDERS`.
-pub const VL_SHARED_ORDERS: u8 = VehicleListType::VL_SHARED_ORDERS.0;
-/// `VL_STATION_LIST`.
-pub const VL_STATION_LIST: u8 = VehicleListType::VL_STATION_LIST.0;
-/// `VL_DEPOT_LIST`.
-pub const VL_DEPOT_LIST: u8 = VehicleListType::VL_DEPOT_LIST.0;
-/// `VL_GROUP_LIST`.
-pub const VL_GROUP_LIST: u8 = VehicleListType::VL_GROUP_LIST.0;

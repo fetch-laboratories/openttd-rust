@@ -1812,7 +1812,7 @@ impl RefitContext {
         // immutable service-table borrows contain no world/vehicle owner borrow.
         let services = unsafe { &*self.services };
         let base = services.common.base;
-        let id = unsafe { (base.groups.vehicle_id)(v.shell().cast()) };
+        let veh_id = v.index(base.groups.vehicles.newgrf());
         crate::command::nested(
             base.commands,
             base.shared,
@@ -1826,7 +1826,7 @@ impl RefitContext {
                     self.temporary,
                     DoCommandFlags(flags),
                     crate::vehicle_transactions::refit::CmdRefitVehicle {
-                        veh_id: crate::vehicle_type::VehicleID(id),
+                        veh_id,
                         new_cargo_type: cargo,
                         new_subtype: 0xFF,
                         auto_refit: true,

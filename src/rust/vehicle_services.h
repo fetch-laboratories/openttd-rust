@@ -44,13 +44,13 @@ inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehic
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine.base(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastLoadingStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); }
+inline uint16_t RustVehicleGroupID(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->group_id.base(); }
+inline void RustVehicleSetGroupID(OpenTTDVehicle *v, uint16_t id) noexcept { VehicleOf(v)->group_id = GroupID(id); }
 inline void RustVehicleSetUnitNumber(OpenTTDVehicle *v, uint16_t unit) noexcept { VehicleOf(v)->unitnumber = unit; }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
 inline uint64_t RustVehicleLastLoadingTick(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_tick; }
 inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
-inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->GetTile()); }
-inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
 inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
 inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { RustVehicleInvalidateDepotTile(v->GetTile()); }
 template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta, bool force) noexcept { v->UpdateViewport(update_delta, force); }
@@ -65,7 +65,6 @@ template <typename Handle> inline void RustVehicleUpdateDelta(Handle handle) noe
 }
 inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }
 inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }
-inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, id); }
 inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, int8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 inline void RustVehicleShowNewGRFError(EngineID engine, StringID first, StringID second, GRFBug bug, bool critical) noexcept { ShowNewGrfVehicleError(engine, first, second, bug, critical); }
@@ -107,7 +106,6 @@ inline void RustWriteVehicleSpriteSequence(Vehicle *v, SpriteID sprite) noexcept
 inline uint8_t RustVehicleNumOrders(const Vehicle *v) noexcept { return v->GetNumOrders(); }
 inline uint8_t RustVehicleRealOrderIndex(const Vehicle *v) noexcept { return v->cur_real_order_index; }
 inline uint16_t RustVehicleServiceInterval(const Vehicle *v) noexcept { return v->GetServiceInterval(); }
-inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { return v->GetDisplayProfitLastYear().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
@@ -183,7 +181,6 @@ static auto RustOpaqueVehicleInvoke(void *shell, Args... args) noexcept { return
 /** `v->name = source->name` for a typed legacy-context source, such as an `OrderBackup`. */
 template <typename Source>
 static void RustOpaqueVehicleCopyName(void *shell, const void *source) noexcept { static_cast<Vehicle *>(shell)->name = static_cast<const Source *>(source)->name; }
-inline bool RustVehicleOldEnough(const Vehicle *v) noexcept { return RustVehicleEconomyAge(v) > VEHICLE_PROFIT_MIN_AGE; }
 
 /** Indexed callback adapter for a canonical field setter. */
 template <typename Value, auto Write>

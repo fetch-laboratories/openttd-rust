@@ -6,16 +6,31 @@
  */
 
 //! Whole autoreplace transactions. Native costs/seeds live in the caller's stack.
+#![allow(
+    unsafe_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::many_single_char_names,
+    clippy::struct_field_names
+)]
 use super::{
-    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupServices, add_engine_replacement, add_profit,
-    engine_replacement, group, remove_engine_replacement, update_autoreplace_raw,
+    EngineRenewRule, GroupServices, add_engine_replacement, add_profit_last_year,
+    engine_replacement, group_get_if_valid, remove_engine_replacement, update_autoreplace,
 };
 use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::command_type::DoCommandFlag;
+use crate::company_type::CompanyID;
+use crate::engine_type::EngineID;
 use crate::engine_type::INVALID_ENGINE;
+use crate::group::GroupFlag;
+use crate::group_type::GroupID;
 use crate::network_type::ClientID;
 use crate::order_type::CloneOptions;
 use crate::raw_field::read_field;
+use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::table::strings::{
     STR_ERROR_AUTOREPLACE_NOTHING_TO_DO, STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
     STR_ERROR_TRAIN_TOO_LONG, STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT,
@@ -162,23 +177,28 @@ unsafe fn move_vehicle(
     let b = (w.build_services)();
     let g = b.refit.common.base.groups;
     let after = if after.is_null() {
-        super::INVALID_VEHICLE
+        crate::vehicle_type::VehicleID::INVALID.0
     } else {
-        unsafe { (g.vehicle_id)(after) }
+        crate::fleet::record(g, after).index(g.vehicles.newgrf()).0
     };
     unsafe {
         crate::vehicle_transactions::rail::nested_move(
             b,
             out.cast(),
             (flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK)) as u16,
-            (g.vehicle_id)(v),
+            crate::fleet::record(g, v).index(g.vehicles.newgrf()).0,
             after,
             whole,
         );
     }
 }
 
-unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
+unsafe fn direct_build(
+    w: &Services,
+    costs: Costs,
+    old: *mut (),
+    engine: u16,
+) -> Option<crate::vehicle::VehicleRef> {
     let s = (w.build_services)();
     let b = s.refit.common.base;
     let v = unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) };
@@ -205,9 +225,12 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
         },
     );
     if (b.cost.success)(costs.build.cast()) {
-        unsafe { (b.groups.vehicle)(result.id) }
+        crate::vehicle_base::get_asserted(
+            &b.groups.vehicles.orders().scheduler().pool(),
+            crate::vehicle_type::VehicleID(result.id),
+        )
     } else {
-        std::ptr::null_mut()
+        None
     }
 }
 unsafe fn vehicle_ref_for_build(
@@ -220,7 +243,11 @@ unsafe fn vehicle_ref_for_build(
 unsafe fn direct_start(w: &Services, out: *mut (), v: *mut (), evaluate: bool) {
     let s = (w.common)();
     let b = s.base;
-    let id = unsafe { (b.groups.vehicle_id)(v) };
+    let id = {
+        crate::fleet::record(b.groups, v)
+            .index(b.groups.vehicles.newgrf())
+            .0
+    };
     crate::command::nested(
         b.commands,
         b.shared,
@@ -235,7 +262,11 @@ unsafe fn direct_start(w: &Services, out: *mut (), v: *mut (), evaluate: bool) {
 unsafe fn direct_sell(w: &Services, out: *mut (), v: *mut (), flags: u32) {
     let s = (w.common)();
     let b = s.base;
-    let id = unsafe { (b.groups.vehicle_id)(v) };
+    let id = {
+        crate::fleet::record(b.groups, v)
+            .index(b.groups.vehicles.newgrf())
+            .0
+    };
     crate::command::nested(
         b.commands,
         b.shared,
@@ -259,13 +290,13 @@ unsafe fn direct_refit(
     w: &Services,
     out: *mut (),
     temporary: *mut (),
-    v: *mut (),
+    veh_id: crate::vehicle_type::VehicleID,
     cargo: u8,
     subtype: u8,
 ) {
     let s = (w.refit_services)();
     let b = s.common.base;
-    let id = unsafe { (b.groups.vehicle_id)(v) };
+    let id = veh_id.0;
     crate::command::nested(
         b.commands,
         b.shared,
@@ -299,8 +330,16 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
         DoCommandFlag::EXECUTE,
         |flags| {
             // SAFETY: `new` and `old` are live vehicle shells.
-            let (veh_dst, veh_src) =
-                unsafe { ((b.groups.vehicle_id)(new), (b.groups.vehicle_id)(old)) };
+            let (veh_dst, veh_src) = {
+                (
+                    crate::fleet::record(b.groups, new)
+                        .index(b.groups.vehicles.newgrf())
+                        .0,
+                    crate::fleet::record(b.groups, old)
+                        .index(b.groups.vehicles.newgrf())
+                        .0,
+                )
+            };
             crate::orders::cmd_clone_order(
                 s.orders,
                 crate::services::Cost(out.cast(), b.cost),
@@ -317,31 +356,28 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
 unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut ()) {
     let s = (w.common)();
     let b = s.base;
-    let group = unsafe { (b.groups.vehicle_group)(old) };
-    let id = unsafe { (b.groups.vehicle_id)(new) };
+    let group_id = crate::fleet::record(b.groups, old).group_id(b.groups);
+    let veh_id = crate::fleet::record(b.groups, new).index(b.groups.vehicles.newgrf());
     crate::command::nested(
         b.commands,
         b.shared,
         crate::services::Cost(out.cast(), b.cost),
         0,
         DoCommandFlag::EXECUTE,
-        |flags| unsafe {
-            let mut group_out = 0;
-            let error = crate::fleet::openttd_rust_fleet_add_vehicle_group(
+        |flags| {
+            let cost = crate::services::Cost(out.cast(), b.cost);
+            cost.zero();
+            crate::fleet::cmd_add_vehicle_group(
                 b.groups,
-                u32::from(flags),
-                group,
-                id,
-                false,
-                std::ptr::null_mut(),
-                false,
-                &raw mut group_out,
+                cost,
+                crate::command_type::DoCommandFlags(flags),
+                crate::fleet::CmdAddVehicleGroup {
+                    group_id,
+                    veh_id,
+                    add_shared: false,
+                    vli: crate::vehiclelist::VehicleListIdentifier::default(),
+                },
             );
-            if error == u32::MAX {
-                (b.cost.zero)(out.cast());
-            } else {
-                (b.cost.error)(out.cast(), error);
-            }
         },
     );
 }
@@ -360,7 +396,7 @@ macro_rules! check {
 }
 
 unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u8) -> bool {
-    let kind = gw.engine(from).kind().0;
+    let kind = gw.engine(EngineID(from)).kind().0;
     if !unsafe { (w.engine_buildable)(to, kind, company) } {
         return false;
     }
@@ -572,12 +608,13 @@ unsafe fn new_engine(
     if kind == 0 && crate::ground_vehicle::is_rear_dualheaded(record(w, v).subtype()) {
         return INVALID_ENGINE;
     }
-    let company = gw.current_company();
-    let head = unsafe { (gw.head)(company).cast::<*mut ()>().read() };
+    let company = gw.current_company().0;
+    let identity = gw.identity();
+    let head = unsafe { (identity.renewal_head)((identity.company)(CompanyID(company))).read() };
     let from = crate::fleet::record(gw, v).engine_type_raw();
-    let id = unsafe { (gw.vehicle_group)(v) };
+    let id = crate::fleet::record(gw, v).group_id(gw);
     let mut old = false;
-    let mut engine = unsafe { engine_replacement(gw, head, from, id, &raw mut old) };
+    let mut engine = engine_replacement(gw, head, EngineID(from), id, Some(&mut old)).0;
     if !always && old && !unsafe { (w.needs_renew)(v, false) } {
         engine = INVALID_ENGINE;
     }
@@ -619,19 +656,31 @@ unsafe fn build(
         }
         return ptr::null_mut();
     }
-    let new = unsafe { direct_build(w, costs, old, engine) };
+    let new_record = unsafe { direct_build(w, costs, old, engine) };
     if !unsafe { (w.success)(cost) } {
         return ptr::null_mut();
     }
+    /* Vehicle::Get(_new_vehicle_id) */
+    let Some(new_record) = new_record else {
+        crate::services_assert::not_reached()
+    };
+    let new: *mut () = new_record.shell().cast();
     if cargo != NO_REFIT {
         let subtype = unsafe { (w.subtype)(old, new, cargo) };
         unsafe {
-            direct_refit(w, costs.temporary, costs.copy, new, cargo, subtype);
+            direct_refit(
+                w,
+                costs.temporary,
+                costs.copy,
+                new_record.index(gw.vehicles.newgrf()),
+                cargo,
+                subtype,
+            );
             (w.cost_add)(cost, costs.temporary);
         }
         check!(w, unsafe { (w.success)(cost) });
     }
-    if crate::fleet::record(gw, new).vehicle_type_raw() == 0
+    if new_record.vehicle_type() == crate::vehicle_type::VehicleType::TRAIN
         && crate::train::Handle::from_vehicle(unsafe {
             vehicle_ref_for_build(old, (w.common)().vehicles)
         })
@@ -643,12 +692,7 @@ unsafe fn build(
                 vehicle_ref_for_build(old, (w.common)().vehicles),
             )
         }
-        && !unsafe {
-            crate::newgrf_vehicle::reverse_probability(
-                (w.common)().vehicles,
-                vehicle_ref_for_build(new, (w.common)().vehicles),
-            )
-        }
+        && !unsafe { crate::newgrf_vehicle::reverse_probability((w.common)().vehicles, new_record) }
     {
         unsafe { (w.reverse)(new) };
     }
@@ -696,7 +740,7 @@ unsafe fn copy_head(
     {
         unsafe {
             (w.copy_configuration)(old, new);
-            add_profit(gw, new);
+            add_profit_last_year(gw, crate::fleet::record(gw, new));
             (w.viewports)(old, new);
             (w.view_window)(old, new);
             (w.news)(old, new);
@@ -771,7 +815,9 @@ unsafe fn replace_chain(
     nothing: &mut bool,
 ) {
     let mut old_head = *chain;
-    check!(w, unsafe { (gw.primary)(old_head) });
+    check!(w, {
+        crate::fleet::record(gw, old_head).is_primary_vehicle()
+    });
     let cost = costs.replace;
     unsafe { (w.cost_vehicles)(cost) };
     if crate::fleet::record(gw, old_head).vehicle_type_raw() == 0 {
@@ -1075,7 +1121,13 @@ unsafe fn replace_chain(
 }
 unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32, id: u32) {
     let cost = costs.result;
-    let mut v = unsafe { (gw.vehicle)(id) };
+    let mut v = {
+        crate::orders::vehicle_get_if_valid(
+            crate::vehicle_type::VehicleID(id),
+            gw.vehicles.orders(),
+        )
+        .map_or(std::ptr::null_mut::<()>(), |v| v.shell().cast())
+    };
     if v.is_null() {
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
@@ -1105,7 +1157,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
             unsafe { (w.cost_error)(cost, ERROR) };
             return;
         }
-    } else if !unsafe { (gw.primary)(v) } {
+    } else if !{ crate::fleet::record(gw, v).is_primary_vehicle() } {
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
@@ -1113,12 +1165,12 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let company = gw.current_company();
-    let mut wagon_removal = unsafe { (gw.keep_length)(company) };
-    let group_id = unsafe { (gw.vehicle_group)(v) };
-    let g = unsafe { group(gw, group_id) };
-    if !g.is_null() {
-        wagon_removal = read_field!(g, flags) & 2 != 0;
+    let company = gw.current_company().0;
+    let identity = gw.identity();
+    let mut wagon_removal = (identity.renew_keep_length)((identity.company)(CompanyID(company)));
+    let group_id = crate::fleet::record(gw, v).group_id(gw);
+    if let Some(g) = group_get_if_valid(gw, group_id) {
+        wagon_removal = g.flags().test(GroupFlag::ReplaceWagonRemoval);
     }
     let mut unit = v;
     let mut any = false;
@@ -1211,40 +1263,77 @@ unsafe fn set_rule(
     to: u16,
     old: bool,
 ) -> u32 {
-    let company = gw.current_company();
+    let company = gw.current_company().0;
     if !unsafe { (w.company_valid)(company) } {
         return ERROR;
     }
-    let g = unsafe { group(gw, id) };
-    if if g.is_null() {
-        id != ALL_GROUP && id != DEFAULT_GROUP
+    let g = group_get_if_valid(gw, GroupID(id));
+    if if let Some(g) = g {
+        g.owner() != CompanyID(company)
     } else {
-        read_field!(g, owner) != company
+        GroupID(id) != GroupID::ALL_GROUP && GroupID(id) != GroupID::DEFAULT_GROUP
     } {
         return ERROR;
     }
     if !unsafe { (w.engine_valid)(from) } {
         return ERROR;
     }
-    let kind = gw.engine(from).kind().0;
-    if !g.is_null() && read_field!(g, vehicle_type) != kind {
+    let kind = gw.engine(EngineID(from)).kind().0;
+    if g.is_some_and(|g| g.vehicle_type().0 != kind) {
         return ERROR;
     }
-    let head = unsafe { (gw.head)(company).cast::<*mut ()>() };
+    let identity = gw.identity();
+    let head = (identity.renewal_head)((identity.company)(CompanyID(company)));
+    let flags16 = crate::command_type::DoCommandFlags(flags as u16);
+    // The rule's result, read back as the code `CmdSetAutoReplace`'s facade converts.
+    let result = |body: &dyn Fn(crate::services::Cost<'_>)| unsafe {
+        crate::command::with_cost(&*gw.station_commands().cost, |cost| {
+            body(cost);
+            if cost.ok() { u32::MAX } else { cost.message() }
+        })
+    };
     let cost = if to == INVALID_ENGINE {
-        unsafe { remove_engine_replacement(gw, head, from, id, flags) }
+        result(&|cost| {
+            remove_engine_replacement(gw, cost, head, EngineID(from), GroupID(id), flags16);
+        })
     } else {
         if !unsafe { (w.engine_valid)(to) } || !unsafe { valid(w, gw, from, to, company) } {
             return ERROR;
         }
-        unsafe { add_engine_replacement(gw, head, from, to, id, old, flags) }
+        result(&|cost| {
+            add_engine_replacement(
+                gw,
+                cost,
+                head,
+                EngineRenewRule {
+                    old_engine: EngineID(from),
+                    new_engine: EngineID(to),
+                    group: GroupID(id),
+                    replace_when_old: old,
+                },
+                flags16,
+            );
+        })
     };
     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-        unsafe { update_autoreplace_raw(gw, company) };
+        update_autoreplace(gw, CompanyID(company));
         if w.is_local_company() {
-            unsafe { (gw.replace_dirty)(kind) };
+            crate::window_func::set_window_dirty(
+                crate::window_type::WindowClass::WC_REPLACE_VEHICLE,
+                crate::window_type::WindowNumber(i32::from(kind)),
+            );
         }
-        unsafe { (gw.list_set_dirty)(company, kind) };
+        let vtype = crate::vehicle_type::VehicleType(kind);
+        crate::window_func::set_window_dirty(
+            crate::vehicle_gui::get_window_class_for_vehicle_type(vtype),
+            crate::vehiclelist::VehicleListIdentifier {
+                r#type: crate::vehiclelist::VehicleListType::VL_GROUP_LIST,
+                vtype,
+                company: CompanyID(company),
+                index: 0,
+            }
+            .to_window_number(),
+        );
     }
     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && w.is_local_company() {
         unsafe { (w.rule_window)(from, id) };

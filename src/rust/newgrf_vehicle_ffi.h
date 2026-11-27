@@ -83,7 +83,6 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*reliability_decay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reliability_decay);
 	int64_t (*value)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 	int64_t (*profit_this)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_this);
-	int64_t (*profit_last)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_last);
 	uint16_t (*vehicle_flags)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_flags);
 	const OpenTTDStation * (*target_airport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(target_airport);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);

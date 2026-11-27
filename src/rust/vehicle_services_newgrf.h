@@ -88,7 +88,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.reliability_decay = [](OpenTTDVehicle * v) noexcept -> uint16_t { return RustVehicleReliabilityDecay(VehicleOf(v)); },
 		.value = RustVehicleRead<int64_t, RustVehicleValue>,
 		.profit_this = [](OpenTTDVehicle * v) noexcept -> int64_t { return VehicleOf(v)->GetDisplayProfitThisYear().base(); },
-		.profit_last = RustVehicleRead<int64_t, RustVehicleDisplayProfitLastYear>,
 		.vehicle_flags = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->vehicle_flags.base(); },
 		.target_airport = [](OpenTTDVehicle * v) noexcept -> const OpenTTDStation * { return RustStation(GetTargetAirportIfValid(Aircraft::From(VehicleOf(v)))); },
 		.airport_ttd_type = RustAirportTTDType,

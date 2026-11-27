@@ -35,7 +35,7 @@ impl ListId {
     /// The typed identifier.
     fn identifier(&self) -> VehicleListIdentifier {
         VehicleListIdentifier {
-            list_type: VehicleListType(self.kind),
+            r#type: VehicleListType(self.kind),
             vtype: VehicleType(self.vehicle_type),
             company: CompanyID(self.company),
             index: self.index,
@@ -61,7 +61,7 @@ impl Drop for List {
 }
 /// `GenerateVehicleSortList` into the transaction-local list.
 unsafe fn generate(s: &Services, list: &mut List, vli: &VehicleListIdentifier) -> bool {
-    unsafe { generate_list(s.selection, vli, |v| list.0.push(v)) }
+    generate_list(s.selection, *vli, |v| list.0.push(v.shell().cast()))
 }
 /// `IsDepotTile(tile) && IsTileOwner(tile, _current_company)`.
 fn depot(s: &Services, tile: TileIndex) -> bool {
@@ -144,7 +144,7 @@ pub(crate) unsafe fn cmd_mass_start_stop_vehicle(
 ) {
     let b = s.common.base;
     let mut list = List::new();
-    if !cmd.vli.valid() || !unsafe { (b.groups.buildable_type)(cmd.vli.vtype.0) } {
+    if !cmd.vli.valid() || !crate::vehicle_func::is_company_buildable_vehicle_type(cmd.vli.vtype) {
         (b.cost.error)(cost, ERROR);
         return;
     }
@@ -186,7 +186,16 @@ pub(crate) unsafe fn cmd_mass_start_stop_vehicle(
         }
         /* Just try and don't care if some vehicle's can't be stopped. */
         unsafe {
-            nested_start(s, item, flags, VehicleID((b.groups.vehicle_id)(v)));
+            nested_start(
+                s,
+                item,
+                flags,
+                VehicleID(
+                    crate::fleet::record(b.groups, v)
+                        .index(b.groups.vehicles.newgrf())
+                        .0,
+                ),
+            );
         }
     }
     (b.cost.zero)(cost);
@@ -242,7 +251,9 @@ pub(crate) unsafe fn cmd_depot_sell_all_vehicles(
     let b = s.common.base;
     let mut list = List::new();
     (b.cost.expense_money)(cost, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    if !unsafe { (b.groups.buildable_type)(cmd.vehicle_type.0) } || !depot(s, cmd.tile) {
+    if !crate::vehicle_func::is_company_buildable_vehicle_type(cmd.vehicle_type)
+        || !depot(s, cmd.tile)
+    {
         (b.cost.error)(cost, ERROR);
         return;
     }
@@ -264,7 +275,16 @@ pub(crate) unsafe fn cmd_depot_sell_all_vehicles(
     for i in 0..list.0.len() {
         let v = list.0[i];
         unsafe {
-            nested_sell(s, item, flags, VehicleID((b.groups.vehicle_id)(v)));
+            nested_sell(
+                s,
+                item,
+                flags,
+                VehicleID(
+                    crate::fleet::record(b.groups, v)
+                        .index(b.groups.vehicles.newgrf())
+                        .0,
+                ),
+            );
         }
         if (b.cost.success)(item) {
             (b.cost.amount)(cost, (b.cost.money)(item));
@@ -317,7 +337,9 @@ pub(crate) unsafe fn cmd_depot_mass_auto_replace(
     let b = s.common.base;
     let mut list = List::new();
     (b.cost.expense_money)(cost, ExpensesType::EXPENSES_NEW_VEHICLES.0, 0);
-    if !unsafe { (b.groups.buildable_type)(cmd.vehicle_type.0) } || !depot(s, cmd.tile) {
+    if !crate::vehicle_func::is_company_buildable_vehicle_type(cmd.vehicle_type)
+        || !depot(s, cmd.tile)
+    {
         (b.cost.error)(cost, ERROR);
         return;
     }
@@ -340,7 +362,11 @@ pub(crate) unsafe fn cmd_depot_mass_auto_replace(
         if !unsafe { (s.common.transactions.chain_depot)(v) } {
             continue;
         }
-        let id = unsafe { (b.groups.vehicle_id)(v) };
+        let id = {
+            crate::fleet::record(b.groups, v)
+                .index(b.groups.vehicles.newgrf())
+                .0
+        };
         crate::command::nested(
             b.commands,
             b.shared,
@@ -396,12 +422,12 @@ unsafe fn send_one(
     depot_cmd: DepotCommandFlags,
 ) {
     let b = s.common.base;
-    let v = unsafe { (b.groups.vehicle)(veh_id.0) };
-    if v.is_null() || !unsafe { (b.groups.primary)(v) } {
+    let v = crate::orders::vehicle_get_if_valid(veh_id, b.groups.vehicles.orders());
+    let Some(v) = v.filter(|v| v.is_primary_vehicle()) else {
         (b.cost.error)(cost, ERROR);
         return;
-    }
-    (s.send)(cost, v, flags.0, depot_cmd.0);
+    };
+    (s.send)(cost, v.shell().cast(), flags.0, depot_cmd.0);
 }
 /// `SendAllVehiclesToDepot`: send all vehicles of type to depots.
 unsafe fn send_all_vehicles_to_depot(
@@ -422,7 +448,11 @@ unsafe fn send_all_vehicles_to_depot(
     let mut had_success = false;
     let depot_cmd = DepotCommandFlags(if service { s.service } else { 0 } | s.dont_cancel);
     for i in 0..list.0.len() {
-        let id = VehicleID(unsafe { (b.groups.vehicle_id)(list.0[i]) });
+        let id = VehicleID(
+            crate::fleet::record(b.groups, list.0[i])
+                .index(b.groups.vehicles.newgrf())
+                .0,
+        );
         crate::command::nested(
             b.commands,
             b.shared,

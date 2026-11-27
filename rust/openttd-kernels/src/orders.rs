@@ -602,7 +602,7 @@ impl Leaves {
         self.base.newgrf()
     }
     /// The vehicle scheduler table.
-    fn scheduler(&self) -> &'static crate::vehicle::scheduler::SchedulerServices {
+    pub(crate) fn scheduler(&self) -> &'static crate::vehicle::scheduler::SchedulerServices {
         // SAFETY: The table names the process-lifetime scheduler table.
         unsafe { &*self.scheduler }
     }
@@ -638,7 +638,7 @@ impl Leaves {
 }
 
 /// `Vehicle::GetIfValid(index)`.
-fn vehicle_get_if_valid(index: VehicleID, s: &Leaves) -> Option<VehicleRef> {
+pub(crate) fn vehicle_get_if_valid(index: VehicleID, s: &Leaves) -> Option<VehicleRef> {
     crate::vehicle_base::get_if_valid(&s.scheduler().pool(), index)
 }
 
@@ -2434,7 +2434,7 @@ pub(crate) fn remove_from_shared(v: VehicleRef, s: &Leaves) {
     let first_before = first();
     let were_first = first_before == v;
     let vli = VehicleListIdentifier {
-        list_type: VehicleListType::VL_SHARED_ORDERS,
+        r#type: VehicleListType::VL_SHARED_ORDERS,
         vtype: v.vehicle_type(),
         company: v.owner(),
         index: first_before.index(s.newgrf()).0,
@@ -3655,8 +3655,8 @@ fn reverse_train_direction(v: VehicleRef, s: &Leaves) {
     let build = (unsafe { &*s.maintenance().transaction }.build_services)();
     let c = s.scheduler();
     let veh_id = v.index(s.newgrf());
-    command_do(
-        s,
+    crate::command::command_do(
+        s.shared(),
         DoCommandFlags::from_element(DoCommandFlag::Execute),
         |out, flags| {
             crate::train::cmd_reverse_train_direction(
@@ -3807,21 +3807,6 @@ pub(crate) fn process_orders(v: VehicleRef, s: &Leaves) -> bool {
 fn ship_station_tile(st: StationID, s: &Leaves) -> TileIndex {
     let area = (s.station_commands().ship_station_area)(station_get(st, s));
     read_field!(area, tile)
-}
-
-/// `Command<cmd>::Do(flags, args)` around the Rust body `body` of a command with no tile
-/// argument; the result is discarded, as each caller here discards it.
-#[allow(unsafe_code)]
-fn command_do(s: &Leaves, flags: DoCommandFlags, mut body: impl FnMut(Cost<'_>, DoCommandFlags)) {
-    // SAFETY: `with_cost` constructs and destroys the native result around the call.
-    unsafe {
-        // SAFETY: The station command table names the process-lifetime cost table.
-        crate::command::with_cost(&*s.station_commands().cost, |out| {
-            crate::command::nested(s.commands(), s.shared(), out, 0, flags.0, |flags| {
-                body(out, DoCommandFlags(flags));
-            });
-        });
-    }
 }
 
 /// `CmdInsertOrder`'s arguments.
@@ -5535,8 +5520,8 @@ pub(crate) fn cmd_bulk_change_timetable(
         while order_number < num_orders(list) {
             let order = order_in(list, order_number);
             if order.is_some_and(|order| !order.view().is_type(OrderType::OT_IMPLICIT)) {
-                command_do(
-                    s,
+                crate::command::command_do(
+                    s.shared(),
                     DoCommandFlags::from_element(DoCommandFlag::Execute),
                     |out, flags| {
                         cmd_change_timetable(
@@ -6144,8 +6129,8 @@ fn order_backup_do_restore(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
     /* If we had shared orders, recover that */
     if !ob.clone_shell().is_null() {
         let clone = record(ob.clone_shell(), s);
-        command_do(
-            s,
+        crate::command::command_do(
+            s.shared(),
             DoCommandFlags::from_element(DoCommandFlag::Execute),
             |out, flags| {
                 cmd_clone_order(
@@ -6196,31 +6181,23 @@ fn order_backup_do_restore(ob: OrderBackupRef, v: VehicleRef, s: &Leaves) {
 
     /* Restore vehicle group */
     let group = ob.group();
-    let groups = s.maintenance().group;
+    let groups = s.maintenance_groups();
     let id = v.index(s.newgrf());
-    command_do(
-        s,
+    crate::command::command_do(
+        s.shared(),
         DoCommandFlags::from_element(DoCommandFlag::Execute),
         |out, flags| {
-            let mut new_group = 0;
-            // SAFETY: The process-lifetime group table; the command reads no list context.
-            let error = unsafe {
-                crate::fleet::add_vehicle_group(
-                    &*groups,
-                    u32::from(flags.0),
-                    group.0,
-                    id.0,
-                    false,
-                    ptr::null_mut(),
-                    false,
-                    &raw mut new_group,
-                )
-            };
-            if error == u32::MAX {
-                out.zero();
-            } else {
-                out.error(error);
-            }
+            crate::fleet::cmd_add_vehicle_group(
+                groups,
+                out,
+                flags,
+                crate::fleet::CmdAddVehicleGroup {
+                    group_id: group,
+                    veh_id: id,
+                    add_shared: false,
+                    vli: VehicleListIdentifier::default(),
+                },
+            );
         },
     );
 }
@@ -7055,12 +7032,6 @@ pub extern "C" fn openttd_rust_backup_reset(user: u32, s: &'static Leaves) {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_backup_tile_clear(tile: u32, from_gui: u8, s: &'static Leaves) {
     order_backup_reset(TileIndex(tile), from_gui != 0, s);
-}
-/// `OrderBackup::ClearGroup`.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_backup_group_clear(group: u16, s: &'static Leaves) {
-    order_backup_clear_group(GroupID(group), s);
 }
 /// `OrderBackup::ClearVehicle`, after the facade's `assert(v != nullptr)`.
 #[allow(unsafe_code)]
