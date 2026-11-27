@@ -7,6 +7,7 @@
 #include "../map_type.h"
 struct OpenTTDSharedServices;
 struct AirportSpec; struct AirportTileSpec;
+struct Town;
 enum VehicleType : uint8_t;
 struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct OpenTTDVehicle; struct RoadStop;
 struct OpenTTDAirportResolverState {

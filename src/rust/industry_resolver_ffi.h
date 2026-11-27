@@ -10,6 +10,7 @@ enum class HouseZone : uint8_t;
 struct ResolverObject;
 struct ScopeResolver;
 struct TownScopeResolver;
+struct Industry;
 struct Town;
 struct IndustrySpec;
 struct IndustryTileSpec;
