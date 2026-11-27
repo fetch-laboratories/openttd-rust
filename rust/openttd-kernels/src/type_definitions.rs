@@ -867,11 +867,11 @@ mod tests {
     ) -> (ChangeInfoResult, Vec<Store>, bool) {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         let shared: &'static Shared = Box::leak(Box::new(Shared {
-            add_string_for_mapping,
+            rail_type_label,
             grf_file_version,
             grf_file_railtype_map,
             grf_file_roadtype_map,
-            rail_type_label,
+            add_string_for_mapping,
             ..crate::test_tables::SHARED
         }));
         let rail: &'static RailServices = Box::leak(Box::new(RailServices {
@@ -922,7 +922,7 @@ mod tests {
         let file = unsafe { GRFFileRef::of(shared, ptr::dangling::<GRFFile>()) };
         let result = body(file, &mut reader).expect("every row reads its whole property");
         exchange_services(saved);
-        (result, STORES.with(|s| s.take()), cursor.remaining() == 0)
+        (result, STORES.with(RefCell::take), cursor.remaining() == 0)
     }
 
     /// The rail properties the scenario's files do not set, or set to one value: each string

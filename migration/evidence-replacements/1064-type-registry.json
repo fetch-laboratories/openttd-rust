@@ -1,0 +1,9 @@
+[
+  {
+    "retires": ["ctest:Engine type label services expose live canonical scalars"],
+    "oracle": "The case asserted the addresses of the registry tables' `labels` carrier (`&_railtypes[i].label`, `&_roadtypes[i].label`) and that a lookup read a label C++ wrote in place. #1064 part 2 (decision 2) deletes the carrier: `GetRailTypeByLabel` and `GetRoadTypeByLabel` read each element's label through `RailTypeInfoRef` and `RoadTypeInfoRef`. The observation that a lookup sees a label C++ wrote directly, the first and last element, a missing label and an exact label before an alternate, is `DefinitionLiveLabels` in `tools/simulation/engine-types-console.inc`, compared with the unchanged original 15.3 by the default scenario.",
+    "observations": {
+      "A lookup by label sees labels C++ writes in place at the first and last element, finds exact labels before alternates and returns invalid for a missing label": ["rust:lib:type_registry::tests::get_type_by_label_reads_each_label_in_place_and_prefers_an_exact_label", "scenario:engines-types-definitions"]
+    }
+  }
+]

@@ -793,24 +793,18 @@ pub(crate) fn convert_rail_types(shared: &Shared, map: &RailMapServices, count: 
         match w.kind(t) {
             TileType::MP_RAILWAY => convert(t, w.get_rail_type(t)),
 
-            TileType::MP_ROAD => {
-                if w.level_crossing(t.0) {
-                    convert(t, w.get_rail_type(t));
-                }
-            }
+            // Each guard's tile type has no other arm, so a failed guard reaches `_`, as the
+            // original's `break` does.
+            TileType::MP_ROAD if w.level_crossing(t.0) => convert(t, w.get_rail_type(t)),
 
-            TileType::MP_STATION => {
-                if w.has_station_rail(t) {
-                    convert(t, w.get_rail_type(t));
-                }
-            }
+            TileType::MP_STATION if w.has_station_rail(t) => convert(t, w.get_rail_type(t)),
 
-            TileType::MP_TUNNELBRIDGE => {
-                if w.asserted(|m| crate::tunnelbridge_map::get_tunnel_bridge_transport_type(m, t))
-                    == TransportType::TRANSPORT_RAIL
-                {
-                    convert(t, w.get_rail_type(t));
-                }
+            TileType::MP_TUNNELBRIDGE
+                if w.asserted(|m| {
+                    crate::tunnelbridge_map::get_tunnel_bridge_transport_type(m, t)
+                }) == TransportType::TRANSPORT_RAIL =>
+            {
+                convert(t, w.get_rail_type(t));
             }
 
             _ => {}
@@ -1116,18 +1110,18 @@ pub(crate) fn convert_road_types(shared: &Shared, count: u32) {
         match w.kind(t) {
             TileType::MP_ROAD => convert(t),
 
-            TileType::MP_STATION => {
-                if w.asserted(|m| crate::station_map::is_any_road_stop(m, t)) {
-                    convert(t);
-                }
+            // Each guard's tile type has no other arm, so a failed guard reaches `_`, as the
+            // original's `break` does.
+            TileType::MP_STATION if w.asserted(|m| crate::station_map::is_any_road_stop(m, t)) => {
+                convert(t);
             }
 
-            TileType::MP_TUNNELBRIDGE => {
-                if w.asserted(|m| crate::tunnelbridge_map::get_tunnel_bridge_transport_type(m, t))
-                    == TransportType::TRANSPORT_ROAD
-                {
-                    convert(t);
-                }
+            TileType::MP_TUNNELBRIDGE
+                if w.asserted(|m| {
+                    crate::tunnelbridge_map::get_tunnel_bridge_transport_type(m, t)
+                }) == TransportType::TRANSPORT_ROAD =>
+            {
+                convert(t);
             }
 
             _ => {}
@@ -1467,6 +1461,22 @@ mod tests {
     extern "C" fn road_set_sorting_order(rti: *mut RoadTypeInfo, value: u8) {
         record("sorting_order", index(rti), u64::from(value));
     }
+    thread_local! {
+        /// The one element and label `alternate_labels_contains` answers true for.
+        static ALTERNATE: Cell<(usize, u32)> = const { Cell::new((usize::MAX, 0)) };
+    }
+    extern "C" fn rail_alternate_labels_contains(
+        rti: *const RailTypeInfo,
+        label: RailTypeLabel,
+    ) -> bool {
+        ALTERNATE.with(Cell::get) == (index(rti), label.0)
+    }
+    extern "C" fn road_alternate_labels_contains(
+        rti: *const RoadTypeInfo,
+        label: RoadTypeLabel,
+    ) -> bool {
+        ALTERNATE.with(Cell::get) == (index(rti), label.0)
+    }
     extern "C" fn type_availability() -> *const type_availability::Services {
         TYPES.with(Cell::get)
     }
@@ -1495,6 +1505,7 @@ mod tests {
             copy_default: rail_copy_default,
             set_label: rail_set_label,
             alternate_labels_clear: rail_alternate_labels_clear,
+            alternate_labels_contains: rail_alternate_labels_contains,
             set_powered_railtypes: rail_set_powered,
             set_compatible_railtypes: rail_set_compatible,
             set_introduces_railtypes: rail_set_introduces,
@@ -1506,6 +1517,7 @@ mod tests {
             copy_default: road_copy_default,
             set_label: road_set_label,
             alternate_labels_clear: road_alternate_labels_clear,
+            alternate_labels_contains: road_alternate_labels_contains,
             set_flags: road_set_flags,
             set_introduction_date: road_set_introduction_date,
             set_powered_roadtypes: road_set_powered,
@@ -1521,7 +1533,7 @@ mod tests {
         exchange_services(saved.0);
         store(&ROADTYPES_ROAD, saved.1);
         store(&ROADTYPES_TRAM, saved.2);
-        (result, STORES.with(|s| s.take()))
+        (result, STORES.with(RefCell::take))
     }
 
     /// `AllocateRailType` takes the first type with no label, copies the default rail type
@@ -1552,7 +1564,7 @@ mod tests {
 
         let (rt, stores) = with_recording_registry([1; 64], || allocate_rail_type(label));
         assert_eq!(rt, RailType::INVALID_RAILTYPE);
-        assert!(stores.is_empty());
+        assert_eq!(stores, []);
     }
 
     /// `AllocateRoadType` copies the default tram type for a tram, then stores its label,
@@ -1591,6 +1603,46 @@ mod tests {
             allocate_road_type(label, RoadTramType::RTT_ROAD)
         });
         assert_eq!(rt, RoadType::INVALID_ROADTYPE);
-        assert!(stores.is_empty());
+        assert_eq!(stores, []);
+    }
+
+    /// `GetRailTypeByLabel` and `GetRoadTypeByLabel` read each type's label where C++ keeps it,
+    /// at every lookup: a label written between lookups is seen at the first and last type,
+    /// an exact label wins over another type's alternate, an alternate is found only when
+    /// allowed, and a missing label or label 0 is invalid. These are the observations of the
+    /// retired native case `Engine type label services expose live canonical scalars`.
+    #[test]
+    fn get_type_by_label_reads_each_label_in_place_and_prefers_an_exact_label() {
+        let (first, last, missing) = (0x5150_0001, 0x5150_0002, 0x5150_0003);
+        let mut labels = [0; 64];
+        labels[0] = first;
+        labels[63] = last;
+        let (found, _) = with_recording_registry(labels, || {
+            let rail = |label, alternate| get_rail_type_by_label(RailTypeLabel(label), alternate).0;
+            let road = |label, alternate| get_road_type_by_label(RoadTypeLabel(label), alternate).0;
+            let mut found = vec![
+                rail(first, false),
+                rail(last, false),
+                rail(missing, false),
+                rail(0, true),
+            ];
+            found.extend([road(first, false), road(missing, true)]);
+            LABELS.with(|l| l.borrow_mut()[0] = missing);
+            found.extend([
+                rail(first, false),
+                rail(missing, false),
+                road(missing, false),
+            ]);
+            ALTERNATE.with(|a| a.set((0, last)));
+            found.extend([rail(last, true), rail(first, true), road(last, true)]);
+            LABELS.with(|l| l.borrow_mut()[63] = 0);
+            found.extend([rail(last, false), rail(last, true)]);
+            ALTERNATE.with(|a| a.set((usize::MAX, 0)));
+            found
+        });
+        assert_eq!(
+            found,
+            [0, 63, 255, 255, 0, 63, 255, 0, 0, 63, 255, 0, 255, 0]
+        );
     }
 }
