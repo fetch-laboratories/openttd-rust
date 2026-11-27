@@ -44,6 +44,8 @@ rust/openttd-kernels/src/effect.rs
 rust/openttd-kernels/src/effectvehicle_func.rs
 rust/openttd-kernels/src/encoded.rs
 rust/openttd-kernels/src/error_func.rs
+rust/openttd-kernels/src/fleet/tests.rs
+rust/openttd-kernels/src/fleet.rs
 rust/openttd-kernels/src/follow_track.rs
 rust/openttd-kernels/src/game_state.rs
 rust/openttd-kernels/src/ground_vehicle.rs
@@ -191,6 +193,7 @@ rust/openttd-kernels/src/vehicle_transactions/mass.rs
 rust/openttd-kernels/src/vehicle_transactions/rail.rs
 rust/openttd-kernels/src/vehicle_transactions/refit.rs
 rust/openttd-kernels/src/vehicle_transactions.rs
+rust/openttd-kernels/src/vehiclelist.rs
 rust/openttd-kernels/src/viewport_func.rs
 rust/openttd-kernels/src/void_map.rs
 rust/openttd-kernels/src/water_regions.rs
