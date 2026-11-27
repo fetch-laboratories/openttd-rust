@@ -179,3 +179,12 @@ pub const TLF_VAR10_FLAGS: u8 = TileLayoutFlags::TLF_VAR10_FLAGS.0;
 pub const TLF_SPRITE_REG_FLAGS: u8 = TileLayoutFlags::TLF_SPRITE_REG_FLAGS.0;
 /// `TileLayoutFlags::TLF_PALETTE_REG_FLAGS`, for `newgrf_act2.rs`.
 pub const TLF_PALETTE_REG_FLAGS: u8 = TileLayoutFlags::TLF_PALETTE_REG_FLAGS.0;
+
+/// `LabelObject`: container for a label for rail or road type conversion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LabelObject<T> {
+    /// Label of rail or road type.
+    pub label: T,
+    /// Subtype of type (road or tram).
+    pub subtype: u8,
+}

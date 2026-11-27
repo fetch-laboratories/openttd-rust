@@ -121,3 +121,10 @@
 - C++ keeps: the `NewGRFClass` facade, whose inline `Get` reads the shared class record in place, and the manager objects, their virtuals, copy and lifetime, the spans the facade and `SlObject` read and write, and `ObjectOverrideManager::SetEntitySpec`.
 - Limits: #156 tracks `Allocate`'s full-registry branch, which no scenario reaches. The raw `PROP_*` and `CIR_*` adapters serve unfinished files until their passes (#734).
 - PRs: #1096.
+
+## Rail and road type registry, definitions and availability (#1064 part 2)
+
+- Rust owns: the globals and bodies over `_railtypes` and `_roadtypes` (`ResetRailTypes`, `InitRailTypes`, `AllocateRailType`, `GetRailTypeByLabel`, the translations, `ConvertRailTypes` and the label lists, with their road counterparts), the four Action 0 handlers of `newgrf_act0_railtypes.cpp` and `newgrf_act0_roadtypes.cpp`, and the engine availability test of `GetCompanyRailTypes` and `GetCompanyRoadTypes`.
+- C++ keeps: the type records and the stores Rust calls, `GRFFile` storage behind `GRFFileRef`'s six type readers, `AddStringForMapping` behind one shared binding, the RAIL and ROTT chunk handlers, and the availability table's engine iteration and company stores.
+- Limits: the lookup by label resolves each element through a slot call, which no retained profile observes, since none loads a NewGRF. `engine_loading` keeps two raw adapters (`railtype_list_raw`, `rail_label_raw`) until its pass (#734).
+- PRs: #1098.

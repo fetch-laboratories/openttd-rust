@@ -23,14 +23,30 @@ pub const ROAD_TILE_DEPOT: u8 = RoadTileType::Depot.0;
 /// `SetRoadTypeRoad` delegates to the canonical typed map setter.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub fn set_road_type_road(s: &crate::services::Services, tile: u32, rt: u8) {
-    (s.set_road_type)(tile, 0, rt);
+pub fn set_road_type_road(
+    s: &crate::services::Services,
+    tile: TileIndex,
+    rt: crate::road_type::RoadType,
+) {
+    (s.set_road_type)(
+        tile.0,
+        u8::from(crate::road_type::RoadTramType::RTT_ROAD.0),
+        rt.0,
+    );
 }
 /// `SetRoadTypeTram` delegates to the canonical typed map setter.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub fn set_road_type_tram(s: &crate::services::Services, tile: u32, rt: u8) {
-    (s.set_road_type)(tile, 1, rt);
+pub fn set_road_type_tram(
+    s: &crate::services::Services,
+    tile: TileIndex,
+    rt: crate::road_type::RoadType,
+) {
+    (s.set_road_type)(
+        tile.0,
+        u8::from(crate::road_type::RoadTramType::RTT_TRAM.0),
+        rt.0,
+    );
 }
 
 /// `Roadside::GrassRoadWorks`.

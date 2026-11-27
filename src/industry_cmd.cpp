@@ -88,7 +88,6 @@ static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfV
 #include "rust/industry_resolver_ffi.h"
 
 #include "rust/industry_definition_ffi.h"
-#include "newgrf/newgrf_stringmapping.h"
 #include "table/build_industry.h"
 
 #include "rust/clock_ffi.h"
@@ -652,7 +651,6 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.shared = &GetRustSharedServices(),
 		.origin = _origin_industry_specs,
 		.origin_tiles = _origin_industry_tile_specs,
-		.map_string = [](uint16_t source, uint32_t *target) noexcept { AddStringForMapping(GRFStringID{source}, target); },
 	};
 	return services;
 }
@@ -935,7 +933,6 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDIndustryResolverServices.hpp"
-#include "abi-visit-OpenTTDIndustryDefinitionServices.hpp"
 #include "abi-visit-OpenTTDIndustryServices.hpp"
 #include "abi-visit-OpenTTDIndustryDeliveryServices.hpp"
 #include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
@@ -950,7 +947,6 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 bool CheckAbi_industry_cmd()
 {
 	return AbiServicesComplete(GetIndustryDeliveryServices()) &&
-		AbiServicesComplete(GetIndustryDefinitionServices()) &&
 		AbiServicesComplete(GetIndustryGenerationServices().environment) &&
 		AbiServicesComplete(GetIndustryResolverServices()) &&
 		AbiServicesComplete(GetIndustryRustServices()) &&

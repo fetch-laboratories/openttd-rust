@@ -99,6 +99,7 @@
 #include "news_ffi.h"
 #include "window_ffi.h"
 #include "../newgrf_debug.h"
+#include "../newgrf/newgrf_stringmapping.h"
 #include "../vehicle_gui.h"
 #include "../widgets/station_widget.h"
 #include "../widgets/vehicle_widget.h"
@@ -686,6 +687,13 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_file_set_cargo_list = [](GRFFile *file, uint32_t id, uint32_t label) noexcept { file->cargo_list[id] = CargoLabel{label}; },
 	.grf_file_set_cargo_list_is_fallback = [](GRFFile *file, bool cargo_list_is_fallback) noexcept { file->cargo_list_is_fallback = cargo_list_is_fallback; },
 	.grf_file_set_cargo_map = [](GRFFile *file, uint8_t cargo, uint8_t value) noexcept { file->cargo_map[cargo] = value; },
+	.add_string_for_mapping = [](uint32_t source, StringID *target) noexcept { AddStringForMapping(GRFStringID{source}, target); },
+	.grf_file_railtype_list = [](const GRFFile *file) noexcept { return OpenTTDRailTypeLabels{.data = file->railtype_list.data(), .size = file->railtype_list.size()}; },
+	.grf_file_railtype_map = [](GRFFile *file) noexcept { return OpenTTDRailTypeMap{.data = file->railtype_map.data(), .size = std::size(file->railtype_map)}; },
+	.grf_file_roadtype_list = [](const GRFFile *file) noexcept { return OpenTTDRoadTypeLabels{.data = file->roadtype_list.data(), .size = file->roadtype_list.size()}; },
+	.grf_file_roadtype_map = [](GRFFile *file) noexcept { return OpenTTDRoadTypeMap{.data = file->roadtype_map.data(), .size = std::size(file->roadtype_map)}; },
+	.grf_file_tramtype_list = [](const GRFFile *file) noexcept { return OpenTTDRoadTypeLabels{.data = file->tramtype_list.data(), .size = file->tramtype_list.size()}; },
+	.grf_file_tramtype_map = [](GRFFile *file) noexcept { return OpenTTDRoadTypeMap{.data = file->tramtype_map.data(), .size = std::size(file->tramtype_map)}; },
 	.grf_price_shift = RustGRFPriceShift,
 	.grf_cargo_map = RustGRFCargoMap,
 	.grf_boolean_callback = OpenTTDConvertBooleanCallback,

@@ -83,6 +83,16 @@ impl RailTypes {
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
+    /// Native `BaseBitSet::Set(value, set)`: set or reset `element` depending on `set`.
+    #[must_use]
+    pub const fn set(self, element: RailType, set: bool) -> Self {
+        let bit = 1_u64.wrapping_shl(element.0 as u32);
+        if set {
+            Self(self.0 | bit)
+        } else {
+            Self(self.0 & !bit)
+        }
+    }
     /// Native `BaseBitSet::Reset` of every element in `other`.
     #[must_use]
     pub const fn reset(self, other: Self) -> Self {

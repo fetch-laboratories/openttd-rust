@@ -46,7 +46,7 @@
 #include "rust/movement_ffi.h"
 
 #include "rust/type_registry_ffi.h"
-#include "rust/type_availability_services.h"
+#include "rust/services_rail.h"
 
 #include "safeguards.h"
 
@@ -134,32 +134,41 @@ static bool CompareRailTypes(const RailType &first, const RailType &second)
 const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
 {
 	static const OpenTTDRailRegistryServices table = {
+		.clear = [](RailTypeInfo *rti) noexcept { *rti = RailTypeInfo{}; },
+		.copy_default = [](RailTypeInfo *rti, RailType source) noexcept { *rti = _original_railtypes[source]; },
 		.default_count = std::size(_original_railtypes),
-		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
-		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
-		.labels = []() noexcept -> const RailTypeLabel * const * {
-			static const auto labels = [] {
-				std::array<const RailTypeLabel *, RAILTYPE_END> pointers{};
-				for (size_t i = 0; i < pointers.size(); ++i) pointers[i] = &RustRailTypeLabel(&_railtypes[i]);
-				return pointers;
-			}();
-			return labels.data();
-		},
-		.alternate = [](RailType rt, uint32_t label) noexcept { return GetRailTypeInfo(rt)->alternate_labels.contains(label); },
-		.clear = [](RailTypeInfo *info) noexcept { *info = RailTypeInfo{}; },
-		.copy_default = [](RailTypeInfo *info, RailType source) noexcept { *info = _original_railtypes[source]; },
-		.resolve_gui = [](RailTypeInfo *info) noexcept { ResolveRailTypeGUISprites(info); },
-		.publication = [](const RailTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = RustRailTypeLabel(info), .hidden = RustRailTypeHidden(info)}; },
+		.resolve_rail_type_gui_sprites = [](RailTypeInfo *rti) noexcept { ResolveRailTypeGUISprites(rti); },
+		.set_sorted_railtypes = [](RailType *data, size_t count) noexcept { _sorted_railtypes = {data, count}; },
 		.sort = [](RailType *data, size_t count) noexcept { std::sort(data, data + count, CompareRailTypes); },
-		.publish_sorted = [](RailType *data, size_t count) noexcept { _sorted_railtypes = {data, count}; },
-		.allocate = [](RailTypeInfo *info, const OpenTTDTypeAllocation *value) noexcept {
-			info->label = value->label;
-			info->alternate_labels.clear();
-			info->compatible_railtypes = RailTypes{value->self};
-			info->powered_railtypes = RailTypes{value->self};
-			info->introduces_railtypes = RailTypes{value->self};
-			info->sorting_order = value->order;
-		},
+		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
+		.alternate_labels_clear = [](RailTypeInfo *rti) noexcept { rti->alternate_labels.clear(); },
+		.alternate_labels_contains = [](const RailTypeInfo *rti, uint32_t label) noexcept { return rti->alternate_labels.contains(label); },
+		.alternate_labels_insert = [](RailTypeInfo *rti, uint32_t label) noexcept { rti->alternate_labels.insert(label); },
+		.badges = [](RailTypeInfo *rti) noexcept { return &rti->badges; },
+		.compatible_railtypes_set = [](RailTypeInfo *rti, RailType rt) noexcept { rti->compatible_railtypes.Set(rt); },
+		.introduces_railtypes_set = [](RailTypeInfo *rti, RailType rt) noexcept { rti->introduces_railtypes.Set(rt); },
+		.introduction_required_railtypes_set = [](RailTypeInfo *rti, RailType rt) noexcept { rti->introduction_required_railtypes.Set(rt); },
+		.powered_railtypes_set = [](RailTypeInfo *rti, RailType rt) noexcept { rti->powered_railtypes.Set(rt); },
+		.set_acceleration_type = [](RailTypeInfo *rti, uint8_t value) noexcept { rti->acceleration_type = static_cast<VehicleAccelerationModel>(value); },
+		.set_compatible_railtypes = [](RailTypeInfo *rti, uint64_t value) noexcept { rti->compatible_railtypes = RailTypes{value}; },
+		.set_cost_multiplier = RustSetRailCostMultiplier,
+		.set_curve_speed = [](RailTypeInfo *rti, uint8_t value) noexcept { rti->curve_speed = value; },
+		.set_fallback_railtype = [](RailTypeInfo *rti, uint8_t value) noexcept { rti->fallback_railtype = value; },
+		.set_flags = [](RailTypeInfo *rti, uint8_t value) noexcept { rti->flags = static_cast<RailTypeFlags>(value); },
+		.set_introduces_railtypes = [](RailTypeInfo *rti, uint64_t value) noexcept { rti->introduces_railtypes = RailTypes{value}; },
+		.set_introduction_date = [](RailTypeInfo *rti, int32_t value) noexcept { rti->introduction_date = TimerGameCalendar::Date(value); },
+		.set_label = [](RailTypeInfo *rti, uint32_t value) noexcept { rti->label = value; },
+		.set_maintenance_multiplier = [](RailTypeInfo *rti, uint16_t value) noexcept { rti->maintenance_multiplier = value; },
+		.set_map_colour = [](RailTypeInfo *rti, uint8_t value) noexcept { rti->map_colour = PixelColour{value}; },
+		.set_max_speed = [](RailTypeInfo *rti, uint16_t value) noexcept { rti->max_speed = value; },
+		.set_powered_railtypes = [](RailTypeInfo *rti, uint64_t value) noexcept { rti->powered_railtypes = RailTypes{value}; },
+		.set_sorting_order = [](RailTypeInfo *rti, uint8_t value) noexcept { rti->sorting_order = value; },
+		.strings_build_caption = [](RailTypeInfo *rti) noexcept { return &rti->strings.build_caption; },
+		.strings_menu_text = [](RailTypeInfo *rti) noexcept { return &rti->strings.menu_text; },
+		.strings_name = [](RailTypeInfo *rti) noexcept { return &rti->strings.name; },
+		.strings_new_loco = [](RailTypeInfo *rti) noexcept { return &rti->strings.new_loco; },
+		.strings_replace_text = [](RailTypeInfo *rti) noexcept { return &rti->strings.replace_text; },
+		.strings_toolbar_caption = [](RailTypeInfo *rti) noexcept { return &rti->strings.toolbar_caption; },
 	};
 	return table;
 }
