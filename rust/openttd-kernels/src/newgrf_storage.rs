@@ -425,94 +425,143 @@ impl<const SIZE: usize> TemporaryStorageArray<SIZE> {
     }
 }
 
-macro_rules! storage_exports {
-    ($size:literal, $new:ident, $delete:ident, $data:ident, $store:ident, $get:ident, $clear:ident) => {
-        /// The array of a constructed `PersistentStorageArray` shell.
-        #[allow(unsafe_code, reason = "export; the shell's constructor")]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn $new(
-            shell: *mut c_void,
-            services: *const Services,
-        ) -> *mut PersistentStorageArray<$size> {
-            Box::into_raw(Box::new(PersistentStorageArray::new(shell, services)))
-        }
-        /// `~PersistentStorageArray`.
-        ///
-        /// # Safety
-        /// The shell's array, which it does not use again.
-        #[allow(unsafe_code, reason = "export; the shell's destructor")]
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $delete(array: *mut PersistentStorageArray<$size>) {
-            // SAFETY: the caller's contract.
-            unsafe { PersistentStorageArray::delete(array) }
-        }
-        /// The shell's `storage` reference.
-        ///
-        /// # Safety
-        /// A live array.
-        #[allow(unsafe_code, reason = "export; the address of a live array's storage")]
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $data(array: *mut PersistentStorageArray<$size>) -> *mut i32 {
-            // SAFETY: the caller's contract.
-            unsafe { (&raw mut (*array).storage).cast() }
-        }
-        /// `StoreValue`.
-        ///
-        /// # Safety
-        /// A live array.
-        #[allow(unsafe_code, reason = "export; the shell's StoreValue")]
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $store(
-            array: *mut PersistentStorageArray<$size>,
-            pos: u32,
-            value: i32,
-        ) {
-            // SAFETY: the caller's contract.
-            unsafe { PersistentStorageArray::store_value(array, pos, value) }
-        }
-        /// `GetValue`.
-        ///
-        /// # Safety
-        /// A live array.
-        #[allow(unsafe_code, reason = "export; the shell's GetValue")]
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $get(
-            array: *const PersistentStorageArray<$size>,
-            pos: u32,
-        ) -> i32 {
-            // SAFETY: the caller's contract.
-            unsafe { PersistentStorageArray::get_value(array, pos) }
-        }
-        /// `ClearChanges`.
-        ///
-        /// # Safety
-        /// A live array.
-        #[allow(unsafe_code, reason = "export; the shell's ClearChanges")]
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $clear(array: *mut PersistentStorageArray<$size>) {
-            // SAFETY: the caller's contract.
-            unsafe { PersistentStorageArray::clear_changes(array) }
-        }
-    };
+/// The array of a constructed `PersistentStorageArray<int32_t, 16>` shell.
+#[allow(unsafe_code, reason = "export; the shell's constructor")]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_storage16_new(
+    shell: *mut c_void,
+    services: *const Services,
+) -> *mut PersistentStorageArray<16> {
+    Box::into_raw(Box::new(PersistentStorageArray::new(shell, services)))
 }
-storage_exports!(
-    16,
-    openttd_rust_storage16_new,
-    openttd_rust_storage16_delete,
-    openttd_rust_storage16_data,
-    openttd_rust_storage16_store,
-    openttd_rust_storage16_get,
-    openttd_rust_storage16_clear
-);
-storage_exports!(
-    256,
-    openttd_rust_storage256_new,
-    openttd_rust_storage256_delete,
-    openttd_rust_storage256_data,
-    openttd_rust_storage256_store,
-    openttd_rust_storage256_get,
-    openttd_rust_storage256_clear
-);
+/// `~PersistentStorageArray`.
+///
+/// # Safety
+/// The shell's array, which it does not use again.
+#[allow(unsafe_code, reason = "export; the shell's destructor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage16_delete(array: *mut PersistentStorageArray<16>) {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::delete(array) }
+}
+/// The shell's `storage` reference.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the address of a live array's storage")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage16_data(
+    array: *mut PersistentStorageArray<16>,
+) -> *mut i32 {
+    // SAFETY: the caller's contract.
+    unsafe { (&raw mut (*array).storage).cast() }
+}
+/// `StoreValue`.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the shell's StoreValue")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage16_store(
+    array: *mut PersistentStorageArray<16>,
+    pos: u32,
+    value: i32,
+) {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::store_value(array, pos, value) }
+}
+/// `GetValue`.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the shell's GetValue")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage16_get(
+    array: *const PersistentStorageArray<16>,
+    pos: u32,
+) -> i32 {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::get_value(array, pos) }
+}
+/// `ClearChanges`.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the shell's ClearChanges")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage16_clear(array: *mut PersistentStorageArray<16>) {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::clear_changes(array) }
+}
+
+/// The array of a constructed `PersistentStorageArray<int32_t, 256>` shell.
+#[allow(unsafe_code, reason = "export; the shell's constructor")]
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_storage256_new(
+    shell: *mut c_void,
+    services: *const Services,
+) -> *mut PersistentStorageArray<256> {
+    Box::into_raw(Box::new(PersistentStorageArray::new(shell, services)))
+}
+/// `~PersistentStorageArray`.
+///
+/// # Safety
+/// The shell's array, which it does not use again.
+#[allow(unsafe_code, reason = "export; the shell's destructor")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage256_delete(array: *mut PersistentStorageArray<256>) {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::delete(array) }
+}
+/// The shell's `storage` reference.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the address of a live array's storage")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage256_data(
+    array: *mut PersistentStorageArray<256>,
+) -> *mut i32 {
+    // SAFETY: the caller's contract.
+    unsafe { (&raw mut (*array).storage).cast() }
+}
+/// `StoreValue`.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the shell's StoreValue")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage256_store(
+    array: *mut PersistentStorageArray<256>,
+    pos: u32,
+    value: i32,
+) {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::store_value(array, pos, value) }
+}
+/// `GetValue`.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the shell's GetValue")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage256_get(
+    array: *const PersistentStorageArray<256>,
+    pos: u32,
+) -> i32 {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::get_value(array, pos) }
+}
+/// `ClearChanges`.
+///
+/// # Safety
+/// A live array.
+#[allow(unsafe_code, reason = "export; the shell's ClearChanges")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_storage256_clear(array: *mut PersistentStorageArray<256>) {
+    // SAFETY: the caller's contract.
+    unsafe { PersistentStorageArray::clear_changes(array) }
+}
 
 /// `BasePersistentStorageArray::SwitchMode`.
 #[allow(unsafe_code, reason = "export; the C++ SwitchMode")]
